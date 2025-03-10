@@ -1,0 +1,218 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Admin {
+  id       String   @id
+  userName String   @unique
+
+}
+
+model Student {
+  id       String   @id
+  userName String   @unique
+  password String
+  rfidNo String @unique
+  firstName String
+  middleName String
+  lastName String
+  suffix String
+  email    String
+  phoneNumber Int
+  address String
+  section    Section   @relation(fields: [sectionId], references: [id])
+  studentType StudentType
+  guardian    Guardian   @relation(fields: [guardian], references: [id])
+}
+model Instructor {
+  id       String   @id
+  rfid_no String @unique
+  userName String   @unique
+  password String
+  email    String
+  phoneNumber Int
+  firstName String
+  middleName String
+  lastName String
+  suffix String
+  instructorType InstructorType
+  departmentId String
+  department    Department   @relation(fields: [departmentId], references: [id])
+  subjects Subjects[]
+  schedule    Schedule[]
+}
+
+model Guardian {
+  id       String   @id
+  userName String   @unique
+  password String
+  email    String
+  phoneNumber Int
+  firstName String
+  middleName String
+  lastName String
+  suffix String
+  address String
+  guardianType GuardianType
+  children Student[]
+}
+
+model Room{
+  id       String   @id
+  roomNo String
+  roomType String
+  roomCapacity Int
+  roomLocation String
+}
+
+model Semester {
+  id       String   @id
+  semesterName String
+  startDate DateTime
+  endDate DateTime
+  year Int
+  semesterType SemesterType
+}
+
+model Section {
+  id       String   @id
+  sectionName String
+  sectionType SectionType
+  sectionCapacity Int
+  sectionSize Int
+  sectionStatus SectionStatus
+  course    Course   @relation(fields: [course], references: [id])
+  department    Department   @relation(fields: [department], references: [id])
+}
+
+model Course {
+  id       String   @id
+  courseName String
+  courseCode String
+  courseDescription String
+  courseCredit Int
+  courseType CourseType
+}
+
+model Department {
+  id       String   @id
+  departmentName String
+  departmentCode String
+  departmentDescription String
+}
+
+model Subjects {
+  id       String   @id
+  subjectName String
+  subjectCode String
+  subjectDescription String
+}
+
+model Schedule {
+  id       String   @id
+  dayOfWeek DayOfWeek
+  startTime DateTime
+  endTime DateTime
+  roomNo String
+}
+
+model Attendance {
+  id       String   @id
+  date DateTime
+  time DateTime
+  status AttendanceStatus
+  student    Student   @relation(fields: [student], references: [id])
+  schedule    Schedule   @relation(fields: [schedule], references: [id])
+}
+
+model Report {
+  id          String   @id
+  title       String
+  content     String
+  createdAt   DateTime @default(now())
+  student     Student  @relation(fields: [studentId], references: [id])
+  studentId   String
+}
+
+model Announcement {
+  id          String   @id
+  title       String
+  content     String
+  createdAt   DateTime @default(now())
+  admin       Admin    @relation(fields: [adminId], references: [id])
+  adminId     String
+}
+
+model Event {
+  id          String   @id
+  title       String
+  description String
+  date        DateTime
+  location    String
+  createdBy   Admin    @relation(fields: [adminId], references: [id])
+  adminId     String
+}
+
+
+
+enum StudentType {
+  IRREGULAR
+  REGULAR
+}
+
+enum InstructorType {
+  FULL_TIME
+  PART_TIME
+}
+
+enum GuardianType {
+  PARENT
+  GUARDIAN
+}
+
+enum SemesterType {
+  FIRST_SEMESTER
+  SECOND_SEMESTER
+  THIRD_SEMESTER
+}
+
+enum SectionType {
+  LECTURE
+  LAB
+}
+
+enum SectionStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum CourseType {
+  MANDATORY
+  ELECTIVE
+}
+
+enum DayOfWeek {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
+}
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+}
