@@ -6,6 +6,11 @@ First, install repos:
 
 npm install
 
+# install Tailwind CSS
+
+npm install tailwindcss @tailwindcss/postcss postcss
+
+
 # install Material UI
 
 npm install @mui/material @emotion/react @emotion/styled

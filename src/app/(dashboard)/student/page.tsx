@@ -1,7 +1,7 @@
 import Announcements from "@/components/Announcements";
-import BigCalendar from "@/components/BigCalendar";
-import EventCalendar from "@/components/EventCalendar";
+import CalendarView from "@/components/CalendarView";
 import { Container, Grid, Paper, Typography } from "@mui/material";
+import { calendarEvents } from "@/lib/data";
 
 const StudentPage = () => {
   return (
@@ -13,14 +13,19 @@ const StudentPage = () => {
             <Typography variant="h5" component="h1" gutterBottom>
               Schedule (Section)
             </Typography>
-            <BigCalendar />
+            <CalendarView mode="work-week" events={calendarEvents} />
           </Paper>
         </Grid>
         {/* RIGHT */}
         <Grid item xs={12} xl={4}>
           <Grid container spacing={4} direction="column">
             <Grid item>
-              <EventCalendar />
+              <CalendarView 
+                mode="month" 
+                events={calendarEvents} 
+                showEventCards={true}
+                className="h-[600px]"
+              />
             </Grid>
             <Grid item>
               <Announcements />

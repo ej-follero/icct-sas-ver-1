@@ -6,6 +6,7 @@ const config: Config = {
     "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
   ],
+  important: true,
   theme: {
     extend: {
       backgroundImage: {
@@ -24,9 +25,19 @@ const config: Config = {
         sasLightBlue: "#CFE4FF",
         sasPurple: "#6D68FF",
         sasLightGray: "#C8C8C6",
+        icct: {
+          primary: "#190089",
+          secondary: "#3F9CDE",
+          accent: "#6D68FF",
+          light: "#CFE4FF",
+          dark: "#0A0044",
+        },
       },
     },
   },
   plugins: [],
+  corePlugins: {
+    preflight: true,
+  },
 };
 export default config;

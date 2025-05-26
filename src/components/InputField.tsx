@@ -1,36 +1,26 @@
-import { FieldError } from "react-hook-form";
+import { UseFormRegister } from "react-hook-form";
 
-type InputFieldProps = {
+export interface InputFieldProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label: string;
-  type?: string;
-  register: any;
-  name: string;
-  defaultValue?: string;
-  error?: FieldError;
-  inputProps?: React.InputHTMLAttributes<HTMLInputElement>;
-};
+  error?: string;
+  register?: UseFormRegister<any>;
+}
 
-const InputField = ({
-  label,
-  type = "text",
-  register,
-  name,
-  defaultValue,
-  error,
-  inputProps,
-}: InputFieldProps) => {
+const InputField = ({ label, error, register, ...props }: InputFieldProps) => {
   return (
-    <div className="flex flex-col gap-2 w-full md:w-1/4">
-      <label className="text-xs text-gray-500">{label}</label>
+    <div className="flex flex-col gap-1.5">
+      <label className="block text-sm font-medium text-gray-700">
+        {label}
+      </label>
       <input
-        type={type}
-        {...register(name)}
-        className="ring-[1.5px] ring-gray-300 p-2 rounded-md text-sm w-full"
-        {...inputProps}
-        defaultValue={defaultValue}
+        {...props}
+        {...(register ? register(props.name || "") : {})}
+        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
       />
-      {error?.message && (
-        <p className="text-xs text-red-400">{error.message.toString()}</p>
+      {error && (
+        <p className="text-sm text-red-600 bg-red-50 px-3 py-1.5 rounded-lg">
+          {error}
+        </p>
       )}
     </div>
   );

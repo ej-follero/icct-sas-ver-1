@@ -2,107 +2,126 @@
 @tailwind components;
 @tailwind utilities;
 
-.react-calendar {
-  width: 100% !important;
-  border: none !important;
-  font-family: "Inter", sans-serif !important;
+@layer base {
+  body {
+    background-color: #899BBD;
+  }
 }
 
-.react-calendar__navigation__label__labelText {
-  font-weight: 600;
+@layer components {
+  /* Big Calendar Styles */
+  .rbc-btn-group:first-child {
+    display: none;
+  }
+
+  .rbc-toolbar-label {
+    text-align: right;
+    padding-left: 1.25rem;
+    padding-right: 1.25rem;
+  }
+
+  .rbc-btn-group:last-child {
+    font-size: 0.875rem;
+  }
+
+  .rbc-btn-group:last-child button {
+    border: none;
+    background-color: theme('colors.sasLightGray');
+    margin-left: 0.125rem;
+  }
+
+  .rbc-toolbar button.rbc-active {
+    background-color: theme('colors.sasBlue');
+    color: white;
+    box-shadow: none;
+  }
+
+  .rbc-time-view {
+    border-color: theme('colors.sasLightGray');
+  }
+
+  .rbc-time-header {
+    display: none;
+  }
+
+  .rbc-time-content {
+    border: none;
+  }
+
+  .rbc-time-gutter.rbc-time-column {
+    font-size: 0.75rem;
+  }
+
+  .rbc-time-gutter.rbc-time-column .rbc-timeslot-group {
+    padding-left: 1.25rem;
+    padding-right: 1.25rem;
+  }
+
+  .rbc-timeslot-group {
+    background-color: theme('colors.sasLightGray');
+  }
+
+  .rbc-day-slot {
+    font-size: 0.875rem;
+  }
+
+  .rbc-event {
+    border: none;
+    color: theme('colors.gray.800');
+    padding: 0.625rem;
+    margin: 0.625rem;
+    width: 99%;
+  }
+
+  .rbc-event:nth-child(odd) {
+    background-color: theme('colors.sasSkyLight');
+    color: white;
+  }
+
+  .rbc-event:nth-child(even) {
+    background-color: theme('colors.sasLightGray');
+  }
+
+  .rbc-event-label {
+    color: theme('colors.gray.600');
+    margin-bottom: 0.25rem;
+  }
 }
 
-.react-calendar__tile--active {
-  background-color: #c3ebfa !important;
-  color: black !important;
-}
+@layer utilities {
+  .bg-primary {
+    background-color: theme('colors.sasBlue');
+  }
 
-.rbc-btn-group:first-child {
-  display: none !important;
-}
+  .bg-primary-light {
+    background-color: theme('colors.sasSkyLight');
+  }
 
-.rbc-toolbar-label {
-  text-align: right !important;
-  padding: 0px 20px !important;
-}
+  .bg-primary-dark {
+    background-color: theme('colors.sasBlue');
+  }
 
-.rbc-btn-group:last-child {
-  font-size: 13px !important;
-}
+  .text-primary {
+    color: theme('colors.sasBlue');
+  }
 
-.rbc-btn-group:last-child button {
-  border: none !important;
-  background-color: #f1f0ff !important;
-  margin-left: 2px !important;
-}
+  .text-primary-light {
+    color: theme('colors.sasSkyLight');
+  }
 
-.rbc-toolbar button.rbc-active {
-  background-color: #dbdafe !important;
-  box-shadow: none !important;
-}
+  .text-primary-dark {
+    color: theme('colors.sasBlue');
+  }
 
-.rbc-time-view {
-  border-color: #eee !important;
-}
+  .hover\:bg-primary:hover {
+    background-color: theme('colors.sasBlue');
+  }
 
-.rbc-time-header {
-  display: none !important;
-}
+  .hover\:bg-primary-light:hover {
+    background-color: theme('colors.sasSkyLight');
+  }
 
-.rbc-time-content {
-  border: none !important;
-}
-
-.rbc-time-gutter.rbc-time-column {
-  font-size: 12px !important;
-}
-
-.rbc-time-gutter.rbc-time-column .rbc-timeslot-group {
-  padding: 0px 20px !important;
-}
-
-.rbc-timeslot-group {
-  background-color: #f7fdff !important;
-}
-
-.rbc-day-slot {
-  font-size: 14px !important;
-}
-
-.rbc-event {
-  border: none !important;
-  color: black !important;
-  padding: 10px !important;
-  margin: 10px !important;
-  width: 99% !important;
-}
-
-.rbc-event:nth-child(1) {
-  background-color: #e2f8ff !important;
-}
-.rbc-event:nth-child(2) {
-  background-color: #fefce8 !important;
-}
-.rbc-event:nth-child(3) {
-  background-color: #f2f1ff !important;
-}
-.rbc-event:nth-child(4) {
-  background-color: #fdf2fb !important;
-}
-.rbc-event:nth-child(5) {
-  background-color: #e2f8ff !important;
-}
-.rbc-event:nth-child(6) {
-  background-color: #fefce8 !important;
-}
-.rbc-event:nth-child(7) {
-  background-color: #f2f1ff !important;
-}
-.rbc-event:nth-child(8) {
-  background-color: #fdf2fb !important;
-}
-
-.rbc-event-label{
-  color: gray !important;
-  margin-bottom: 5px;
+  .hover\:bg-primary-dark:hover {
+    background-color: theme('colors.sasBlue');
+  }
 }

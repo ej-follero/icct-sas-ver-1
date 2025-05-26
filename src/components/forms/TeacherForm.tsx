@@ -2,162 +2,168 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
-import { z } from "zod";
+import { useState } from "react";
+import { 
+  Person as PersonIcon,
+  ContactMail as ContactMailIcon,
+  Work as WorkIcon,
+  Bloodtype as BloodtypeIcon,
+} from '@mui/icons-material';
 import InputField from "../InputField";
-import Image from "next/image";
+import SelectField from "./SelectField";
+import FormSection from "./FormSection";
+import { teacherSchema } from "@/lib/validations/form";
+import { TeacherData, FormProps, UserGender, UserStatus, BloodType } from "@/types/form";
 
-const schema = z.object({
-  username: z
-    .string()
-    .min(3, { message: "Username must be at least 3 characters long!" })
-    .max(20, { message: "Username must be at most 20 characters long!" }),
-  email: z.string().email({ message: "Invalid email address!" }),
-  password: z
-    .string()
-    .min(8, { message: "Password must be at least 8 characters long!" }),
-  firstName: z.string().min(1, { message: "First name is required!" }),
-  lastName: z.string().min(1, { message: "Last name is required!" }),
-  phone: z.string().min(1, { message: "Phone is required!" }),
-  address: z.string().min(1, { message: "Address is required!" }),
-  bloodType: z.string().min(1, { message: "Blood Type is required!" }),
-  birthday: z.date({ message: "Birthday is required!" }),
-  sex: z.enum(["male", "female"], { message: "Sex is required!" }),
-  img: z.instanceof(File, { message: "Image is required" }),
-});
+const TeacherForm = ({ type, data, onSubmit, isLoading }: FormProps<TeacherData>) => {
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
-type Inputs = z.infer<typeof schema>;
-
-const TeacherForm = ({
-  type,
-  data,
-}: {
-  type: "create" | "update";
-  data?: any;
-}) => {
   const {
     register,
     handleSubmit,
     formState: { errors },
-  } = useForm<Inputs>({
-    resolver: zodResolver(schema),
+  } = useForm<TeacherData>({
+    resolver: zodResolver(teacherSchema),
+    defaultValues: data,
   });
 
-  const onSubmit = handleSubmit((data) => {
-    console.log(data);
-  });
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setSelectedImage(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   return (
-    <form className="flex flex-col gap-8" onSubmit={onSubmit}>
-      <h1 className="text-xl font-semibold">Create a new teacher</h1>
-      <span className="text-xs text-gray-400 font-medium">
-        Authentication Information
-      </span>
-      <div className="flex justify-between flex-wrap gap-4">
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
+      {/* Form Title */}
+      <div className="space-y-2">
+        <h1 className="text-2xl font-semibold text-gray-900">
+          {type === "create" ? "Create New Teacher" : "Update Teacher"}
+        </h1>
+        <p className="text-sm text-gray-500">
+          {type === "create" 
+            ? "Fill in the details below to add a new teacher to the system" 
+            : "Update the teacher's information in the system"}
+        </p>
+      </div>
+
+      {/* Authentication Section */}
+      <FormSection title="Authentication Details" icon={ContactMailIcon} color="blue">
         <InputField
           label="Username"
-          name="username"
-          defaultValue={data?.username}
-          register={register}
-          error={errors?.username}
+          type="text"
+          error={errors.username?.message}
+          {...register("username")}
+          placeholder="Enter username"
         />
         <InputField
-          label="Email"
-          name="email"
-          defaultValue={data?.email}
-          register={register}
-          error={errors?.email}
+          label="Email Address"
+          type="email"
+          error={errors.email?.message}
+          {...register("email")}
+          placeholder="Enter email address"
         />
-        <InputField
-          label="Password"
-          name="password"
-          type="password"
-          defaultValue={data?.password}
-          register={register}
-          error={errors?.password}
-        />
-      </div>
-      <span className="text-xs text-gray-400 font-medium">
-        Personal Information
-      </span>
-      <div className="flex justify-between flex-wrap gap-4">
+        {type === "create" && (
+          <InputField
+            label="Password"
+            type="password"
+            error={errors.password?.message}
+            {...register("password")}
+            placeholder="Enter password (min. 6 characters)"
+          />
+        )}
+      </FormSection>
+
+      {/* Personal Information Section */}
+      <FormSection title="Personal Information" icon={PersonIcon} color="green">
         <InputField
           label="First Name"
-          name="firstName"
-          defaultValue={data?.firstName}
-          register={register}
-          error={errors.firstName}
+          type="text"
+          error={errors.firstName?.message}
+          {...register("firstName")}
+          placeholder="Enter first name"
         />
         <InputField
           label="Last Name"
-          name="lastName"
-          defaultValue={data?.lastName}
+          type="text"
+          error={errors.lastName?.message}
+          {...register("lastName")}
+          placeholder="Enter last name"
+        />
+        <SelectField
+          label="Gender"
+          name="gender"
+          options={Object.values(UserGender).map(gender => ({
+            value: gender,
+            label: gender.charAt(0) + gender.slice(1).toLowerCase()
+          }))}
           register={register}
-          error={errors.lastName}
+          error={errors.gender?.message}
+          required
+        />
+        <SelectField
+          label="Status"
+          name="status"
+          options={Object.values(UserStatus).map(status => ({
+            value: status,
+            label: status.charAt(0) + status.slice(1).toLowerCase()
+          }))}
+          register={register}
+          error={errors.status?.message}
+          required
+        />
+      </FormSection>
+
+      {/* Additional Information Section */}
+      <FormSection title="Additional Information" icon={WorkIcon} color="purple">
+        <InputField
+          label="Birthday"
+          type="date"
+          error={errors.birthday?.message}
+          {...register("birthday")}
+        />
+        <SelectField
+          label="Blood Type"
+          name="bloodType"
+          options={Object.values(BloodType).map(type => ({
+            value: type,
+            label: type
+          }))}
+          register={register}
+          error={errors.bloodType?.message}
+          required
         />
         <InputField
-          label="Phone"
-          name="phone"
-          defaultValue={data?.phone}
-          register={register}
-          error={errors.phone}
+          label="Phone Number"
+          type="tel"
+          error={errors.phoneNumber?.message}
+          {...register("phoneNumber")}
+          placeholder="Enter phone number"
         />
         <InputField
           label="Address"
-          name="address"
-          defaultValue={data?.address}
-          register={register}
-          error={errors.address}
+          type="text"
+          error={errors.address?.message}
+          {...register("address")}
+          placeholder="Enter complete address"
         />
-        <InputField
-          label="Blood Type"
-          name="bloodType"
-          defaultValue={data?.bloodType}
-          register={register}
-          error={errors.bloodType}
-        />
-        <InputField
-          label="Birthday"
-          name="birthday"
-          defaultValue={data?.birthday}
-          register={register}
-          error={errors.birthday}
-          type="date"
-        />
-        <div className="flex flex-col gap-2 w-full md:w-1/4">
-          <label className="text-xs text-gray-500">Sex</label>
-          <select
-            className="ring-[1.5px] ring-gray-300 p-2 rounded-md text-sm w-full"
-            {...register("sex")}
-            defaultValue={data?.sex}
-          >
-            <option value="male">Male</option>
-            <option value="female">Female</option>
-          </select>
-          {errors.sex?.message && (
-            <p className="text-xs text-red-400">
-              {errors.sex.message.toString()}
-            </p>
-          )}
-        </div>
-        <div className="flex flex-col gap-2 w-full md:w-1/4 justify-center">
-          <label
-            className="text-xs text-gray-500 flex items-center gap-2 cursor-pointer"
-            htmlFor="img"
-          >
-            <Image src="/upload.png" alt="" width={28} height={28} />
-            <span>Upload a photo</span>
-          </label>
-          <input type="file" id="img" {...register("img")} className="hidden" />
-          {errors.img?.message && (
-            <p className="text-xs text-red-400">
-              {errors.img.message.toString()}
-            </p>
-          )}
-        </div>
+      </FormSection>
+
+      {/* Submit Button */}
+      <div className="flex justify-end">
+        <button
+          type="submit"
+          disabled={isLoading}
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {isLoading ? "Saving..." : type === "create" ? "Create Teacher" : "Update Teacher"}
+        </button>
       </div>
-      <button className="bg-blue-400 text-white p-2 rounded-md">
-        {type === "create" ? "Create" : "Update"}
-      </button>
     </form>
   );
 };

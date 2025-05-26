@@ -2,162 +2,186 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
-import { z } from "zod";
+import { useState } from "react";
+import { 
+  Person as PersonIcon,
+  School as SchoolIcon,
+  ContactMail as ContactMailIcon,
+  Badge as BadgeIcon,
+} from '@mui/icons-material';
 import InputField from "../InputField";
-import Image from "next/image";
+import SelectField from "./SelectField";
+import FormSection from "./FormSection";
+import { studentSchema } from "@/lib/validations/form";
+import { StudentData, FormProps, UserGender, UserStatus, StudentType, YearLevel } from "@/types/form";
+//import { z } from "zod";
 
-const schema = z.object({
-  username: z
-    .string()
-    .min(3, { message: "Username must be at least 3 characters long!" })
-    .max(20, { message: "Username must be at most 20 characters long!" }),
-  email: z.string().email({ message: "Invalid email address!" }),
-  password: z
-    .string()
-    .min(8, { message: "Password must be at least 8 characters long!" }),
-  firstName: z.string().min(1, { message: "First name is required!" }),
-  lastName: z.string().min(1, { message: "Last name is required!" }),
-  phone: z.string().min(1, { message: "Phone is required!" }),
-  address: z.string().min(1, { message: "Address is required!" }),
-  bloodType: z.string().min(1, { message: "Blood Type is required!" }),
-  birthday: z.date({ message: "Birthday is required!" }),
-  sex: z.enum(["male", "female"], { message: "Sex is required!" }),
-  img: z.instanceof(File, { message: "Image is required" }),
-});
+const StudentForm = ({ type, data, onSubmit, isLoading }: FormProps<StudentData>) => {
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
-type Inputs = z.infer<typeof schema>;
-
-const StudentForm = ({
-  type,
-  data,
-}: {
-  type: "create" | "update";
-  data?: any;
-}) => {
   const {
     register,
     handleSubmit,
     formState: { errors },
-  } = useForm<Inputs>({
-    resolver: zodResolver(schema),
+  } = useForm<StudentData>({
+    resolver: zodResolver(studentSchema),
+    defaultValues: data,
   });
 
-  const onSubmit = handleSubmit((data) => {
-    console.log(data);
-  });
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setSelectedImage(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   return (
-    <form className="flex flex-col gap-8" onSubmit={onSubmit}>
-      <h1 className="text-xl font-semibold">Create a new student</h1>
-      <span className="text-xs text-gray-400 font-medium">
-        Authentication Information
-      </span>
-      <div className="flex justify-between flex-wrap gap-4">
-        <InputField
-          label="Username"
-          name="username"
-          defaultValue={data?.username}
-          register={register}
-          error={errors?.username}
-        />
-        <InputField
-          label="Email"
-          name="email"
-          defaultValue={data?.email}
-          register={register}
-          error={errors?.email}
-        />
-        <InputField
-          label="Password"
-          name="password"
-          type="password"
-          defaultValue={data?.password}
-          register={register}
-          error={errors?.password}
-        />
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
+      {/* Form Title */}
+      <div className="space-y-2">
+        <h1 className="text-2xl font-semibold text-gray-900">
+          {type === "create" ? "Create New Student" : "Update Student"}
+        </h1>
+        <p className="text-sm text-gray-500">
+          {type === "create" 
+            ? "Fill in the details below to add a new student to the system" 
+            : "Update the student's information in the system"}
+        </p>
       </div>
-      <span className="text-xs text-gray-400 font-medium">
-        Personal Information
-      </span>
-      <div className="flex justify-between flex-wrap gap-4">
+
+      {/* Student Identification Section */}
+      <FormSection title="Student Identification" icon={BadgeIcon} color="blue">
+        <InputField
+          label="Student ID Number"
+          type="text"
+          error={errors.studentIdNum?.message}
+          {...register("studentIdNum")}
+          placeholder="Enter student ID number"
+        />
+        <InputField
+          label="RFID Tag"
+          type="text"
+          error={errors.rfidTag?.message}
+          {...register("rfidTag")}
+          placeholder="Enter RFID tag"
+        />
+        <SelectField
+          label="Student Type"
+          name="studentType"
+          options={Object.values(StudentType).map(type => ({
+            value: type,
+            label: type.charAt(0) + type.slice(1).toLowerCase().replace('_', ' ')
+          }))}
+          register={register}
+          error={errors.studentType?.message}
+          required
+        />
+        <SelectField
+          label="Year Level"
+          name="yearLevel"
+          options={Object.values(YearLevel).map(level => ({
+            value: level,
+            label: level.charAt(0) + level.slice(1).toLowerCase().replace('_', ' ')
+          }))}
+          register={register}
+          error={errors.yearLevel?.message}
+          required
+        />
+      </FormSection>
+
+      {/* Personal Information Section */}
+      <FormSection title="Personal Information" icon={PersonIcon} color="green">
         <InputField
           label="First Name"
-          name="firstName"
-          defaultValue={data?.firstName}
-          register={register}
-          error={errors.firstName}
+          type="text"
+          error={errors.firstName?.message}
+          {...register("firstName")}
+          placeholder="Enter first name"
+        />
+        <InputField
+          label="Middle Name"
+          type="text"
+          error={errors.middleName?.message}
+          {...register("middleName")}
+          placeholder="Enter middle name"
         />
         <InputField
           label="Last Name"
-          name="lastName"
-          defaultValue={data?.lastName}
-          register={register}
-          error={errors.lastName}
+          type="text"
+          error={errors.lastName?.message}
+          {...register("lastName")}
+          placeholder="Enter last name"
         />
         <InputField
-          label="Phone"
-          name="phone"
-          defaultValue={data?.phone}
+          label="Suffix"
+          type="text"
+          error={errors.suffix?.message}
+          {...register("suffix")}
+          placeholder="Enter suffix (e.g., Jr., Sr.)"
+        />
+        <SelectField
+          label="Gender"
+          name="gender"
+          options={Object.values(UserGender).map(gender => ({
+            value: gender,
+            label: gender.charAt(0) + gender.slice(1).toLowerCase()
+          }))}
           register={register}
-          error={errors.phone}
+          error={errors.gender?.message}
+          required
+        />
+        <SelectField
+          label="Status"
+          name="status"
+          options={Object.values(UserStatus).map(status => ({
+            value: status,
+            label: status.charAt(0) + status.slice(1).toLowerCase()
+          }))}
+          register={register}
+          error={errors.status?.message}
+          required
+        />
+      </FormSection>
+
+      {/* Contact Information Section */}
+      <FormSection title="Contact Information" icon={ContactMailIcon} color="purple">
+        <InputField
+          label="Email Address"
+          type="email"
+          error={errors.email?.message}
+          {...register("email")}
+          placeholder="Enter email address"
+        />
+        <InputField
+          label="Phone Number"
+          type="tel"
+          error={errors.phoneNumber?.message}
+          {...register("phoneNumber")}
+          placeholder="Enter phone number"
         />
         <InputField
           label="Address"
-          name="address"
-          defaultValue={data?.address}
-          register={register}
-          error={errors.address}
+          type="text"
+          error={errors.address?.message}
+          {...register("address")}
+          placeholder="Enter complete address"
         />
-        <InputField
-          label="Blood Type"
-          name="bloodType"
-          defaultValue={data?.bloodType}
-          register={register}
-          error={errors.bloodType}
-        />
-        <InputField
-          label="Birthday"
-          name="birthday"
-          defaultValue={data?.birthday}
-          register={register}
-          error={errors.birthday}
-          type="date"
-        />
-        <div className="flex flex-col gap-2 w-full md:w-1/4">
-          <label className="text-xs text-gray-500">Sex</label>
-          <select
-            className="ring-[1.5px] ring-gray-300 p-2 rounded-md text-sm w-full"
-            {...register("sex")}
-            defaultValue={data?.sex}
-          >
-            <option value="male">Male</option>
-            <option value="female">Female</option>
-          </select>
-          {errors.sex?.message && (
-            <p className="text-xs text-red-400">
-              {errors.sex.message.toString()}
-            </p>
-          )}
-        </div>
-        <div className="flex flex-col gap-2 w-full md:w-1/4 justify-center">
-          <label
-            className="text-xs text-gray-500 flex items-center gap-2 cursor-pointer"
-            htmlFor="img"
-          >
-            <Image src="/upload.png" alt="" width={28} height={28} />
-            <span>Upload a photo</span>
-          </label>
-          <input type="file" id="img" {...register("img")} className="hidden" />
-          {errors.img?.message && (
-            <p className="text-xs text-red-400">
-              {errors.img.message.toString()}
-            </p>
-          )}
-        </div>
+      </FormSection>
+
+      {/* Submit Button */}
+      <div className="flex justify-end">
+        <button
+          type="submit"
+          disabled={isLoading}
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {isLoading ? "Saving..." : type === "create" ? "Create Student" : "Update Student"}
+        </button>
       </div>
-      <button className="bg-blue-400 text-white p-2 rounded-md">
-        {type === "create" ? "Create" : "Update"}
-      </button>
     </form>
   );
 };

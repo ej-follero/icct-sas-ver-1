@@ -1,6 +1,56 @@
 // TEMPORARY DATA
 
+import { UserGender, InstructorType, Status } from "@/types/enums";
+import { Teacher } from "@/types/teacher";
+
 export let role = "admin";
+
+type StudentType = "regular" | "irregular" | "transferee";
+
+type Student = {
+  studentId: number;
+  studentIdNum: string;
+  rfidTag: string;
+  firstName: string;
+  middleName?: string;
+  lastName: string;
+  suffix?: string;
+  email: string;
+  phoneNumber: string;
+  address: string;
+  img?: string;
+  gender: "MALE" | "FEMALE";
+  studentType: "REGULAR" | "IRREGULAR";
+  status: "ACTIVE" | "INACTIVE";
+  yearLevel: "FIRST_YEAR" | "SECOND_YEAR" | "THIRD_YEAR" | "FOURTH_YEAR";
+  guardianId: number;
+  userId: number;
+  section_name?: string;
+  guardian_name?: string;
+};
+
+export const instructorsData: Teacher[] = [
+  {
+    instructorId: 1,
+    email: "john.doe@example.com",
+    phoneNumber: "+1234567890",
+    firstName: "John",
+    middleName: "Robert",
+    lastName: "Doe",
+    suffix: "Jr.",
+    img: "/images/instructors/john-doe.jpg",
+    gender: UserGender.MALE,
+    instructorType: InstructorType.FULL_TIME,
+    status: Status.ACTIVE,
+    departmentId: 1,
+    departmentName: "Computer Science",
+    rfidTag: "RFID001",
+    rfidtagNumber: "TAG001",
+    createdAt: new Date(),
+    updatedAt: new Date()
+  },
+  // Add more mock data as needed
+];
 
 export const teachersData = [
   {
@@ -125,126 +175,153 @@ export const teachersData = [
   },
 ];
 
-export const studentsData = [
+export const studentsData: Student[] = [
   {
-    id: 1,
-    studentId: "1234567890",
-    name: "John Doe",
-    email: "john@doe.com",
-    photo:
-      "https://images.pexels.com/photos/2888150/pexels-photo-2888150.jpeg?auto=compress&cs=tinysrgb&w=1200",
-    phone: "1234567890",
-    grade: 5,
-    class: "1B",
-    address: "123 Main St, Anytown, USA",
+    studentId: 1,
+    studentIdNum: "STU001",
+    rfidTag: "RFID001",
+    firstName: "John",
+    middleName: "Smith",
+    lastName: "Doe",
+    suffix: "Jr",
+    email: "john.doe@example.com",
+    phoneNumber: "+1234567890",
+    address: "123 Main St",
+    img: "/images/students/student1.jpg",
+    gender: "MALE",
+    studentType: "REGULAR",
+    status: "ACTIVE",
+    yearLevel: "FIRST_YEAR",
+    guardianId: 1,
+    userId: 1,
+    section_name: "Section A",
+    guardian_name: "Jane Doe"
   },
   {
-    id: 2,
-    studentId: "1234567890",
-    name: "Jane Doe",
-    email: "jane@doe.com",
-    photo:
-      "https://images.pexels.com/photos/936126/pexels-photo-936126.jpeg?auto=compress&cs=tinysrgb&w=1200",
-    phone: "1234567890",
-    grade: 5,
-    class: "5A",
-    address: "123 Main St, Anytown, USA",
+    studentId: 2,
+    studentIdNum: "STU002",
+    rfidTag: "RFID002",
+    firstName: "Jane",
+    middleName: "",
+    lastName: "Smith",
+    suffix: "",
+    email: "jane.smith@example.com",
+    phoneNumber: "+1987654321",
+    address: "456 Oak St",
+    img: "/images/students/student2.jpg",
+    gender: "FEMALE",
+    studentType: "IRREGULAR",
+    status: "ACTIVE",
+    yearLevel: "SECOND_YEAR",
+    guardianId: 2,
+    userId: 2,
+    section_name: "Section B",
+    guardian_name: "John Smith"
   },
   {
-    id: 3,
-    studentId: "1234567890",
-    name: "Mike Geller",
-    email: "mike@geller.com",
-    photo:
-      "https://images.pexels.com/photos/428328/pexels-photo-428328.jpeg?auto=compress&cs=tinysrgb&w=1200",
-    phone: "1234567890",
-    grade: 5,
-    class: "5A",
-    address: "123 Main St, Anytown, USA",
+    studentId: 3,
+    studentIdNum: "STU003",
+    rfidTag: "RFID003",
+    firstName: "Michael",
+    middleName: "James",
+    lastName: "Johnson",
+    suffix: "",
+    email: "michael.j@example.com",
+    phoneNumber: "+1122334455",
+    address: "789 Pine St",
+    img: "/images/students/student3.jpg",
+    gender: "MALE",
+    studentType: "REGULAR",
+    status: "ACTIVE",
+    yearLevel: "THIRD_YEAR",
+    guardianId: 3,
+    userId: 3,
+    section_name: "Section A",
+    guardian_name: "Sarah Johnson"
   },
   {
-    id: 4,
-    studentId: "1234567890",
-    name: "Jay French",
-    email: "jay@gmail.com",
-    photo:
-      "https://images.pexels.com/photos/1187765/pexels-photo-1187765.jpeg?auto=compress&cs=tinysrgb&w=1200",
-    phone: "1234567890",
-    grade: 5,
-    class: "5A",
-    address: "123 Main St, Anytown, USA",
+    studentId: 4,
+    studentIdNum: "STU004",
+    rfidTag: "RFID004",
+    firstName: "Jay",
+    middleName: "",
+    lastName: "French",
+    suffix: "",
+    email: "jay.french@example.com",
+    phoneNumber: "+1234567890",
+    address: "123 Main St",
+    img: "/images/students/student4.jpg",
+    gender: "MALE",
+    studentType: "REGULAR",
+    status: "ACTIVE",
+    yearLevel: "FIRST_YEAR",
+    guardianId: 4,
+    userId: 4,
+    section_name: "Section B",
+    guardian_name: "Mary French"
   },
   {
-    id: 5,
-    studentId: "1234567890",
-    name: "Jane Smith",
-    email: "jane@gmail.com",
-    photo:
-      "https://images.pexels.com/photos/1102341/pexels-photo-1102341.jpeg?auto=compress&cs=tinysrgb&w=1200",
-    phone: "1234567890",
-    grade: 5,
-    class: "5A",
-    address: "123 Main St, Anytown, USA",
+    studentId: 5,
+    studentIdNum: "STU005",
+    rfidTag: "RFID005",
+    firstName: "Jane",
+    middleName: "",
+    lastName: "Smith",
+    suffix: "",
+    email: "jane.smith@example.com",
+    phoneNumber: "+1234567890",
+    address: "123 Main St",
+    img: "/images/students/student5.jpg",
+    gender: "FEMALE",
+    studentType: "REGULAR",
+    status: "ACTIVE",
+    yearLevel: "FIRST_YEAR",
+    guardianId: 5,
+    userId: 5,
+    section_name: "Section A",
+    guardian_name: "Robert Smith"
   },
   {
-    id: 6,
-    studentId: "1234567890",
-    name: "Anna Santiago",
-    email: "anna@gmail.com",
-    photo:
-      "https://images.pexels.com/photos/712513/pexels-photo-712513.jpeg?auto=compress&cs=tinysrgb&w=1200",
-    phone: "1234567890",
-    grade: 5,
-    class: "5A",
-    address: "123 Main St, Anytown, USA",
+    studentId: 6,
+    studentIdNum: "STU006",
+    rfidTag: "RFID006",
+    firstName: "Anna",
+    middleName: "",
+    lastName: "Santiago",
+    suffix: "",
+    email: "anna.santiago@example.com",
+    phoneNumber: "+1234567890",
+    address: "123 Main St",
+    img: "/images/students/student6.jpg",
+    gender: "FEMALE",
+    studentType: "REGULAR",
+    status: "ACTIVE",
+    yearLevel: "FIRST_YEAR",
+    guardianId: 6,
+    userId: 6,
+    section_name: "Section A",
+    guardian_name: "Carlos Santiago"
   },
   {
-    id: 7,
-    studentId: "1234567890",
-    name: "Allen Black",
-    email: "allen@black.com",
-    photo:
-      "https://images.pexels.com/photos/1438081/pexels-photo-1438081.jpeg?auto=compress&cs=tinysrgb&w=1200",
-    phone: "1234567890",
-    grade: 5,
-    class: "5A",
-    address: "123 Main St, Anytown, USA",
-  },
-  {
-    id: 8,
-    studentId: "1234567890",
-    name: "Ophelia Castro",
-    email: "ophelia@castro.com",
-    photo:
-      "https://images.pexels.com/photos/1036623/pexels-photo-1036623.jpeg?auto=compress&cs=tinysrgb&w=1200",
-    phone: "1234567890",
-    grade: 5,
-    class: "5A",
-    address: "123 Main St, Anytown, USA",
-  },
-  {
-    id: 9,
-    studentId: "1234567890",
-    name: "Derek Briggs",
-    email: "derek@briggs.com",
-    photo:
-      "https://images.pexels.com/photos/842980/pexels-photo-842980.jpeg?auto=compress&cs=tinysrgb&w=1200",
-    phone: "1234567890",
-    grade: 5,
-    class: "5A",
-    address: "123 Main St, Anytown, USA",
-  },
-  {
-    id: 10,
-    studentId: "1234567890",
-    name: "John Glover",
-    email: "john@glover.com",
-    photo:
-      "https://images.pexels.com/photos/1043474/pexels-photo-1043474.jpeg?auto=compress&cs=tinysrgb&w=1200",
-    phone: "1234567890",
-    grade: 5,
-    class: "5A",
-    address: "123 Main St, Anytown, USA",
+    studentId: 7,
+    studentIdNum: "STU007",
+    rfidTag: "RFID007",
+    firstName: "Allen",
+    middleName: "",
+    lastName: "Black",
+    suffix: "",
+    email: "allen.black@example.com",
+    phoneNumber: "+1234567890",
+    address: "123 Main St",
+    img: "/images/students/student7.jpg",
+    gender: "MALE",
+    studentType: "REGULAR",
+    status: "ACTIVE",
+    yearLevel: "FIRST_YEAR",
+    guardianId: 7,
+    userId: 7,
+    section_name: "Section B",
+    guardian_name: "Patricia Black"
   },
 ];
 
@@ -335,52 +412,52 @@ export const subjectsData = [
   {
     id: 1,
     name: "Math",
-    teachers: ["Alice Phelps", "Russell Davidson"],
+    instructors: ["Alice Phelps", "Russell Davidson"],
   },
   {
     id: 2,
     name: "English",
-    teachers: ["Manuel Becker", "Eddie Chavez"],
+    instructors: ["Manuel Becker", "Eddie Chavez"],
   },
   {
     id: 3,
     name: "Physics",
-    teachers: ["Lola Newman", "Darrell Delgado"],
+    instructors: ["Lola Newman", "Darrell Delgado"],
   },
   {
     id: 4,
     name: "Chemistry",
-    teachers: ["Nathan Kelly", "Benjamin Snyder"],
+    instructors: ["Nathan Kelly", "Benjamin Snyder"],
   },
   {
     id: 5,
     name: "Biology",
-    teachers: ["Alma Benson", "Lina Collier"],
+    instructors: ["Alma Benson", "Lina Collier"],
   },
   {
     id: 6,
     name: "History",
-    teachers: ["Hannah Bowman", "Betty Obrien"],
+    instructors: ["Hannah Bowman", "Betty Obrien"],
   },
   {
     id: 7,
     name: "Geography",
-    teachers: ["Lora French", "Sue Brady"],
+    instructors: ["Lora French", "Sue Brady"],
   },
   {
     id: 8,
     name: "Art",
-    teachers: ["Harriet Alvarado", "Mayme Keller"],
+    instructors: ["Harriet Alvarado", "Mayme Keller"],
   },
   {
     id: 9,
     name: "Music",
-    teachers: ["Gertrude Roy", "Rosa Singleton"],
+    instructors: ["Gertrude Roy", "Rosa Singleton"],
   },
   {
     id: 10,
     name: "Literature",
-    teachers: ["Effie Lynch", "Brett Flowers"],
+    instructors: ["Effie Lynch", "Brett Flowers"],
   },
 ];
 
