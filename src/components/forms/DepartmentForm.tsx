@@ -1,36 +1,40 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Button,
-  TextField,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Box,
-  Typography,
-  Chip,
-  FormHelperText,
-  CircularProgress,
-  Divider,
-  Autocomplete,
-  IconButton,
-  Tooltip,
-  Paper,
-} from "@mui/material";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { toast } from "sonner";
-import InfoIcon from '@mui/icons-material/Info';
-import SupervisorAccountIcon from '@mui/icons-material/SupervisorAccount';
-import ListAltIcon from '@mui/icons-material/ListAlt';
-import CloseIcon from '@mui/icons-material/Close';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogClose,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Form,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormControl,
+  FormMessage,
+} from "@/components/ui/form";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Info, User, List, X } from "lucide-react";
 
 interface Course {
   id: string;
@@ -60,7 +64,7 @@ const departmentFormSchema = z.object({
     description: z.string().optional(),
     status: z.enum(["active", "inactive"]),
     totalStudents: z.number(),
-    totalSections: z.number()
+    totalSections: z.number(),
   })),
   status: z.enum(["active", "inactive"]),
   totalInstructors: z.number().optional(),
@@ -72,7 +76,7 @@ interface DepartmentFormModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialData?: {
-  id: string;
+    id: string;
     name: string;
     code: string;
     headOfDepartment: string;
@@ -85,12 +89,12 @@ interface DepartmentFormModalProps {
   onSuccess: () => void;
 }
 
-export function DepartmentForm({ 
-  open, 
-  onOpenChange, 
-  initialData, 
+export function DepartmentForm({
+  open,
+  onOpenChange,
+  initialData,
   instructors,
-  onSuccess 
+  onSuccess,
 }: DepartmentFormModalProps) {
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
@@ -144,25 +148,23 @@ export function DepartmentForm({
       const fetchCourses = async () => {
         try {
           setLoading(true);
-          const response = await fetch('/api/courses');
+          const response = await fetch("/api/courses");
           if (!response.ok) {
-            throw new Error('Failed to fetch courses');
+            throw new Error("Failed to fetch courses");
           }
           const data = await response.json();
           setCourses(data);
         } catch (error) {
-          console.error('Error fetching courses:', error);
-          toast.error('Failed to fetch courses');
+          console.error("Error fetching courses:", error);
+          toast.error("Failed to fetch courses");
         } finally {
           setLoading(false);
         }
       };
-
       fetchCourses();
     }
   }, [open]);
 
-  // Auto-focus Department Name
   useEffect(() => {
     if (open && nameInputRef.current) {
       nameInputRef.current.focus();
@@ -186,12 +188,11 @@ export function DepartmentForm({
     }
   };
 
-  // Watch code field for real-time validation
   useEffect(() => {
     if (!isEdit) {
       const sub = form.watch((value, { name }) => {
-        if (name === 'code') {
-          checkCodeExists(value.code || '');
+        if (name === "code") {
+          checkCodeExists(value.code || "");
         }
       });
       return () => sub.unsubscribe();
@@ -201,15 +202,15 @@ export function DepartmentForm({
   // Save as Draft
   const handleSaveDraft = () => {
     const values = form.getValues();
-    localStorage.setItem('departmentFormDraft', JSON.stringify(values));
+    localStorage.setItem("departmentFormDraft", JSON.stringify(values));
     setDraftSaved(true);
-    toast.success('Draft saved!');
+    toast.success("Draft saved!");
   };
 
   // Restore draft if present
   useEffect(() => {
     if (open && !isEdit) {
-      const draft = localStorage.getItem('departmentFormDraft');
+      const draft = localStorage.getItem("departmentFormDraft");
       if (draft) {
         form.reset(JSON.parse(draft));
       }
@@ -239,10 +240,9 @@ export function DepartmentForm({
     try {
       const url = isEdit && initialData?.id ? `/api/departments/${initialData.id}` : "/api/departments";
       const method = isEdit ? "PUT" : "POST";
-      
       const submitData = {
         ...data,
-        courseOfferings: data.courseOfferings.map(course => ({
+        courseOfferings: data.courseOfferings.map((course) => ({
           id: course.id,
           name: course.name,
           code: course.code,
@@ -252,13 +252,11 @@ export function DepartmentForm({
           totalSections: course.totalSections,
         })),
       };
-
       const response = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(submitData),
       });
-
       if (!response.ok) throw new Error("Failed to save department");
       toast.success(isEdit ? "Department updated successfully" : "Department created successfully");
       onSuccess();
@@ -271,318 +269,303 @@ export function DepartmentForm({
   }
 
   return (
-    <Dialog 
-      open={open} 
-      onClose={() => onOpenChange(false)} 
-      maxWidth="md" 
-      fullWidth 
-      PaperProps={{ 
-        sx: { 
-          borderRadius: 2,
-          boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)',
-          bgcolor: 'background.paper',
-          overflow: 'hidden'
-        } 
-      }}
-    >
-      {/* Form Header */}
-      <Box sx={{ 
-        bgcolor: 'primary.main',
-        color: 'primary.contrastText',
-        p: 3,
-        position: 'relative'
-      }}>
-        <Typography variant="h5" fontWeight={600}>
-          {isEdit ? 'Edit Department' : 'Add New Department'}
-        </Typography>
-        <Typography variant="body2" sx={{ mt: 0.5, opacity: 0.9 }}>
-          {isEdit ? 'Update department information and settings' : 'Create a new department with its details'}
-        </Typography>
-        <IconButton 
-          aria-label="close" 
-          onClick={() => onOpenChange(false)}
-          sx={{ 
-            position: 'absolute',
-            right: 8,
-            top: 8,
-            color: 'primary.contrastText',
-            '&:hover': { 
-              bgcolor: 'rgba(255, 255, 255, 0.1)'
-            }
-          }}
-        >
-          <CloseIcon />
-        </IconButton>
-      </Box>
-
-      <DialogContent sx={{ p: 0 }}>
-        <Box component="form" onSubmit={form.handleSubmit(onSubmit)} sx={{ mt: 0, display: 'flex', flexDirection: 'column', gap: 3, p: 3 }}>
-          {/* Error Summary */}
-          {showErrorSummary && hasErrors && (
-            <Paper 
-              elevation={0} 
-              sx={{ 
-                mb: 2, 
-                p: 2, 
-                bgcolor: 'error.light', 
-                color: 'error.contrastText', 
-                borderRadius: 1,
-                border: '1px solid',
-                borderColor: 'error.main'
-              }}
-            >
-              <Typography variant="subtitle1" fontWeight="bold">Please fix the following errors:</Typography>
-              <ul style={{ margin: 0, paddingLeft: 20 }}>
-                {Object.entries(form.formState.errors).map(([field, error]) => (
-                  <li key={field}><Typography variant="body2">{(error as any).message}</Typography></li>
-                ))}
-              </ul>
-            </Paper>
-          )}
-          {/* Basic Info Section */}
-          <Paper elevation={0} sx={{ p: 3, borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2, bgcolor: 'primary.50', p: 1.5, borderRadius: 1 }}>
-              <InfoIcon color="primary" />
-              <Typography variant="h6" fontWeight={600}>Basic Information</Typography>
-            </Box>
-            <TextField
-              fullWidth
-              inputRef={nameInputRef}
-              label={<span>Department Name <span style={{ color: 'error.main' }}>*</span></span>}
-              placeholder="e.g. Computer Science"
-              {...form.register("name", { required: true })}
-              error={!!form.formState.errors.name}
-              helperText={form.formState.errors.name?.message || <span style={{ color: 'text.secondary' }}>Enter the department name.</span>}
-              margin="normal"
-              sx={{ mb: 2 }}
-              inputProps={{ 'aria-label': 'Department Name' }}
-            />
-            <Tooltip title="A unique code for this department (e.g. CS for Computer Science)" arrow>
-              <TextField
-                fullWidth
-                label={<span>Department Code <span style={{ color: 'error.main' }}>*</span></span>}
-                placeholder="e.g. CS"
-                {...form.register("code", { required: true })}
-                error={!!form.formState.errors.code || codeExists}
-                helperText={
-                  form.formState.errors.code?.message ||
-                  (codeExists ? 'Department code already exists.' : <span style={{ color: 'text.secondary' }}>Enter a unique department code.</span>)
-                }
-                margin="normal"
-                disabled={isEdit}
-                sx={{ mb: 2 }}
-                inputProps={{ 'aria-label': 'Department Code' }}
-                InputProps={{
-                  endAdornment: checkingCode && !isEdit ? <CircularProgress size={18} /> : null
-                }}
-              />
-            </Tooltip>
-            <TextField
-              fullWidth
-              label="Description"
-              placeholder="Brief description of the department (optional)"
-              {...form.register("description")}
-              error={!!form.formState.errors.description}
-              helperText={form.formState.errors.description?.message || <span style={{ color: 'text.secondary' }}>Describe the department.</span>}
-              margin="normal"
-              multiline
-              rows={3}
-              sx={{ mb: 1 }}
-            />
-          </Paper>
-          {/* Head of Department Section */}
-          <Paper elevation={0} sx={{ p: 3, borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2, bgcolor: 'success.50', p: 1.5, borderRadius: 1 }}>
-              <SupervisorAccountIcon color="success" />
-              <Typography variant="h6" fontWeight={600}>Department Head</Typography>
-            </Box>
-            <FormControl fullWidth margin="normal" error={!!form.formState.errors.headOfDepartment}>
-              <InputLabel>Head of Department <span style={{ color: 'error.main' }}>*</span></InputLabel>
-              <Select
-                label="Head of Department *"
-                value={form.watch("headOfDepartment")}
-                onChange={(e) => form.setValue("headOfDepartment", e.target.value)}
-                sx={{ borderRadius: 1 }}
-              >
-                {instructors.map((instructor) => (
-                  <MenuItem key={instructor.id} value={instructor.name}>
-                    {instructor.name}
-                  </MenuItem>
-                ))}
-              </Select>
-              {form.formState.errors.headOfDepartment && (
-                <FormHelperText>{form.formState.errors.headOfDepartment.message}</FormHelperText>
-              )}
-            </FormControl>
-          </Paper>
-          {/* Course Offerings Section */}
-          <Paper elevation={0} sx={{ p: 3, borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2, bgcolor: 'secondary.50', p: 1.5, borderRadius: 1 }}>
-              <Typography variant="h6" fontWeight={600}>Course Offerings</Typography>
-            </Box>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-              Select courses to be offered by this department
-            </Typography>
-            {loading ? (
-              <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
-                <CircularProgress size={24} />
-              </Box>
-            ) : courses.length === 0 ? (
-              <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 1, mt: 1 }}>
-                <FormControl fullWidth disabled>
-                  <InputLabel>Course Offerings</InputLabel>
-                  <Select value="" label="Course Offerings" sx={{ bgcolor: 'action.disabledBackground' }}>
-                    <MenuItem value="">No courses available</MenuItem>
-                  </Select>
-                </FormControl>
-                <Typography variant="body2" color="text.secondary">
-                  No available courses. <b>Please add courses first.</b>
-                </Typography>
-                <Button
-                  variant="text"
-                  size="small"
-                  sx={{ mt: 1 }}
-                  href="/dashboard/courses"
-                  target="_blank"
-                  rel="noopener"
-                >
-                  Add Courses
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl w-full p-0">
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 p-6">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b pb-4 mb-4">
+              <div>
+                <h2 className="text-2xl font-semibold flex items-center gap-2">
+                  <Info className="text-blue-600" size={22} />
+                  {isEdit ? "Edit Department" : "Add New Department"}
+                </h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {isEdit
+                    ? "Update department information and settings"
+                    : "Create a new department with its details"}
+                </p>
+              </div>
+              <DialogClose asChild>
+                <Button type="button" variant="ghost" size="icon" className="text-gray-500 hover:text-red-600">
+                  <X size={20} />
                 </Button>
-              </Box>
-            ) : (
-              <Autocomplete
-                options={courses.filter(course => !(form.watch("courseOfferings") || []).some((c: Course) => c.id === course.id))}
-                getOptionLabel={(option) => `${option.name} (${option.code})`}
-                onChange={(_, value) => {
-                  if (value) {
-                    const currentCourses = form.getValues("courseOfferings") || [];
-                    form.setValue("courseOfferings", [...currentCourses, value]);
-                  }
-                }}
-                renderInput={(params) => (
-                  <TextField {...params} label="Add Course" placeholder="Search courses..." />
-                )}
-                sx={{ mb: 2 }}
-              />
+              </DialogClose>
+            </div>
+
+            {/* Error Summary */}
+            {showErrorSummary && hasErrors && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+                <h3 className="font-semibold text-red-700 mb-2">Please fix the following errors:</h3>
+                <ul className="list-disc pl-5 text-red-600 text-sm">
+                  {Object.entries(form.formState.errors).map(([field, error]) => (
+                    <li key={field}>{(error as any).message}</li>
+                  ))}
+                </ul>
+              </div>
             )}
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-              {(form.watch("courseOfferings") || []).map((course: Course) => (
-                <Chip
-                  key={course.id}
-                  label={`${course.name} (${course.code})`}
-                  onDelete={() => {
-                    const currentCourses = form.getValues("courseOfferings") || [];
-                    form.setValue(
-                      "courseOfferings",
-                      currentCourses.filter((c: Course) => c.id !== course.id)
-                    );
-                  }}
-                  sx={{
-                    backgroundColor: 'secondary.50',
-                    color: 'secondary.dark',
-                    fontWeight: 500,
-                    borderRadius: 1,
-                    '& .MuiChip-deleteIcon': {
-                      color: 'secondary.dark',
-                      '&:hover': {
-                        color: 'error.main',
-                      },
-                    },
-                  }}
+
+            {/* Basic Info Section */}
+            <div className="bg-white rounded-lg border p-4 mb-4">
+              <h4 className="font-semibold text-lg flex items-center gap-2 mb-2">
+                <Info className="text-blue-600" size={18} /> Basic Information
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Department Name *</FormLabel>
+                      <FormControl field={field}>
+                        <Input
+                          ref={nameInputRef}
+                          placeholder="e.g. Computer Science"
+                          aria-label="Department Name"
+                        />
+                      </FormControl>
+                      <FormMessage> </FormMessage>    
+                    </FormItem>
+                  )}
                 />
-              ))}
-            </Box>
-            {(!form.watch("courseOfferings") || form.watch("courseOfferings").length === 0) && !loading && courses.length > 0 && (
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                No courses selected. Use the search above to add courses.
-              </Typography>
-            )}
-            {form.formState.errors.courseOfferings && (
-              <FormHelperText error>
-                {form.formState.errors.courseOfferings.message}
-              </FormHelperText>
-            )}
-          </Paper>
-          {/* Status Section */}
-          <Paper elevation={0} sx={{ p: 3, borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2, bgcolor: 'warning.50', p: 1.5, borderRadius: 1 }}>
-              <Typography variant="h6" fontWeight={600}>Status</Typography>
-            </Box>
-            <FormControl fullWidth margin="normal" error={!!form.formState.errors.status}>
-              <InputLabel>Status <span style={{ color: 'error.main' }}>*</span></InputLabel>
-              <Select
-                label="Status *"
-                value={form.watch("status")}
-                onChange={(e) => form.setValue("status", e.target.value as "active" | "inactive")}
-                sx={{ borderRadius: 1 }}
-              >
-                <MenuItem value="active">Active</MenuItem>
-                <MenuItem value="inactive">Inactive</MenuItem>
-              </Select>
-              {form.formState.errors.status && (
-                <FormHelperText>{form.formState.errors.status.message}</FormHelperText>
+                <FormField
+                  control={form.control}
+                  name="code"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Department Code *</FormLabel>
+                      <FormControl field={field}>
+                        <Input
+                          placeholder="e.g. CS"
+                          aria-label="Department Code"
+                          disabled={isEdit}
+                        />
+                      </FormControl>
+                      {checkingCode && !isEdit && (
+                        <span className="text-xs text-blue-600 ml-2">Checking...</span>
+                      )}
+                      {codeExists && !isEdit && (
+                        <span className="text-xs text-red-600 ml-2">Department code already exists.</span>
+                      )}
+                    <FormMessage> </FormMessage>
+                    </FormItem>
+                  )}
+                />
+              </div>
+              <FormField
+                control={form.control}
+                name="description"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Description</FormLabel>
+                    <FormControl field={field}>
+                      <Textarea
+                        placeholder="Brief description of the department (optional)"
+                        rows={3}
+                      />
+                    </FormControl>
+                    <FormMessage> </FormMessage>  
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            {/* Head of Department Section */}
+            <div className="bg-white rounded-lg border p-4 mb-4">
+              <h4 className="font-semibold text-lg flex items-center gap-2 mb-2">
+                <User className="text-green-600" size={18} /> Department Head
+              </h4>
+              <FormField
+                control={form.control}
+                name="headOfDepartment"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Head of Department *</FormLabel>
+                    <FormControl field={field}>
+                      <Select
+                        onValueChange={field.onChange}
+                        defaultValue={field.value}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select head of department" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {instructors.map((instructor) => (
+                            <SelectItem key={instructor.id} value={instructor.name}>
+                              {instructor.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </FormControl>
+                    <FormMessage> </FormMessage>
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            {/* Course Offerings Section */}
+            <div className="bg-white rounded-lg border p-4 mb-4">
+              <h4 className="font-semibold text-lg flex items-center gap-2 mb-2">
+                <List className="text-purple-600" size={18} /> Course Offerings
+              </h4>
+              <p className="text-sm text-muted-foreground mb-2">
+                Select courses to be offered by this department
+              </p>
+              {loading ? (
+                <div className="flex justify-center items-center py-4">
+                  <span className="text-blue-600 animate-spin">
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24">
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      ></circle>
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8v8z"
+                      ></path>
+                    </svg>
+                  </span>
+                </div>
+              ) : courses.length === 0 ? (
+                <div className="flex flex-col items-start gap-2 mt-2">
+                  <span className="text-sm text-muted-foreground">No available courses. <b>Please add courses first.</b></span>
+                  <Button asChild variant="link" className="p-0 h-auto text-blue-600">
+                    <a href="/dashboard/courses" target="_blank" rel="noopener">Add Courses</a>
+                  </Button>
+                </div>
+              ) : (
+                <>
+                  <FormField
+                    control={form.control}
+                    name="courseOfferings"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Add Course</FormLabel>
+                        <Select
+                          onValueChange={(value) => {
+                            const course = courses.find((c) => c.id === value);
+                            if (course && !field.value.some((c: Course) => c.id === course.id)) {
+                              field.onChange([...field.value, course]);
+                            }
+                          }}
+                          value=""
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Search courses..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {courses
+                              .filter((course) => !(field.value || []).some((c: Course) => c.id === course.id))
+                              .map((course) => (
+                                <SelectItem key={course.id} value={course.id}>
+                                  {course.name} ({course.code})
+                                </SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          {(field.value || []).map((course: Course) => (
+                            <Badge
+                              key={course.id}
+                              className="flex items-center gap-1 bg-purple-100 text-purple-700 px-3 py-1 rounded-full"
+                            >
+                              {course.name} ({course.code})
+                              <button
+                                type="button"
+                                className="ml-1 text-purple-500 hover:text-red-600"
+                                onClick={() => {
+                                  field.onChange(
+                                    (field.value || []).filter((c: Course) => c.id !== course.id)
+                                  );
+                                }}
+                              >
+                                <X size={14} />
+                              </button>
+                            </Badge>
+                          ))}
+                        </div>
+                        {(field.value || []).length === 0 && courses.length > 0 && (
+                          <span className="text-xs text-muted-foreground mt-1 block">
+                            No courses selected. Use the search above to add courses.
+                          </span>
+                        )}
+                        <FormMessage> </FormMessage>
+                      </FormItem>
+                    )}
+                  />
+                </>
               )}
-            </FormControl>
-          </Paper>
-        </Box>
+            </div>
+
+            {/* Status Section */}
+            <div className="bg-white rounded-lg border p-4 mb-4">
+              <h4 className="font-semibold text-lg flex items-center gap-2 mb-2">
+                <List className="text-yellow-600" size={18} /> Status
+              </h4>
+              <FormField
+                control={form.control}
+                name="status"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Status *</FormLabel>
+                    <FormControl field={field}>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="active">Active</SelectItem>
+                          <SelectItem value="inactive">Inactive</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </FormControl>
+                    <FormMessage> </FormMessage>  
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            {/* Footer Actions */}
+            <div className="flex items-center justify-between pt-4 border-t border-gray-100 gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleCancel}
+                className="min-w-[120px]"
+              >
+                Cancel
+              </Button>
+              <div className="flex gap-2">
+                {!isEdit && (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={handleSaveDraft}
+                    className="min-w-[140px]"
+                  >
+                    Save as Draft
+                  </Button>
+                )}
+                <Button
+                  type="submit"
+                  variant="default"
+                  className="min-w-[180px] flex items-center gap-2"
+                  disabled={form.formState.isSubmitting || loading}
+                >
+                  <List size={18} />
+                  {isEdit ? "Update" : "Add"} Department
+                </Button>
+              </div>
+            </div>
+          </form>
+        </Form>
       </DialogContent>
-      <DialogActions sx={{ px: 3, pb: 2, gap: 2 }}>
-        <Button 
-          onClick={handleCancel} 
-          variant="outlined" 
-          color="inherit"
-          sx={{ 
-            borderRadius: 1,
-            fontWeight: 500,
-            minWidth: 120,
-            borderColor: 'divider',
-            '&:hover': {
-              borderColor: 'text.primary',
-              bgcolor: 'action.hover'
-            }
-          }}
-        >
-          Cancel
-        </Button>
-        <Button
-          variant="contained"
-          color="primary"
-          onClick={form.handleSubmit(onSubmit)}
-          disabled={form.formState.isSubmitting || loading}
-          sx={{ 
-            borderRadius: 1,
-            fontWeight: 600,
-            minWidth: 180,
-            boxShadow: 1,
-            '&:hover': {
-              boxShadow: 2
-            }
-          }}
-          startIcon={isEdit ? <ListAltIcon /> : <ListAltIcon />}
-        >
-          {isEdit ? "Update" : "Add"} Department
-        </Button>
-        {!isEdit && (
-          <Button
-            variant="outlined"
-            color="secondary"
-            onClick={handleSaveDraft}
-            sx={{ borderRadius: 1, fontWeight: 500, minWidth: 140 }}
-          >
-            Save as Draft
-          </Button>
-        )}
-      </DialogActions>
-      <Dialog open={showCancelConfirm} onClose={() => setShowCancelConfirm(false)}>
-        <DialogTitle>Discard changes?</DialogTitle>
-        <DialogContent>
-          <Typography>Are you sure you want to discard your changes?</Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setShowCancelConfirm(false)}>No</Button>
-          <Button color="error" onClick={confirmCancel}>Yes, Discard</Button>
-        </DialogActions>
-      </Dialog>
     </Dialog>
   );
-} 
+}

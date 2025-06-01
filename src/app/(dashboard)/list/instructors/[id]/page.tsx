@@ -2,40 +2,15 @@
 
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import {
-  Box,
-  Card,
-  CardContent,
-  Typography,
-  Grid,
-  Paper,
-  Chip,
-  Button,
-  IconButton,
-  Breadcrumbs,
-  Link,
-  Divider,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-} from "@mui/material";
-import {
-  ArrowBack as ArrowBackIcon,
-  Edit as EditIcon,
-  Delete as DeleteIcon,
-  Person as PersonIcon,
-  Email as EmailIcon,
-  Phone as PhoneIcon,
-  Business as BusinessIcon,
-  Badge as BadgeIcon,
-  AccessTime as AccessTimeIcon,
-  QrCode as QrCodeIcon,
-} from "@mui/icons-material";
 import { UserGender, InstructorType, Status } from "@/types/enums";
 import { Teacher } from "@/types/teacher";
 import { instructorsData } from "@/lib/data";
 import { toast } from "sonner";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { ArrowLeft, Edit, Trash2, User, Mail, Phone, Building2, BadgeCheck, Clock, QrCode } from "lucide-react";
 
 export default function InstructorDetailPage() {
   const params = useParams();
@@ -59,254 +34,159 @@ export default function InstructorDetailPage() {
 
   if (!instructor) {
     return (
-      <Box sx={{ p: 3 }}>
-        <Typography>Instructor not found</Typography>
-      </Box>
+      <div className="p-6">
+        <p className="text-lg text-gray-600">Instructor not found</p>
+      </div>
     );
   }
 
   return (
-    <Box sx={{ minHeight: "100vh", bgcolor: "background.default", p: 3 }}>
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100/50 p-6">
       {/* Breadcrumbs */}
-      <Breadcrumbs sx={{ mb: 3 }}>
-        <Link
-          component="button"
-          variant="body1"
+      <div className="flex items-center gap-2 mb-6 text-sm text-gray-500">
+        <button
+          className="flex items-center gap-1 text-blue-600 hover:underline"
           onClick={() => router.push("/list/instructors")}
-          sx={{ display: 'flex', alignItems: 'center' }}
         >
-          <ArrowBackIcon sx={{ mr: 0.5 }} fontSize="small" />
+          <ArrowLeft className="w-4 h-4 mr-1" />
           Back to Instructors
-        </Link>
-        <Typography color="text.primary">Instructor Details</Typography>
-      </Breadcrumbs>
-
+        </button>
+        <span className="mx-2">/</span>
+        <span className="text-gray-700 font-medium">Instructor Details</span>
+      </div>
       <Card>
         <CardContent>
           {/* Header */}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 4 }}>
-            <Box
-              sx={{
-                width: 80,
-                height: 80,
-                borderRadius: '50%',
-                bgcolor: 'primary.main',
-                color: 'white',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontWeight: 'bold',
-                fontSize: '2rem',
-              }}
-            >
-              {instructor.firstName.charAt(0)}{instructor.lastName.charAt(0)}
-            </Box>
-            <Box sx={{ flex: 1 }}>
-              <Typography variant="h4" gutterBottom>
-                {instructor.lastName}, {instructor.firstName} {instructor.middleName || ''} {instructor.suffix || ''}
-              </Typography>
-              <Typography variant="subtitle1" color="text.secondary" gutterBottom>
-                ID: {instructor.instructorId}
-              </Typography>
-              <Chip
-                label={instructor.status}
-                color={instructor.status === Status.ACTIVE ? "success" : "error"}
-                size="small"
-              />
-            </Box>
-            <Box sx={{ display: 'flex', gap: 1 }}>
+          <div className="flex flex-col md:flex-row md:items-center gap-6 mb-8">
+            <div className="flex items-center gap-4 flex-1">
+              <div className="w-20 h-20 rounded-full bg-blue-600 text-white flex items-center justify-center text-3xl font-bold">
+                {instructor.firstName.charAt(0)}{instructor.lastName.charAt(0)}
+              </div>
+              <div className="flex-1 min-w-0">
+                <h1 className="text-2xl font-bold text-gray-900 truncate">
+                  {instructor.lastName}, {instructor.firstName} {instructor.middleName || ''} {instructor.suffix || ''}
+                </h1>
+                <div className="text-gray-500 text-sm">ID: {instructor.instructorId}</div>
+                <Badge variant={instructor.status === Status.ACTIVE ? "success" : "error"} className="capitalize mt-1">
+                  {instructor.status}
+                </Badge>
+              </div>
+            </div>
+            <div className="flex gap-2">
               <Button
-                variant="contained"
-                startIcon={<EditIcon />}
+                variant="default"
+                className="flex items-center gap-2"
                 onClick={() => router.push(`/list/instructors/${instructor.instructorId}/edit`)}
               >
-                Edit
+                <Edit className="w-4 h-4" /> Edit
               </Button>
               <Button
-                variant="outlined"
-                color="error"
-                startIcon={<DeleteIcon />}
+                variant="outline"
+                className="flex items-center gap-2 border-red-200 text-red-600 hover:bg-red-50"
                 onClick={() => setDeleteDialogOpen(true)}
               >
-                Delete
+                <Trash2 className="w-4 h-4" /> Delete
               </Button>
-            </Box>
-          </Box>
-
-          <Divider sx={{ my: 3 }} />
-
-          {/* Content */}
-          <Grid container spacing={3}>
+            </div>
+          </div>
+          {/* Content Sections */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Personal Information */}
-            <Grid item xs={12} md={6}>
-              <Paper sx={{ p: 3 }}>
-                <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <PersonIcon color="primary" />
-                  Personal Information
-                </Typography>
-                <Box sx={{ mt: 2 }}>
-                  <Typography variant="body2" color="text.secondary">
-                    Full Name
-                  </Typography>
-                  <Typography variant="body1" gutterBottom>
-                    {instructor.firstName} {instructor.middleName || ''} {instructor.lastName} {instructor.suffix || ''}
-                  </Typography>
-
-                  <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-                    Gender
-                  </Typography>
-                  <Typography variant="body1" gutterBottom>
-                    {instructor.gender}
-                  </Typography>
-
-                  <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-                    Instructor Type
-                  </Typography>
-                  <Typography variant="body1">
-                    {instructor.instructorType}
-                  </Typography>
-                </Box>
-              </Paper>
-            </Grid>
-
+            <div className="bg-gray-50 rounded-xl p-6">
+              <div className="flex items-center gap-2 mb-4 text-blue-700 font-semibold">
+                <User className="w-5 h-5" /> Personal Information
+              </div>
+              <div className="mb-2">
+                <div className="text-xs text-gray-500">Full Name</div>
+                <div className="text-base text-gray-900 font-medium">
+                  {instructor.firstName} {instructor.middleName || ''} {instructor.lastName} {instructor.suffix || ''}
+                </div>
+              </div>
+              <div className="mb-2">
+                <div className="text-xs text-gray-500">Gender</div>
+                <div className="text-base text-gray-900 font-medium">{instructor.gender}</div>
+              </div>
+              <div>
+                <div className="text-xs text-gray-500">Instructor Type</div>
+                <div className="text-base text-gray-900 font-medium">{instructor.instructorType}</div>
+              </div>
+            </div>
             {/* Contact Information */}
-            <Grid item xs={12} md={6}>
-              <Paper sx={{ p: 3 }}>
-                <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <EmailIcon color="primary" />
-                  Contact Information
-                </Typography>
-                <Box sx={{ mt: 2 }}>
-                  <Typography variant="body2" color="text.secondary">
-                    Email Address
-                  </Typography>
-                  <Typography variant="body1" gutterBottom>
-                    {instructor.email}
-                  </Typography>
-
-                  <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-                    Phone Number
-                  </Typography>
-                  <Typography variant="body1">
-                    {instructor.phoneNumber}
-                  </Typography>
-                </Box>
-              </Paper>
-            </Grid>
-
+            <div className="bg-gray-50 rounded-xl p-6">
+              <div className="flex items-center gap-2 mb-4 text-blue-700 font-semibold">
+                <Mail className="w-5 h-5" /> Contact Information
+              </div>
+              <div className="mb-2">
+                <div className="text-xs text-gray-500">Email Address</div>
+                <div className="text-base text-gray-900 font-medium">{instructor.email}</div>
+              </div>
+              <div>
+                <div className="text-xs text-gray-500">Phone Number</div>
+                <div className="text-base text-gray-900 font-medium">{instructor.phoneNumber}</div>
+              </div>
+            </div>
             {/* Department Information */}
-            <Grid item xs={12} md={6}>
-              <Paper sx={{ p: 3 }}>
-                <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <BusinessIcon color="primary" />
-                  Department Information
-                </Typography>
-                <Box sx={{ mt: 2 }}>
-                  <Typography variant="body2" color="text.secondary">
-                    Department
-                  </Typography>
-                  <Typography variant="body1" gutterBottom>
-                    {instructor.departmentName}
-                  </Typography>
-
-                  <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-                    Department ID
-                  </Typography>
-                  <Typography variant="body1">
-                    {instructor.departmentId}
-                  </Typography>
-                </Box>
-              </Paper>
-            </Grid>
-
+            <div className="bg-gray-50 rounded-xl p-6">
+              <div className="flex items-center gap-2 mb-4 text-blue-700 font-semibold">
+                <Building2 className="w-5 h-5" /> Department Information
+              </div>
+              <div className="mb-2">
+                <div className="text-xs text-gray-500">Department</div>
+                <div className="text-base text-gray-900 font-medium">{instructor.departmentName}</div>
+              </div>
+              <div>
+                <div className="text-xs text-gray-500">Department ID</div>
+                <div className="text-base text-gray-900 font-medium">{instructor.departmentId}</div>
+              </div>
+            </div>
             {/* RFID Information */}
-            <Grid item xs={12} md={6}>
-              <Paper sx={{ p: 3 }}>
-                <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <QrCodeIcon color="primary" />
-                  RFID Information
-                </Typography>
-                <Box sx={{ mt: 2 }}>
-                  <Typography variant="body2" color="text.secondary">
-                    RFID Tag
-                  </Typography>
-                  <Typography variant="body1" gutterBottom>
-                    {instructor.rfidTag}
-                  </Typography>
-
-                  <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-                    Tag Number
-                  </Typography>
-                  <Typography variant="body1">
-                    {instructor.rfidtagNumber}
-                  </Typography>
-                </Box>
-              </Paper>
-            </Grid>
-
+            <div className="bg-gray-50 rounded-xl p-6">
+              <div className="flex items-center gap-2 mb-4 text-blue-700 font-semibold">
+                <QrCode className="w-5 h-5" /> RFID Information
+              </div>
+              <div className="mb-2">
+                <div className="text-xs text-gray-500">RFID Tag</div>
+                <div className="text-base text-gray-900 font-medium">{instructor.rfidTag}</div>
+              </div>
+              <div>
+                <div className="text-xs text-gray-500">Tag Number</div>
+                <div className="text-base text-gray-900 font-medium">{instructor.rfidtagNumber}</div>
+              </div>
+            </div>
             {/* Additional Information */}
-            <Grid item xs={12}>
-              <Paper sx={{ p: 3 }}>
-                <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <AccessTimeIcon color="primary" />
-                  Additional Information
-                </Typography>
-                <Box sx={{ mt: 2 }}>
-                  <Grid container spacing={2}>
-                    <Grid item xs={12} md={6}>
-                      <Typography variant="body2" color="text.secondary">
-                        Created At
-                      </Typography>
-                      <Typography variant="body1">
-                        {instructor.createdAt.toLocaleDateString()}
-                      </Typography>
-                    </Grid>
-                    <Grid item xs={12} md={6}>
-                      <Typography variant="body2" color="text.secondary">
-                        Last Updated
-                      </Typography>
-                      <Typography variant="body1">
-                        {instructor.updatedAt.toLocaleDateString()}
-                      </Typography>
-                    </Grid>
-                  </Grid>
-                </Box>
-              </Paper>
-            </Grid>
-          </Grid>
+            <div className="bg-gray-50 rounded-xl p-6 md:col-span-2">
+              <div className="flex items-center gap-2 mb-4 text-blue-700 font-semibold">
+                <Clock className="w-5 h-5" /> Additional Information
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <div className="text-xs text-gray-500">Created At</div>
+                  <div className="text-base text-gray-900 font-medium">{instructor.createdAt.toLocaleDateString()}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-gray-500">Last Updated</div>
+                  <div className="text-base text-gray-900 font-medium">{instructor.updatedAt.toLocaleDateString()}</div>
+                </div>
+              </div>
+            </div>
+          </div>
         </CardContent>
       </Card>
-
       {/* Delete Confirmation Dialog */}
-      <Dialog
-        open={deleteDialogOpen}
-        onClose={() => setDeleteDialogOpen(false)}
-        maxWidth="xs"
-        fullWidth
-      >
-        <DialogTitle sx={{ pb: 1 }}>
-          Delete Instructor
-        </DialogTitle>
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent>
-          <Typography>
-            Are you sure you want to delete the instructor "{instructor.firstName} {instructor.lastName}"? This action cannot be undone.
-          </Typography>
+          <DialogHeader>
+            <DialogTitle>Delete Instructor</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete the instructor "{instructor.firstName} {instructor.lastName}"? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleDelete}>Delete</Button>
+          </DialogFooter>
         </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button
-            onClick={() => setDeleteDialogOpen(false)}
-          >
-            Cancel
-          </Button>
-          <Button
-            variant="contained"
-            color="error"
-            onClick={handleDelete}
-          >
-            Delete
-          </Button>
-        </DialogActions>
       </Dialog>
-    </Box>
+    </div>
   );
 } 

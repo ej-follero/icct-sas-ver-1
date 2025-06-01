@@ -264,6 +264,7 @@ model CourseOffering {
   Section       Section[]
   Student       Student[]
   Subjects      Subjects[]
+  major         String?
 
   @@index([courseCode])
   @@index([departmentId, courseStatus])
@@ -295,7 +296,6 @@ model Department {
   @@index([departmentType, departmentStatus])
   @@index([headOfDepartment])
 }
-
 model Subjects {
   subjectId         Int               @id @default(autoincrement())
   subjectName       String
@@ -469,7 +469,7 @@ model RFIDReader {
   readerId        Int              @id @default(autoincrement())
   roomId          Int              @unique
   deviceId        String           @unique
-  deviceName      String
+  deviceName      String?
   components      Json
   assemblyDate    DateTime         @default(now())
   lastCalibration DateTime?

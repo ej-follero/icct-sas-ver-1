@@ -1,6 +1,7 @@
-'use client';
+"use client";
 
-import React from 'react';
+import React from "react";
+import { Button } from "@/components/ui/button";
 
 interface Props {
   children: React.ReactNode;
@@ -22,24 +23,27 @@ class ErrorBoundary extends React.Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error('Error caught by ErrorBoundary:', error, errorInfo);
+    console.error("Error caught by ErrorBoundary:", error, errorInfo);
   }
 
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50">
-          <div className="max-w-md w-full p-6 bg-white rounded-lg shadow-lg">
-            <h2 className="text-2xl font-bold text-red-600 mb-4">Something went wrong</h2>
-            <p className="text-gray-600 mb-4">
+        <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+          <div className="max-w-md w-full p-6 bg-white rounded-lg shadow-lg text-center">
+            <h2 className="text-2xl font-bold text-red-600 mb-4">
+              Something went wrong
+            </h2>
+            <p className="text-gray-600 mb-6">
               We apologize for the inconvenience. Please try refreshing the page or contact support if the problem persists.
             </p>
-            <button
+            <Button
               onClick={() => window.location.reload()}
-              className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition-colors"
+              className="w-full"
+              variant="default"
             >
               Refresh Page
-            </button>
+            </Button>
           </div>
         </div>
       );
@@ -49,4 +53,4 @@ class ErrorBoundary extends React.Component<Props, State> {
   }
 }
 
-export default ErrorBoundary; 
+export default ErrorBoundary;

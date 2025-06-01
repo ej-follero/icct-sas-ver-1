@@ -1,6 +1,6 @@
 "use client";
 
-import Image from "next/image";
+import { MoreHorizontal } from "lucide-react";
 import {
   BarChart,
   Bar,
@@ -85,17 +85,14 @@ const DataChart = ({
       case "bar":
         return (
           <BarChart data={data} barSize={20}>
-            {showGrid && <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#ddd" />}
-            <XAxis
-              dataKey="name"
-              axisLine={false}
-              tick={{ fill: "#d1d5db" }}
-              tickLine={false}
-            />
-            <YAxis axisLine={false} tick={{ fill: "#d1d5db" }} tickLine={false} />
+            {showGrid && (
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#ddd" />
+            )}
+            <XAxis dataKey="name" axisLine={false} tick={{ fill: "#6B7280" }} tickLine={false} />
+            <YAxis axisLine={false} tick={{ fill: "#6B7280" }} tickLine={false} />
             {showTooltip && (
               <Tooltip
-                contentStyle={{ borderRadius: "10px", borderColor: "lightgray" }}
+                contentStyle={{ borderRadius: 10, borderColor: "lightgray" }}
                 formatter={customTooltip}
               />
             )}
@@ -103,7 +100,7 @@ const DataChart = ({
               <Legend
                 align="left"
                 verticalAlign="top"
-                wrapperStyle={{ paddingTop: "20px", paddingBottom: "40px" }}
+                wrapperStyle={{ paddingTop: 20, paddingBottom: 40 }}
                 formatter={customLegend}
               />
             )}
@@ -118,13 +115,9 @@ const DataChart = ({
             ))}
           </BarChart>
         );
-
       case "line":
         return (
-          <LineChart
-            data={data}
-            margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-          >
+          <LineChart data={data} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
             {showGrid && <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />}
             <XAxis
               dataKey="name"
@@ -132,11 +125,7 @@ const DataChart = ({
               tick={{ fontSize: 12 }}
               tickFormatter={(value) => new Date(value).toLocaleDateString()}
             />
-            <YAxis
-              stroke="#6B7280"
-              tick={{ fontSize: 12 }}
-              allowDecimals={false}
-            />
+            <YAxis stroke="#6B7280" tick={{ fontSize: 12 }} allowDecimals={false} />
             {showTooltip && (
               <Tooltip
                 contentStyle={{
@@ -149,13 +138,7 @@ const DataChart = ({
                 labelFormatter={(label) => new Date(label).toLocaleDateString()}
               />
             )}
-            {showLegend && (
-              <Legend
-                verticalAlign="bottom"
-                height={36}
-                formatter={customLegend}
-              />
-            )}
+            {showLegend && <Legend verticalAlign="bottom" height={36} formatter={customLegend} />}
             {dataKeys?.map((key, index) => (
               <Line
                 key={key}
@@ -170,7 +153,6 @@ const DataChart = ({
             ))}
           </LineChart>
         );
-
       case "pie":
         return (
           <PieChart>
@@ -185,7 +167,10 @@ const DataChart = ({
               nameKey="name"
             >
               {data.map((entry, index) => (
-                <Cell key={`cell-${index}`} fill={entry.fill || colors[index % colors.length]} />
+                <Cell
+                  key={`cell-${index}`}
+                  fill={entry.fill || colors[index % colors.length]}
+                />
               ))}
             </Pie>
             {showTooltip && (
@@ -199,16 +184,9 @@ const DataChart = ({
                 }}
               />
             )}
-            {showLegend && (
-              <Legend
-                verticalAlign="bottom"
-                height={36}
-                formatter={customLegend}
-              />
-            )}
+            {showLegend && <Legend verticalAlign="bottom" height={36} formatter={customLegend} />}
           </PieChart>
         );
-
       case "radial":
         return (
           <RadialBarChart
@@ -223,17 +201,26 @@ const DataChart = ({
             {showLegend && <Legend />}
           </RadialBarChart>
         );
-
       default:
-        return null;
+        return <div />;
     }
   };
 
   return (
-    <div className={`bg-white rounded-xl w-full h-full p-4 ${className}`}>
-      <div className="flex justify-between items-center">
+    <div
+      className={`bg-white rounded-xl w-full h-full p-4 ${className}`}
+      aria-label={title}
+    >
+      <div className="flex justify-between items-center mb-4">
         <h1 className="text-lg font-semibold">{title}</h1>
-        {showMoreIcon && <Image src="/moreDark.png" alt="" width={20} height={20} />}
+        {showMoreIcon && (
+          <MoreHorizontal
+            className="w-5 h-5 cursor-pointer text-gray-600 hover:text-gray-900 transition-colors"
+            aria-label="More options"
+            role="button"
+            tabIndex={0}
+          />
+        )}
       </div>
       <div style={{ height }} className="relative w-full">
         <ResponsiveContainer width="100%" height="100%">
@@ -244,4 +231,4 @@ const DataChart = ({
   );
 };
 
-export default DataChart; 
+export default DataChart;

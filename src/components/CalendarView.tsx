@@ -2,19 +2,15 @@
 
 import { useState } from "react";
 import { Calendar, dateFnsLocalizer, View, Views } from "react-big-calendar";
-import {
-  format,
-  parse,
-  startOfWeek,
-  getDay,
-} from "date-fns";
+import { format, parse, startOfWeek, getDay } from "date-fns";
 import enUS from "date-fns/locale/en-US";
-import Image from "next/image";
+import { MoreHorizontal } from "lucide-react";
 import "react-big-calendar/lib/css/react-big-calendar.css";
 
 const locales = {
   "en-US": enUS,
 };
+
 const localizer = dateFnsLocalizer({
   format,
   parse,
@@ -49,14 +45,16 @@ const CalendarView = ({
   maxTime = new Date(2025, 1, 0, 17, 0, 0),
   className = "",
 }: CalendarViewProps) => {
-  const [view, setView] = useState<View>(mode === "work-week" ? Views.WORK_WEEK : Views.MONTH);
+  const [view, setView] = useState<View>(
+    mode === "work-week" ? Views.WORK_WEEK : Views.MONTH
+  );
 
   const handleOnChangeView = (selectedView: View) => {
     setView(selectedView);
   };
 
   return (
-    <div className={`bg-white p-4 rounded-md ${className}`}>
+    <div className={`bg-white p-4 rounded-md shadow-sm ${className}`}>
       <Calendar
         localizer={localizer}
         events={events}
@@ -68,26 +66,37 @@ const CalendarView = ({
         onView={handleOnChangeView}
         min={minTime}
         max={maxTime}
+        className="rounded-md"
       />
-      
+
       {showEventCards && (
         <>
-          <div className="flex items-center justify-between">
-            <h1 className="text-xl font-semibold my-4">Events</h1>
-            <Image src="/moreDark.png" alt="" width={20} height={20} />
+          <div className="flex items-center justify-between mt-6 mb-4">
+            <h1 className="text-xl font-semibold">Events</h1>
+            <button
+              aria-label="More options"
+              className="p-1 rounded-full hover:bg-gray-100 transition-colors"
+              type="button"
+            >
+              <MoreHorizontal className="w-5 h-5 text-gray-600" />
+            </button>
           </div>
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-4 max-h-96 overflow-y-auto">
             {events.map((event) => (
               <div
-                className="p-5 rounded-md border-2 border-gray-100 border-t-4 odd:border-t-sasSkyLight even:border-t-sasRedLight"
                 key={event.id}
+                className={`p-5 rounded-md border-2 border-gray-100 border-t-4 ${
+                  event.id % 2 === 1
+                    ? "border-t-sky-300"
+                    : "border-t-rose-300"
+                }`}
               >
                 <div className="flex items-center justify-between">
-                  <h1 className="font-semibold text-gray-600">{event.title}</h1>
-                  <span className="text-gray-300 text-xs">{event.time}</span>
+                  <h2 className="font-semibold text-gray-700">{event.title}</h2>
+                  <span className="text-gray-400 text-xs">{event.time}</span>
                 </div>
                 {event.description && (
-                  <p className="mt-2 text-gray-400 text-sm">{event.description}</p>
+                  <p className="mt-2 text-gray-500 text-sm">{event.description}</p>
                 )}
               </div>
             ))}
@@ -98,4 +107,4 @@ const CalendarView = ({
   );
 };
 
-export default CalendarView; 
+export default CalendarView;

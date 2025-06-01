@@ -1,21 +1,14 @@
 import CalendarView from "@/components/CalendarView";
-import { Container, Grid, Paper, Typography } from "@mui/material";
 import { calendarEvents } from "@/lib/data";
 
 const TeacherPage = () => {
   return (
-    <Container>
-      <Grid container spacing={4}>
-        <Grid item xs={12}>
-          <Paper elevation={3} className="p-4">
-            <Typography variant="h5" component="h1" gutterBottom>
-              Schedule
-            </Typography>
+    <div className="max-w-4xl mx-auto p-4">
+      <div className="bg-white rounded-lg shadow-md p-6">
+        <h1 className="text-2xl font-bold mb-4">Schedule</h1>
             <CalendarView mode="work-week" events={calendarEvents} />
-          </Paper>
-        </Grid>
-      </Grid>
-    </Container>
+      </div>
+    </div>
   );
 };
 

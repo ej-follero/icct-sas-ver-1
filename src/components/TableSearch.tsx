@@ -1,21 +1,31 @@
-import Image from "next/image";
+"use client";
+
+import { Search } from "lucide-react";
+import { Input } from "@/components/ui/input";
 
 interface TableSearchProps {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
+  className?: string;
 }
 
-const TableSearch = ({ value, onChange, placeholder = "Search..." }: TableSearchProps) => {
+const TableSearch = ({
+  value,
+  onChange,
+  placeholder = "Search...",
+  className = "",
+}: TableSearchProps) => {
   return (
-    <div className="w-full md:w-auto flex items-center gap-2 text-xs rounded-full ring-[1.5px] ring-gray-300 px-2">
-      <Image src="/search.png" alt="" width={14} height={14} />
-      <input
-        type="text"
+    <div className={`flex items-center gap-2 rounded-full ring-1 ring-gray-300 px-3 py-1 w-full md:w-auto max-w-xs ${className}`}>
+      <Search className="w-4 h-4 text-gray-400" aria-hidden="true" />
+      <Input
+        type="search"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-[200px] p-2 bg-transparent outline-none"
+        aria-label="Search table"
+        className="bg-transparent border-none focus:ring-0 focus:outline-none focus-visible:outline-none p-0"
       />
     </div>
   );

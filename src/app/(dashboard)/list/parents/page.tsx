@@ -6,25 +6,17 @@ import { parentsData, role } from "@/lib/data";
 import Image from "next/image";
 import Link from "next/link";
 import { useState, useMemo } from "react";
-import {
-  Visibility as VisibilityIcon,
-  FilterList as FilterListIcon,
-  Sort as SortIcon,
-  Add as AddIcon,
-  Delete as DeleteIcon,
-  Edit as EditIcon,
-  Person as PersonIcon,
-  Email as EmailIcon,
-  Phone as PhoneIcon,
-  LocationOn as LocationIcon,
-  School as SchoolIcon,
-  Class as ClassIcon,
-  Search as SearchIcon,
-  Close as CloseIcon,
-  ArrowUpward as ArrowUpwardIcon,
-  ArrowDownward as ArrowDownwardIcon
-} from '@mui/icons-material';
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { Dialog, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent } from "@/components/ui/card";
+import { Eye, Filter, SortAsc, Plus, Trash2, Pencil, Mail, Phone, MapPin, School, User, ChevronUp, ChevronDown, Search } from "lucide-react";
 import ParentForm from "@/components/forms/ParentForm";
+import { z } from 'zod';
 
 type Parent = {
   id: number;
@@ -84,6 +76,9 @@ const ParentListPage = () => {
   const [filters, setFilters] = useState({
     students: [] as string[],
   });
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalType, setModalType] = useState<'create' | 'update' | 'delete' | null>(null);
+  const [selectedParent, setSelectedParent] = useState<Parent | null>(null);
 
   // Get unique students for filter options
   const uniqueStudents = useMemo(() => {
@@ -174,6 +169,22 @@ const ParentListPage = () => {
     setCurrentPage(page);
   };
 
+  // Define schema and fields for FormModal
+  const parentSchema = z.object({
+    name: z.string().min(1, 'Name is required'),
+    email: z.string().email('Invalid email').optional(),
+    phone: z.string().min(1, 'Phone is required'),
+    address: z.string().min(1, 'Address is required'),
+    students: z.array(z.string()),
+  });
+  const parentFields = [
+    { name: 'name', label: 'Name', type: 'text' as const },
+    { name: 'email', label: 'Email', type: 'text' as const },
+    { name: 'phone', label: 'Phone', type: 'text' as const },
+    { name: 'address', label: 'Address', type: 'text' as const },
+    // Add students field as needed
+  ];
+
   const renderRow = (item: Parent) => (
     <tr
       key={item.id}
@@ -183,13 +194,13 @@ const ParentListPage = () => {
         <div className="flex items-center gap-4">
           <div className="relative w-12 h-12 rounded-xl overflow-hidden bg-gray-50 ring-1 ring-gray-100 flex-shrink-0 group-hover:ring-2 group-hover:ring-blue-100 transition-all duration-200">
             <div className="w-full h-full flex items-center justify-center">
-              <PersonIcon className="text-gray-300" style={{ fontSize: 28 }} />
+              <User className="text-gray-300 w-7 h-7" />
             </div>
           </div>
           <div className="flex flex-col min-w-0">
             <h3 className="font-medium text-gray-900 truncate group-hover:text-blue-600 transition-colors duration-200">{item.name}</h3>
             <div className="flex items-center gap-1.5 text-xs text-gray-500">
-              <EmailIcon style={{ fontSize: 14 }} />
+              <Mail className="w-3.5 h-3.5 text-gray-400" />
               <span className="truncate">{item.email}</span>
             </div>
           </div>
@@ -198,13 +209,10 @@ const ParentListPage = () => {
       <td className="hidden md:table-cell p-4">
         <div className="flex flex-wrap gap-1.5 justify-center">
           {item.students.map((student, index) => (
-            <span
-              key={index}
-              className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-blue-50 text-blue-700 ring-1 ring-blue-100 hover:bg-blue-100 transition-colors duration-200"
-            >
-              <SchoolIcon style={{ fontSize: 14, marginRight: 4 }} />
+            <Badge key={index} variant="info" className="flex items-center gap-1">
+              <School className="w-3.5 h-3.5 mr-1 text-blue-700" />
               {student}
-            </span>
+            </Badge>
           ))}
         </div>
       </td>
@@ -221,24 +229,16 @@ const ParentListPage = () => {
       <td className="p-4">
         <div className="flex items-center justify-center gap-1.5">
           <Link href={`/list/parents/${item.id}`}>
-            <button className="p-2 text-gray-500 hover:text-gray-700 rounded-lg transition-colors duration-200">
-              <VisibilityIcon style={{ fontSize: 20 }} />
-            </button>
+            <Button variant="ghost" size="icon">
+              <Eye className="w-5 h-5 text-blue-600" />
+            </Button>
           </Link>
-          {role === "admin" && (
-            <>
-              <FormModal
-                table="parent"
-                type="update"
-                data={item}
-              />
-              <FormModal
-                table="parent"
-                type="delete"
-                id={item.id}
-              />
-            </>
-          )}
+          <Button variant="ghost" size="icon" onClick={() => { setModalType('update'); setSelectedParent(item); setModalOpen(true); }}>
+            <Pencil className="w-5 h-5 text-green-600" />
+          </Button>
+          <Button variant="ghost" size="icon" onClick={() => { setModalType('delete'); setSelectedParent(item); setModalOpen(true); }}>
+            <Trash2 className="w-5 h-5 text-red-600" />
+          </Button>
         </div>
       </td>
     </tr>
@@ -255,116 +255,81 @@ const ParentListPage = () => {
                 <h1 className="text-3xl font-bold text-gray-900 bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">All Parents</h1>
                 <p className="text-sm text-gray-500 mt-2">Manage and view all parent information in one place</p>
               </div>
-              <div className="flex flex-col sm:flex-row items-center gap-4">
+              <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
                 <div className="relative w-full sm:w-80">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <SearchIcon className="text-gray-400" style={{ fontSize: 20 }} />
-                  </div>
-                  <input
-                    type="text"
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-5 w-5" />
+                  <Input
+                    className="pl-10 pr-4 py-3 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 shadow-sm"
                     placeholder="Search parents by name, email, or phone..."
                     value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-10 pr-4 py-3 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 shadow-sm"
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
                   />
                 </div>
                 <div className="flex items-center gap-3">
-                  <div className="relative">
-                    <button 
-                      onClick={() => setShowFilters(!showFilters)}
-                      className={`p-3 rounded-xl transition-all duration-200 ${
-                        showFilters 
-                          ? 'bg-blue-50 text-blue-600 ring-1 ring-blue-100 shadow-sm' 
-                          : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
-                      }`}
-                    >
-                      <FilterListIcon style={{ fontSize: 20 }} />
-                    </button>
-                    {showFilters && (
-                      <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-xl border border-gray-100 p-4 z-10">
-                        <div className="flex items-center justify-between mb-4">
-                          <h3 className="font-semibold text-gray-900">Filters</h3>
-                          <button 
-                            onClick={clearFilters}
-                            className="text-sm text-blue-600 hover:text-blue-700 font-medium hover:underline"
-                          >
-                            Clear all
-                          </button>
-                        </div>
-                        <div className="space-y-4">
-                          <div>
-                            <h4 className="text-sm font-medium text-gray-700 mb-3">Students</h4>
-                            <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
-                              {uniqueStudents.map(student => (
-                                <label key={student} className="flex items-center gap-2 hover:bg-gray-50 p-2 rounded-lg transition-colors duration-200">
-                                  <input
-                                    type="checkbox"
-                                    checked={filters.students.includes(student)}
-                                    onChange={() => handleFilterChange('students', student)}
-                                    className="rounded-lg border-gray-300 text-blue-600 focus:ring-blue-500"
-                                  />
-                                  <span className="text-sm text-gray-600">{student}</span>
-                                </label>
-                              ))}
-                            </div>
+                  <Button variant={showFilters ? "default" : "outline"} onClick={() => setShowFilters(!showFilters)} className={showFilters ? "ring-1 ring-blue-100 shadow-sm" : ""} size="icon">
+                    <Filter className="h-5 w-5" />
+                  </Button>
+                  {showFilters && (
+                    <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-xl border border-gray-100 p-4 z-10">
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="font-semibold text-gray-900">Filters</h3>
+                        <Button variant="link" size="sm" onClick={clearFilters} className="text-blue-600 hover:text-blue-700 font-medium">Clear all</Button>
+                      </div>
+                      <div className="space-y-4">
+                        <div>
+                          <h4 className="text-sm font-medium text-gray-700 mb-3">Students</h4>
+                          <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
+                            {uniqueStudents.map(student => (
+                              <label key={student} className="flex items-center gap-2 hover:bg-gray-50 p-2 rounded-lg transition-colors duration-200">
+                                <input
+                                  type="checkbox"
+                                  checked={filters.students.includes(student)}
+                                  onChange={() => handleFilterChange('students', student)}
+                                  className="rounded-lg border-gray-300 text-blue-600 focus:ring-blue-500"
+                                />
+                                <span className="text-sm text-gray-600">{student}</span>
+                              </label>
+                            ))}
                           </div>
                         </div>
                       </div>
-                    )}
-                  </div>
-                  <div className="relative">
-                    <button 
-                      onClick={() => setShowSort(!showSort)}
-                      className={`p-3 rounded-xl transition-all duration-200 ${
-                        showSort 
-                          ? 'bg-blue-50 text-blue-600 ring-1 ring-blue-100 shadow-sm' 
-                          : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
-                      }`}
-                    >
-                      <div className="flex items-center gap-1">
-                        <SortIcon style={{ fontSize: 20 }} />
-                        {sortOrder === 'asc' ? (
-                          <ArrowUpwardIcon style={{ fontSize: 16 }} />
-                        ) : (
-                          <ArrowDownwardIcon style={{ fontSize: 16 }} />
-                        )}
-                      </div>
-                    </button>
-                    {showSort && (
-                      <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-gray-100 p-2 z-10">
-                        <div className="py-1">
-                          {sortOptions.map((option) => (
-                            <button
-                              key={option.field}
-                              onClick={() => handleSort(option.field)}
-                              className={`w-full px-3 py-2.5 text-sm rounded-lg flex items-center justify-between transition-colors duration-200 ${
-                                sortField === option.field
-                                  ? 'bg-blue-50 text-blue-600 font-medium'
-                                  : 'text-gray-700 hover:bg-gray-50'
-                              }`}
-                            >
-                              <span>{option.label}</span>
-                              {sortField === option.field && (
-                                sortOrder === 'asc' ? (
-                                  <ArrowUpwardIcon style={{ fontSize: 16 }} />
-                                ) : (
-                                  <ArrowDownwardIcon style={{ fontSize: 16 }} />
-                                )
-                              )}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                  {role === "admin" && (
-                    <div className="relative">
-                      <FormModal
-                        table="parent"
-                        type="create"
-                      />
                     </div>
                   )}
+                  <Button variant={showSort ? "default" : "outline"} onClick={() => setShowSort(!showSort)} className={showSort ? "ring-1 ring-blue-100 shadow-sm" : ""} size="icon">
+                    <SortAsc className="h-5 w-5" />
+                    {sortOrder === 'asc' ? (
+                      <ChevronUp className="h-4 w-4" />
+                    ) : (
+                      <ChevronDown className="h-4 w-4" />
+                    )}
+                  </Button>
+                  {showSort && (
+                    <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-gray-100 p-2 z-10">
+                      <div className="py-1">
+                        {sortOptions.map((option) => (
+                          <Button
+                            key={option.field}
+                            variant={sortField === option.field ? "default" : "ghost"}
+                            onClick={() => handleSort(option.field)}
+                            className="w-full px-3 py-2.5 text-sm rounded-lg flex items-center justify-between"
+                          >
+                            <span>{option.label}</span>
+                            {sortField === option.field && (
+                              sortOrder === 'asc' ? (
+                                <ChevronUp className="h-4 w-4" />
+                              ) : (
+                                <ChevronDown className="h-4 w-4" />
+                              )
+                            )}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  <Button onClick={() => { setModalType('create'); setSelectedParent(null); setModalOpen(true); }} className="flex items-center gap-2">
+                    <Plus className="h-4 w-4" />
+                    <span className="hidden sm:inline">Add Parent</span>
+                  </Button>
                 </div>
               </div>
             </div>
@@ -382,48 +347,53 @@ const ParentListPage = () => {
                 Showing <span className="font-medium text-gray-700">{startIndex + 1}</span> to <span className="font-medium text-gray-700">{Math.min(endIndex, totalItems)}</span> of <span className="font-medium text-gray-700">{totalItems}</span> entries
               </div>
               <div className="flex items-center gap-2">
-                <button
-                  onClick={() => handlePageChange(currentPage - 1)}
+                <Button
+                  variant="outline"
+                  size="sm"
                   disabled={currentPage === 1}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200 ${
-                    currentPage === 1
-                      ? 'text-gray-400 cursor-not-allowed'
-                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                  }`}
+                  onClick={() => handlePageChange(currentPage - 1)}
                 >
                   Previous
-                </button>
+                </Button>
                 <div className="flex items-center gap-1">
                   {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                    <button
+                    <Button
                       key={page}
+                      variant={currentPage === page ? "default" : "outline"}
+                      size="sm"
                       onClick={() => handlePageChange(page)}
-                      className={`w-9 h-9 rounded-lg text-sm font-medium transition-colors duration-200 ${
-                        currentPage === page
-                          ? 'bg-blue-50 text-blue-600 shadow-sm'
-                          : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                      }`}
+                      className={currentPage === page ? "shadow-sm" : ""}
                     >
                       {page}
-                    </button>
+                    </Button>
                   ))}
                 </div>
-                <button
-                  onClick={() => handlePageChange(currentPage + 1)}
+                <Button
+                  variant="outline"
+                  size="sm"
                   disabled={currentPage === totalPages}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200 ${
-                    currentPage === totalPages
-                      ? 'text-gray-400 cursor-not-allowed'
-                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                  }`}
+                  onClick={() => handlePageChange(currentPage + 1)}
                 >
                   Next
-                </button>
+                </Button>
               </div>
             </div>
           </div>
         </div>
       </div>
+      <FormModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        onSubmit={async (data) => {
+          // Implement create, update, or delete logic here
+          setModalOpen(false);
+        }}
+        title={modalType === 'create' ? 'Add New Parent' : modalType === 'update' ? 'Edit Parent' : 'Delete Parent'}
+        submitLabel={modalType === 'delete' ? 'Delete' : modalType === 'update' ? 'Update' : 'Add'}
+        defaultValues={modalType === 'update' && selectedParent ? selectedParent : undefined}
+        schema={parentSchema}
+        fields={parentFields}
+      />
     </div>
   );
 };

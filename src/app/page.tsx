@@ -1,795 +1,221 @@
-'use client';
+"use client";
 
-import { Box, Button, Container, Grid, Typography, useTheme, Card, CardContent, Avatar, TextField, Accordion, AccordionSummary, AccordionDetails, IconButton, Link as MuiLink, AppBar, Toolbar, Drawer, List, ListItem, ListItemButton, ListItemText, Divider } from '@mui/material';
-import { motion } from 'framer-motion';
-import { 
-  School, 
-  AccessTime, 
-  Analytics, 
-  Security, 
-  Speed, 
-  Group,
-  ArrowForward,
-  ExpandMore,
-  Email,
-  Phone,
-  LocationOn,
-  Facebook,
-  Twitter,
-  LinkedIn,
-  YouTube,
-  PlayCircle,
-  Menu
-} from '@mui/icons-material';
-import Link from 'next/link';
-import { useState } from 'react';
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { School, Users, ShieldCheck, BarChart2, ArrowRight, Quote } from "lucide-react";
+import React, { useRef, useEffect, useState } from "react";
+import { motion } from "framer-motion";
 
-export default function LandingPage() {
-  const theme = useTheme();
-  const [drawerOpen, setDrawerOpen] = useState(false);
+const fadeInUp = {
+  initial: { opacity: 0, y: 30 },
+  whileInView: { opacity: 1, y: 0 },
+  transition: { duration: 0.6, ease: "easeOut" },
+};
 
-  const stats = [
-    {
-      number: "100%",
-      label: "Automated",
-      description: "ICCT-exclusive attendance system"
-    },
-    {
-      number: "24/7",
-      label: "Real-time",
-      description: "Instant attendance tracking"
-    },
-    {
-      number: "99.9%",
-      label: "Accuracy",
-      description: "Reliable attendance records"
-    }
-  ];
+export default function Home() {
+  return (
+    <div className="min-h-screen flex flex-col bg-gradient-to-b from-blue-50 via-white to-white">
+      {/* Header */}
+      <header className="sticky top-0 z-30 bg-white/80 backdrop-blur border-b border-blue-100 shadow-sm">
+        <div className="max-w-7xl mx-auto flex items-center justify-between px-4 py-3">
+          <div className="flex items-center gap-2">
+            <School className="w-7 h-7 text-blue-600" />
+            <span className="font-bold text-xl text-blue-700 tracking-tight">ICCT Smart Attendance</span>
+          </div>
+          <nav className="hidden md:flex gap-8 text-blue-700 font-medium">
+            <Link href="#features" className="hover:text-blue-900 transition">Features</Link>
+            <Link href="#stats" className="hover:text-blue-900 transition">Why Us</Link>
+            <Link href="#testimonials" className="hover:text-blue-900 transition">Testimonials</Link>
+            <Link href="#contact" className="hover:text-blue-900 transition">Contact</Link>
+          </nav>
+          <Button asChild className="ml-4 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-full shadow">
+            <Link href="/login">Sign In</Link>
+          </Button>
+        </div>
+      </header>
 
-  const solutions = [
-    {
-      title: "Students",
-      description: "Track attendance with your ICCT ID card and access your records anytime.",
-      icon: <School sx={{ fontSize: 48 }} />,
-      features: [
-        "One-tap attendance with ICCT ID",
-        "Real-time attendance status",
-        "Personal attendance history",
-      ]
-    },
-    {
-      title: "Faculty",
-      description: "Manage class attendance efficiently with automated tracking and real-time monitoring.",
-      icon: <Group sx={{ fontSize: 48 }} />,
-      features: [
-        "Automated class attendance",
-        "Real-time class monitoring",
-        "Attendance analytics",
-        "Student performance tracking"
-      ]
-    },
-    {
-      title: "Administration",
-      description: "Access comprehensive analytics and manage the attendance system campus-wide.",
-      icon: <Analytics sx={{ fontSize: 48 }} />,
-      features: [
-        "Campus-wide analytics",
-        "Custom report generation",
-        "System management",
-        "Data security"
-      ]
-    }
-  ];
+      {/* Hero Section */}
+      <section className="relative flex flex-col md:flex-row items-center justify-between min-h-screen px-4 md:px-12 py-20 bg-gradient-to-br from-[var(--icctSAS-blue-light)] via-white to-[var(--icctSAS-blue-light)] overflow-hidden font-sans">
+        <div className="flex-1 z-10 text-center md:text-left">
+          <h1 className="text-4xl md:text-6xl font-extrabold text-[color:var(--icctSAS-blue)] mb-6 leading-tight drop-shadow-sm">
+            The Identity Platform<br className="hidden md:block" /> for Education
+          </h1>
+          <p className="max-w-xl text-lg md:text-2xl text-[color:var(--icctSAS-gray-dark)] mb-10">
+            Secure, unified access for students, teachers, and schools. Accelerate learning with seamless digital identity and smart attendance.
+          </p>
+          <Button className="bg-[color:var(--icctSAS-blue)] hover:bg-[color:var(--icctSAS-blue-dark)] text-white font-semibold px-10 py-4 text-xl rounded-lg shadow-xl transition-transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-[color:var(--icctSAS-blue-light)]">
+            Get Started
+          </Button>
+        </div>
+        <ParallaxHeroImage />
+        <AnimatedGradientBackground />
+      </section>
 
-  const testimonials = [
-    {
-      name: "Prof. Sarah Johnson",
-      role: "ICCT Department Head",
-      avatar: "/avatars/prof1.jpg",
-      quote: "ICCT-SAS has streamlined our attendance tracking process, saving valuable teaching time."
-    },
-    {
-      name: "Mark Chen",
-      role: "ICCT Student",
-      avatar: "/avatars/student1.jpg",
-      quote: "The system makes attendance tracking effortless. Just tap your ICCT ID and you're done."
-    },
-    {
-      name: "Dr. Michael Rodriguez",
-      role: "ICCT Academic Coordinator",
-      avatar: "/avatars/prof2.jpg",
-      quote: "The analytics help us make data-driven decisions about student engagement."
-    }
-  ];
+      {/* Features Section */}
+      <section id="features" className="max-w-7xl mx-auto py-16 px-4 grid grid-cols-1 md:grid-cols-3 gap-8">
+        {[{
+          Icon: ShieldCheck,
+          title: "Secure Identity",
+          description: "Layered security and access management for your entire school community.",
+        }, {
+          Icon: BarChart2,
+          title: "Analytics & Insights",
+          description: "Real-time attendance analytics and actionable insights for educators and admins.",
+        }, {
+          Icon: Users,
+          title: "Unified Access",
+          description: "One place for students and teachers to access all their digital learning tools.",
+        }].map(({ Icon, title, description }, i) => (
+          <motion.div
+            key={i}
+            {...fadeInUp}
+            viewport={{ once: true, amount: 0.3 }}
+            className="bg-white rounded-2xl shadow-lg p-8 flex flex-col items-center text-center border border-[color:var(--icctSAS-blue-light)] hover:shadow-2xl transition"
+          >
+            <Icon className="w-10 h-10 text-[color:var(--icctSAS-blue)] mb-4" />
+            <h3 className="font-bold text-xl text-[color:var(--icctSAS-blue)] mb-2">{title}</h3>
+            <p className="text-[color:var(--icctSAS-gray-dark)]">{description}</p>
+          </motion.div>
+        ))}
+      </section>
 
-  const faqs = [
-    {
-      question: "How do I use ICCT-SAS?",
-      answer: "Simply tap your ICCT ID card on the reader when entering class. The system automatically records your attendance."
-    },
-    {
-      question: "Is my attendance data secure?",
-      answer: "Yes, ICCT-SAS uses advanced encryption and secure authentication to protect all attendance records."
-    },
-    {
-      question: "Can I check my attendance records?",
-      answer: "Yes, you can access your attendance history anytime through the ICCT-SAS portal."
-    },
-    {
-      question: "What if I forget my ICCT ID?",
-      answer: "Contact your class adviser for manual attendance recording. Remember to bring your ICCT ID next time."
-    }
-  ];
+      {/* Section Divider */}
+      <WaveDivider color="var(--icctSAS-blue-light)" />
 
-  const navLinks = [
-    { label: 'Solutions', href: '#solutions' },
-    { label: 'Stats', href: '#stats' },
-    { label: 'Testimonials', href: '#testimonials' },
-    { label: 'FAQ', href: '#faq' },
-  ];
+      {/* Stats Section */}
+      <section id="stats" className="bg-[color:var(--icctSAS-blue-light)] py-16 px-4">
+        <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8 text-center">
+          {[
+            { label: "Uptime for Schools", value: "99.99%" },
+            { label: "Students Supported", value: "1M+" },
+            { label: "Support & Security", value: "24/7" },
+          ].map((stat, i) => (
+            <motion.div key={i} {...fadeInUp} viewport={{ once: true, amount: 0.3 }}>
+              <div className="text-4xl font-extrabold text-[color:var(--icctSAS-blue)] mb-2">{stat.value}</div>
+              <div className="text-[color:var(--icctSAS-blue)] font-medium">{stat.label}</div>
+            </motion.div>
+          ))}
+        </div>
+      </section>
+
+      {/* Section Divider */}
+      <WaveDivider color="#fff" />
+
+      {/* Testimonials Section */}
+      <section id="testimonials" className="max-w-7xl mx-auto py-16 px-4">
+        <h2 className="text-3xl md:text-4xl font-bold text-[color:var(--icctSAS-blue)] text-center mb-10">What Our Users Say</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          {[
+            "ICCT Smart Attendance has made our school's digital transition seamless and secure.",
+            "The analytics dashboard gives us real-time insights we never had before.",
+            "Our teachers and students love the unified access and easy sign-in.",
+          ].map((text, i) => (
+            <motion.div
+              key={i}
+              {...fadeInUp}
+              viewport={{ once: true, amount: 0.3 }}
+              className="bg-white rounded-2xl shadow-lg p-8 border border-[color:var(--icctSAS-blue-light)] flex flex-col items-center text-center hover:shadow-2xl transition"
+            >
+              <Quote className="w-8 h-8 text-[color:var(--icctSAS-blue-light)] mb-2" />
+              <p className="text-[color:var(--icctSAS-gray-dark)] italic mb-4">“{text}”</p>
+              <div className="font-bold text-[color:var(--icctSAS-blue)]">- User {i + 1}</div>
+            </motion.div>
+          ))}
+        </div>
+      </section>
+
+      {/* Section Divider */}
+      <WaveDivider color="var(--icctSAS-blue-light)" />
+
+      {/* Contact Section */}
+      <section id="contact" className="bg-[color:var(--icctSAS-blue-light)] py-16 px-4">
+        <div className="max-w-2xl mx-auto rounded-2xl shadow-lg bg-white p-8 border border-[color:var(--icctSAS-blue-light)]">
+          <h2 className="text-2xl md:text-3xl font-bold text-[color:var(--icctSAS-blue)] mb-6 text-center">Contact Us</h2>
+          <form className="flex flex-col gap-4">
+            <input type="text" placeholder="Your Name" className="border border-[color:var(--icctSAS-gray)] rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[color:var(--icctSAS-blue)]" />
+            <input type="email" placeholder="Your Email" className="border border-[color:var(--icctSAS-gray)] rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[color:var(--icctSAS-blue)]" />
+            <textarea placeholder="Your Message" rows={4} className="border border-[color:var(--icctSAS-gray)] rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[color:var(--icctSAS-blue)]" />
+            <Button className="bg-[color:var(--icctSAS-blue)] hover:bg-[color:var(--icctSAS-blue-dark)] text-white px-6 py-2 rounded-full mt-2">Send Message</Button>
+          </form>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="bg-white border-t border-[color:var(--icctSAS-blue-light)] py-8 mt-auto">
+        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between px-4 gap-4">
+          <div className="flex items-center gap-2">
+            <School className="w-6 h-6 text-[color:var(--icctSAS-blue)]" />
+            <span className="font-bold text-lg text-[color:var(--icctSAS-blue)]">ICCT Smart Attendance</span>
+          </div>
+          <div className="text-[color:var(--icctSAS-gray)] text-sm">&copy; {new Date().getFullYear()} ICCT Smart Attendance. All rights reserved.</div>
+        </div>
+      </footer>
+    </div>
+  );
+}
+
+// Shared Wave Component
+const WaveDivider = ({ color }: { color: string }) => (
+  <div className="w-full overflow-hidden">
+    <svg viewBox="0 0 1440 80" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-20">
+      <path fill={color} d="M0,80 C480,0 960,160 1440,80 L1440,0 L0,0 Z" />
+    </svg>
+  </div>
+);
+
+// Parallax Image
+function ParallaxHeroImage() {
+  const ref = useRef<HTMLDivElement>(null);
+  const [offset, setOffset] = useState(0);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      if (!ref.current) return;
+      const rect = ref.current.getBoundingClientRect();
+      if (rect.top < window.innerHeight && rect.bottom > 0) {
+        setOffset((window.scrollY || 0) * 0.08);
+      }
+    };
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   return (
-    <Box sx={{ overflow: 'hidden', bgcolor: 'grey.50' }}>
-      {/* Responsive Fixed Header */}
-      <AppBar position="fixed" color="inherit" elevation={1} sx={{ zIndex: 1200 }}>
-        <Toolbar sx={{ justifyContent: 'space-between' }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <Box component={Link} href="/" sx={{ display: 'flex', alignItems: 'center', textDecoration: 'none' }}>
-              <Box
-                component="img"
-                src="/icct-logo.png"
-                alt="ICCT Logo"
-                sx={{ height: 40, mr: 1 }}
-              />
-              <Typography variant="h6" sx={{ fontWeight: 800, color: 'primary.main', letterSpacing: 1 }}>
-                ICCT-SAS
-              </Typography>
-            </Box>
-          </Box>
-          {/* Desktop Nav */}
-          <Box sx={{ display: { xs: 'none', md: 'flex' }, gap: 3, alignItems: 'center' }}>
-            {navLinks.map((link) => (
-              <MuiLink key={link.href} href={link.href} color="text.primary" underline="none" sx={{ fontWeight: 500 }}>
-                {link.label}
-              </MuiLink>
-            ))}
-            <Button
-              variant="contained"
-              component={Link}
-              href="/login"
-              sx={{ ml: 2, fontWeight: 600 }}
-            >
-              Login
-            </Button>
-          </Box>
-          {/* Mobile Nav */}
-          <Box sx={{ display: { xs: 'flex', md: 'none' } }}>
-            <IconButton edge="end" color="inherit" onClick={() => setDrawerOpen(true)}>
-              <Menu />
-            </IconButton>
-          </Box>
-        </Toolbar>
-        {/* Drawer for mobile nav */}
-        <Drawer
-          anchor="right"
-          open={drawerOpen}
-          onClose={() => setDrawerOpen(false)}
-          PaperProps={{ sx: { width: 240 } }}
-        >
-          <Box sx={{ p: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Box
-              component="img"
-              src="/icct-logo.png"
-              alt="ICCT Logo"
-              sx={{ height: 32, mr: 1 }}
-            />
-            <Typography variant="h6" sx={{ fontWeight: 800, color: 'primary.main', letterSpacing: 1 }}>
-              ICCT-SAS
-            </Typography>
-          </Box>
-          <Divider />
-          <List>
-            {navLinks.map((link) => (
-              <ListItem key={link.href} disablePadding>
-                <ListItemButton component="a" href={link.href} onClick={() => setDrawerOpen(false)}>
-                  <ListItemText primary={link.label} />
-                </ListItemButton>
-              </ListItem>
-            ))}
-            <ListItem disablePadding>
-              <ListItemButton component={Link} href="/login" onClick={() => setDrawerOpen(false)}>
-                <ListItemText primary="Login" />
-              </ListItemButton>
-            </ListItem>
-          </List>
-        </Drawer>
-      </AppBar>
-
-      {/* Add top margin to offset fixed header */}
-      <Box sx={{ mt: { xs: 7, md: 8 } }}>
-        {/* Hero Section */}
-        <Box 
-          sx={{ 
-            background: 'linear-gradient(135deg, #1a237e 0%, #0d47a1 100%)',
-            color: 'white',
-            py: { xs: 8, md: 12 },
-            position: 'relative',
-            overflow: 'hidden'
-          }}
-        >
-          <Container maxWidth="lg">
-            <Grid container spacing={4} alignItems="center" justifyContent="center">
-              <Grid item xs={12} md={6} sx={{ textAlign: { xs: 'center', md: 'left' } }}>
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.8 }}
-                >
-                  <Typography 
-                    variant="h1" 
-                    component="h1" 
-                    sx={{ 
-                      fontWeight: 800,
-                      mb: 2,
-                      fontSize: { xs: '2.5rem', md: '3.5rem' },
-                      lineHeight: 1.2
-                    }}
-                  >
-                    ICCT Smart Attendance System
-                  </Typography>
-                  <Typography 
-                    variant="h5" 
-                    sx={{ 
-                      mb: 4,
-                      opacity: 0.9,
-                      fontSize: { xs: '1.2rem', md: '1.5rem' },
-                      lineHeight: 1.5
-                    }}
-                  >
-                    Streamline attendance tracking at ICCT Colleges Cainta with RFID technology
-                  </Typography>
-                  <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-                    <Button 
-                      variant="contained" 
-                      size="large"
-                      component={Link}
-                      href="/login"
-                      endIcon={<ArrowForward />}
-                      sx={{ 
-                        backgroundColor: 'white',
-                        color: 'primary.main',
-                        '&:hover': {
-                          backgroundColor: 'grey.100',
-                          transform: 'translateY(-2px)',
-                        },
-                        px: 6,
-                        py: 2,
-                        fontSize: '1.1rem',
-                        fontWeight: 600,
-                        transition: 'all 0.3s ease',
-                        boxShadow: '0 4px 20px rgba(0,0,0,0.2)'
-                      }}
-                    >
-                      ICCT Login
-                    </Button>
-                    <Button 
-                      variant="outlined" 
-                      size="large"
-                      component={Link}
-                      href="/demo"
-                      sx={{ 
-                        borderColor: 'white',
-                        color: 'white',
-                        '&:hover': {
-                          borderColor: 'white',
-                          backgroundColor: 'rgba(255,255,255,0.1)',
-                          transform: 'translateY(-2px)',
-                        },
-                        px: 6,
-                        py: 2,
-                        fontSize: '1.1rem',
-                        fontWeight: 600,
-                        transition: 'all 0.3s ease'
-                      }}
-                    >
-                      View Demo
-                    </Button>
-                  </Box>
-                </motion.div>
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <motion.div
-                  initial={{ opacity: 0, x: 50 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.8 }}
-                >
-                  {/* Hero Image Placeholder */}
-                  <Box
-                    sx={{
-                      width: '100%',
-                      maxWidth: 500,
-                      height: 320,
-                      borderRadius: 3,
-                      background: 'linear-gradient(135deg, #e3eafc 0%, #b6ccfa 100%)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
-                      mx: 'auto',
-                      position: 'relative',
-                    }}
-                  >
-                    <Box
-                      component="img"
-                      src="/hero-placeholder.svg"
-                      alt="Attendance system illustration"
-                      sx={{ width: '70%', height: 'auto', opacity: 0.9 }}
-                    />
-                  </Box>
-                </motion.div>
-              </Grid>
-            </Grid>
-          </Container>
-        </Box>
-
-        {/* Stats Section */}
-        <Box id="stats" sx={{ py: { xs: 6, md: 8 }, bgcolor: 'white' }}>
-          <Container maxWidth="lg">
-            <Typography 
-              variant="h3" 
-              component="h2" 
-              align="center" 
-              sx={{ 
-                mb: 6, 
-                fontWeight: 700,
-                color: 'text.primary'
-              }}
-            >
-              ICCT-SAS at a Glance
-            </Typography>
-            <Grid container spacing={4} justifyContent="center">
-              {stats.map((stat, index) => (
-                <Grid item xs={12} sm={4} key={index}>
-                  <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.5, delay: index * 0.1 }}
-                  >
-                    <Box sx={{ textAlign: 'center' }}>
-                      <Typography 
-                        variant="h2" 
-                        sx={{ 
-                          color: 'primary.main',
-                          fontWeight: 700,
-                          mb: 1
-                        }}
-                      >
-                        {stat.number}
-                      </Typography>
-                      <Typography 
-                        variant="h5" 
-                        sx={{ 
-                          fontWeight: 600,
-                          mb: 1
-                        }}
-                      >
-                        {stat.label}
-                      </Typography>
-                      <Typography 
-                        variant="body1" 
-                        color="text.secondary"
-                      >
-                        {stat.description}
-                      </Typography>
-                    </Box>
-                  </motion.div>
-                </Grid>
-              ))}
-            </Grid>
-          </Container>
-        </Box>
-
-        {/* Solutions Section */}
-        <Box id="solutions" sx={{ py: { xs: 6, md: 10 }, bgcolor: 'grey.50' }}>
-          <Container maxWidth="lg">
-            <Typography 
-              variant="h3" 
-              component="h2" 
-              align="center" 
-              sx={{ 
-                mb: 8, 
-                fontWeight: 700,
-                color: 'text.primary'
-              }}
-            >
-              ICCT-SAS for Our Community
-            </Typography>
-            <Grid container spacing={4}>
-              {solutions.map((solution, index) => (
-                <Grid item xs={12} md={4} key={index} sx={{ height: '100%', display: 'flex' }}>
-                  <motion.div
-                    style={{ flex: 1, display: 'flex' }}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.5, delay: index * 0.1 }}
-                  >
-                    <Card
-                      sx={{
-                        height: '100%',
-                        width: '100%',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        borderRadius: 3,
-                        boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
-                        transition: 'all 0.3s ease-in-out',
-                        '&:hover': {
-                          transform: 'translateY(-8px)',
-                          boxShadow: '0 8px 30px rgba(0,0,0,0.15)',
-                        },
-                      }}
-                    >
-                      <CardContent sx={{ p: 4, display: 'flex', flexDirection: 'column', height: '100%' }}>
-                        <Box sx={{ color: 'primary.main', mb: 3, display: 'flex', justifyContent: 'center' }}>
-                          {solution.icon}
-                        </Box>
-                        <Typography 
-                          variant="h5" 
-                          component="h3" 
-                          sx={{ mb: 2, fontWeight: 600, textAlign: 'center' }}
-                        >
-                          {solution.title}
-                        </Typography>
-                        <Typography 
-                          variant="body1" 
-                          color="text.secondary"
-                          sx={{ mb: 3, textAlign: 'center', lineHeight: 1.6 }}
-                        >
-                          {solution.description}
-                        </Typography>
-                        <Box component="ul" sx={{ pl: 2, flexGrow: 1 }}>
-                          {solution.features.map((feature, idx) => (
-                            <Typography 
-                              component="li" 
-                              key={idx}
-                              sx={{ mb: 1, color: 'text.secondary' }}
-                            >
-                              {feature}
-                            </Typography>
-                          ))}
-                        </Box>
-                      </CardContent>
-                    </Card>
-                  </motion.div>
-                </Grid>
-              ))}
-            </Grid>
-          </Container>
-        </Box>
-
-        {/* Video Demo Section */}
-        <Box sx={{ py: { xs: 6, md: 10 }, bgcolor: 'white' }}>
-          <Container maxWidth="lg">
-            <Grid container spacing={4} alignItems="center">
-              <Grid item xs={12} md={6}>
-                <Typography 
-                  variant="h3" 
-                  component="h2" 
-                  sx={{ mb: 3, fontWeight: 700, color: 'text.primary' }}
-                >
-                  See ICCT-SAS in Action
-                </Typography>
-                <Typography 
-                  variant="body1" 
-                  sx={{ mb: 4, color: 'text.secondary', fontSize: '1.1rem', lineHeight: 1.6 }}
-                >
-                  Watch our short demo video to see how ICCT-SAS streamlines attendance tracking and classroom management.
-                </Typography>
-                <Button
-                  variant="contained"
-                  size="large"
-                  startIcon={<PlayCircle />}
-                  sx={{ px: 4, py: 1.5, fontSize: '1.1rem', fontWeight: 600 }}
-                >
-                  Watch Demo
-                </Button>
-              </Grid>
-              <Grid item xs={12} md={6}>
-                {/* Video Placeholder */}
-                <Box
-                  sx={{
-                    position: 'relative',
-                    paddingTop: '56.25%', // 16:9 Aspect Ratio
-                    borderRadius: 3,
-                    overflow: 'hidden',
-                    boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
-                    background: 'linear-gradient(135deg, #e3eafc 0%, #b6ccfa 100%)',
-                  }}
-                >
-                  <Box
-                    component="img"
-                    src="/video-placeholder.svg"
-                    alt="ICCT-SAS Demo Video Placeholder"
-                    sx={{
-                      position: 'absolute',
-                      top: 0,
-                      left: 0,
-                      width: '100%',
-                      height: '100%',
-                      objectFit: 'cover',
-                      opacity: 0.8
-                    }}
-                  />
-                  <Box
-                    sx={{
-                      position: 'absolute',
-                      top: '50%',
-                      left: '50%',
-                      transform: 'translate(-50%, -50%)',
-                      bgcolor: 'rgba(255,255,255,0.8)',
-                      borderRadius: '50%',
-                      p: 2,
-                      boxShadow: 2,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <PlayCircle sx={{ fontSize: 56, color: 'primary.main' }} />
-                  </Box>
-                </Box>
-              </Grid>
-            </Grid>
-          </Container>
-        </Box>
-
-        {/* Testimonials Section */}
-        <Box id="testimonials" sx={{ py: { xs: 6, md: 10 }, bgcolor: 'white' }}>
-          <Container maxWidth="lg">
-            <Typography 
-              variant="h3" 
-              component="h2" 
-              align="center" 
-              sx={{ mb: 8, fontWeight: 700, color: 'text.primary' }}
-            >
-              What Our Community Says
-            </Typography>
-            <Grid container spacing={4}>
-              {testimonials.map((testimonial, index) => (
-                <Grid item xs={12} md={4} key={index}>
-                  <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.5, delay: index * 0.1 }}
-                  >
-                    <Card
-                      sx={{
-                        height: '100%',
-                        borderRadius: 3,
-                        boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
-                      }}
-                    >
-                      <CardContent sx={{ p: 4 }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-                          {/* Testimonial Avatar Placeholder */}
-                          <Avatar 
-                            src={testimonial.avatar || '/avatar-placeholder.svg'} 
-                            alt={testimonial.name}
-                            sx={{ width: 56, height: 56, mr: 2, bgcolor: 'grey.200' }}
-                          />
-                          <Box>
-                            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                              {testimonial.name}
-                            </Typography>
-                            <Typography variant="body2" color="text.secondary">
-                              {testimonial.role}
-                            </Typography>
-                          </Box>
-                        </Box>
-                        <Typography 
-                          variant="body1" 
-                          sx={{ fontStyle: 'italic', lineHeight: 1.6 }}
-                        >
-                          "{testimonial.quote}"
-                        </Typography>
-                      </CardContent>
-                    </Card>
-                  </motion.div>
-                </Grid>
-              ))}
-            </Grid>
-          </Container>
-        </Box>
-
-        {/* FAQ Section */}
-        <Box sx={{ py: { xs: 6, md: 10 }, bgcolor: 'grey.50' }}>
-          <Container maxWidth="md">
-            <Typography 
-              variant="h3" 
-              component="h2" 
-              align="center" 
-              sx={{ 
-                mb: 6, 
-                fontWeight: 700,
-                color: 'text.primary'
-              }}
-            >
-              Frequently Asked Questions
-            </Typography>
-            {faqs.map((faq, index) => (
-              <Accordion 
-                key={index}
-                sx={{
-                  mb: 2,
-                  borderRadius: '8px !important',
-                  '&:before': { display: 'none' },
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-                }}
-              >
-                <AccordionSummary expandIcon={<ExpandMore />}>
-                  <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                    {faq.question}
-                  </Typography>
-                </AccordionSummary>
-                <AccordionDetails>
-                  <Typography variant="body1" color="text.secondary">
-                    {faq.answer}
-                  </Typography>
-                </AccordionDetails>
-              </Accordion>
-            ))}
-          </Container>
-        </Box>
-
-        {/* Contact Section */}
-        <Box sx={{ py: { xs: 6, md: 10 }, bgcolor: 'white' }}>
-          <Container maxWidth="md">
-            <Typography 
-              variant="h3" 
-              component="h2" 
-              align="center" 
-              sx={{ 
-                mb: 6, 
-                fontWeight: 700,
-                color: 'text.primary'
-              }}
-            >
-              Need Help?
-            </Typography>
-            <Grid container spacing={4}>
-              <Grid item xs={12} md={6}>
-                <Card sx={{ p: 4, height: '100%' }}>
-                  <Typography variant="h5" sx={{ mb: 3, fontWeight: 600 }}>
-                    Contact Us
-                  </Typography>
-                  <Box sx={{ mb: 3 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                      <Email sx={{ mr: 2, color: 'primary.main' }} />
-                      <Typography>support@icct-sas.edu.ph</Typography>
-                    </Box>
-                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                      <Phone sx={{ mr: 2, color: 'primary.main' }} />
-                      <Typography>(02) 123-4567</Typography>
-                    </Box>
-                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                      <LocationOn sx={{ mr: 2, color: 'primary.main' }} />
-                      <Typography>ICCT Colleges Cainta, Rizal</Typography>
-                    </Box>
-                  </Box>
-                  <Typography variant="body1" color="text.secondary">
-                    Our support team is ready to assist you with any questions about ICCT-SAS.
-                  </Typography>
-                </Card>
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <Card sx={{ p: 4 }}>
-                  <form>
-                    <TextField
-                      fullWidth
-                      label="Full Name"
-                      variant="outlined"
-                      margin="normal"
-                      required
-                    />
-                    <TextField
-                      fullWidth
-                      label="Email Address"
-                      variant="outlined"
-                      margin="normal"
-                      required
-                      type="email"
-                    />
-                    <TextField
-                      fullWidth
-                      label="Message"
-                      variant="outlined"
-                      margin="normal"
-                      multiline
-                      rows={4}
-                    />
-                    <Button
-                      variant="contained"
-                      size="large"
-                      fullWidth
-                      sx={{ mt: 3 }}
-                    >
-                      Send Message
-                    </Button>
-                  </form>
-                </Card>
-              </Grid>
-            </Grid>
-          </Container>
-        </Box>
-
-        {/* Footer */}
-        <Box 
-          sx={{ 
-            bgcolor: 'primary.main',
-            color: 'white',
-            py: 6
-          }}
-        >
-          <Container maxWidth="lg">
-            <Grid container spacing={4}>
-              <Grid item xs={12} md={4}>
-                <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
-                  ICCT Smart Attendance System
-                </Typography>
-                <Typography variant="body2" sx={{ mb: 2, opacity: 0.8 }}>
-                  Transforming classroom management at ICCT Colleges Cainta.
-                </Typography>
-                <Box sx={{ display: 'flex', gap: 2 }}>
-                  <IconButton color="inherit">
-                    <Facebook />
-                  </IconButton>
-                  <IconButton color="inherit">
-                    <Twitter />
-                  </IconButton>
-                  <IconButton color="inherit">
-                    <LinkedIn />
-                  </IconButton>
-                  <IconButton color="inherit">
-                    <YouTube />
-                  </IconButton>
-                </Box>
-              </Grid>
-              <Grid item xs={12} md={4}>
-                <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
-                  Quick Links
-                </Typography>
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                  <MuiLink href="/about" color="inherit" underline="hover">About ICCT-SAS</MuiLink>
-                  <MuiLink href="/features" color="inherit" underline="hover">Features</MuiLink>
-                  <MuiLink href="/support" color="inherit" underline="hover">Support</MuiLink>
-                  <MuiLink href="/contact" color="inherit" underline="hover">Contact</MuiLink>
-                </Box>
-              </Grid>
-              <Grid item xs={12} md={4}>
-                <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
-                  Legal
-                </Typography>
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                  <MuiLink href="/privacy" color="inherit" underline="hover">Privacy Policy</MuiLink>
-                  <MuiLink href="/terms" color="inherit" underline="hover">Terms of Service</MuiLink>
-                  <MuiLink href="/cookies" color="inherit" underline="hover">Cookie Policy</MuiLink>
-                </Box>
-              </Grid>
-            </Grid>
-            <Box 
-              sx={{ 
-                mt: 4, 
-                pt: 4, 
-                borderTop: '1px solid rgba(255,255,255,0.1)',
-                textAlign: 'center'
-              }}
-            >
-              <Typography variant="body2" sx={{ opacity: 0.8 }}>
-                © {new Date().getFullYear()} ICCT Colleges Cainta. All rights reserved.
-              </Typography>
-            </Box>
-          </Container>
-        </Box>
-      </Box>
-    </Box>
+    <div
+      ref={ref}
+      className="flex-1 flex justify-center md:justify-end z-10 mt-10 md:mt-0"
+      style={{ transform: `translateY(${offset}px)`, transition: "transform 0.2s linear" }}
+      aria-hidden="true"
+    >
+      <img
+        src="/hero-illustration.svg"
+        alt="Smart Attendance Illustration"
+        className="w-80 md:w-[32rem] drop-shadow-2xl select-none pointer-events-none"
+        draggable="false"
+      />
+    </div>
   );
-} 
+}
+
+// Gradient Background
+function AnimatedGradientBackground() {
+  return (
+    <div className="absolute inset-0 pointer-events-none -z-10">
+      <svg className="absolute top-0 right-0 w-1/2 h-1/2 opacity-40 animate-float" viewBox="0 0 600 600" aria-hidden="true">
+        <ellipse cx="300" cy="300" rx="300" ry="200" fill="#3b82f6" fillOpacity="0.15" />
+      </svg>
+      <div className="w-full h-full animate-gradient-move bg-gradient-to-tr from-blue-200/40 via-white/0 to-blue-400/20 blur-2xl opacity-60" />
+      <style jsx global>{`
+        @keyframes gradient-move {
+          0% { background-position: 0% 50%; }
+          50% { background-position: 100% 50%; }
+          100% { background-position: 0% 50%; }
+        }
+        .animate-gradient-move {
+          background-size: 200% 200%;
+          animation: gradient-move 16s ease-in-out infinite;
+        }
+      `}</style>
+    </div>
+  );
+}

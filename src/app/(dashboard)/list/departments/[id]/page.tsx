@@ -1,666 +1,231 @@
 "use client";
 
-import { Suspense } from 'react';
-import FormModal from "@/components/FormModal";
-import { role } from "@/lib/data";
-import { useParams, useRouter } from "next/navigation";
-import { useMemo, useEffect, useState } from "react";
-import {
-  Box,
-  Card,
-  CardContent,
-  Typography,
-  Tabs,
-  Tab,
-  Grid,
-  Chip,
-  IconButton,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-} from "@mui/material";
-import EditIcon from "@mui/icons-material/Edit";
-import DeleteIcon from "@mui/icons-material/Delete";
-import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
-import { z } from "zod";
-import { toast } from "sonner";
-import { DepartmentForm } from "@/components/forms/DepartmentForm";
+import { useState } from "react";
+import { Pencil, Trash2, Plus, Users, BookOpen, User2, Info } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
 
-interface Course {
-  id: string;
-  name: string;
-  code: string;
-  description?: string;
-  status: "active" | "inactive";
-  students: number;
-  sections: number;
-}
-
-interface Instructor {
-  id: string;
-  name: string;
-  type: string;
-  status: string;
-}
-
-interface Department {
-  id: string;
-  name: string;
-  code: string;
-  headOfDepartment: string;
-  description: string;
-  courses: Course[];
-  status: "active" | "inactive";
-  totalCourses: number;
-  totalInstructors: number;
-  instructors: Instructor[];
-  coursesList: Course[];
+// Mock data
+const mockDepartment = {
+  id: "1",
+  name: "College of Information Technology",
+  code: "CITE",
+  headOfDepartment: "Mr. J. Dela Cruz",
+  description: "Department of Information Technology",
+  status: "active",
   statistics: {
-    attendanceRate: number;
-    studentCount: number;
-    courseCount: number;
-    instructorCount: number;
-  };
-}
-
-// Mock data - replace with actual data fetching
-const departmentsData: Department[] = [
-  {
-    id: "1",
-    name: "College of Information Technology",
-    code: "CITE",
-    headOfDepartment: "Mr. J. Dela Cruz",
-    description: "Department of Information Technology",
-    courses: [
-      { 
-        id: "1", 
-        name: "BSIT", 
-        code: "BSIT",
-        description: "Bachelor of Science in Information Technology",
-        status: "active",
-        students: 120, 
-        sections: 4 
-      },
-      { 
-        id: "2", 
-        name: "BSCS", 
-        code: "BSCS",
-        description: "Bachelor of Science in Computer Science",
-        status: "active",
-        students: 100, 
-        sections: 3 
-      },
-      { 
-        id: "3", 
-        name: "BSIS", 
-        code: "BSIS",
-        description: "Bachelor of Science in Information Systems",
-        status: "active",
-        students: 80, 
-        sections: 3 
-      },
-    ],
-    status: "active",
-    totalCourses: 5,
-    totalInstructors: 12,
-    instructors: [
-      { id: "1", name: "John Doe", type: "Full Time", status: "Active" },
-      { id: "2", name: "Jane Smith", type: "Part Time", status: "Active" },
-    ],
-    coursesList: [
-      { 
-        id: "1", 
-        name: "BSIT", 
-        code: "BSIT",
-        description: "Bachelor of Science in Information Technology",
-        status: "active",
-        students: 120, 
-        sections: 4 
-      },
-      { 
-        id: "2", 
-        name: "BSCS", 
-        code: "BSCS",
-        description: "Bachelor of Science in Computer Science",
-        status: "active",
-        students: 100, 
-        sections: 3 
-      },
-      { 
-        id: "3", 
-        name: "BSIS", 
-        code: "BSIS",
-        description: "Bachelor of Science in Information Systems",
-        status: "active",
-        students: 80, 
-        sections: 3 
-      },
-    ],
-    statistics: {
-      attendanceRate: 95,
-      studentCount: 300,
-      courseCount: 5,
-      instructorCount: 12,
-    },
+    attendanceRate: 95,
+    studentCount: 300,
+    courseCount: 5,
+    instructorCount: 12,
   },
+  courses: [
+    { id: "1", name: "BSIT", code: "BSIT", description: "Bachelor of Science in Information Technology", status: "active", students: 120, sections: 4 },
+    { id: "2", name: "BSCS", code: "BSCS", description: "Bachelor of Science in Computer Science", status: "active", students: 100, sections: 3 },
+    { id: "3", name: "BSIS", code: "BSIS", description: "Bachelor of Science in Information Systems", status: "active", students: 80, sections: 3 },
+  ],
+  instructors: [
+    { id: "1", name: "John Doe", type: "Full Time", status: "Active" },
+    { id: "2", name: "Jane Smith", type: "Part Time", status: "Active" },
+  ],
+};
+
+const TABS = [
+  { label: "Overview", icon: Info },
+  { label: "Courses", icon: BookOpen },
+  { label: "Instructors", icon: Users },
 ];
 
-function DepartmentPageContent() {
-  const params = useParams();
-  const router = useRouter();
-  const [tabValue, setTabValue] = useState(0);
-  const [department, setDepartment] = useState(departmentsData[0]);
-  const [editModalOpen, setEditModalOpen] = useState(false);
-  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
-  const [createCourseModalOpen, setCreateCourseModalOpen] = useState(false);
-  const [createInstructorModalOpen, setCreateInstructorModalOpen] = useState(false);
+export default function DepartmentDetailPage() {
+  const [tab, setTab] = useState(0);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
-  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
-    setTabValue(newValue);
-  };
-
-  const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
-
-  const attendanceData = [
-    { name: 'Present', value: 95 },
-    { name: 'Absent', value: 5 },
-  ];
-
-  const departmentSchema = z.object({
-    id: z.string(),
-    name: z.string().min(1, "Department Name is required"),
-    code: z.string().min(1, "Department Code is required"),
-    headOfDepartment: z.string().min(1, "Head of Department is required"),
-    description: z.string().optional(),
-    courseOfferings: z.array(z.object({
-      id: z.string(),
-      name: z.string().min(1, "Course name is required"),
-      code: z.string().min(1, "Course code is required"),
-      description: z.string().optional(),
-      status: z.enum(["active", "inactive"]),
-      totalStudents: z.number(),
-      totalSections: z.number()
-    })),
-    status: z.enum(["active", "inactive"]),
-    totalInstructors: z.number(),
-  });
-
-  const courseSchema = z.object({
-    name: z.string().min(1, "Course Name is required"),
-    code: z.string().min(1, "Course Code is required"),
-    description: z.string().min(1, "Description is required"),
-    status: z.enum(["active", "inactive"]),
-  });
-
-  const instructorSchema = z.object({
-    name: z.string().min(1, "Instructor Name is required"),
-    type: z.enum(["Full Time", "Part Time"]),
-    status: z.enum(["Active", "Inactive"]),
-  });
-
-  const handleEditSubmit = async (data: any) => {
-    try {
-      const response = await fetch(`/api/departments/${department.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to update department');
-      }
-
-      const updatedDepartment = await response.json();
-      setDepartment(updatedDepartment);
-      setEditModalOpen(false);
-      toast.success('Department updated successfully');
-    } catch (error) {
-      console.error('Error updating department:', error);
-      toast.error('Failed to update department');
-    }
-  };
-
-  const handleDeleteSubmit = async () => {
-    try {
-      const response = await fetch(`/api/departments/${department.id}`, {
-        method: 'DELETE',
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to delete department');
-      }
-
-      setDeleteModalOpen(false);
-      toast.success('Department deleted successfully');
-      // Redirect to departments list
-      router.push('/list/departments');
-    } catch (error) {
-      console.error('Error deleting department:', error);
-      toast.error('Failed to delete department');
-    }
-  };
-
-  const handleCreateCourseSubmit = async (data: any) => {
-    try {
-      const response = await fetch('/api/courses', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ...data,
-          departmentId: department.id,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to create course');
-      }
-
-      const newCourse = await response.json();
-      setDepartment(prev => ({
-        ...prev,
-        courses: [...prev.courses, newCourse],
-        totalCourses: prev.totalCourses + 1,
-      }));
-      setCreateCourseModalOpen(false);
-      toast.success('Course created successfully');
-    } catch (error) {
-      console.error('Error creating course:', error);
-      toast.error('Failed to create course');
-    }
-  };
-
-  const handleCreateInstructorSubmit = async (data: any) => {
-    try {
-      const response = await fetch('/api/instructors', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ...data,
-          departmentId: department.id,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to create instructor');
-      }
-
-      const newInstructor = await response.json();
-      setDepartment(prev => ({
-        ...prev,
-        instructors: [...prev.instructors, newInstructor],
-        totalInstructors: prev.totalInstructors + 1,
-      }));
-      setCreateInstructorModalOpen(false);
-      toast.success('Instructor created successfully');
-    } catch (error) {
-      console.error('Error creating instructor:', error);
-      toast.error('Failed to create instructor');
-    }
-  };
-
-  const renderEditModal = () => (
-    <DepartmentForm
-      open={editModalOpen}
-      onOpenChange={setEditModalOpen}
-      initialData={{
-        id: department.id,
-        name: department.name,
-        code: department.code,
-        headOfDepartment: department.headOfDepartment,
-        description: department.description,
-        courseOfferings: department.courses.map(course => ({
-          id: course.id,
-          name: course.name,
-          code: course.code,
-          description: course.description,
-          status: course.status,
-          totalStudents: course.students,
-          totalSections: course.sections
-        })),
-        status: department.status,
-        totalInstructors: department.totalInstructors
-      }}
-      instructors={department.instructors}
-      onSuccess={() => {
-        setEditModalOpen(false);
-        // Refresh department data
-        handleEditSubmit(department);
-      }}
-    />
-  );
-
-  if (!department) {
-    return (
-      <div className="flex-1 p-4">
-        <div className="bg-white rounded-md p-4">
-          <h1 className="text-xl font-semibold text-red-600">Department not found</h1>
-        </div>
-      </div>
-    );
-  }
+  const department = mockDepartment;
 
   return (
     <div className="flex-1 p-6 flex flex-col gap-6">
       {/* Header */}
-      <div className="bg-gradient-to-br from-blue-50 to-blue-100/50 py-8 px-6 rounded-2xl shadow-sm ring-1 ring-gray-100">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold text-gray-900">{department.name}</h1>
-            <p className="text-sm text-gray-600 mt-1">{department.description}</p>
-          </div>
-          {role === "admin" && (
-            <div className="flex gap-2">
-              {renderEditModal()}
-              <FormModal
-                open={deleteModalOpen}
-                onClose={() => setDeleteModalOpen(false)}
-                onSubmit={handleDeleteSubmit}
-                title="Delete Department"
-                submitLabel="Delete"
-                schema={z.object({})}
-                fields={[]}
-              />
-            </div>
-          )}
+      <div className="bg-gradient-to-br from-blue-50 to-blue-100/50 py-8 px-6 rounded-2xl shadow-sm ring-1 ring-gray-100 flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold text-gray-900">{department.name}</h1>
+          <p className="text-sm text-gray-600 mt-1">{department.description}</p>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="outline" size="icon" onClick={() => setEditDialogOpen(true)} aria-label="Edit Department">
+            <Pencil className="h-5 w-5" />
+          </Button>
+          <Button variant="destructive" size="icon" onClick={() => setDeleteDialogOpen(true)} aria-label="Delete Department">
+            <Trash2 className="h-5 w-5" />
+          </Button>
         </div>
       </div>
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="shadow-sm ring-1 ring-gray-100">
-          <CardContent>
-            <Typography color="textSecondary" gutterBottom>
-              Total Students
-            </Typography>
-            <Typography variant="h4" component="div">
-              {department.statistics.studentCount}
-            </Typography>
-          </CardContent>
-        </Card>
-        <Card className="shadow-sm ring-1 ring-gray-100">
-          <CardContent>
-            <Typography color="textSecondary" gutterBottom>
-              Total Courses
-            </Typography>
-            <Typography variant="h4" component="div">
-              {department.statistics.courseCount}
-            </Typography>
-          </CardContent>
-        </Card>
-        <Card className="shadow-sm ring-1 ring-gray-100">
-          <CardContent>
-            <Typography color="textSecondary" gutterBottom>
-              Total Instructors
-            </Typography>
-            <Typography variant="h4" component="div">
-              {department.statistics.instructorCount}
-            </Typography>
-          </CardContent>
-        </Card>
-        <Card className="shadow-sm ring-1 ring-gray-100">
-          <CardContent>
-            <Typography color="textSecondary" gutterBottom>
-              Attendance Rate
-            </Typography>
-            <Typography variant="h4" component="div">
-              {department.statistics.attendanceRate}%
-            </Typography>
-          </CardContent>
-        </Card>
+        <div className="bg-white rounded-lg shadow p-4 flex flex-col items-center">
+          <User2 className="h-6 w-6 text-blue-500 mb-2" />
+          <div className="text-xs text-gray-500">Total Students</div>
+          <div className="text-xl font-bold">{department.statistics.studentCount}</div>
+        </div>
+        <div className="bg-white rounded-lg shadow p-4 flex flex-col items-center">
+          <BookOpen className="h-6 w-6 text-green-500 mb-2" />
+          <div className="text-xs text-gray-500">Total Courses</div>
+          <div className="text-xl font-bold">{department.statistics.courseCount}</div>
+        </div>
+        <div className="bg-white rounded-lg shadow p-4 flex flex-col items-center">
+          <Users className="h-6 w-6 text-purple-500 mb-2" />
+          <div className="text-xs text-gray-500">Total Instructors</div>
+          <div className="text-xl font-bold">{department.statistics.instructorCount}</div>
+        </div>
+        <div className="bg-white rounded-lg shadow p-4 flex flex-col items-center">
+          <Info className="h-6 w-6 text-yellow-500 mb-2" />
+          <div className="text-xs text-gray-500">Attendance Rate</div>
+          <div className="text-xl font-bold">{department.statistics.attendanceRate}%</div>
+        </div>
       </div>
 
       {/* Tabs */}
-      <Card className="shadow-sm ring-1 ring-gray-100">
-        <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-          <Tabs value={tabValue} onChange={handleTabChange}>
-            <Tab label="Overview" />
-            <Tab label="Courses" />
-            <Tab label="Instructors" />
-          </Tabs>
-        </Box>
-        <CardContent>
-          {tabValue === 0 && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="bg-white rounded-lg shadow p-4">
+        <div className="flex gap-2 mb-4 border-b">
+          {TABS.map((tabItem, i) => (
+            <button
+              key={tabItem.label}
+              className={`flex items-center gap-1 px-4 py-2 border-b-2 transition-all duration-150 ${tab === i ? 'border-blue-600 text-blue-600 font-semibold' : 'border-transparent text-gray-500'}`}
+              onClick={() => setTab(i)}
+            >
+              <tabItem.icon className="h-4 w-4" />
+              {tabItem.label}
+            </button>
+          ))}
+        </div>
+        <div>
+          {tab === 0 && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <Typography variant="h6" gutterBottom>
-                  Department Information
-                </Typography>
-                <TableContainer component={Paper} variant="outlined">
-                  <Table>
-                    <TableBody>
-                      <TableRow>
-                        <TableCell component="th" scope="row">Department Code</TableCell>
-                        <TableCell>{department.code}</TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell component="th" scope="row">Head of Department</TableCell>
-                        <TableCell>{department.headOfDepartment}</TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell component="th" scope="row">Status</TableCell>
-                        <TableCell>
-                          <Chip
-                            label={department.status}
-                            color={department.status === "active" ? "success" : "default"}
-                            size="small"
-                          />
-                        </TableCell>
-                      </TableRow>
-                    </TableBody>
-                  </Table>
-                </TableContainer>
+                <h2 className="font-semibold mb-2">Department Information</h2>
+                <div className="space-y-2">
+                  <div><span className="font-medium">Department Code:</span> {department.code}</div>
+                  <div><span className="font-medium">Head of Department:</span> {department.headOfDepartment}</div>
+                  <div><span className="font-medium">Status:</span> <Badge variant={department.status === "active" ? "success" : "error"}>{department.status}</Badge></div>
+                </div>
               </div>
               <div>
-                <Typography variant="h6" gutterBottom>
-                  Attendance Overview
-                </Typography>
-                <div className="h-[300px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={attendanceData}
-                        cx="50%"
-                        cy="50%"
-                        labelLine={false}
-                        outerRadius={80}
-                        fill="#8884d8"
-                        dataKey="value"
-                        label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                      >
-                        {attendanceData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip />
-                      <Legend />
-                    </PieChart>
-                  </ResponsiveContainer>
+                <h2 className="font-semibold mb-2">Attendance Overview</h2>
+                <div className="flex flex-col items-center justify-center h-40">
+                  <div className="text-4xl font-bold text-blue-600">{department.statistics.attendanceRate}%</div>
+                  <div className="text-xs text-gray-500 mt-2">Attendance Rate</div>
                 </div>
               </div>
             </div>
           )}
-
-          {tabValue === 1 && (
+          {tab === 1 && (
             <div>
               <div className="flex justify-between items-center mb-4">
-                <Typography variant="h6">Course List</Typography>
-                {role === "admin" && (
-                  <FormModal
-                    open={createCourseModalOpen}
-                    onClose={() => setCreateCourseModalOpen(false)}
-                    onSubmit={handleCreateCourseSubmit}
-                    title="Add New Course"
-                    submitLabel="Add"
-                    schema={courseSchema}
-                    fields={[
-                      {
-                        name: "name",
-                        label: "Course Name",
-                        type: "text",
-                      },
-                      {
-                        name: "code",
-                        label: "Course Code",
-                        type: "text",
-                      },
-                      {
-                        name: "description",
-                        label: "Description",
-                        type: "multiline",
-                      },
-                      {
-                        name: "status",
-                        label: "Status",
-                        type: "select",
-                        options: [
-                          { value: "active", label: "Active" },
-                          { value: "inactive", label: "Inactive" },
-                        ],
-                      },
-                    ]}
-                  />
-                )}
+                <h2 className="font-semibold">Course List</h2>
+                <Button variant="default" size="sm" className="gap-1">
+                  <Plus className="h-4 w-4" /> Add Course
+                </Button>
               </div>
-              <TableContainer component={Paper} variant="outlined">
+              <div className="overflow-x-auto rounded-lg border bg-white shadow">
                 <Table>
-                  <TableHead>
+                  <TableHeader>
                     <TableRow>
-                      <TableCell>Course Name</TableCell>
-                      <TableCell>Students</TableCell>
-                      <TableCell>Sections</TableCell>
-                      <TableCell align="right">Actions</TableCell>
+                      <TableHead>Course Name</TableHead>
+                      <TableHead>Students</TableHead>
+                      <TableHead>Sections</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Actions</TableHead>
                     </TableRow>
-                  </TableHead>
+                  </TableHeader>
                   <TableBody>
                     {department.courses.map((course) => (
                       <TableRow key={course.id}>
                         <TableCell>{course.name}</TableCell>
                         <TableCell>{course.students}</TableCell>
                         <TableCell>{course.sections}</TableCell>
-                        <TableCell align="right">
-                          {role === "admin" && (
-                            <>
-                              <IconButton size="small" color="primary">
-                                <EditIcon />
-                              </IconButton>
-                              <IconButton size="small" color="error">
-                                <DeleteIcon />
-                              </IconButton>
-                            </>
-                          )}
+                        <TableCell><Badge variant={course.status === "active" ? "success" : "error"}>{course.status}</Badge></TableCell>
+                        <TableCell>
+                          <div className="flex gap-2">
+                            <Button variant="ghost" size="icon" aria-label="Edit Course"><Pencil className="h-4 w-4 text-green-600" /></Button>
+                            <Button variant="ghost" size="icon" aria-label="Delete Course"><Trash2 className="h-4 w-4 text-red-600" /></Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
-              </TableContainer>
+              </div>
             </div>
           )}
-
-          {tabValue === 2 && (
+          {tab === 2 && (
             <div>
               <div className="flex justify-between items-center mb-4">
-                <Typography variant="h6">Instructor List</Typography>
-                {role === "admin" && (
-                  <FormModal
-                    open={createInstructorModalOpen}
-                    onClose={() => setCreateInstructorModalOpen(false)}
-                    onSubmit={handleCreateInstructorSubmit}
-                    title="Add New Instructor"
-                    submitLabel="Add"
-                    schema={instructorSchema}
-                    fields={[
-                      {
-                        name: "name",
-                        label: "Instructor Name",
-                        type: "text",
-                      },
-                      {
-                        name: "type",
-                        label: "Type",
-                        type: "select",
-                        options: [
-                          { value: "Full Time", label: "Full Time" },
-                          { value: "Part Time", label: "Part Time" },
-                        ],
-                      },
-                      {
-                        name: "status",
-                        label: "Status",
-                        type: "select",
-                        options: [
-                          { value: "Active", label: "Active" },
-                          { value: "Inactive", label: "Inactive" },
-                        ],
-                      },
-                    ]}
-                  />
-                )}
+                <h2 className="font-semibold">Instructor List</h2>
+                <Button variant="default" size="sm" className="gap-1">
+                  <Plus className="h-4 w-4" /> Add Instructor
+                </Button>
               </div>
-              <TableContainer component={Paper} variant="outlined">
+              <div className="overflow-x-auto rounded-lg border bg-white shadow">
                 <Table>
-                  <TableHead>
+                  <TableHeader>
                     <TableRow>
-                      <TableCell>Name</TableCell>
-                      <TableCell>Type</TableCell>
-                      <TableCell>Status</TableCell>
-                      <TableCell align="right">Actions</TableCell>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Actions</TableHead>
                     </TableRow>
-                  </TableHead>
+                  </TableHeader>
                   <TableBody>
                     {department.instructors.map((instructor) => (
                       <TableRow key={instructor.id}>
                         <TableCell>{instructor.name}</TableCell>
                         <TableCell>{instructor.type}</TableCell>
+                        <TableCell><Badge variant={instructor.status === "Active" ? "success" : "error"}>{instructor.status}</Badge></TableCell>
                         <TableCell>
-                          <Chip
-                            label={instructor.status}
-                            color={instructor.status === "Active" ? "success" : "default"}
-                            size="small"
-                          />
-                        </TableCell>
-                        <TableCell align="right">
-                          {role === "admin" && (
-                            <>
-                              <IconButton size="small" color="primary">
-                                <EditIcon />
-                              </IconButton>
-                              <IconButton size="small" color="error">
-                                <DeleteIcon />
-                              </IconButton>
-                            </>
-                          )}
+                          <div className="flex gap-2">
+                            <Button variant="ghost" size="icon" aria-label="Edit Instructor"><Pencil className="h-4 w-4 text-green-600" /></Button>
+                            <Button variant="ghost" size="icon" aria-label="Delete Instructor"><Trash2 className="h-4 w-4 text-red-600" /></Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
-              </TableContainer>
+              </div>
             </div>
           )}
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
+        </div>
+      </div>
 
-export default function DepartmentPage() {
-  return (
-    <Suspense fallback={<div>Loading...</div>}>
-      <DepartmentPageContent />
-    </Suspense>
+      {/* Edit Dialog (structure only) */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Department</DialogTitle>
+          </DialogHeader>
+          {/* Add edit form here */}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditDialogOpen(false)}>Cancel</Button>
+            <Button>Save</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* Delete Dialog (structure only) */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Department</DialogTitle>
+          </DialogHeader>
+          <div>Are you sure you want to delete the department "{department.name}"? This action cannot be undone.</div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={() => setDeleteDialogOpen(false)}>Delete</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 } 

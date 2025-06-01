@@ -1,26 +1,43 @@
 "use client";
 
-import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import InputField from "../InputField";
 import { useState } from "react";
-import { 
-  Person as PersonIcon,
-  ContactMail as ContactMailIcon,
-  LocationOn as LocationOnIcon,
-  PhotoCamera as PhotoCameraIcon,
-  Info as InfoIcon,
-  Work as WorkIcon,
-  Bloodtype as BloodtypeIcon,
-  Cake as CakeIcon,
-  Wc as WcIcon
-} from '@mui/icons-material';
+import {
+  User,
+  Mail,
+  MapPin,
+  Camera,
+  Info,
+  Briefcase,
+  Droplet,
+  Cake,
+  Venus,
+  Mars,
+} from "lucide-react";
+import { InputField } from "./InputField";
+import FormSection from "./FormSection";
+import {
+  Form,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormControl,
+  FormMessage,
+  Input,
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+  Button,
+} from "@/components/ui";
 
 const schema = z.object({
   username: z.string().min(1, "Username is required"),
   email: z.string().email("Invalid email address"),
-  password: z.string().min(6, "Password must be at least 6 characters"),
+  password: z.string().min(6, "Password must be at least 6 characters").optional(),
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().min(1, "Last name is required"),
   phone: z.string().min(1, "Phone number is required"),
@@ -36,46 +53,28 @@ type FormData = z.infer<typeof schema>;
 
 interface ParentFormProps {
   type: "create" | "update";
-  data?: {
-    id: number;
-    username: string;
-    email: string;
-    firstName: string;
-    lastName: string;
-    phone: string;
-    address: string;
-    bloodType: string;
-    birthday: string;
-    sex: string;
-    occupation: string;
-  };
+  data?: Partial<FormData>;
 }
 
-const ParentForm = ({ type, data }: ParentFormProps) => {
+export default function ParentForm({ type, data }: ParentFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-  } = useForm<FormData>({
+  const form = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: data
-      ? {
-          username: data.username,
-          email: data.email,
-          firstName: data.firstName,
-          lastName: data.lastName,
-          phone: data.phone,
-          address: data.address,
-          bloodType: data.bloodType,
-          birthday: data.birthday,
-          sex: data.sex,
-          occupation: data.occupation,
-        }
-      : undefined,
+    defaultValues: data,
   });
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setSelectedImage(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   const onSubmit = async (formData: FormData) => {
     setIsLoading(true);
@@ -89,246 +88,219 @@ const ParentForm = ({ type, data }: ParentFormProps) => {
     }
   };
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setSelectedImage(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
-      {/* Form Title */}
-      <div className="space-y-2">
-        <h1 className="text-2xl font-semibold text-gray-900">
-          {type === "create" ? "Create New Parent" : "Update Parent"}
-        </h1>
-        <p className="text-sm text-gray-500">
-          {type === "create" 
-            ? "Fill in the details below to add a new parent to the system" 
-            : "Update the parent's information in the system"}
-        </p>
-      </div>
-
-      {/* Authentication Section */}
-      <div className="space-y-4">
-        <div className="flex items-center gap-2">
-          <div className="h-6 w-1 bg-blue-600 rounded-full"></div>
-          <div className="flex items-center gap-2">
-            <ContactMailIcon className="text-blue-600" style={{ fontSize: 20 }} />
-            <h2 className="text-lg font-semibold text-gray-900">Authentication Details</h2>
-          </div>
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+        {/* Title */}
+        <div className="space-y-2">
+          <h1 className="text-2xl font-semibold text-gray-900">
+            {type === "create" ? "Create New Parent" : "Update Parent"}
+          </h1>
+          <p className="text-sm text-gray-500">
+            {type === "create"
+              ? "Fill in the details below to add a new parent to the system"
+              : "Update the parent's information in the system"}
+          </p>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+        {/* Authentication Section */}
+        <FormSection title="Authentication Details" icon={Mail} color="blue">
           <InputField
             label="Username"
-            type="text"
-            error={errors.username?.message?.toString()}
-            {...register("username")}
+            name="username"
+            control={form.control}
+            error={form.formState.errors.username?.message}
             placeholder="Enter username"
           />
           <InputField
             label="Email Address"
+            name="email"
             type="email"
-            error={errors.email?.message?.toString()}
-            {...register("email")}
+            control={form.control}
+            error={form.formState.errors.email?.message}
             placeholder="Enter email address"
           />
           {type === "create" && (
             <InputField
               label="Password"
+              name="password"
               type="password"
-              error={errors.password?.message?.toString()}
-              {...register("password")}
+              control={form.control}
+              error={form.formState.errors.password?.message}
               placeholder="Enter password (min. 6 characters)"
             />
           )}
-        </div>
-      </div>
+        </FormSection>
 
-      {/* Personal Information Section */}
-      <div className="space-y-4">
-        <div className="flex items-center gap-2">
-          <div className="h-6 w-1 bg-green-600 rounded-full"></div>
-          <div className="flex items-center gap-2">
-            <PersonIcon className="text-green-600" style={{ fontSize: 20 }} />
-            <h2 className="text-lg font-semibold text-gray-900">Personal Information</h2>
-          </div>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Personal Information Section */}
+        <FormSection title="Personal Information" icon={User} color="green">
           <InputField
             label="First Name"
-            type="text"
-            error={errors.firstName?.message?.toString()}
-            {...register("firstName")}
+            name="firstName"
+            control={form.control}
+            error={form.formState.errors.firstName?.message}
             placeholder="Enter first name"
           />
           <InputField
             label="Last Name"
-            type="text"
-            error={errors.lastName?.message?.toString()}
-            {...register("lastName")}
+            name="lastName"
+            control={form.control}
+            error={form.formState.errors.lastName?.message}
             placeholder="Enter last name"
           />
           <InputField
             label="Phone Number"
+            name="phone"
             type="tel"
-            error={errors.phone?.message?.toString()}
-            {...register("phone")}
+            control={form.control}
+            error={form.formState.errors.phone?.message}
             placeholder="Enter phone number"
           />
           <InputField
             label="Address"
-            type="text"
-            error={errors.address?.message?.toString()}
-            {...register("address")}
+            name="address"
+            control={form.control}
+            error={form.formState.errors.address?.message}
             placeholder="Enter complete address"
           />
           <InputField
             label="Occupation"
-            type="text"
-            error={errors.occupation?.message?.toString()}
-            {...register("occupation")}
+            name="occupation"
+            control={form.control}
+            error={form.formState.errors.occupation?.message}
             placeholder="Enter occupation"
           />
-        </div>
-      </div>
+        </FormSection>
 
-      {/* Additional Information Section */}
-      <div className="space-y-4">
-        <div className="flex items-center gap-2">
-          <div className="h-6 w-1 bg-purple-600 rounded-full"></div>
-          <div className="flex items-center gap-2">
-            <WorkIcon className="text-purple-600" style={{ fontSize: 20 }} />
-            <h2 className="text-lg font-semibold text-gray-900">Additional Information</h2>
-          </div>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              Blood Type
-            </label>
-            <select
-              {...register("bloodType")}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-            >
-              <option value="">Select blood type</option>
-              {["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"].map((type) => (
-                <option key={type} value={type}>
-                  {type}
-                </option>
-              ))}
-            </select>
-            {errors.bloodType && (
-              <p className="mt-1 text-sm text-red-600 bg-red-50 px-3 py-1.5 rounded-lg">
-                {errors.bloodType.message}
-              </p>
+        {/* Additional Information Section */}
+        <FormSection title="Additional Information" icon={Briefcase} color="purple">
+          {/* Blood Type */}
+          <FormField
+            control={form.control}
+            name="bloodType"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Blood Type</FormLabel>
+                <FormControl>
+                  <Select
+                    onValueChange={field.onChange}
+                    defaultValue={field.value}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select blood type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"].map((type) => (
+                        <SelectItem key={type} value={type}>
+                          {type}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </FormControl>
+                <FormMessage>{form.formState.errors.bloodType?.message}</FormMessage>
+              </FormItem>
             )}
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              Sex
-            </label>
-            <select
-              {...register("sex")}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-            >
-              <option value="">Select sex</option>
-              <option value="male">Male</option>
-              <option value="female">Female</option>
-            </select>
-            {errors.sex && (
-              <p className="mt-1 text-sm text-red-600 bg-red-50 px-3 py-1.5 rounded-lg">
-                {errors.sex.message}
-              </p>
-            )}
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              Birthday
-            </label>
-            <input
-              type="date"
-              {...register("birthday")}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-            />
-            {errors.birthday && (
-              <p className="mt-1 text-sm text-red-600 bg-red-50 px-3 py-1.5 rounded-lg">
-                {errors.birthday.message}
-              </p>
-            )}
-          </div>
-        </div>
-      </div>
+          />
 
-      {/* Photo Upload Section */}
-      <div className="space-y-4">
-        <div className="flex items-center gap-2">
-          <div className="h-6 w-1 bg-orange-600 rounded-full"></div>
-          <div className="flex items-center gap-2">
-            <PhotoCameraIcon className="text-orange-600" style={{ fontSize: 20 }} />
-            <h2 className="text-lg font-semibold text-gray-900">Parent Photo</h2>
-          </div>
-        </div>
-        <div className="flex items-center gap-6">
-          <div className="relative w-32 h-32 rounded-xl overflow-hidden bg-gray-50 ring-1 ring-gray-100 flex-shrink-0">
-            {selectedImage ? (
-              <img
-                src={selectedImage}
-                alt="Selected"
-                className="w-full h-full object-cover"
+          {/* Sex */}
+          <FormField
+            control={form.control}
+            name="sex"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Sex</FormLabel>
+                <FormControl>
+                  <Select
+                    onValueChange={field.onChange}
+                    defaultValue={field.value}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select sex" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="male">Male</SelectItem>
+                      <SelectItem value="female">Female</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </FormControl>
+                <FormMessage>{form.formState.errors.sex?.message}</FormMessage>
+              </FormItem>
+            )}
+          />
+
+          {/* Birthday */}
+          <FormField
+            control={form.control}
+            name="birthday"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Birthday</FormLabel>
+                <FormControl>
+                  <Input type="date" {...field} />
+                </FormControl>
+                <FormMessage>{form.formState.errors.birthday?.message}</FormMessage>
+              </FormItem>
+            )}
+          />
+        </FormSection>
+
+        {/* Photo Upload Section */}
+        <FormSection title="Parent Photo" icon={Camera} color="orange">
+          <div className="flex items-center gap-6 col-span-2">
+            <div className="relative w-32 h-32 rounded-xl overflow-hidden bg-gray-50 ring-1 ring-gray-100 flex-shrink-0">
+              {selectedImage ? (
+                <img
+                  src={selectedImage}
+                  alt="Selected"
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center">
+                  <User className="text-gray-300" size={48} />
+                </div>
+              )}
+            </div>
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-gray-700">
+                Upload Parent Photo
+              </label>
+              <p className="text-sm text-gray-500">
+                Upload a clear photo of the parent. Recommended size: 400x400 pixels
+              </p>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleImageChange}
+                className="hidden"
+                id="photo-upload"
               />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center">
-                <PersonIcon className="text-gray-300" style={{ fontSize: 48 }} />
-              </div>
-            )}
+              <label
+                htmlFor="photo-upload"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 hover:border-blue-500 transition-all duration-200 cursor-pointer"
+              >
+                <Camera size={20} />
+                Choose Photo
+              </label>
+            </div>
           </div>
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700">
-              Upload Parent Photo
-            </label>
-            <p className="text-sm text-gray-500">
-              Upload a clear photo of the parent. Recommended size: 400x400 pixels
-            </p>
-            <input
-              type="file"
-              accept="image/*"
-              onChange={handleImageChange}
-              className="hidden"
-              id="photo-upload"
-            />
-            <label
-              htmlFor="photo-upload"
-              className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 hover:border-blue-500 transition-all duration-200 cursor-pointer"
-            >
-              <PhotoCameraIcon style={{ fontSize: 20 }} />
-              Choose Photo
-            </label>
-          </div>
-        </div>
-      </div>
+        </FormSection>
 
-      {/* Submit Button */}
-      <div className="flex items-center justify-between pt-4 border-t border-gray-100">
-        <div className="flex items-center gap-2 text-sm text-gray-500">
-          <InfoIcon style={{ fontSize: 16 }} />
-          <span>All fields marked with * are required</span>
+        {/* Submit Button */}
+        <div className="flex items-center justify-between pt-4 border-t border-gray-100">
+          <div className="flex items-center gap-2 text-sm text-gray-500">
+            <Info size={16} />
+            <span>All fields marked with * are required</span>
+          </div>
+          <Button
+            type="submit"
+            disabled={isLoading}
+            className="inline-flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-700 transition-all duration-200 shadow-sm hover:shadow disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isLoading ? "Saving..." : type === "create" ? "Add Parent" : "Update Parent"}
+          </Button>
         </div>
-        <button
-          type="submit"
-          disabled={isLoading}
-          className="inline-flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-700 transition-all duration-200 shadow-sm hover:shadow disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {isLoading ? "Saving..." : type === "create" ? "Add Parent" : "Update Parent"}
-        </button>
-      </div>
-    </form>
+      </form>
+    </Form>
   );
-};
-
-export default ParentForm; 
+}

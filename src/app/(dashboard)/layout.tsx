@@ -1,95 +1,42 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import Menu from "@/components/Menu";
 import Navbar from "@/components/Navbar";
-import { Box, useTheme, Drawer, IconButton } from "@mui/material";
-import MenuIcon from '@mui/icons-material/Menu';
+import { Menu as MenuIcon, X } from "lucide-react";
+import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
+import { role } from "@/lib/data";
+import type { Role } from "@/components/Menu";
+//import { Role } from "@prisma/client";
 
-const SIDEBAR_WIDTH = 280;
-const HEADER_HEIGHT = 64;
+const SIDEBAR_WIDTH = 256; // 64 * 4 = 256px (w-64)
+const HEADER_HEIGHT = 64; // h-16
 
 export default function DashboardLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const theme = useTheme();
   const [drawerOpen, setDrawerOpen] = useState(false);
-
   const handleDrawerToggle = () => setDrawerOpen((prev) => !prev);
 
   return (
-    <Box sx={{ minHeight: '100vh', bgcolor: 'transparent' }}>
-      {/* Fixed Header */}
-      <Box
-        sx={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          width: '100%',
-          height: HEADER_HEIGHT,
-          zIndex: theme.zIndex.appBar,
-          bgcolor: 'white',
-          boxShadow: 1,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          px: { xs: 2, md: 4 },
-        }}
-      >
-        <Navbar />
-        {/* Hamburger for mobile */}
-        <Box sx={{ display: { xs: 'flex', md: 'none' } }}>
-          <IconButton
-            aria-label="Open sidebar menu"
-            onClick={handleDrawerToggle}
-            sx={{ color: 'black', ml: 1 }}
-            edge="end"
-          >
-            <MenuIcon />
-          </IconButton>
-        </Box>
-      </Box>
-      {/* Fixed Sidebar for desktop */}
-      <Box
-        sx={{
-          display: { xs: 'none', md: 'block' },
-          position: 'fixed',
-          top: HEADER_HEIGHT,
-          left: 0,
-          width: SIDEBAR_WIDTH,
-          height: `calc(100vh - ${HEADER_HEIGHT}px)`,
-          zIndex: theme.zIndex.drawer,
-        }}
-      >
-        <Menu variant="sidebar" />
-      </Box>
-      {/* Drawer for mobile */}
-      <Drawer
-        anchor="left"
-        open={drawerOpen}
-        onClose={handleDrawerToggle}
-        ModalProps={{ keepMounted: true }}
-        sx={{ display: { xs: 'block', md: 'none' }, zIndex: theme.zIndex.drawer + 1 }}
-        PaperProps={{ sx: { width: SIDEBAR_WIDTH, bgcolor: '#012970', color: 'white' } }}
-      >
-        <Menu variant="drawer" onNavigate={handleDrawerToggle} />
-      </Drawer>
-      {/* Main Content */}
-      <Box
-        component="main"
-        sx={{
-          ml: { xs: 0, md: `${SIDEBAR_WIDTH}px` },
-          mt: `${HEADER_HEIGHT}px`,
-          p: 4,
-          minHeight: `calc(100vh - ${HEADER_HEIGHT}px)`,
-          transition: 'margin 0.3s',
-          bgcolor: 'transparent',
-        }}
-      >
-        {children}
-      </Box>
-    </Box>
+    <div className="min-h-screen bg-gray-50 flex">
+      {/* Sidebar - fixed, full height */}
+      <aside className="hidden md:flex flex-col fixed left-0 top-0 w-64 h-full z-30 bg-[#0c2556] border-r border-blue-900 shadow-lg">
+        <Menu role={role as Role} />
+      </aside>
+      {/* Main area: header/navbar and content */}
+      <div className="flex-1 flex flex-col md:ml-64 min-h-screen pt-16">
+        {/* Header/Navbar - fixed at top of main area */}
+        <header className="fixed top-0 z-20 w-full h-16 bg-white shadow flex items-center justify-end px-4 md:px-8 border-b">
+          <Navbar />
+        </header>
+        {/* Main Content */}
+        <main className="flex-1 p-4 bg-gray-50 min-h-[calc(100vh-4rem)]">
+          {children}
+        </main>
+      </div>
+    </div>
   );
 }

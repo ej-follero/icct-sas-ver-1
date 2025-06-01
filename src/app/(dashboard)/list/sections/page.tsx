@@ -1,48 +1,6 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import {
-  Box,
-  Button,
-  Card,
-  CardContent,
-  IconButton,
-  Paper,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Typography,
-  Select,
-  MenuItem,
-  FormControl,
-  InputLabel,
-  Chip,
-  TextField,
-  Pagination,
-  Stack,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Grid,
-  Menu,
-} from "@mui/material";
-import {
-  Add as AddIcon,
-  Search as SearchIcon,
-  FilterList as FilterIcon,
-  MoreVert as MoreVertIcon,
-  FileDownload as FileDownloadIcon,
-  Print as PrintIcon,
-  Visibility as VisibilityIcon,
-  Edit as EditIcon,
-  Delete as DeleteIcon,
-  Sort as SortIcon,
-  School as SchoolIcon,
-} from "@mui/icons-material";
 import * as XLSX from "xlsx";
 import { jsPDF } from "jspdf";
 import "jspdf-autotable";
@@ -50,6 +8,16 @@ import type { UserOptions } from "jspdf-autotable";
 import { z } from "zod";
 import { toast } from "sonner";
 import FormModal from "@/components/FormModal";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { Dialog, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import { Plus, Search, Filter, SortAsc, FileDown, Printer, Eye, Pencil, Trash2, School } from "lucide-react";
 
 // Define the section schema
 const sectionSchema = z.object({
@@ -385,253 +353,144 @@ export default function SectionsPage() {
   const totalPages = Math.ceil(sortedSections.length / itemsPerPage);
 
   return (
-    <Box sx={{ minHeight: "100vh", bgcolor: "background.default", p: 3 }}>
+    <div className="min-h-screen bg-background p-3">
       <Card>
         <CardContent>
           {/* Header */}
-          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 }}>
-            <Box>
-              <Typography variant="h5" component="h1" gutterBottom>
-                All Sections
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Manage and view all section information
-              </Typography>
-            </Box>
-            <Box sx={{ display: "flex", gap: 2 }}>
-              <TextField
-                size="small"
-                placeholder="Search sections..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                InputProps={{
-                  startAdornment: <SearchIcon sx={{ color: "action.active", mr: 1 }} />,
-                }}
-              />
-              <Button
-                variant="outlined"
-                startIcon={<FilterIcon />}
-                onClick={() => setFilterDialogOpen(true)}
-              >
-                Filter
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+            <div>
+              <h1 className="text-2xl font-bold mb-1">All Sections</h1>
+              <p className="text-muted-foreground text-sm">Manage and view all section information</p>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+              <div className="relative w-full sm:w-56">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                <Input
+                  className="pl-9"
+                  placeholder="Search sections..."
+                  value={searchTerm}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
+                />
+              </div>
+              <Button variant="outline" onClick={() => setFilterDialogOpen(true)} className="flex items-center gap-2">
+                <Filter className="h-4 w-4" />
+                <span className="hidden sm:inline">Filter</span>
               </Button>
-              <Button
-                variant="outlined"
-                startIcon={<SortIcon />}
-                onClick={() => setSortDialogOpen(true)}
-              >
-                Sort
+              <Button variant="outline" onClick={() => setSortDialogOpen(true)} className="flex items-center gap-2">
+                <SortAsc className="h-4 w-4" />
+                <span className="hidden sm:inline">Sort</span>
               </Button>
-              <Button
-                variant="contained"
-                startIcon={<AddIcon />}
-                onClick={() => {
-                  setModalSection(undefined);
-                  setModalOpen(true);
-                }}
-              >
-                Add Section
+              <Button onClick={() => { setModalSection(undefined); setModalOpen(true); }} className="flex items-center gap-2">
+                <Plus className="h-4 w-4" />
+                <span className="hidden sm:inline">Add Section</span>
               </Button>
-            </Box>
-          </Box>
+            </div>
+          </div>
 
           {/* Table */}
-          <TableContainer component={Paper}>
+          <div className="overflow-x-auto rounded-lg border bg-white shadow">
             <Table>
-              <TableHead>
-                <TableRow sx={{ 
-                  backgroundColor: 'rgba(25, 118, 210, 0.2)', // Light blue with 20% opacity
-                  '& .MuiTableCell-head': {
-                    color: 'text.primary',
-                    fontWeight: 'bold',
-                    fontSize: '0.875rem',
-                    padding: '12px 16px',
-                  }
-                }}>
-                  <TableCell>Section Info</TableCell>
-                  <TableCell>Type</TableCell>
-                  <TableCell>Capacity</TableCell>
-                  <TableCell>Status</TableCell>
-                  <TableCell>Year Level</TableCell>
-                  <TableCell>Course</TableCell>
-                  <TableCell align="center" sx={{ width: '120px' }}>Actions</TableCell>
+              <TableHeader>
+                <TableRow className="bg-blue-100/60">
+                  <TableHead>Section Info</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Capacity</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Year Level</TableHead>
+                  <TableHead>Course</TableHead>
+                  <TableHead className="text-center w-32">Actions</TableHead>
                 </TableRow>
-              </TableHead>
+              </TableHeader>
               <TableBody>
                 {paginatedSections.map((item) => (
-                  <TableRow 
-                    key={item.sectionId} 
-                    hover
-                    sx={{
-                      backgroundColor: 'rgba(0, 0, 0, 0.02)', // Light gray with 2% opacity
-                      '&:hover': {
-                        backgroundColor: 'rgba(0, 0, 0, 0.04)', // Slightly darker on hover
-                      },
-                      '& .MuiTableCell-root': {
-                        borderBottom: '1px solid rgba(0, 0, 0, 0.08)', // Lighter border
-                      }
-                    }}
-                  >
+                  <TableRow key={item.sectionId} className="hover:bg-gray-50">
                     <TableCell>
-                      <Typography variant="body1">{item.sectionName}</Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        {item.Course?.courseName}
-                      </Typography>
+                      <div className="font-medium">{item.sectionName}</div>
+                      <div className="text-xs text-muted-foreground">{item.Course?.courseName}</div>
                     </TableCell>
                     <TableCell>
-                      <Chip
-                        label={item.sectionType}
-                        color={item.sectionType === "REGULAR" ? "primary" : item.sectionType === "IRREGULAR" ? "warning" : "success"}
-                        size="small"
-                      />
+                      <Badge variant={item.sectionType === "REGULAR" ? "success" : item.sectionType === "IRREGULAR" ? "warning" : "info"}>{item.sectionType}</Badge>
                     </TableCell>
                     <TableCell>{item.sectionCapacity}</TableCell>
                     <TableCell>
-                      <Chip
-                        label={item.sectionStatus}
-                        color={item.sectionStatus === "ACTIVE" ? "success" : "error"}
-                        size="small"
-                      />
+                      <Badge variant={item.sectionStatus === "ACTIVE" ? "success" : "destructive"}>{item.sectionStatus}</Badge>
                     </TableCell>
                     <TableCell>{item.yearLevel}</TableCell>
                     <TableCell>{item.Course?.courseName}</TableCell>
-                    <TableCell align="center">
-                      <Box sx={{ display: "flex", gap: 1, justifyContent: "center" }}>
-                        <IconButton
-                          size="small"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setSelectedSection(item);
-                            setViewDialogOpen(true);
-                          }}
-                          sx={{ color: "primary.main" }}
-                        >
-                          <VisibilityIcon fontSize="small" />
-                        </IconButton>
-                        <IconButton
-                          size="small"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setModalSection(item);
-                            setModalOpen(true);
-                          }}
-                          sx={{ color: "info.main" }}
-                        >
-                          <EditIcon fontSize="small" />
-                        </IconButton>
-                        <IconButton
-                          size="small"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setSectionToDelete(item);
-                            setDeleteDialogOpen(true);
-                          }}
-                          sx={{ color: "error.main" }}
-                        >
-                          <DeleteIcon fontSize="small" />
-                        </IconButton>
-                      </Box>
+                    <TableCell className="text-center">
+                      <div className="flex gap-2 justify-center">
+                        <Button variant="ghost" size="icon" onClick={e => { e.stopPropagation(); setSelectedSection(item); setViewDialogOpen(true); }}>
+                          <Eye className="h-4 w-4 text-blue-600" />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={e => { e.stopPropagation(); setModalSection(item); setModalOpen(true); }}>
+                          <Pencil className="h-4 w-4 text-green-600" />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={e => { e.stopPropagation(); setSectionToDelete(item); setDeleteDialogOpen(true); }}>
+                          <Trash2 className="h-4 w-4 text-red-600" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
-          </TableContainer>
+          </div>
 
-          {/* Pagination */}
-          <Box sx={{ mt: 3, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <Typography variant="body2" color="text.secondary">
-              Showing {(currentPage - 1) * itemsPerPage + 1} to{" "}
-              {Math.min(currentPage * itemsPerPage, sortedSections.length)} of{" "}
-              {sortedSections.length} entries
-            </Typography>
-            <Stack direction="row" spacing={2}>
-              <Button
-                variant="outlined"
-                startIcon={<FileDownloadIcon />}
-                onClick={handleExportMenuOpen}
-              >
-                Export
-              </Button>
-              <Menu
-                anchorEl={exportMenuAnchorEl}
-                open={Boolean(exportMenuAnchorEl)}
-                onClose={handleExportMenuClose}
-              >
-                <MenuItem onClick={() => {
-                  handleExportToCSV();
-                  handleExportMenuClose();
-                }}>
-                  Export as CSV
-                </MenuItem>
-                <MenuItem onClick={() => {
-                  handleExportToExcel();
-                  handleExportMenuClose();
-                }}>
-                  Export as Excel
-                </MenuItem>
-                <MenuItem onClick={() => {
-                  handleExportToPDF();
-                  handleExportMenuClose();
-                }}>
-                  Export as PDF
-                </MenuItem>
-              </Menu>
-              <Button
-                variant="outlined"
-                startIcon={<PrintIcon />}
-                onClick={handlePrint}
-              >
+          {/* Export/Print and Pagination */}
+          <div className="mt-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div className="text-sm text-muted-foreground">
+              Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, sortedSections.length)} of {sortedSections.length} entries
+            </div>
+            <div className="flex gap-2">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" className="flex items-center gap-2">
+                    <FileDown className="h-4 w-4" />
+                    Export
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={handleExportToCSV}>Export as CSV</DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleExportToExcel}>Export as Excel</DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleExportToPDF}>Export as PDF</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <Button variant="outline" className="flex items-center gap-2" onClick={handlePrint}>
+                <Printer className="h-4 w-4" />
                 Print
               </Button>
-            </Stack>
-          </Box>
-          <Box sx={{ mt: 2, display: "flex", justifyContent: "center" }}>
-            <Pagination
-              count={totalPages}
-              page={currentPage}
-              onChange={handlePageChange}
-              color="primary"
-            />
-          </Box>
+            </div>
+          </div>
+          <div className="mt-4 flex justify-center">
+            <div className="inline-flex items-center gap-2">
+              <Button variant="outline" size="sm" disabled={currentPage === 1} onClick={() => setCurrentPage(currentPage - 1)}>
+                Prev
+              </Button>
+              <span className="text-sm font-medium">
+                Page {currentPage} of {totalPages}
+              </span>
+              <Button variant="outline" size="sm" disabled={currentPage === totalPages} onClick={() => setCurrentPage(currentPage + 1)}>
+                Next
+              </Button>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
       {/* Delete Confirmation Dialog */}
-      <Dialog
-        open={deleteDialogOpen}
-        onClose={() => {
-          setDeleteDialogOpen(false);
-          setSectionToDelete(null);
-        }}
-        maxWidth="xs"
-        fullWidth
-      >
-        <DialogTitle sx={{ pb: 1 }}>
-          Delete Section
-        </DialogTitle>
+      <Dialog open={deleteDialogOpen} onOpenChange={open => { if (!open) { setDeleteDialogOpen(false); setSectionToDelete(null); } }}>
         <DialogContent>
-          <Typography>
-            Are you sure you want to delete the section "{sectionToDelete?.sectionName}"? This action cannot be undone.
-          </Typography>
+          <DialogHeader>
+            <DialogTitle>Delete Section</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete the section "{sectionToDelete?.sectionName}"? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setDeleteDialogOpen(false); setSectionToDelete(null); }}>Cancel</Button>
+            <Button variant="destructive" onClick={() => sectionToDelete && handleDeleteSection(sectionToDelete.sectionId)}>Delete</Button>
+          </DialogFooter>
         </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button
-            onClick={() => {
-              setDeleteDialogOpen(false);
-              setSectionToDelete(null);
-            }}
-          >
-            Cancel
-          </Button>
-          <Button
-            variant="contained"
-            color="error"
-            onClick={() => sectionToDelete && handleDeleteSection(sectionToDelete.sectionId)}
-          >
-            Delete
-          </Button>
-        </DialogActions>
       </Dialog>
 
       {/* Section Form Modal */}
@@ -735,277 +594,174 @@ export default function SectionsPage() {
       />
 
       {/* Filter Dialog */}
-      <Dialog
-        open={filterDialogOpen}
-        onClose={() => setFilterDialogOpen(false)}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>Filter Sections</DialogTitle>
+      <Dialog open={filterDialogOpen} onOpenChange={open => setFilterDialogOpen(open)}>
         <DialogContent>
-          <Box sx={{ mt: 2 }}>
-            <FormControl fullWidth margin="normal">
-              <InputLabel>Type</InputLabel>
-              <Select
-                value={filters.type}
-                label="Type"
-                onChange={(e) => handleFilterChange('type', e.target.value)}
-              >
-                <MenuItem value="all">All</MenuItem>
-                <MenuItem value="REGULAR">Regular</MenuItem>
-                <MenuItem value="IRREGULAR">Irregular</MenuItem>
-                <MenuItem value="SUMMER">Summer</MenuItem>
-              </Select>
-            </FormControl>
-
-            <FormControl fullWidth margin="normal">
-              <InputLabel>Status</InputLabel>
-              <Select
-                value={filters.status}
-                label="Status"
-                onChange={(e) => handleFilterChange('status', e.target.value)}
-              >
-                <MenuItem value="all">All</MenuItem>
-                <MenuItem value="ACTIVE">Active</MenuItem>
-                <MenuItem value="INACTIVE">Inactive</MenuItem>
-              </Select>
-            </FormControl>
-
-            <FormControl fullWidth margin="normal">
-              <InputLabel>Year Level</InputLabel>
-              <Select
-                value={filters.yearLevel}
-                label="Year Level"
-                onChange={(e) => handleFilterChange('yearLevel', e.target.value)}
-              >
-                <MenuItem value="all">All</MenuItem>
-                <MenuItem value="1">1st Year</MenuItem>
-                <MenuItem value="2">2nd Year</MenuItem>
-                <MenuItem value="3">3rd Year</MenuItem>
-                <MenuItem value="4">4th Year</MenuItem>
-              </Select>
-            </FormControl>
-
-            <FormControl fullWidth margin="normal">
-              <InputLabel>Course</InputLabel>
-              <Select
-                value={filters.course}
-                label="Course"
-                onChange={(e) => handleFilterChange('course', e.target.value)}
-              >
-                <MenuItem value="all">All</MenuItem>
-                <MenuItem value="Bachelor of Science in Information Technology">BSIT</MenuItem>
-                <MenuItem value="Bachelor of Science in Computer Science">BSCS</MenuItem>
-                <MenuItem value="Bachelor of Science in Information Systems">BSIS</MenuItem>
-              </Select>
-            </FormControl>
-          </Box>
+          <DialogHeader>
+            <DialogTitle>Filter Sections</DialogTitle>
+            <DialogDescription>Filter the list of sections by the following criteria.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="filter-type">Type</Label>
+                <Select value={filters.type} onValueChange={value => handleFilterChange('type', value)}>
+                  <SelectTrigger id="filter-type">
+                    <SelectValue placeholder="All" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All</SelectItem>
+                    <SelectItem value="REGULAR">Regular</SelectItem>
+                    <SelectItem value="IRREGULAR">Irregular</SelectItem>
+                    <SelectItem value="SUMMER">Summer</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="filter-status">Status</Label>
+                <Select value={filters.status} onValueChange={value => handleFilterChange('status', value)}>
+                  <SelectTrigger id="filter-status">
+                    <SelectValue placeholder="All" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All</SelectItem>
+                    <SelectItem value="ACTIVE">Active</SelectItem>
+                    <SelectItem value="INACTIVE">Inactive</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="filter-year">Year Level</Label>
+                <Select value={filters.yearLevel} onValueChange={value => handleFilterChange('yearLevel', value)}>
+                  <SelectTrigger id="filter-year">
+                    <SelectValue placeholder="All" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All</SelectItem>
+                    <SelectItem value="1">1st Year</SelectItem>
+                    <SelectItem value="2">2nd Year</SelectItem>
+                    <SelectItem value="3">3rd Year</SelectItem>
+                    <SelectItem value="4">4th Year</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="filter-course">Course</Label>
+                <Select value={filters.course} onValueChange={value => handleFilterChange('course', value)}>
+                  <SelectTrigger id="filter-course">
+                    <SelectValue placeholder="All" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All</SelectItem>
+                    <SelectItem value="Bachelor of Science in Information Technology">BSIT</SelectItem>
+                    <SelectItem value="Bachelor of Science in Computer Science">BSCS</SelectItem>
+                    <SelectItem value="Bachelor of Science in Information Systems">BSIS</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={handleResetFilters}>Reset</Button>
+            <Button variant="ghost" onClick={() => setFilterDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleApplyFilters}>Apply Filters</Button>
+          </DialogFooter>
         </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={handleResetFilters}>Reset</Button>
-          <Button onClick={() => setFilterDialogOpen(false)}>Cancel</Button>
-          <Button variant="contained" onClick={handleApplyFilters}>
-            Apply Filters
-          </Button>
-        </DialogActions>
       </Dialog>
 
       {/* Sort Dialog */}
-      <Dialog
-        open={sortDialogOpen}
-        onClose={() => setSortDialogOpen(false)}
-        maxWidth="xs"
-        fullWidth
-      >
-        <DialogTitle>Sort Sections</DialogTitle>
+      <Dialog open={sortDialogOpen} onOpenChange={open => setSortDialogOpen(open)}>
         <DialogContent>
-          <Box sx={{ mt: 2 }}>
-            <Typography variant="subtitle2" gutterBottom>
-              Sort by:
-            </Typography>
-            <Stack spacing={1}>
-              <Button
-                variant={sortField === 'sectionName' ? 'contained' : 'outlined'}
-                onClick={() => handleSort('sectionName')}
-                startIcon={<SortIcon />}
-                fullWidth
-              >
-                Section Name {sortField === 'sectionName' && (sortOrder === 'asc' ? '↑' : '↓')}
-              </Button>
-              <Button
-                variant={sortField === 'sectionType' ? 'contained' : 'outlined'}
-                onClick={() => handleSort('sectionType')}
-                startIcon={<SortIcon />}
-                fullWidth
-              >
-                Type {sortField === 'sectionType' && (sortOrder === 'asc' ? '↑' : '↓')}
-              </Button>
-              <Button
-                variant={sortField === 'sectionCapacity' ? 'contained' : 'outlined'}
-                onClick={() => handleSort('sectionCapacity')}
-                startIcon={<SortIcon />}
-                fullWidth
-              >
-                Capacity {sortField === 'sectionCapacity' && (sortOrder === 'asc' ? '↑' : '↓')}
-              </Button>
-              <Button
-                variant={sortField === 'sectionStatus' ? 'contained' : 'outlined'}
-                onClick={() => handleSort('sectionStatus')}
-                startIcon={<SortIcon />}
-                fullWidth
-              >
-                Status {sortField === 'sectionStatus' && (sortOrder === 'asc' ? '↑' : '↓')}
-              </Button>
-              <Button
-                variant={sortField === 'yearLevel' ? 'contained' : 'outlined'}
-                onClick={() => handleSort('yearLevel')}
-                startIcon={<SortIcon />}
-                fullWidth
-              >
-                Year Level {sortField === 'yearLevel' && (sortOrder === 'asc' ? '↑' : '↓')}
-              </Button>
-            </Stack>
-          </Box>
+          <DialogHeader>
+            <DialogTitle>Sort Sections</DialogTitle>
+            <DialogDescription>Sort the list of sections by the following fields.</DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-2 py-4">
+            <Button variant={sortField === 'sectionName' ? 'default' : 'outline'} className="justify-start" onClick={() => handleSort('sectionName')}>
+              <SortAsc className="mr-2 h-4 w-4" />
+              Section Name {sortField === 'sectionName' && (sortOrder === 'asc' ? '↑' : '↓')}
+            </Button>
+            <Button variant={sortField === 'sectionType' ? 'default' : 'outline'} className="justify-start" onClick={() => handleSort('sectionType')}>
+              <SortAsc className="mr-2 h-4 w-4" />
+              Type {sortField === 'sectionType' && (sortOrder === 'asc' ? '↑' : '↓')}
+            </Button>
+            <Button variant={sortField === 'sectionCapacity' ? 'default' : 'outline'} className="justify-start" onClick={() => handleSort('sectionCapacity')}>
+              <SortAsc className="mr-2 h-4 w-4" />
+              Capacity {sortField === 'sectionCapacity' && (sortOrder === 'asc' ? '↑' : '↓')}
+            </Button>
+            <Button variant={sortField === 'sectionStatus' ? 'default' : 'outline'} className="justify-start" onClick={() => handleSort('sectionStatus')}>
+              <SortAsc className="mr-2 h-4 w-4" />
+              Status {sortField === 'sectionStatus' && (sortOrder === 'asc' ? '↑' : '↓')}
+            </Button>
+            <Button variant={sortField === 'yearLevel' ? 'default' : 'outline'} className="justify-start" onClick={() => handleSort('yearLevel')}>
+              <SortAsc className="mr-2 h-4 w-4" />
+              Year Level {sortField === 'yearLevel' && (sortOrder === 'asc' ? '↑' : '↓')}
+            </Button>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setSortDialogOpen(false)}>Close</Button>
+          </DialogFooter>
         </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={() => setSortDialogOpen(false)}>Close</Button>
-        </DialogActions>
       </Dialog>
 
       {/* View Dialog */}
-      <Dialog
-        open={viewDialogOpen}
-        onClose={() => {
-          setViewDialogOpen(false);
-          setSelectedSection(null);
-        }}
-        maxWidth="md"
-        fullWidth
-      >
-        <DialogTitle>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <SchoolIcon color="primary" />
-            <Typography variant="h6">Section Details</Typography>
-          </Box>
-        </DialogTitle>
-        <DialogContent>
+      <Dialog open={viewDialogOpen} onOpenChange={open => { if (!open) { setViewDialogOpen(false); setSelectedSection(null); } }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>
+              <div className="flex items-center gap-2">
+                <School className="h-6 w-6 text-blue-600" />
+                Section Details
+              </div>
+            </DialogTitle>
+          </DialogHeader>
           {selectedSection && (
-            <Box sx={{ mt: 2 }}>
-              <Grid container spacing={3}>
-                <Grid item xs={12}>
-                  <Paper sx={{ p: 2, bgcolor: 'background.default' }}>
-                    <Typography variant="h5" gutterBottom>
-                      {selectedSection.sectionName}
-                    </Typography>
-                    <Typography variant="subtitle1" color="text.secondary" gutterBottom>
-                      {selectedSection.Course?.courseName}
-                    </Typography>
-                    <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
-                      <Chip
-                        label={selectedSection.sectionType}
-                        color={selectedSection.sectionType === "REGULAR" ? "primary" : selectedSection.sectionType === "IRREGULAR" ? "warning" : "success"}
-                        size="small"
-                      />
-                      <Chip
-                        label={selectedSection.sectionStatus}
-                        color={selectedSection.sectionStatus === "ACTIVE" ? "success" : "error"}
-                        size="small"
-                      />
-                    </Box>
-                  </Paper>
-                </Grid>
-
-                <Grid item xs={12} md={6}>
-                  <Paper sx={{ p: 2 }}>
-                    <Typography variant="subtitle1" gutterBottom>
-                      Course
-                    </Typography>
-                    <Typography variant="body1">
-                      {selectedSection.Course?.courseName}
-                    </Typography>
-                  </Paper>
-                </Grid>
-
-                <Grid item xs={12} md={6}>
-                  <Paper sx={{ p: 2 }}>
-                    <Typography variant="subtitle1" gutterBottom>
-                      Year Level
-                    </Typography>
-                    <Typography variant="body1">
-                      {selectedSection.yearLevel}
-                    </Typography>
-                  </Paper>
-                </Grid>
-
-                <Grid item xs={12} md={6}>
-                  <Paper sx={{ p: 2 }}>
-                    <Typography variant="subtitle1" gutterBottom>
-                      Capacity
-                    </Typography>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <Typography variant="h4" color="primary">
-                        {selectedSection.sectionCapacity}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        students
-                      </Typography>
-                    </Box>
-                  </Paper>
-                </Grid>
-
-                <Grid item xs={12} md={6}>
-                  <Paper sx={{ p: 2 }}>
-                    <Typography variant="subtitle1" gutterBottom>
-                      Statistics
-                    </Typography>
-                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <Typography variant="body2" color="text.secondary">
-                          Total Students
-                        </Typography>
-                        <Typography variant="body1">
-                          {selectedSection.totalStudents || 0}
-                        </Typography>
-                      </Box>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <Typography variant="body2" color="text.secondary">
-                          Total Subjects
-                        </Typography>
-                        <Typography variant="body1">
-                          {selectedSection.totalSubjects || 0}
-                        </Typography>
-                      </Box>
-                    </Box>
-                  </Paper>
-                </Grid>
-              </Grid>
-            </Box>
+            <div className="mt-4 space-y-6">
+              <div className="rounded-lg border bg-muted p-4">
+                <h2 className="text-xl font-bold mb-1">{selectedSection.sectionName}</h2>
+                <div className="text-sm text-muted-foreground mb-2">{selectedSection.Course?.courseName}</div>
+                <div className="flex gap-2 mt-2">
+                  <Badge variant={selectedSection.sectionType === 'REGULAR' ? 'success' : selectedSection.sectionType === 'IRREGULAR' ? 'warning' : 'info'}>{selectedSection.sectionType}</Badge>
+                  <Badge variant={selectedSection.sectionStatus === 'ACTIVE' ? 'success' : 'destructive'}>{selectedSection.sectionStatus}</Badge>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="rounded-lg border bg-background p-4">
+                  <div className="font-semibold text-sm mb-1">Course</div>
+                  <div className="text-base">{selectedSection.Course?.courseName}</div>
+                </div>
+                <div className="rounded-lg border bg-background p-4">
+                  <div className="font-semibold text-sm mb-1">Year Level</div>
+                  <div className="text-base">{selectedSection.yearLevel}</div>
+                </div>
+                <div className="rounded-lg border bg-background p-4">
+                  <div className="font-semibold text-sm mb-1">Capacity</div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-2xl font-bold text-blue-600">{selectedSection.sectionCapacity}</span>
+                    <span className="text-muted-foreground">students</span>
+                  </div>
+                </div>
+                <div className="rounded-lg border bg-background p-4">
+                  <div className="font-semibold text-sm mb-1">Statistics</div>
+                  <div className="flex flex-col gap-1">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Total Students</span>
+                      <span>{selectedSection.totalStudents || 0}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Total Subjects</span>
+                      <span>{selectedSection.totalSubjects || 0}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           )}
+          <DialogFooter className="mt-6">
+            <Button variant="outline" onClick={() => { setViewDialogOpen(false); setSelectedSection(null); }}>Close</Button>
+            <Button onClick={() => { if (selectedSection) { setModalSection(selectedSection); setModalOpen(true); setViewDialogOpen(false); } }}>Edit Section</Button>
+          </DialogFooter>
         </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button
-            onClick={() => {
-              setViewDialogOpen(false);
-              setSelectedSection(null);
-            }}
-          >
-            Close
-          </Button>
-          <Button
-            variant="contained"
-            startIcon={<EditIcon />}
-            onClick={() => {
-              if (selectedSection) {
-                setModalSection(selectedSection);
-                setModalOpen(true);
-                setViewDialogOpen(false);
-              }
-            }}
-          >
-            Edit Section
-          </Button>
-        </DialogActions>
       </Dialog>
-    </Box>
+    </div>
   );
 }

@@ -1,4 +1,10 @@
+"use client";
+
+import React from "react";
 import { UseFormRegister } from "react-hook-form";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils"; // Optional: utility for conditional classes
 
 export interface InputFieldProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label: string;
@@ -6,24 +12,36 @@ export interface InputFieldProps extends React.InputHTMLAttributes<HTMLInputElem
   register?: UseFormRegister<any>;
 }
 
-const InputField = ({ label, error, register, ...props }: InputFieldProps) => {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <label className="block text-sm font-medium text-gray-700">
-        {label}
-      </label>
-      <input
-        {...props}
-        {...(register ? register(props.name || "") : {})}
-        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-      />
-      {error && (
-        <p className="text-sm text-red-600 bg-red-50 px-3 py-1.5 rounded-lg">
-          {error}
-        </p>
-      )}
-    </div>
-  );
-};
+const InputField = React.forwardRef<HTMLInputElement, InputFieldProps>(
+  ({ label, error, register, id, name, className, ...props }, ref) => {
+    const inputId = id || name;
+
+    return (
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor={inputId}>{label}</Label>
+        <Input
+          id={inputId}
+          {...props}
+          {...(register && name ? register(name) : {})}
+          ref={ref}
+          className={cn(className, error && "border-red-600 focus:ring-red-600")}
+          aria-invalid={!!error}
+          aria-describedby={error ? `${inputId}-error` : undefined}
+        />
+        {error && (
+          <p
+            id={`${inputId}-error`}
+            role="alert"
+            className="text-sm text-red-600 bg-red-50 px-3 py-1.5 rounded-lg"
+          >
+            {error}
+          </p>
+        )}
+      </div>
+    );
+  }
+);
+
+InputField.displayName = "InputField";
 
 export default InputField;

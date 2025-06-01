@@ -5,21 +5,27 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import {
-  Box,
-  Container,
-  Card,
-  CardContent,
-  TextField,
+  Input,
+} from "@/components/ui/input";
+import {
   Button,
-  Typography,
-  Checkbox,
-  FormControlLabel,
-  InputAdornment,
-  IconButton,
-  Divider,
+} from "@/components/ui/button";
+import {
+  Label,
+} from "@/components/ui/label";
+import {
   Avatar,
-} from "@mui/material";
-import { Email, Lock, Visibility, VisibilityOff, Person } from "@mui/icons-material";
+  AvatarImage,
+} from "@/components/ui/avatar";
+import {
+  Mail as EmailIcon,
+  Lock as LockIcon,
+  Eye,
+  EyeOff,
+  User,
+} from "lucide-react";
+
+const MIN_PASSWORD_LENGTH = 6;
 
 const LoginPage = () => {
   const router = useRouter();
@@ -31,8 +37,6 @@ const LoginPage = () => {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  const MIN_PASSWORD_LENGTH = 6;
-
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError("");
@@ -42,10 +46,9 @@ const LoginPage = () => {
     }
     setIsLoading(true);
     try {
-      // TODO: Implement actual login logic here
-      await new Promise((resolve) => setTimeout(resolve, 1000)); // Simulate API call
+      await new Promise((resolve) => setTimeout(resolve, 1000));
       router.push("/dashboard");
-    } catch (err) {
+    } catch {
       setError("Invalid email or password");
     } finally {
       setIsLoading(false);
@@ -58,145 +61,146 @@ const LoginPage = () => {
   };
 
   return (
-    <Box sx={{ minHeight: "100vh", bgcolor: "grey.50", display: "flex", alignItems: "center", justifyContent: "center", py: 6 }}>
-      <Container maxWidth="sm">
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4 py-12">
+      <div className="max-w-md w-full space-y-8">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
         >
-          <Box sx={{ textAlign: "center", mb: 4 }}>
-            <Link href="/" style={{ textDecoration: "none" }}>
-              <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 1, mb: 1 }}>
-                <Avatar src="/icct-logo.png" alt="ICCT Logo" sx={{ width: 48, height: 48, bgcolor: "white" }} />
-                <Typography variant="h5" sx={{ fontWeight: 800, color: "primary.main", letterSpacing: 1 }}>
-                  ICCT-SAS
-                </Typography>
-              </Box>
-            </Link>
-            <Typography variant="h4" sx={{ fontWeight: 700, color: "text.primary" }}>
-              Sign in to your account
-            </Typography>
-            <Typography variant="body2" sx={{ mt: 1, color: "text.secondary" }}>
-              Or{' '}
-              <Link href="/sign-up" style={{ color: '#1976d2', fontWeight: 500, textDecoration: 'none' }}>
+          <div className="text-center">
+            <h2 className="text-3xl font-bold text-gray-900">Sign in to your account</h2>
+            <p className="mt-2 text-sm text-gray-600">
+              Or{" "}
+              <Link
+                href="/sign-up"
+                className="text-blue-600 font-medium hover:underline"
+              >
                 create a new account
               </Link>
-            </Typography>
-          </Box>
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.2 }}
-          >
-            <Card sx={{ borderRadius: 3, boxShadow: 4 }}>
-              <CardContent sx={{ p: { xs: 3, sm: 4 } }}>
-                <form onSubmit={handleSubmit}>
-                  <TextField
-                    fullWidth
-                    margin="normal"
-                    label="Email Address"
+            </p>
+          </div>
+
+          <div className="bg-white rounded-2xl shadow-lg p-8 mt-6">
+            <form onSubmit={handleSubmit} className="space-y-6" noValidate>
+              {/* Email Input */}
+              <div>
+                <Label htmlFor="email" className="mb-1 font-semibold">
+                  Email Address
+                </Label>
+                <div className="relative mt-1">
+                  <span className="absolute inset-y-0 left-3 flex items-center text-gray-400">
+                    <EmailIcon size={20} />
+                  </span>
+                  <Input
+                    id="email"
                     name="email"
                     type="email"
                     autoComplete="email"
                     required
                     value={formData.email}
                     onChange={handleChange}
-                    InputProps={{
-                      startAdornment: (
-                        <InputAdornment position="start">
-                          <Email color="action" />
-                        </InputAdornment>
-                      ),
-                    }}
+                    className="pl-10"
+                    placeholder="you@example.com"
                   />
-                  <TextField
-                    fullWidth
-                    margin="normal"
-                    label="Password"
+                </div>
+              </div>
+
+              {/* Password Input */}
+              <div>
+                <Label htmlFor="password" className="mb-1 font-semibold">
+                  Password
+                </Label>
+                <div className="relative mt-1">
+                  <span className="absolute inset-y-0 left-3 flex items-center text-gray-400">
+                    <LockIcon size={20} />
+                  </span>
+                  <Input
+                    id="password"
                     name="password"
                     type={showPassword ? "text" : "password"}
                     autoComplete="current-password"
                     required
+                    minLength={MIN_PASSWORD_LENGTH}
                     value={formData.password}
                     onChange={handleChange}
-                    inputProps={{ minLength: MIN_PASSWORD_LENGTH }}
-                    InputProps={{
-                      startAdornment: (
-                        <InputAdornment position="start">
-                          <Lock color="action" />
-                        </InputAdornment>
-                      ),
-                      endAdornment: (
-                        <InputAdornment position="end">
-                          <IconButton
-                            aria-label="toggle password visibility"
-                            onClick={() => setShowPassword((show) => !show)}
-                            edge="end"
-                          >
-                            {showPassword ? <VisibilityOff /> : <Visibility />}
-                          </IconButton>
-                        </InputAdornment>
-                      ),
-                    }}
+                    className="pl-10 pr-10"
+                    placeholder="••••••••"
                   />
-                  <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mt: 1 }}>
-                    <FormControlLabel
-                      control={<Checkbox color="primary" />}
-                      label={<Typography variant="body2">Remember me</Typography>}
-                    />
-                    <Link href="/forgot-password" style={{ color: '#1976d2', fontWeight: 500, textDecoration: 'none', fontSize: 14 }}>
-                      Forgot your password?
-                    </Link>
-                  </Box>
-                  {error && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="text-red-500 text-sm text-center bg-red-50 p-2 rounded-md"
-                      style={{ marginTop: 16, marginBottom: 8 }}
-                    >
-                      {error}
-                    </motion.div>
-                  )}
-                  <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                    <Button
-                      type="submit"
-                      fullWidth
-                      variant="contained"
-                      size="large"
-                      sx={{ mt: 2, fontWeight: 600, py: 1.5 }}
-                      disabled={isLoading}
-                    >
-                      {isLoading ? "Signing in..." : "Sign in"}
-                    </Button>
-                  </motion.div>
-                </form>
-                <Divider sx={{ my: 3 }}>Or continue with</Divider>
-                <Box sx={{ display: 'flex', gap: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
-                  <Button
-                    fullWidth
-                    variant="outlined"
-                    startIcon={<Person />}
-                    sx={{ fontWeight: 500 }}
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((prev) => !prev)}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1 rounded"
+                    aria-label="Toggle password visibility"
                   >
-                    Student ID
-                  </Button>
-                  <Button
-                    fullWidth
-                    variant="outlined"
-                    startIcon={<Person />}
-                    sx={{ fontWeight: 500 }}
-                  >
-                    Employee ID
-                  </Button>
-                </Box>
-              </CardContent>
-            </Card>
-          </motion.div>
+                    {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Remember me and forgot password */}
+              <div className="flex items-center justify-between">
+                <Label htmlFor="remember" className="flex items-center space-x-2 cursor-pointer">
+                  <input
+                    id="remember"
+                    type="checkbox"
+                    className="form-checkbox h-4 w-4 text-blue-600 rounded"
+                  />
+                  <span className="text-sm text-gray-700 select-none">Remember me</span>
+                </Label>
+                <Link
+                  href="/forgot-password"
+                  className="text-sm text-blue-600 font-medium hover:underline"
+                >
+                  Forgot your password?
+                </Link>
+              </div>
+
+              {/* Error message */}
+              {error && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="text-red-600 text-sm text-center bg-red-50 p-2 rounded-md"
+                >
+                  {error}
+                </motion.div>
+              )}
+
+              {/* Submit Button */}
+              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                <Button
+                  type="submit"
+                  className="w-full py-3 font-semibold"
+                  disabled={isLoading}
+                >
+                  {isLoading ? "Signing in..." : "Sign in"}
+                </Button>
+              </motion.div>
+            </form>
+
+            {/* Divider */}
+            <div className="my-8 flex items-center">
+              <div className="flex-grow border-t border-gray-200" />
+              <span className="mx-4 text-gray-400 text-sm">Or continue with</span>
+              <div className="flex-grow border-t border-gray-200" />
+            </div>
+
+            {/* Alternative Auth Buttons */}
+            <div className="flex flex-col sm:flex-row gap-4">
+              <Button variant="outline" className="flex-1 font-medium">
+                <User className="mr-2 h-5 w-5" />
+                Student ID
+              </Button>
+              <Button variant="outline" className="flex-1 font-medium">
+                <User className="mr-2 h-5 w-5" />
+                Employee ID
+              </Button>
+            </div>
+          </div>
         </motion.div>
-      </Container>
-    </Box>
+      </div>
+    </div>
   );
 };
 

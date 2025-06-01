@@ -3,37 +3,24 @@ import { prisma } from '@/lib/prisma';
 
 export async function GET() {
   try {
-    const courses = await prisma.course.findMany({
-      select: {
-        id: true,
-        name: true,
-        code: true,
-        description: true,
-        status: true,
-        _count: {
-          select: {
-            students: true,
-            sections: true,
-          },
-        },
-      },
-      where: {
-        status: true, // Only get active courses
+    const courses = await prisma.courseOffering.findMany({
+      include: {
+        Department: true,
       },
       orderBy: {
-        name: 'asc',
+        courseName: 'asc',
       },
     });
 
-    // Transform the data to match the expected format
     const formattedCourses = courses.map(course => ({
-      id: course.id,
-      name: course.name,
-      code: course.code,
-      description: course.description,
-      status: course.status ? 'active' : 'inactive',
-      totalStudents: course._count.students,
-      totalSections: course._count.sections,
+      id: course.courseId,
+      name: course.courseName,
+      code: course.courseCode,
+      department: course.Department?.departmentName ?? '',
+      units: course.totalUnits,
+      totalInstructors: 0, // Update if you have a relation
+      totalStudents: course.totalStudents,
+      status: course.courseStatus === 'ACTIVE' ? 'active' : 'inactive',
     }));
 
     return NextResponse.json(formattedCourses);

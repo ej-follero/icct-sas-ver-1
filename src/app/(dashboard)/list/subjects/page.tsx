@@ -1,55 +1,23 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import {
-  Box,
-  Button,
-  Card,
-  CardContent,
-  IconButton,
-  Paper,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Typography,
-  Select,
-  MenuItem,
-  FormControl,
-  InputLabel,
-  Chip,
-  TextField,
-  Pagination,
-  Stack,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Grid,
-  Menu,
-} from "@mui/material";
-import {
-  Add as AddIcon,
-  Search as SearchIcon,
-  FilterList as FilterIcon,
-  MoreVert as MoreVertIcon,
-  FileDownload as FileDownloadIcon,
-  Print as PrintIcon,
-  Visibility as VisibilityIcon,
-  Edit as EditIcon,
-  Delete as DeleteIcon,
-  Sort as SortIcon,
-  School as SchoolIcon,
-} from "@mui/icons-material";
-import * as XLSX from "xlsx";
 import { jsPDF } from "jspdf";
 import "jspdf-autotable";
 import type { UserOptions } from "jspdf-autotable";
 import { z } from "zod";
 import { toast } from "sonner";
 import FormModal from "@/components/FormModal";
+import * as XLSX from "xlsx";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Plus, Search, Filter, SortAsc, FileDown, Printer, Eye, Pencil, Trash2, School, CheckSquare, Square } from "lucide-react";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { Dialog, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 
 // Define the subject schema
 const subjectSchema = z.object({
@@ -65,6 +33,7 @@ const subjectSchema = z.object({
   year_level: z.enum(["1st", "2nd", "3rd", "4th"]),
   department: z.string().min(1, "Department is required"),
   instructors: z.array(z.string()),
+  status: z.enum(["active", "inactive"]).optional(),
 });
 
 type Subject = z.infer<typeof subjectSchema>;
@@ -101,6 +70,7 @@ const initialSubjects: Subject[] = [
     year_level: "1st",
     department: "College of Information Technology",
     instructors: ["John Doe", "Jane Smith"],
+    status: "active",
   },
   {
     id: "2",
@@ -115,11 +85,32 @@ const initialSubjects: Subject[] = [
     year_level: "2nd",
     department: "College of Information Technology",
     instructors: ["Alice Johnson", "Bob Wilson"],
+    status: "active",
   },
 ];
 
 type SortField = 'name' | 'code' | 'type' | 'units' | 'semester' | 'year_level' | 'department';
 type SortOrder = 'asc' | 'desc';
+
+function Checkbox({ checked, indeterminate, onChange, ...props }: any) {
+  return (
+    <button
+      type="button"
+      aria-checked={checked}
+      onClick={onChange}
+      className={`w-5 h-5 flex items-center justify-center border rounded transition-colors ${checked ? 'bg-primary border-primary' : 'bg-white border-gray-300'} ${indeterminate ? 'bg-gray-200' : ''}`}
+      {...props}
+    >
+      {indeterminate ? (
+        <span className="w-3 h-0.5 bg-gray-500 rounded" />
+      ) : checked ? (
+        <CheckSquare className="w-4 h-4 text-primary" />
+      ) : (
+        <Square className="w-4 h-4 text-gray-400" />
+      )}
+    </button>
+  );
+}
 
 export default function SubjectsPage() {
   const [subjects, setSubjects] = useState(initialSubjects);
@@ -145,6 +136,8 @@ export default function SubjectsPage() {
   });
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [exportMenuAnchorEl, setExportMenuAnchorEl] = useState<null | HTMLElement>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [statusFilter, setStatusFilter] = useState("all");
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -363,10 +356,11 @@ export default function SubjectsPage() {
       const matchesSemester = filters.semester === "all" || subject.semester === filters.semester;
       const matchesYearLevel = filters.year_level === "all" || subject.year_level === filters.year_level;
       const matchesDepartment = filters.department === "all" || subject.department === filters.department;
+      const matchesStatus = statusFilter === "all" || (subject.status || "active") === statusFilter;
       
-      return matchesSearch && matchesType && matchesSemester && matchesYearLevel && matchesDepartment;
+      return matchesSearch && matchesType && matchesSemester && matchesYearLevel && matchesDepartment && matchesStatus;
     });
-  }, [subjects, searchTerm, filters]);
+  }, [subjects, searchTerm, filters, statusFilter]);
 
   const sortedSubjects = useMemo(() => {
     return [...filteredSubjects].sort((a, b) => {
@@ -386,248 +380,160 @@ export default function SubjectsPage() {
 
   const totalPages = Math.ceil(sortedSubjects.length / itemsPerPage);
 
+  const isAllSelected = paginatedSubjects.length > 0 && paginatedSubjects.every(s => selectedIds.includes(s.id));
+  const isIndeterminate = selectedIds.length > 0 && !isAllSelected;
+
+  const handleSelectAll = () => {
+    if (isAllSelected) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(paginatedSubjects.map(s => s.id));
+    }
+  };
+
+  const handleSelectRow = (id: string) => {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  };
+
   return (
-    <Box sx={{ minHeight: "100vh", bgcolor: "background.default", p: 3 }}>
+    <div className="min-h-screen bg-background p-3">
       <Card>
         <CardContent>
           {/* Header */}
-          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 }}>
-            <Box>
-              <Typography variant="h5" component="h1" gutterBottom>
-                All Subjects
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Manage and view all subject information
-              </Typography>
-            </Box>
-            <Box sx={{ display: "flex", gap: 2 }}>
-              <TextField
-                size="small"
-                placeholder="Search subjects..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                InputProps={{
-                  startAdornment: <SearchIcon sx={{ color: "action.active", mr: 1 }} />,
-                }}
-              />
-              <Button
-                variant="outlined"
-                startIcon={<FilterIcon />}
-                onClick={() => setFilterDialogOpen(true)}
-              >
-                Filter
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+            <div>
+              <h1 className="text-2xl font-bold mb-1">All Subjects</h1>
+              <p className="text-muted-foreground text-sm">Manage and view all subject information</p>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+              <div className="relative w-full sm:w-56">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                <Input
+                  className="pl-9"
+                  placeholder="Search subjects..."
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                />
+              </div>
+              <Button variant="outline" onClick={() => setFilterDialogOpen(true)} className="flex items-center gap-2">
+                <Filter className="h-4 w-4" />
+                <span className="hidden sm:inline">Filter</span>
               </Button>
-              <Button
-                variant="outlined"
-                startIcon={<SortIcon />}
-                onClick={() => setSortDialogOpen(true)}
-              >
-                Sort
+              <Button variant="outline" onClick={() => setSortDialogOpen(true)} className="flex items-center gap-2">
+                <SortAsc className="h-4 w-4" />
+                <span className="hidden sm:inline">Sort</span>
               </Button>
-              <Button
-                variant="contained"
-                startIcon={<AddIcon />}
-                onClick={() => {
-                  setModalSubject(undefined);
-                  setModalOpen(true);
-                }}
-              >
-                Add Subject
+              <Button onClick={() => { setModalSubject(undefined); setModalOpen(true); }} className="flex items-center gap-2">
+                <Plus className="h-4 w-4" />
+                <span className="hidden sm:inline">Add Subject</span>
               </Button>
-            </Box>
-          </Box>
+            </div>
+          </div>
 
           {/* Table */}
-          <TableContainer component={Paper}>
+          <div className="overflow-x-auto rounded-lg border bg-white shadow">
             <Table>
-              <TableHead>
-                <TableRow sx={{ 
-                  backgroundColor: 'rgba(25, 118, 210, 0.2)', // Light blue with 20% opacity
-                  '& .MuiTableCell-head': {
-                    color: 'text.primary',
-                    fontWeight: 'bold',
-                    fontSize: '0.875rem',
-                    padding: '12px 16px',
-                  }
-                }}>
-                  <TableCell>Subject Info</TableCell>
-                  <TableCell>Type</TableCell>
-                  <TableCell>Units</TableCell>
-                  <TableCell>Semester</TableCell>
-                  <TableCell>Year Level</TableCell>
-                  <TableCell>Department</TableCell>
-                  <TableCell align="center" sx={{ width: '120px' }}>Actions</TableCell>
+              <TableHeader>
+                <TableRow className="bg-blue-100/60">
+                  <TableHead>Subject Info</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Units</TableHead>
+                  <TableHead>Semester</TableHead>
+                  <TableHead>Year Level</TableHead>
+                  <TableHead>Department</TableHead>
+                  <TableHead className="text-center w-32">Actions</TableHead>
                 </TableRow>
-              </TableHead>
+              </TableHeader>
               <TableBody>
                 {paginatedSubjects.map((item) => (
-                  <TableRow 
-                    key={item.code} 
-                    hover
-                    sx={{
-                      backgroundColor: 'rgba(0, 0, 0, 0.02)', // Light gray with 2% opacity
-                      '&:hover': {
-                        backgroundColor: 'rgba(0, 0, 0, 0.04)', // Slightly darker on hover
-                      },
-                      '& .MuiTableCell-root': {
-                        borderBottom: '1px solid rgba(0, 0, 0, 0.08)', // Lighter border
-                      }
-                    }}
-                  >
+                  <TableRow key={item.code} className="hover:bg-gray-50">
                     <TableCell>
-                      <Typography variant="body1">{item.name}</Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        {item.code}
-                      </Typography>
+                      <div className="font-medium">{item.name}</div>
+                      <div className="text-xs text-muted-foreground">{item.code}</div>
                     </TableCell>
                     <TableCell>
-                      <Chip
-                        label={item.type}
-                        color={item.type === "both" ? "primary" : item.type === "lecture" ? "success" : "warning"}
-                        size="small"
-                      />
+                      <Badge variant={item.type === "both" ? "info" : item.type === "lecture" ? "success" : "warning"}>
+                        {item.type.charAt(0).toUpperCase() + item.type.slice(1)}
+                      </Badge>
                     </TableCell>
                     <TableCell>{item.units}</TableCell>
                     <TableCell>{item.semester}</TableCell>
                     <TableCell>{item.year_level}</TableCell>
                     <TableCell>{item.department}</TableCell>
-                    <TableCell align="center">
-                      <Box sx={{ display: "flex", gap: 1, justifyContent: "center" }}>
-                        <IconButton
-                          size="small"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setSelectedSubject(item);
-                            setViewDialogOpen(true);
-                          }}
-                          sx={{ color: "primary.main" }}
-                        >
-                          <VisibilityIcon fontSize="small" />
-                        </IconButton>
-                        <IconButton
-                          size="small"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setModalSubject(item);
-                            setModalOpen(true);
-                          }}
-                          sx={{ color: "info.main" }}
-                        >
-                          <EditIcon fontSize="small" />
-                        </IconButton>
-                        <IconButton
-                          size="small"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setSubjectToDelete(item);
-                            setDeleteDialogOpen(true);
-                          }}
-                          sx={{ color: "error.main" }}
-                        >
-                          <DeleteIcon fontSize="small" />
-                        </IconButton>
-                      </Box>
+                    <TableCell className="text-center">
+                      <div className="flex gap-2 justify-center">
+                        <Button variant="ghost" size="icon" onClick={e => { e.stopPropagation(); setSelectedSubject(item); setViewDialogOpen(true); }}>
+                          <Eye className="h-4 w-4 text-blue-600" />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={e => { e.stopPropagation(); setModalSubject(item); setModalOpen(true); }}>
+                          <Pencil className="h-4 w-4 text-green-600" />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={e => { e.stopPropagation(); setSubjectToDelete(item); setDeleteDialogOpen(true); }}>
+                          <Trash2 className="h-4 w-4 text-red-600" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
-          </TableContainer>
+          </div>
 
-          {/* Pagination */}
-          <Box sx={{ mt: 3, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <Typography variant="body2" color="text.secondary">
-              Showing {(currentPage - 1) * itemsPerPage + 1} to{" "}
-              {Math.min(currentPage * itemsPerPage, sortedSubjects.length)} of{" "}
-              {sortedSubjects.length} entries
-            </Typography>
-            <Stack direction="row" spacing={2}>
-              <Button
-                variant="outlined"
-                startIcon={<FileDownloadIcon />}
-                onClick={handleExportMenuOpen}
-              >
-                Export
-              </Button>
-              <Menu
-                anchorEl={exportMenuAnchorEl}
-                open={Boolean(exportMenuAnchorEl)}
-                onClose={handleExportMenuClose}
-              >
-                <MenuItem onClick={() => {
-                  handleExportToCSV();
-                  handleExportMenuClose();
-                }}>
-                  Export as CSV
-                </MenuItem>
-                <MenuItem onClick={() => {
-                  handleExportToExcel();
-                  handleExportMenuClose();
-                }}>
-                  Export as Excel
-                </MenuItem>
-                <MenuItem onClick={() => {
-                  handleExportToPDF();
-                  handleExportMenuClose();
-                }}>
-                  Export as PDF
-                </MenuItem>
-              </Menu>
-              <Button
-                variant="outlined"
-                startIcon={<PrintIcon />}
-                onClick={handlePrint}
-              >
+          {/* Export/Print and Pagination */}
+          <div className="mt-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div className="text-sm text-muted-foreground">
+              Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, sortedSubjects.length)} of {sortedSubjects.length} entries
+            </div>
+            <div className="flex gap-2">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" className="flex items-center gap-2">
+                    <FileDown className="h-4 w-4" />
+                    Export
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={handleExportToCSV}>Export as CSV</DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleExportToExcel}>Export as Excel</DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleExportToPDF}>Export as PDF</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <Button variant="outline" className="flex items-center gap-2" onClick={handlePrint}>
+                <Printer className="h-4 w-4" />
                 Print
               </Button>
-            </Stack>
-          </Box>
-          <Box sx={{ mt: 2, display: "flex", justifyContent: "center" }}>
-            <Pagination
-              count={totalPages}
-              page={currentPage}
-              onChange={handlePageChange}
-              color="primary"
-            />
-          </Box>
+            </div>
+          </div>
+          <div className="mt-4 flex justify-center">
+            <div className="inline-flex items-center gap-2">
+              <Button variant="outline" size="sm" disabled={currentPage === 1} onClick={() => setCurrentPage(currentPage - 1)}>
+                Prev
+              </Button>
+              <span className="text-sm font-medium">
+                Page {currentPage} of {totalPages}
+              </span>
+              <Button variant="outline" size="sm" disabled={currentPage === totalPages} onClick={() => setCurrentPage(currentPage + 1)}>
+                Next
+              </Button>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
       {/* Delete Confirmation Dialog */}
-      <Dialog
-        open={deleteDialogOpen}
-        onClose={() => {
-          setDeleteDialogOpen(false);
-          setSubjectToDelete(null);
-        }}
-        maxWidth="xs"
-        fullWidth
-      >
-        <DialogTitle sx={{ pb: 1 }}>
-          Delete Subject
-        </DialogTitle>
+      <Dialog open={deleteDialogOpen} onOpenChange={open => { if (!open) { setDeleteDialogOpen(false); setSubjectToDelete(null); } }}>
         <DialogContent>
-          <Typography>
-            Are you sure you want to delete the subject "{subjectToDelete?.name}"? This action cannot be undone.
-          </Typography>
+          <DialogHeader>
+            <DialogTitle>Delete Subject</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete the subject "{subjectToDelete?.name}"? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setDeleteDialogOpen(false); setSubjectToDelete(null); }}>Cancel</Button>
+            <Button variant="destructive" onClick={() => subjectToDelete && handleDeleteSubject(subjectToDelete.id)}>Delete</Button>
+          </DialogFooter>
         </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button
-            onClick={() => {
-              setDeleteDialogOpen(false);
-              setSubjectToDelete(null);
-            }}
-          >
-            Cancel
-          </Button>
-          <Button
-            variant="contained"
-            color="error"
-            onClick={() => subjectToDelete && handleDeleteSubject(subjectToDelete.id)}
-          >
-            Delete
-          </Button>
-        </DialogActions>
       </Dialog>
 
       {/* Subject Form Modal */}
@@ -738,309 +644,191 @@ export default function SubjectsPage() {
       />
 
       {/* Filter Dialog */}
-      <Dialog
-        open={filterDialogOpen}
-        onClose={() => setFilterDialogOpen(false)}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>Filter Subjects</DialogTitle>
+      <Dialog open={filterDialogOpen} onOpenChange={open => setFilterDialogOpen(open)}>
         <DialogContent>
-          <Box sx={{ mt: 2 }}>
-            <FormControl fullWidth margin="normal">
-              <InputLabel>Type</InputLabel>
-              <Select
-                value={filters.type}
-                label="Type"
-                onChange={(e) => handleFilterChange('type', e.target.value)}
-              >
-                <MenuItem value="all">All</MenuItem>
-                <MenuItem value="lecture">Lecture</MenuItem>
-                <MenuItem value="laboratory">Laboratory</MenuItem>
-                <MenuItem value="both">Both</MenuItem>
+          <DialogHeader>
+            <DialogTitle>Filter Subjects</DialogTitle>
+            <DialogDescription>Filter the subjects by type, semester, year level, and department.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div>
+              <Label htmlFor="filter-type">Type</Label>
+              <Select value={filters.type} onValueChange={value => handleFilterChange('type', value)}>
+                <SelectTrigger id="filter-type" className="mt-1">
+                  <SelectValue placeholder="All" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="lecture">Lecture</SelectItem>
+                  <SelectItem value="laboratory">Laboratory</SelectItem>
+                  <SelectItem value="both">Both</SelectItem>
+                </SelectContent>
               </Select>
-            </FormControl>
-
-            <FormControl fullWidth margin="normal">
-              <InputLabel>Semester</InputLabel>
-              <Select
-                value={filters.semester}
-                label="Semester"
-                onChange={(e) => handleFilterChange('semester', e.target.value)}
-              >
-                <MenuItem value="all">All</MenuItem>
-                <MenuItem value="1st">1st Semester</MenuItem>
-                <MenuItem value="2nd">2nd Semester</MenuItem>
-                <MenuItem value="3rd">3rd Semester</MenuItem>
+            </div>
+            <div>
+              <Label htmlFor="filter-semester">Semester</Label>
+              <Select value={filters.semester} onValueChange={value => handleFilterChange('semester', value)}>
+                <SelectTrigger id="filter-semester" className="mt-1">
+                  <SelectValue placeholder="All" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="1st">1st Semester</SelectItem>
+                  <SelectItem value="2nd">2nd Semester</SelectItem>
+                  <SelectItem value="3rd">3rd Semester</SelectItem>
+                </SelectContent>
               </Select>
-            </FormControl>
-
-            <FormControl fullWidth margin="normal">
-              <InputLabel>Year Level</InputLabel>
-              <Select
-                value={filters.year_level}
-                label="Year Level"
-                onChange={(e) => handleFilterChange('year_level', e.target.value)}
-              >
-                <MenuItem value="all">All</MenuItem>
-                <MenuItem value="1st">1st Year</MenuItem>
-                <MenuItem value="2nd">2nd Year</MenuItem>
-                <MenuItem value="3rd">3rd Year</MenuItem>
-                <MenuItem value="4th">4th Year</MenuItem>
+            </div>
+            <div>
+              <Label htmlFor="filter-year">Year Level</Label>
+              <Select value={filters.year_level} onValueChange={value => handleFilterChange('year_level', value)}>
+                <SelectTrigger id="filter-year" className="mt-1">
+                  <SelectValue placeholder="All" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="1st">1st Year</SelectItem>
+                  <SelectItem value="2nd">2nd Year</SelectItem>
+                  <SelectItem value="3rd">3rd Year</SelectItem>
+                  <SelectItem value="4th">4th Year</SelectItem>
+                </SelectContent>
               </Select>
-            </FormControl>
-
-            <FormControl fullWidth margin="normal">
-              <InputLabel>Department</InputLabel>
-              <Select
-                value={filters.department}
-                label="Department"
-                onChange={(e) => handleFilterChange('department', e.target.value)}
-              >
-                <MenuItem value="all">All</MenuItem>
-                <MenuItem value="College of Information Technology">College of Information Technology</MenuItem>
-                <MenuItem value="College of Engineering">College of Engineering</MenuItem>
-                <MenuItem value="College of Education">College of Education</MenuItem>
+            </div>
+            <div>
+              <Label htmlFor="filter-dept">Department</Label>
+              <Select value={filters.department} onValueChange={value => handleFilterChange('department', value)}>
+                <SelectTrigger id="filter-dept" className="mt-1">
+                  <SelectValue placeholder="All" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="College of Information Technology">College of Information Technology</SelectItem>
+                  <SelectItem value="College of Engineering">College of Engineering</SelectItem>
+                  <SelectItem value="College of Education">College of Education</SelectItem>
+                </SelectContent>
               </Select>
-            </FormControl>
-          </Box>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={handleResetFilters}>Reset</Button>
+            <Button variant="ghost" onClick={() => setFilterDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleApplyFilters}>Apply Filters</Button>
+          </DialogFooter>
         </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={handleResetFilters}>Reset</Button>
-          <Button onClick={() => setFilterDialogOpen(false)}>Cancel</Button>
-          <Button variant="contained" onClick={handleApplyFilters}>
-            Apply Filters
-          </Button>
-        </DialogActions>
       </Dialog>
 
       {/* Sort Dialog */}
-      <Dialog
-        open={sortDialogOpen}
-        onClose={() => setSortDialogOpen(false)}
-        maxWidth="xs"
-        fullWidth
-      >
-        <DialogTitle>Sort Subjects</DialogTitle>
+      <Dialog open={sortDialogOpen} onOpenChange={open => setSortDialogOpen(open)}>
         <DialogContent>
-          <Box sx={{ mt: 2 }}>
-            <Typography variant="subtitle2" gutterBottom>
-              Sort by:
-            </Typography>
-            <Stack spacing={1}>
+          <DialogHeader>
+            <DialogTitle>Sort Subjects</DialogTitle>
+            <DialogDescription>Choose a field to sort the subjects by.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            {[
+              { field: 'name', label: 'Subject Name' },
+              { field: 'code', label: 'Subject Code' },
+              { field: 'type', label: 'Type' },
+              { field: 'units', label: 'Units' },
+              { field: 'semester', label: 'Semester' },
+              { field: 'year_level', label: 'Year Level' },
+              { field: 'department', label: 'Department' },
+            ].map(option => (
               <Button
-                variant={sortField === 'name' ? 'contained' : 'outlined'}
-                onClick={() => handleSort('name')}
-                startIcon={<SortIcon />}
-                fullWidth
+                key={option.field}
+                variant={sortField === option.field ? 'default' : 'outline'}
+                className="w-full flex items-center justify-between"
+                onClick={() => handleSort(option.field as any)}
               >
-                Subject Name {sortField === 'name' && (sortOrder === 'asc' ? '↑' : '↓')}
+                <span className="flex items-center gap-2">
+                  <SortAsc className="h-4 w-4" />
+                  {option.label}
+                </span>
+                {sortField === option.field && (
+                  <span className="ml-2">{sortOrder === 'asc' ? '↑' : '↓'}</span>
+                )}
               </Button>
-              <Button
-                variant={sortField === 'code' ? 'contained' : 'outlined'}
-                onClick={() => handleSort('code')}
-                startIcon={<SortIcon />}
-                fullWidth
-              >
-                Subject Code {sortField === 'code' && (sortOrder === 'asc' ? '↑' : '↓')}
-              </Button>
-              <Button
-                variant={sortField === 'type' ? 'contained' : 'outlined'}
-                onClick={() => handleSort('type')}
-                startIcon={<SortIcon />}
-                fullWidth
-              >
-                Type {sortField === 'type' && (sortOrder === 'asc' ? '↑' : '↓')}
-              </Button>
-              <Button
-                variant={sortField === 'units' ? 'contained' : 'outlined'}
-                onClick={() => handleSort('units')}
-                startIcon={<SortIcon />}
-                fullWidth
-              >
-                Units {sortField === 'units' && (sortOrder === 'asc' ? '↑' : '↓')}
-              </Button>
-              <Button
-                variant={sortField === 'semester' ? 'contained' : 'outlined'}
-                onClick={() => handleSort('semester')}
-                startIcon={<SortIcon />}
-                fullWidth
-              >
-                Semester {sortField === 'semester' && (sortOrder === 'asc' ? '↑' : '↓')}
-              </Button>
-              <Button
-                variant={sortField === 'year_level' ? 'contained' : 'outlined'}
-                onClick={() => handleSort('year_level')}
-                startIcon={<SortIcon />}
-                fullWidth
-              >
-                Year Level {sortField === 'year_level' && (sortOrder === 'asc' ? '↑' : '↓')}
-              </Button>
-              <Button
-                variant={sortField === 'department' ? 'contained' : 'outlined'}
-                onClick={() => handleSort('department')}
-                startIcon={<SortIcon />}
-                fullWidth
-              >
-                Department {sortField === 'department' && (sortOrder === 'asc' ? '↑' : '↓')}
-              </Button>
-            </Stack>
-          </Box>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setSortDialogOpen(false)}>Close</Button>
+          </DialogFooter>
         </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={() => setSortDialogOpen(false)}>Close</Button>
-        </DialogActions>
       </Dialog>
 
       {/* View Dialog */}
-      <Dialog
-        open={viewDialogOpen}
-        onClose={() => {
-          setViewDialogOpen(false);
-          setSelectedSubject(null);
-        }}
-        maxWidth="md"
-        fullWidth
-      >
-        <DialogTitle>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <SchoolIcon color="primary" />
-            <Typography variant="h6">Subject Details</Typography>
-          </Box>
-        </DialogTitle>
-        <DialogContent>
+      <Dialog open={viewDialogOpen} onOpenChange={open => { if (!open) { setViewDialogOpen(false); setSelectedSubject(null); } }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <div className="flex items-center gap-2">
+              <School className="h-6 w-6 text-blue-600" />
+              <DialogTitle>Subject Details</DialogTitle>
+            </div>
+          </DialogHeader>
           {selectedSubject && (
-            <Box sx={{ mt: 2 }}>
-              <Grid container spacing={3}>
-                <Grid item xs={12}>
-                  <Paper sx={{ p: 2, bgcolor: 'background.default' }}>
-                    <Typography variant="h5" gutterBottom>
-                      {selectedSubject.name}
-                    </Typography>
-                    <Typography variant="subtitle1" color="text.secondary" gutterBottom>
-                      {selectedSubject.code}
-                    </Typography>
-                    <Chip
-                      label={selectedSubject.type}
-                      color={selectedSubject.type === "both" ? "primary" : selectedSubject.type === "lecture" ? "success" : "warning"}
-                      size="small"
-                      sx={{ mt: 1 }}
-                    />
-                  </Paper>
-                </Grid>
-
-                <Grid item xs={12} md={6}>
-                  <Paper sx={{ p: 2 }}>
-                    <Typography variant="subtitle1" gutterBottom>
-                      Department
-                    </Typography>
-                    <Typography variant="body1">
-                      {selectedSubject.department}
-                    </Typography>
-                  </Paper>
-                </Grid>
-
-                <Grid item xs={12} md={6}>
-                  <Paper sx={{ p: 2 }}>
-                    <Typography variant="subtitle1" gutterBottom>
-                      Description
-                    </Typography>
-                    <Typography variant="body1">
-                      {selectedSubject.description || "No description available"}
-                    </Typography>
-                  </Paper>
-                </Grid>
-
-                <Grid item xs={12} md={6}>
-                  <Paper sx={{ p: 2 }}>
-                    <Typography variant="subtitle1" gutterBottom>
-                      Units
-                    </Typography>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <Typography variant="h4" color="primary">
-                        {selectedSubject.units}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        total units
-                      </Typography>
-                    </Box>
-                    {selectedSubject.type === "both" && (
-                      <Box sx={{ mt: 1 }}>
-                        <Typography variant="body2" color="text.secondary">
-                          Lecture: {selectedSubject.lecture_units} units
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          Laboratory: {selectedSubject.laboratory_units} units
-                        </Typography>
-                      </Box>
-                    )}
-                  </Paper>
-                </Grid>
-
-                <Grid item xs={12} md={6}>
-                  <Paper sx={{ p: 2 }}>
-                    <Typography variant="subtitle1" gutterBottom>
-                      Schedule
-                    </Typography>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <Typography variant="body1">
-                        {selectedSubject.semester} Semester
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        •
-                      </Typography>
-                      <Typography variant="body1">
-                        {selectedSubject.year_level} Year
-                      </Typography>
-                    </Box>
-                  </Paper>
-                </Grid>
-
-                <Grid item xs={12}>
-                  <Paper sx={{ p: 2 }}>
-                    <Typography variant="subtitle1" gutterBottom>
-                      Instructors
-                    </Typography>
-                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                      {selectedSubject.instructors.map((instructor, index) => (
-                        <Chip
-                          key={index}
-                          label={instructor}
-                          size="small"
-                          sx={{ bgcolor: 'primary.light', color: 'primary.contrastText' }}
-                        />
-                      ))}
-                    </Box>
-                  </Paper>
-                </Grid>
-              </Grid>
-            </Box>
+            <div className="space-y-6 py-2">
+              <div className="bg-muted rounded-lg p-4">
+                <div className="text-xl font-bold mb-1">{selectedSubject.name}</div>
+                <div className="text-sm text-muted-foreground mb-2">{selectedSubject.code}</div>
+                <Badge variant={selectedSubject.type === "both" ? "info" : selectedSubject.type === "lecture" ? "success" : "warning"}>
+                  {selectedSubject.type.charAt(0).toUpperCase() + selectedSubject.type.slice(1)}
+                </Badge>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="bg-muted rounded-lg p-4">
+                  <div className="font-semibold mb-1">Department</div>
+                  <div>{selectedSubject.department}</div>
+                </div>
+                <div className="bg-muted rounded-lg p-4">
+                  <div className="font-semibold mb-1">Description</div>
+                  <div>{selectedSubject.description || "No description available"}</div>
+                </div>
+                <div className="bg-muted rounded-lg p-4">
+                  <div className="font-semibold mb-1">Units</div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg font-bold text-blue-700">{selectedSubject.units}</span>
+                    <span className="text-xs text-muted-foreground">total units</span>
+                  </div>
+                  {selectedSubject.type === "both" && (
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      Lecture: {selectedSubject.lecture_units} units<br />
+                      Laboratory: {selectedSubject.laboratory_units} units
+                    </div>
+                  )}
+                </div>
+                <div className="bg-muted rounded-lg p-4">
+                  <div className="font-semibold mb-1">Schedule</div>
+                  <div className="flex items-center gap-2">
+                    <span>{selectedSubject.semester} Semester</span>
+                    <span className="text-muted-foreground">•</span>
+                    <span>{selectedSubject.year_level} Year</span>
+                  </div>
+                </div>
+                <div className="md:col-span-2 bg-muted rounded-lg p-4">
+                  <div className="font-semibold mb-1">Instructors</div>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedSubject.instructors.map((instructor, index) => (
+                      <Badge key={index} variant="secondary">{instructor}</Badge>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
           )}
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button
-            onClick={() => {
-              setViewDialogOpen(false);
-              setSelectedSubject(null);
-            }}
-          >
-            Close
-          </Button>
-          <Button
-            variant="contained"
-            startIcon={<EditIcon />}
-            onClick={() => {
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => { setViewDialogOpen(false); setSelectedSubject(null); }}>Close</Button>
+            <Button onClick={() => {
               if (selectedSubject) {
                 setModalSubject(selectedSubject);
                 setModalOpen(true);
                 setViewDialogOpen(false);
               }
-            }}
-          >
-            Edit Subject
-          </Button>
-        </DialogActions>
+            }}>
+              Edit Subject
+            </Button>
+          </DialogFooter>
+        </DialogContent>
       </Dialog>
-    </Box>
+    </div>
   );
 }

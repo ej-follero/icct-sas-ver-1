@@ -2,7 +2,6 @@
 
 import { useParams } from "next/navigation";
 import { useMemo, useEffect, useState } from "react";
-import { Container, Grid, Paper, Typography } from "@mui/material";
 import CalendarView from "@/components/CalendarView";
 import DataChart from "@/components/DataChart";
 import { calendarEvents } from "@/lib/data";
@@ -115,62 +114,64 @@ const SingleStudentPage = () => {
     : 0;
 
   return (
-    <Container>
-      <Grid container spacing={4}>
-        <Grid item xs={12}>
-          <Paper elevation={3} className="p-4">
-            <Typography variant="h5" component="h1" gutterBottom>
-              Student Schedule
-            </Typography>
+    <div className="container mx-auto py-8">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+        <div className="col-span-1 md:col-span-2">
+          <div className="bg-white rounded-xl shadow p-6 mb-6">
+            <h1 className="text-2xl font-bold mb-2">Student Schedule</h1>
             <CalendarView mode="work-week" events={calendarEvents} />
-          </Paper>
-        </Grid>
-        <Grid item xs={12} md={6}>
-          <DataChart
-            type="pie"
-            data={pieChartData}
-            title="Attendance Rate"
-            height="400px"
-            customTooltip={(value) => `${value} days`}
-            customLegend={(value) => value}
-          />
-          <div className="mt-4 text-center">
-            <p className="text-2xl font-bold text-gray-900">{attendanceRate}%</p>
-            <p className="text-sm text-gray-500">Overall Attendance Rate</p>
-            <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
-              <div>
-                <p className="text-gray-500">Present</p>
-                <p className="font-medium text-gray-900">{attendanceData.present}</p>
-              </div>
-              <div>
-                <p className="text-gray-500">Absent</p>
-                <p className="font-medium text-gray-900">{attendanceData.absent}</p>
-              </div>
-              <div>
-                <p className="text-gray-500">Late</p>
-                <p className="font-medium text-gray-900">{attendanceData.late}</p>
-              </div>
-              <div>
-                <p className="text-gray-500">Excused</p>
-                <p className="font-medium text-gray-900">{attendanceData.excused}</p>
+          </div>
+        </div>
+        <div>
+          <div className="bg-white rounded-xl shadow p-6 mb-6">
+            <DataChart
+              type="pie"
+              data={pieChartData}
+              title="Attendance Rate"
+              height="400px"
+              customTooltip={(value) => `${value} days`}
+              customLegend={(value) => value}
+            />
+            <div className="mt-4 text-center">
+              <p className="text-2xl font-bold text-gray-900">{attendanceRate}%</p>
+              <p className="text-sm text-gray-500">Overall Attendance Rate</p>
+              <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
+                <div>
+                  <p className="text-gray-500">Present</p>
+                  <p className="font-medium text-gray-900">{attendanceData.present}</p>
+                </div>
+                <div>
+                  <p className="text-gray-500">Absent</p>
+                  <p className="font-medium text-gray-900">{attendanceData.absent}</p>
+                </div>
+                <div>
+                  <p className="text-gray-500">Late</p>
+                  <p className="font-medium text-gray-900">{attendanceData.late}</p>
+                </div>
+                <div>
+                  <p className="text-gray-500">Excused</p>
+                  <p className="font-medium text-gray-900">{attendanceData.excused}</p>
+                </div>
               </div>
             </div>
           </div>
-        </Grid>
-        <Grid item xs={12} md={6}>
-          <DataChart
-            type="line"
-            data={attendanceTrend}
-            title="Attendance Trend"
-            height="400px"
-            dataKeys={['present', 'absent', 'late', 'excused']}
-            colors={['#3B82F6', '#EF4444', '#F59E0B', '#8B5CF6']}
-            customTooltip={(value) => `${value} days`}
-            customLegend={(value) => value}
-          />
-        </Grid>
-      </Grid>
-    </Container>
+        </div>
+        <div>
+          <div className="bg-white rounded-xl shadow p-6 mb-6">
+            <DataChart
+              type="line"
+              data={attendanceTrend}
+              title="Attendance Trend"
+              height="400px"
+              dataKeys={['present', 'absent', 'late', 'excused']}
+              colors={['#3B82F6', '#EF4444', '#F59E0B', '#8B5CF6']}
+              customTooltip={(value) => `${value} days`}
+              customLegend={(value) => value}
+            />
+          </div>
+        </div>
+      </div>
+    </div>
   );
 };
 

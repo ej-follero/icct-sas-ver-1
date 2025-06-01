@@ -1,53 +1,6 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import {
-  Box,
-  Button,
-  Card,
-  CardContent,
-  IconButton,
-  Paper,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Typography,
-  Select,
-  MenuItem,
-  FormControl,
-  InputLabel,
-  Chip,
-  TextField,
-  Pagination,
-  Stack,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Grid,
-  Menu,
-  Avatar,
-} from "@mui/material";
-import {
-  Add as AddIcon,
-  Search as SearchIcon,
-  FilterList as FilterIcon,
-  FileDownload as FileDownloadIcon,
-  Print as PrintIcon,
-  Visibility as VisibilityIcon,
-  Edit as EditIcon,
-  Delete as DeleteIcon,
-  Sort as SortIcon,
-  Person as PersonIcon,
-  Email as EmailIcon,
-  Phone as PhoneIcon,
-  LocationOn as LocationIcon,
-  School as SchoolIcon,
-  Class as ClassIcon,
-} from "@mui/icons-material";
 import * as XLSX from "xlsx";
 import { jsPDF } from "jspdf";
 import "jspdf-autotable";
@@ -56,6 +9,16 @@ import { z } from "zod";
 import { toast } from "sonner";
 import FormModal from "@/components/FormModal";
 import { studentsData } from "@/lib/data";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { Dialog, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import { Plus, Search, Filter, SortAsc, FileDown, Printer, Eye, Pencil, Trash2, User, Mail, Phone, MapPin, School, GraduationCap } from "lucide-react";
 
 // Define the student schema
 const studentSchema = z.object({
@@ -396,275 +359,156 @@ export default function StudentsPage() {
   const totalPages = Math.ceil(sortedStudents.length / itemsPerPage);
 
   return (
-    <Box sx={{ minHeight: "100vh", bgcolor: "background.default", p: 3 }}>
+    <div className="min-h-screen bg-background p-3">
       <Card>
         <CardContent>
           {/* Header */}
-          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 }}>
-            <Box>
-              <Typography variant="h5" component="h1" gutterBottom>
-                All Students
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Manage and view all student information
-              </Typography>
-            </Box>
-            <Box sx={{ display: "flex", gap: 2 }}>
-              <TextField
-                size="small"
-                placeholder="Search students..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                InputProps={{
-                  startAdornment: <SearchIcon sx={{ color: "action.active", mr: 1 }} />,
-                }}
-              />
-              <Button
-                variant="outlined"
-                startIcon={<FilterIcon />}
-                onClick={() => setFilterDialogOpen(true)}
-              >
-                Filter
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+            <div>
+              <h1 className="text-2xl font-bold mb-1">All Students</h1>
+              <p className="text-muted-foreground text-sm">Manage and view all student information</p>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+              <div className="relative w-full sm:w-56">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                <Input
+                  className="pl-9"
+                  placeholder="Search students..."
+                  value={searchTerm}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
+                />
+              </div>
+              <Button variant="outline" onClick={() => setFilterDialogOpen(true)} className="flex items-center gap-2">
+                <Filter className="h-4 w-4" />
+                <span className="hidden sm:inline">Filter</span>
               </Button>
-              <Button
-                variant="outlined"
-                startIcon={<SortIcon />}
-                onClick={() => setSortDialogOpen(true)}
-              >
-                Sort
+              <Button variant="outline" onClick={() => setSortDialogOpen(true)} className="flex items-center gap-2">
+                <SortAsc className="h-4 w-4" />
+                <span className="hidden sm:inline">Sort</span>
               </Button>
-              <Button
-                variant="contained"
-                startIcon={<AddIcon />}
-                onClick={() => {
-                  setModalStudent(undefined);
-                  setModalOpen(true);
-                }}
-              >
-                Add Student
+              <Button onClick={() => { setModalStudent(undefined); setModalOpen(true); }} className="flex items-center gap-2">
+                <Plus className="h-4 w-4" />
+                <span className="hidden sm:inline">Add Student</span>
               </Button>
-            </Box>
-          </Box>
+            </div>
+          </div>
 
           {/* Table */}
-          <TableContainer component={Paper}>
+          <div className="overflow-x-auto rounded-lg border bg-white shadow">
             <Table>
-              <TableHead>
-                <TableRow sx={{ 
-                  backgroundColor: 'rgba(25, 118, 210, 0.2)', // Light blue with 20% opacity
-                  '& .MuiTableCell-head': {
-                    color: 'text.primary',
-                    fontWeight: 'bold',
-                    fontSize: '0.875rem',
-                    padding: '12px 16px',
-                  }
-                }}>
-                  <TableCell>Student Info</TableCell>
-                  <TableCell>Student ID</TableCell>
-                  <TableCell>RFID Tag</TableCell>
-                  <TableCell>Type</TableCell>
-                  <TableCell>Contact</TableCell>
-                  <TableCell>Section</TableCell>
-                  <TableCell>Guardian</TableCell>
-                  <TableCell align="center" sx={{ width: '120px' }}>Actions</TableCell>
+              <TableHeader>
+                <TableRow className="bg-blue-100/60">
+                  <TableHead>Student Info</TableHead>
+                  <TableHead>Student ID</TableHead>
+                  <TableHead>RFID Tag</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Contact</TableHead>
+                  <TableHead>Section</TableHead>
+                  <TableHead>Guardian</TableHead>
+                  <TableHead className="text-center w-32">Actions</TableHead>
                 </TableRow>
-              </TableHead>
+              </TableHeader>
               <TableBody>
                 {paginatedStudents.map((item) => (
-                  <TableRow 
-                    key={item.studentId} 
-                    hover
-                    sx={{
-                      backgroundColor: 'rgba(0, 0, 0, 0.02)', // Light gray with 2% opacity
-                      '&:hover': {
-                        backgroundColor: 'rgba(0, 0, 0, 0.04)', // Slightly darker on hover
-                      },
-                      '& .MuiTableCell-root': {
-                        borderBottom: '1px solid rgba(0, 0, 0, 0.08)', // Lighter border
-                      }
-                    }}
-                  >
+                  <TableRow key={item.studentId} className="hover:bg-gray-50">
                     <TableCell>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                        <Avatar
-                          sx={{
-                            bgcolor: 'primary.main',
-                            width: 40,
-                            height: 40,
-                          }}
-                        >
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold text-lg">
                           {`${item.firstName.charAt(0)}${item.lastName.charAt(0)}`}
-                        </Avatar>
-                        <Box>
-                          <Typography variant="body1">
-                            {`${item.lastName}, ${item.firstName} ${item.middleName || ''} ${item.suffix || ''}`}
-                          </Typography>
-                          <Typography variant="body2" color="text.secondary">
-                            {item.studentIdNum}
-                          </Typography>
-                        </Box>
-                      </Box>
+                        </div>
+                        <div>
+                          <div className="font-medium">{`${item.lastName}, ${item.firstName} ${item.middleName || ''} ${item.suffix || ''}`}</div>
+                          <div className="text-xs text-muted-foreground">{item.studentIdNum}</div>
+                        </div>
+                      </div>
                     </TableCell>
                     <TableCell>{item.studentIdNum}</TableCell>
                     <TableCell>
-                      <Chip
-                        label={item.rfidTag}
-                        color="info"
-                        size="small"
-                      />
+                      <Badge variant="info">{item.rfidTag}</Badge>
                     </TableCell>
                     <TableCell>
-                      <Chip
-                        label={item.studentType}
-                        color={item.studentType === "REGULAR" ? "success" : "warning"}
-                        size="small"
-                      />
+                      <Badge variant={item.studentType === "REGULAR" ? "success" : "warning"}>{item.studentType}</Badge>
                     </TableCell>
                     <TableCell>
-                      <Typography variant="body2">{item.email}</Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        {item.phoneNumber}
-                      </Typography>
+                      <div className="text-sm">{item.email}</div>
+                      <div className="text-xs text-muted-foreground">{item.phoneNumber}</div>
                     </TableCell>
                     <TableCell>{item.section_name || '-'}</TableCell>
                     <TableCell>{item.guardian_name || '-'}</TableCell>
-                    <TableCell align="center">
-                      <Box sx={{ display: "flex", gap: 1, justifyContent: "center" }}>
-                        <IconButton
-                          size="small"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setSelectedStudent(item);
-                            setViewDialogOpen(true);
-                          }}
-                          sx={{ color: "primary.main" }}
-                        >
-                          <VisibilityIcon fontSize="small" />
-                        </IconButton>
-                        <IconButton
-                          size="small"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setModalStudent(item);
-                            setModalOpen(true);
-                          }}
-                          sx={{ color: "info.main" }}
-                        >
-                          <EditIcon fontSize="small" />
-                        </IconButton>
-                        <IconButton
-                          size="small"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setStudentToDelete(item);
-                            setDeleteDialogOpen(true);
-                          }}
-                          sx={{ color: "error.main" }}
-                        >
-                          <DeleteIcon fontSize="small" />
-                        </IconButton>
-                      </Box>
+                    <TableCell className="text-center">
+                      <div className="flex gap-2 justify-center">
+                        <Button variant="ghost" size="icon" onClick={e => { e.stopPropagation(); setSelectedStudent(item); setViewDialogOpen(true); }}>
+                          <Eye className="h-4 w-4 text-blue-600" />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={e => { e.stopPropagation(); setModalStudent(item); setModalOpen(true); }}>
+                          <Pencil className="h-4 w-4 text-green-600" />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={e => { e.stopPropagation(); setStudentToDelete(item); setDeleteDialogOpen(true); }}>
+                          <Trash2 className="h-4 w-4 text-red-600" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
-          </TableContainer>
+          </div>
 
-          {/* Pagination */}
-          <Box sx={{ mt: 3, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <Typography variant="body2" color="text.secondary">
-              Showing {(currentPage - 1) * itemsPerPage + 1} to{" "}
-              {Math.min(currentPage * itemsPerPage, sortedStudents.length)} of{" "}
-              {sortedStudents.length} entries
-            </Typography>
-            <Stack direction="row" spacing={2}>
-              <Button
-                variant="outlined"
-                startIcon={<FileDownloadIcon />}
-                onClick={handleExportMenuOpen}
-              >
-                Export
-              </Button>
-              <Menu
-                anchorEl={exportMenuAnchorEl}
-                open={Boolean(exportMenuAnchorEl)}
-                onClose={handleExportMenuClose}
-              >
-                <MenuItem onClick={() => {
-                  handleExportToCSV();
-                  handleExportMenuClose();
-                }}>
-                  Export as CSV
-                </MenuItem>
-                <MenuItem onClick={() => {
-                  handleExportToExcel();
-                  handleExportMenuClose();
-                }}>
-                  Export as Excel
-                </MenuItem>
-                <MenuItem onClick={() => {
-                  handleExportToPDF();
-                  handleExportMenuClose();
-                }}>
-                  Export as PDF
-                </MenuItem>
-              </Menu>
-              <Button
-                variant="outlined"
-                startIcon={<PrintIcon />}
-                onClick={handlePrint}
-              >
+          {/* Export/Print and Pagination */}
+          <div className="mt-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div className="text-sm text-muted-foreground">
+              Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, sortedStudents.length)} of {sortedStudents.length} entries
+            </div>
+            <div className="flex gap-2">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" className="flex items-center gap-2">
+                    <FileDown className="h-4 w-4" />
+                    Export
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={handleExportToCSV}>Export as CSV</DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleExportToExcel}>Export as Excel</DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleExportToPDF}>Export as PDF</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <Button variant="outline" className="flex items-center gap-2" onClick={handlePrint}>
+                <Printer className="h-4 w-4" />
                 Print
               </Button>
-            </Stack>
-          </Box>
-          <Box sx={{ mt: 2, display: "flex", justifyContent: "center" }}>
-            <Pagination
-              count={totalPages}
-              page={currentPage}
-              onChange={handlePageChange}
-              color="primary"
-            />
-          </Box>
+            </div>
+          </div>
+          <div className="mt-4 flex justify-center">
+            <div className="inline-flex items-center gap-2">
+              <Button variant="outline" size="sm" disabled={currentPage === 1} onClick={() => setCurrentPage(currentPage - 1)}>
+                Prev
+              </Button>
+              <span className="text-sm font-medium">
+                Page {currentPage} of {totalPages}
+              </span>
+              <Button variant="outline" size="sm" disabled={currentPage === totalPages} onClick={() => setCurrentPage(currentPage + 1)}>
+                Next
+              </Button>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
       {/* Delete Confirmation Dialog */}
-      <Dialog
-        open={deleteDialogOpen}
-        onClose={() => {
-          setDeleteDialogOpen(false);
-          setStudentToDelete(null);
-        }}
-        maxWidth="xs"
-        fullWidth
-      >
-        <DialogTitle sx={{ pb: 1 }}>
-          Delete Student
-        </DialogTitle>
+      <Dialog open={deleteDialogOpen} onOpenChange={open => { if (!open) { setDeleteDialogOpen(false); setStudentToDelete(null); } }}>
         <DialogContent>
-          <Typography>
-            Are you sure you want to delete the student "{studentToDelete?.firstName} {studentToDelete?.lastName}"? This action cannot be undone.
-          </Typography>
+          <DialogHeader>
+            <DialogTitle>Delete Student</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete the student "{studentToDelete?.firstName} {studentToDelete?.lastName}"? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setDeleteDialogOpen(false); setStudentToDelete(null); }}>Cancel</Button>
+            <Button variant="destructive" onClick={() => studentToDelete && handleDeleteStudent(studentToDelete.studentId)}>Delete</Button>
+          </DialogFooter>
         </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button
-            onClick={() => {
-              setDeleteDialogOpen(false);
-              setStudentToDelete(null);
-            }}
-          >
-            Cancel
-          </Button>
-          <Button
-            variant="contained"
-            color="error"
-            onClick={() => studentToDelete && handleDeleteStudent(studentToDelete.studentId)}
-          >
-            Delete
-          </Button>
-        </DialogActions>
       </Dialog>
 
       {/* Student Form Modal */}
@@ -738,7 +582,7 @@ export default function StudentsPage() {
           {
             name: "email",
             label: "Email",
-            type: "email",
+            type: "text",
           },
           {
             name: "phoneNumber",
@@ -797,283 +641,164 @@ export default function StudentsPage() {
       />
 
       {/* Filter Dialog */}
-      <Dialog
-        open={filterDialogOpen}
-        onClose={() => setFilterDialogOpen(false)}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>Filter Students</DialogTitle>
+      <Dialog open={filterDialogOpen} onOpenChange={open => setFilterDialogOpen(open)}>
         <DialogContent>
-          <Box sx={{ mt: 2 }}>
-            <FormControl fullWidth margin="normal">
-              <InputLabel>Type</InputLabel>
-              <Select
-                value={filters.type}
-                label="Type"
-                onChange={(e) => handleFilterChange('type', e.target.value)}
-              >
-                <MenuItem value="all">All</MenuItem>
-                <MenuItem value="REGULAR">Regular</MenuItem>
-                <MenuItem value="IRREGULAR">Irregular</MenuItem>
+          <DialogHeader>
+            <DialogTitle>Filter Students</DialogTitle>
+            <DialogDescription>Filter the students by type, section, and status.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div>
+              <Label htmlFor="filter-type">Type</Label>
+              <Select value={filters.type} onValueChange={value => handleFilterChange('type', value)}>
+                <SelectTrigger id="filter-type" className="mt-1">
+                  <SelectValue placeholder="All" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="REGULAR">Regular</SelectItem>
+                  <SelectItem value="IRREGULAR">Irregular</SelectItem>
+                </SelectContent>
               </Select>
-            </FormControl>
-
-            <FormControl fullWidth margin="normal">
-              <InputLabel>Section</InputLabel>
-              <Select
-                value={filters.section}
-                label="Section"
-                onChange={(e) => handleFilterChange('section', e.target.value)}
-              >
-                <MenuItem value="all">All</MenuItem>
-                {Array.from(new Set(students.map(s => s.section_name))).map(section => (
-                  <MenuItem key={section} value={section}>
-                    {section}
-                  </MenuItem>
-                ))}
+            </div>
+            <div>
+              <Label htmlFor="filter-section">Section</Label>
+              <Select value={filters.section} onValueChange={value => handleFilterChange('section', value)}>
+                <SelectTrigger id="filter-section" className="mt-1">
+                  <SelectValue placeholder="All" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  {Array.from(new Set(students.map(s => s.section_name))).map(section => (
+                    <SelectItem key={section} value={section || ''}>{section || 'No Section'}</SelectItem>
+                  ))}
+                </SelectContent>
               </Select>
-            </FormControl>
-
-            <FormControl fullWidth margin="normal">
-              <InputLabel>Status</InputLabel>
-              <Select
-                value={filters.status}
-                label="Status"
-                onChange={(e) => handleFilterChange('status', e.target.value)}
-              >
-                <MenuItem value="all">All</MenuItem>
-                <MenuItem value="ACTIVE">Active</MenuItem>
-                <MenuItem value="INACTIVE">Inactive</MenuItem>
+            </div>
+            <div>
+              <Label htmlFor="filter-status">Status</Label>
+              <Select value={filters.status} onValueChange={value => handleFilterChange('status', value)}>
+                <SelectTrigger id="filter-status" className="mt-1">
+                  <SelectValue placeholder="All" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="ACTIVE">Active</SelectItem>
+                  <SelectItem value="INACTIVE">Inactive</SelectItem>
+                </SelectContent>
               </Select>
-            </FormControl>
-          </Box>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={handleResetFilters}>Reset</Button>
+            <Button variant="ghost" onClick={() => setFilterDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleApplyFilters}>Apply Filters</Button>
+          </DialogFooter>
         </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={handleResetFilters}>Reset</Button>
-          <Button onClick={() => setFilterDialogOpen(false)}>Cancel</Button>
-          <Button variant="contained" onClick={handleApplyFilters}>
-            Apply Filters
-          </Button>
-        </DialogActions>
       </Dialog>
 
       {/* Sort Dialog */}
-      <Dialog
-        open={sortDialogOpen}
-        onClose={() => setSortDialogOpen(false)}
-        maxWidth="xs"
-        fullWidth
-      >
-        <DialogTitle>Sort Students</DialogTitle>
+      <Dialog open={sortDialogOpen} onOpenChange={open => setSortDialogOpen(open)}>
         <DialogContent>
-          <Box sx={{ mt: 2 }}>
-            <Typography variant="subtitle2" gutterBottom>
-              Sort by:
-            </Typography>
-            <Stack spacing={1}>
+          <DialogHeader>
+            <DialogTitle>Sort Students</DialogTitle>
+            <DialogDescription>Choose a field to sort the students by.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            {[
+              { field: 'studentIdNum', label: 'Student ID' },
+              { field: 'rfidTag', label: 'RFID Tag' },
+              { field: 'name', label: 'Name' },
+              { field: 'studentType', label: 'Type' },
+              { field: 'section', label: 'Section' },
+              { field: 'email', label: 'Email' },
+              { field: 'phone', label: 'Phone' },
+            ].map(option => (
               <Button
-                variant={sortField === 'studentIdNum' ? 'contained' : 'outlined'}
-                onClick={() => handleSort('studentIdNum')}
-                startIcon={<SortIcon />}
-                fullWidth
+                key={option.field}
+                variant={sortField === option.field ? 'default' : 'outline'}
+                className="w-full flex items-center justify-between"
+                onClick={() => handleSort(option.field as any)}
               >
-                Student ID {sortField === 'studentIdNum' && (sortOrder === 'asc' ? '↑' : '↓')}
+                <span className="flex items-center gap-2">
+                  <SortAsc className="h-4 w-4" />
+                  {option.label}
+                </span>
+                {sortField === option.field && (
+                  <span className="ml-2">{sortOrder === 'asc' ? '↑' : '↓'}</span>
+                )}
               </Button>
-              <Button
-                variant={sortField === 'rfidTag' ? 'contained' : 'outlined'}
-                onClick={() => handleSort('rfidTag')}
-                startIcon={<SortIcon />}
-                fullWidth
-              >
-                RFID Tag {sortField === 'rfidTag' && (sortOrder === 'asc' ? '↑' : '↓')}
-              </Button>
-              <Button
-                variant={sortField === 'name' ? 'contained' : 'outlined'}
-                onClick={() => handleSort('name')}
-                startIcon={<SortIcon />}
-                fullWidth
-              >
-                Name {sortField === 'name' && (sortOrder === 'asc' ? '↑' : '↓')}
-              </Button>
-              <Button
-                variant={sortField === 'studentType' ? 'contained' : 'outlined'}
-                onClick={() => handleSort('studentType')}
-                startIcon={<SortIcon />}
-                fullWidth
-              >
-                Type {sortField === 'studentType' && (sortOrder === 'asc' ? '↑' : '↓')}
-              </Button>
-              <Button
-                variant={sortField === 'section' ? 'contained' : 'outlined'}
-                onClick={() => handleSort('section')}
-                startIcon={<SortIcon />}
-                fullWidth
-              >
-                Section {sortField === 'section' && (sortOrder === 'asc' ? '↑' : '↓')}
-              </Button>
-              <Button
-                variant={sortField === 'email' ? 'contained' : 'outlined'}
-                onClick={() => handleSort('email')}
-                startIcon={<SortIcon />}
-                fullWidth
-              >
-                Email {sortField === 'email' && (sortOrder === 'asc' ? '↑' : '↓')}
-              </Button>
-              <Button
-                variant={sortField === 'phone' ? 'contained' : 'outlined'}
-                onClick={() => handleSort('phone')}
-                startIcon={<SortIcon />}
-                fullWidth
-              >
-                Phone {sortField === 'phone' && (sortOrder === 'asc' ? '↑' : '↓')}
-              </Button>
-            </Stack>
-          </Box>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setSortDialogOpen(false)}>Close</Button>
+          </DialogFooter>
         </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={() => setSortDialogOpen(false)}>Close</Button>
-        </DialogActions>
       </Dialog>
 
       {/* View Dialog */}
-      <Dialog
-        open={viewDialogOpen}
-        onClose={() => {
-          setViewDialogOpen(false);
-          setSelectedStudent(null);
-        }}
-        maxWidth="md"
-        fullWidth
-      >
-        <DialogTitle>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <PersonIcon color="primary" />
-            <Typography variant="h6">Student Details</Typography>
-          </Box>
-        </DialogTitle>
-        <DialogContent>
+      <Dialog open={viewDialogOpen} onOpenChange={open => { if (!open) { setViewDialogOpen(false); setSelectedStudent(null); } }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <div className="flex items-center gap-2">
+              <User className="h-6 w-6 text-blue-600" />
+              <DialogTitle>Student Details</DialogTitle>
+            </div>
+          </DialogHeader>
           {selectedStudent && (
-            <Box sx={{ mt: 2 }}>
-              <Grid container spacing={3}>
-                <Grid item xs={12}>
-                  <Paper sx={{ p: 2, bgcolor: 'background.default' }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                      <Avatar
-                        sx={{
-                          bgcolor: 'primary.main',
-                          width: 64,
-                          height: 64,
-                        }}
-                      >
-                        {`${selectedStudent.firstName.charAt(0)}${selectedStudent.lastName.charAt(0)}`}
-                      </Avatar>
-                      <Box>
-                        <Typography variant="h5" gutterBottom>
-                          {`${selectedStudent.lastName}, ${selectedStudent.firstName} ${selectedStudent.middleName || ''} ${selectedStudent.suffix || ''}`}
-                        </Typography>
-                        <Typography variant="subtitle1" color="text.secondary" gutterBottom>
-                          {selectedStudent.studentIdNum}
-                        </Typography>
-                        <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
-                          <Chip
-                            label={selectedStudent.studentType}
-                            color={selectedStudent.studentType === "REGULAR" ? "success" : "warning"}
-                            size="small"
-                          />
-                          <Chip
-                            label={selectedStudent.status}
-                            color={selectedStudent.status === "ACTIVE" ? "success" : "error"}
-                            size="small"
-                          />
-                        </Box>
-                      </Box>
-                    </Box>
-                  </Paper>
-                </Grid>
-
-                <Grid item xs={12} md={6}>
-                  <Paper sx={{ p: 2 }}>
-                    <Typography variant="subtitle1" gutterBottom>
-                      Contact Information
-                    </Typography>
-                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <EmailIcon color="action" />
-                        <Typography variant="body1">{selectedStudent.email}</Typography>
-                      </Box>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <PhoneIcon color="action" />
-                        <Typography variant="body1">{selectedStudent.phoneNumber}</Typography>
-                      </Box>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <LocationIcon color="action" />
-                        <Typography variant="body1">{selectedStudent.address}</Typography>
-                      </Box>
-                    </Box>
-                  </Paper>
-                </Grid>
-
-                <Grid item xs={12} md={6}>
-                  <Paper sx={{ p: 2 }}>
-                    <Typography variant="subtitle1" gutterBottom>
-                      Academic Information
-                    </Typography>
-                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <SchoolIcon color="action" />
-                        <Typography variant="body1">{selectedStudent.yearLevel.replace('_', ' ')}</Typography>
-                      </Box>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <ClassIcon color="action" />
-                        <Typography variant="body1">{selectedStudent.section_name || 'No Section'}</Typography>
-                      </Box>
-                    </Box>
-                  </Paper>
-                </Grid>
-
-                <Grid item xs={12}>
-                  <Paper sx={{ p: 2 }}>
-                    <Typography variant="subtitle1" gutterBottom>
-                      RFID Information
-                    </Typography>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <Chip
-                        label={selectedStudent.rfidTag}
-                        color="info"
-                        size="small"
-                      />
-                    </Box>
-                  </Paper>
-                </Grid>
-              </Grid>
-            </Box>
+            <div className="space-y-6 py-2">
+              <div className="bg-muted rounded-lg p-4 flex items-center gap-4">
+                <div className="w-16 h-16 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold text-2xl">
+                  {`${selectedStudent.firstName.charAt(0)}${selectedStudent.lastName.charAt(0)}`}
+                </div>
+                <div>
+                  <div className="text-xl font-bold mb-1">{`${selectedStudent.lastName}, ${selectedStudent.firstName} ${selectedStudent.middleName || ''} ${selectedStudent.suffix || ''}`}</div>
+                  <div className="text-sm text-muted-foreground mb-2">{selectedStudent.studentIdNum}</div>
+                  <div className="flex gap-2 mt-1">
+                    <Badge variant={selectedStudent.studentType === "REGULAR" ? "success" : "warning"}>{selectedStudent.studentType}</Badge>
+                    <Badge variant={selectedStudent.status === "ACTIVE" ? "success" : "destructive"}>{selectedStudent.status}</Badge>
+                  </div>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="bg-muted rounded-lg p-4">
+                  <div className="font-semibold mb-1 flex items-center gap-2"><Mail className="h-4 w-4 text-blue-600" />Contact Information</div>
+                  <div className="flex flex-col gap-1 mt-2">
+                    <div className="flex items-center gap-2"><Mail className="h-4 w-4 text-muted-foreground" />{selectedStudent.email}</div>
+                    <div className="flex items-center gap-2"><Phone className="h-4 w-4 text-muted-foreground" />{selectedStudent.phoneNumber}</div>
+                    <div className="flex items-center gap-2"><MapPin className="h-4 w-4 text-muted-foreground" />{selectedStudent.address}</div>
+                  </div>
+                </div>
+                <div className="bg-muted rounded-lg p-4">
+                  <div className="font-semibold mb-1 flex items-center gap-2"><GraduationCap className="h-4 w-4 text-blue-600" />Academic Information</div>
+                  <div className="flex flex-col gap-1 mt-2">
+                    <div className="flex items-center gap-2"><School className="h-4 w-4 text-muted-foreground" />{selectedStudent.yearLevel.replace('_', ' ')}</div>
+                    <div className="flex items-center gap-2"><User className="h-4 w-4 text-muted-foreground" />{selectedStudent.section_name || 'No Section'}</div>
+                  </div>
+                </div>
+                <div className="md:col-span-2 bg-muted rounded-lg p-4">
+                  <div className="font-semibold mb-1 flex items-center gap-2"><Badge variant="info">RFID</Badge>RFID Information</div>
+                  <div className="flex items-center gap-2 mt-2">
+                    <Badge variant="info">{selectedStudent.rfidTag}</Badge>
+                  </div>
+                </div>
+              </div>
+            </div>
           )}
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button
-            onClick={() => {
-              setViewDialogOpen(false);
-              setSelectedStudent(null);
-            }}
-          >
-            Close
-          </Button>
-          <Button
-            variant="contained"
-            startIcon={<EditIcon />}
-            onClick={() => {
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => { setViewDialogOpen(false); setSelectedStudent(null); }}>Close</Button>
+            <Button onClick={() => {
               if (selectedStudent) {
                 setModalStudent(selectedStudent);
                 setModalOpen(true);
                 setViewDialogOpen(false);
               }
-            }}
-          >
-            Edit Student
-          </Button>
-        </DialogActions>
+            }}>
+              Edit Student
+            </Button>
+          </DialogFooter>
+        </DialogContent>
       </Dialog>
-    </Box>
+    </div>
   );
 }

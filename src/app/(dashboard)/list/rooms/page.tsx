@@ -1,48 +1,16 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import {
-  Box,
-  Button,
-  Card,
-  CardContent,
-  IconButton,
-  Paper,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Typography,
-  Select,
-  MenuItem,
-  FormControl,
-  InputLabel,
-  Chip,
-  TextField,
-  Pagination,
-  Stack,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Grid,
-  Menu,
-} from "@mui/material";
-import {
-  Add as AddIcon,
-  Search as SearchIcon,
-  FilterList as FilterIcon,
-  MoreVert as MoreVertIcon,
-  FileDownload as FileDownloadIcon,
-  Print as PrintIcon,
-  Visibility as VisibilityIcon,
-  Edit as EditIcon,
-  Delete as DeleteIcon,
-  Sort as SortIcon,
-  MeetingRoom as MeetingRoomIcon,
-} from "@mui/icons-material";
+import { Card, CardContent } from "@/components/ui/card";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { Dialog, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Plus, Search, Filter, SortAsc, FileDown, Printer, Eye, Pencil, Trash2, Building2, DoorOpen } from "lucide-react";
 import * as XLSX from "xlsx";
 import { jsPDF } from "jspdf";
 import "jspdf-autotable";
@@ -359,253 +327,144 @@ export default function RoomsPage() {
   const totalPages = Math.ceil(sortedRooms.length / itemsPerPage);
 
   return (
-    <Box sx={{ minHeight: "100vh", bgcolor: "background.default", p: 3 }}>
+    <div className="min-h-screen bg-background p-3">
       <Card>
         <CardContent>
           {/* Header */}
-          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 }}>
-            <Box>
-              <Typography variant="h5" component="h1" gutterBottom>
-                All Rooms
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Manage and view all room information
-              </Typography>
-            </Box>
-            <Box sx={{ display: "flex", gap: 2 }}>
-              <TextField
-                size="small"
-                placeholder="Search rooms..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                InputProps={{
-                  startAdornment: <SearchIcon sx={{ color: "action.active", mr: 1 }} />,
-                }}
-              />
-              <Button
-                variant="outlined"
-                startIcon={<FilterIcon />}
-                onClick={() => setFilterDialogOpen(true)}
-              >
-                Filter
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+            <div>
+              <h1 className="text-2xl font-bold mb-1">All Rooms</h1>
+              <p className="text-muted-foreground text-sm">Manage and view all room information</p>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+              <div className="relative w-full sm:w-56">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                <Input
+                  className="pl-9"
+                  placeholder="Search rooms..."
+                  value={searchTerm}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
+                />
+              </div>
+              <Button variant="outline" onClick={() => setFilterDialogOpen(true)} className="flex items-center gap-2">
+                <Filter className="h-4 w-4" />
+                <span className="hidden sm:inline">Filter</span>
               </Button>
-              <Button
-                variant="outlined"
-                startIcon={<SortIcon />}
-                onClick={() => setSortDialogOpen(true)}
-              >
-                Sort
+              <Button variant="outline" onClick={() => setSortDialogOpen(true)} className="flex items-center gap-2">
+                <SortAsc className="h-4 w-4" />
+                <span className="hidden sm:inline">Sort</span>
               </Button>
-              <Button
-                variant="contained"
-                startIcon={<AddIcon />}
-                onClick={() => {
-                  setModalRoom(undefined);
-                  setModalOpen(true);
-                }}
-              >
-                Add Room
+              <Button onClick={() => { setModalRoom(undefined); setModalOpen(true); }} className="flex items-center gap-2">
+                <Plus className="h-4 w-4" />
+                <span className="hidden sm:inline">Add Room</span>
               </Button>
-            </Box>
-          </Box>
+            </div>
+          </div>
 
           {/* Table */}
-          <TableContainer component={Paper}>
+          <div className="overflow-x-auto rounded-lg border bg-white shadow">
             <Table>
-              <TableHead>
-                <TableRow sx={{ 
-                  backgroundColor: 'rgba(25, 118, 210, 0.2)', // Light blue with 20% opacity
-                  '& .MuiTableCell-head': {
-                    color: 'text.primary',
-                    fontWeight: 'bold',
-                    fontSize: '0.875rem',
-                    padding: '12px 16px',
-                  }
-                }}>
-                  <TableCell>Room Info</TableCell>
-                  <TableCell>Type</TableCell>
-                  <TableCell>Capacity</TableCell>
-                  <TableCell>Building</TableCell>
-                  <TableCell>Floor</TableCell>
-                  <TableCell>RFID Reader</TableCell>
-                  <TableCell align="center" sx={{ width: '120px' }}>Actions</TableCell>
+              <TableHeader>
+                <TableRow className="bg-blue-100/60">
+                  <TableHead>Room Info</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Capacity</TableHead>
+                  <TableHead>Building</TableHead>
+                  <TableHead>Floor</TableHead>
+                  <TableHead>RFID Reader</TableHead>
+                  <TableHead className="text-center w-32">Actions</TableHead>
                 </TableRow>
-              </TableHead>
+              </TableHeader>
               <TableBody>
                 {paginatedRooms.map((item) => (
-                  <TableRow 
-                    key={item.roomId} 
-                    hover
-                    sx={{
-                      backgroundColor: 'rgba(0, 0, 0, 0.02)', // Light gray with 2% opacity
-                      '&:hover': {
-                        backgroundColor: 'rgba(0, 0, 0, 0.04)', // Slightly darker on hover
-                      },
-                      '& .MuiTableCell-root': {
-                        borderBottom: '1px solid rgba(0, 0, 0, 0.08)', // Lighter border
-                      }
-                    }}
-                  >
+                  <TableRow key={item.roomId} className="hover:bg-gray-50">
                     <TableCell>
-                      <Typography variant="body1">{item.roomNo}</Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        {item.roomBuildingLoc}
-                      </Typography>
+                      <div className="font-medium">{item.roomNo}</div>
+                      <div className="text-xs text-muted-foreground">{item.roomBuildingLoc}</div>
                     </TableCell>
                     <TableCell>
-                      <Chip
-                        label={item.roomType}
-                        color={item.roomType === "CLASSROOM" ? "primary" : item.roomType === "LABORATORY" ? "warning" : "success"}
-                        size="small"
-                      />
+                      <Badge variant={item.roomType === "CLASSROOM" ? "success" : item.roomType === "LABORATORY" ? "warning" : "info"}>{item.roomType}</Badge>
                     </TableCell>
                     <TableCell>{item.roomCapacity}</TableCell>
                     <TableCell>{item.roomBuildingLoc}</TableCell>
                     <TableCell>{item.roomFloorLoc}</TableCell>
                     <TableCell>
-                      <Chip
-                        label={item.readerId}
-                        color="info"
-                        size="small"
-                      />
+                      <Badge variant="info">{item.readerId}</Badge>
                     </TableCell>
-                    <TableCell align="center">
-                      <Box sx={{ display: "flex", gap: 1, justifyContent: "center" }}>
-                        <IconButton
-                          size="small"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setSelectedRoom(item);
-                            setViewDialogOpen(true);
-                          }}
-                          sx={{ color: "primary.main" }}
-                        >
-                          <VisibilityIcon fontSize="small" />
-                        </IconButton>
-                        <IconButton
-                          size="small"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setModalRoom(item);
-                            setModalOpen(true);
-                          }}
-                          sx={{ color: "info.main" }}
-                        >
-                          <EditIcon fontSize="small" />
-                        </IconButton>
-                        <IconButton
-                          size="small"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setRoomToDelete(item);
-                            setDeleteDialogOpen(true);
-                          }}
-                          sx={{ color: "error.main" }}
-                        >
-                          <DeleteIcon fontSize="small" />
-                        </IconButton>
-                      </Box>
+                    <TableCell className="text-center">
+                      <div className="flex gap-2 justify-center">
+                        <Button variant="ghost" size="icon" onClick={e => { e.stopPropagation(); setSelectedRoom(item); setViewDialogOpen(true); }}>
+                          <Eye className="h-4 w-4 text-blue-600" />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={e => { e.stopPropagation(); setModalRoom(item); setModalOpen(true); }}>
+                          <Pencil className="h-4 w-4 text-green-600" />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={e => { e.stopPropagation(); setRoomToDelete(item); setDeleteDialogOpen(true); }}>
+                          <Trash2 className="h-4 w-4 text-red-600" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
-          </TableContainer>
+          </div>
 
-          {/* Pagination */}
-          <Box sx={{ mt: 3, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <Typography variant="body2" color="text.secondary">
-              Showing {(currentPage - 1) * itemsPerPage + 1} to{" "}
-              {Math.min(currentPage * itemsPerPage, sortedRooms.length)} of{" "}
-              {sortedRooms.length} entries
-            </Typography>
-            <Stack direction="row" spacing={2}>
-              <Button
-                variant="outlined"
-                startIcon={<FileDownloadIcon />}
-                onClick={handleExportMenuOpen}
-              >
-                Export
-              </Button>
-              <Menu
-                anchorEl={exportMenuAnchorEl}
-                open={Boolean(exportMenuAnchorEl)}
-                onClose={handleExportMenuClose}
-              >
-                <MenuItem onClick={() => {
-                  handleExportToCSV();
-                  handleExportMenuClose();
-                }}>
-                  Export as CSV
-                </MenuItem>
-                <MenuItem onClick={() => {
-                  handleExportToExcel();
-                  handleExportMenuClose();
-                }}>
-                  Export as Excel
-                </MenuItem>
-                <MenuItem onClick={() => {
-                  handleExportToPDF();
-                  handleExportMenuClose();
-                }}>
-                  Export as PDF
-                </MenuItem>
-              </Menu>
-              <Button
-                variant="outlined"
-                startIcon={<PrintIcon />}
-                onClick={handlePrint}
-              >
+          {/* Export/Print and Pagination */}
+          <div className="mt-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div className="text-sm text-muted-foreground">
+              Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, sortedRooms.length)} of {sortedRooms.length} entries
+            </div>
+            <div className="flex gap-2">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" className="flex items-center gap-2">
+                    <FileDown className="h-4 w-4" />
+                    Export
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={handleExportToCSV}>Export as CSV</DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleExportToExcel}>Export as Excel</DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleExportToPDF}>Export as PDF</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <Button variant="outline" className="flex items-center gap-2" onClick={handlePrint}>
+                <Printer className="h-4 w-4" />
                 Print
               </Button>
-            </Stack>
-          </Box>
-          <Box sx={{ mt: 2, display: "flex", justifyContent: "center" }}>
-            <Pagination
-              count={totalPages}
-              page={currentPage}
-              onChange={handlePageChange}
-              color="primary"
-            />
-          </Box>
+            </div>
+          </div>
+          <div className="mt-4 flex justify-center">
+            <div className="inline-flex items-center gap-2">
+              <Button variant="outline" size="sm" disabled={currentPage === 1} onClick={() => setCurrentPage(currentPage - 1)}>
+                Prev
+              </Button>
+              <span className="text-sm font-medium">
+                Page {currentPage} of {totalPages}
+              </span>
+              <Button variant="outline" size="sm" disabled={currentPage === totalPages} onClick={() => setCurrentPage(currentPage + 1)}>
+                Next
+              </Button>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
       {/* Delete Confirmation Dialog */}
-      <Dialog
-        open={deleteDialogOpen}
-        onClose={() => {
-          setDeleteDialogOpen(false);
-          setRoomToDelete(null);
-        }}
-        maxWidth="xs"
-        fullWidth
-      >
-        <DialogTitle sx={{ pb: 1 }}>
-          Delete Room
-        </DialogTitle>
+      <Dialog open={deleteDialogOpen} onOpenChange={open => { if (!open) { setDeleteDialogOpen(false); setRoomToDelete(null); } }}>
         <DialogContent>
-          <Typography>
-            Are you sure you want to delete the room "{roomToDelete?.roomNo}"? This action cannot be undone.
-          </Typography>
+          <DialogHeader>
+            <DialogTitle>Delete Room</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete the room "{roomToDelete?.roomNo}"? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setDeleteDialogOpen(false); setRoomToDelete(null); }}>Cancel</Button>
+            <Button variant="destructive" onClick={() => roomToDelete && handleDeleteRoom(roomToDelete.roomId)}>Delete</Button>
+          </DialogFooter>
         </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button
-            onClick={() => {
-              setDeleteDialogOpen(false);
-              setRoomToDelete(null);
-            }}
-          >
-            Cancel
-          </Button>
-          <Button
-            variant="contained"
-            color="error"
-            onClick={() => roomToDelete && handleDeleteRoom(roomToDelete.roomId)}
-          >
-            Delete
-          </Button>
-        </DialogActions>
       </Dialog>
 
       {/* Room Form Modal */}
@@ -686,243 +545,150 @@ export default function RoomsPage() {
       />
 
       {/* Filter Dialog */}
-      <Dialog
-        open={filterDialogOpen}
-        onClose={() => setFilterDialogOpen(false)}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>Filter Rooms</DialogTitle>
+      <Dialog open={filterDialogOpen} onOpenChange={open => setFilterDialogOpen(open)}>
         <DialogContent>
-          <Box sx={{ mt: 2 }}>
-            <FormControl fullWidth margin="normal">
-              <InputLabel>Type</InputLabel>
-              <Select
-                value={filters.type}
-                label="Type"
-                onChange={(e) => handleFilterChange('type', e.target.value)}
-              >
-                <MenuItem value="all">All</MenuItem>
-                <MenuItem value="CLASSROOM">Classroom</MenuItem>
-                <MenuItem value="LABORATORY">Laboratory</MenuItem>
-                <MenuItem value="OFFICE">Office</MenuItem>
-                <MenuItem value="CONFERENCE">Conference Room</MenuItem>
-              </Select>
-            </FormControl>
-
-            <FormControl fullWidth margin="normal">
-              <InputLabel>Building</InputLabel>
-              <Select
-                value={filters.building}
-                label="Building"
-                onChange={(e) => handleFilterChange('building', e.target.value)}
-              >
-                <MenuItem value="all">All</MenuItem>
-                <MenuItem value="Main Building">Main Building</MenuItem>
-                <MenuItem value="Science Wing">Science Wing</MenuItem>
-              </Select>
-            </FormControl>
-
-            <FormControl fullWidth margin="normal">
-              <InputLabel>Floor</InputLabel>
-              <Select
-                value={filters.floor}
-                label="Floor"
-                onChange={(e) => handleFilterChange('floor', e.target.value)}
-              >
-                <MenuItem value="all">All</MenuItem>
-                <MenuItem value="1st Floor">1st Floor</MenuItem>
-                <MenuItem value="2nd Floor">2nd Floor</MenuItem>
-                <MenuItem value="3rd Floor">3rd Floor</MenuItem>
-              </Select>
-            </FormControl>
-          </Box>
+          <DialogHeader>
+            <DialogTitle>Filter Rooms</DialogTitle>
+            <DialogDescription>Filter the list of rooms by the following criteria.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="filter-type">Type</Label>
+                <Select value={filters.type} onValueChange={value => handleFilterChange('type', value)}>
+                  <SelectTrigger id="filter-type">
+                    <SelectValue placeholder="All" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All</SelectItem>
+                    <SelectItem value="CLASSROOM">Classroom</SelectItem>
+                    <SelectItem value="LABORATORY">Laboratory</SelectItem>
+                    <SelectItem value="OFFICE">Office</SelectItem>
+                    <SelectItem value="CONFERENCE">Conference Room</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="filter-building">Building</Label>
+                <Select value={filters.building} onValueChange={value => handleFilterChange('building', value)}>
+                  <SelectTrigger id="filter-building">
+                    <SelectValue placeholder="All" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All</SelectItem>
+                    <SelectItem value="Main Building">Main Building</SelectItem>
+                    <SelectItem value="Science Wing">Science Wing</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="filter-floor">Floor</Label>
+                <Select value={filters.floor} onValueChange={value => handleFilterChange('floor', value)}>
+                  <SelectTrigger id="filter-floor">
+                    <SelectValue placeholder="All" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All</SelectItem>
+                    <SelectItem value="1st Floor">1st Floor</SelectItem>
+                    <SelectItem value="2nd Floor">2nd Floor</SelectItem>
+                    <SelectItem value="3rd Floor">3rd Floor</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={handleResetFilters}>Reset</Button>
+            <Button variant="ghost" onClick={() => setFilterDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleApplyFilters}>Apply Filters</Button>
+          </DialogFooter>
         </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={handleResetFilters}>Reset</Button>
-          <Button onClick={() => setFilterDialogOpen(false)}>Cancel</Button>
-          <Button variant="contained" onClick={handleApplyFilters}>
-            Apply Filters
-          </Button>
-        </DialogActions>
       </Dialog>
 
       {/* Sort Dialog */}
-      <Dialog
-        open={sortDialogOpen}
-        onClose={() => setSortDialogOpen(false)}
-        maxWidth="xs"
-        fullWidth
-      >
-        <DialogTitle>Sort Rooms</DialogTitle>
+      <Dialog open={sortDialogOpen} onOpenChange={open => setSortDialogOpen(open)}>
         <DialogContent>
-          <Box sx={{ mt: 2 }}>
-            <Typography variant="subtitle2" gutterBottom>
-              Sort by:
-            </Typography>
-            <Stack spacing={1}>
-              <Button
-                variant={sortField === 'roomNo' ? 'contained' : 'outlined'}
-                onClick={() => handleSort('roomNo')}
-                startIcon={<SortIcon />}
-                fullWidth
-              >
-                Room Number {sortField === 'roomNo' && (sortOrder === 'asc' ? '↑' : '↓')}
-              </Button>
-              <Button
-                variant={sortField === 'roomType' ? 'contained' : 'outlined'}
-                onClick={() => handleSort('roomType')}
-                startIcon={<SortIcon />}
-                fullWidth
-              >
-                Type {sortField === 'roomType' && (sortOrder === 'asc' ? '↑' : '↓')}
-              </Button>
-              <Button
-                variant={sortField === 'roomCapacity' ? 'contained' : 'outlined'}
-                onClick={() => handleSort('roomCapacity')}
-                startIcon={<SortIcon />}
-                fullWidth
-              >
-                Capacity {sortField === 'roomCapacity' && (sortOrder === 'asc' ? '↑' : '↓')}
-              </Button>
-              <Button
-                variant={sortField === 'roomBuildingLoc' ? 'contained' : 'outlined'}
-                onClick={() => handleSort('roomBuildingLoc')}
-                startIcon={<SortIcon />}
-                fullWidth
-              >
-                Building {sortField === 'roomBuildingLoc' && (sortOrder === 'asc' ? '↑' : '↓')}
-              </Button>
-              <Button
-                variant={sortField === 'roomFloorLoc' ? 'contained' : 'outlined'}
-                onClick={() => handleSort('roomFloorLoc')}
-                startIcon={<SortIcon />}
-                fullWidth
-              >
-                Floor {sortField === 'roomFloorLoc' && (sortOrder === 'asc' ? '↑' : '↓')}
-              </Button>
-            </Stack>
-          </Box>
+          <DialogHeader>
+            <DialogTitle>Sort Rooms</DialogTitle>
+            <DialogDescription>Sort the list of rooms by the following fields.</DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-2 py-4">
+            <Button variant={sortField === 'roomNo' ? 'default' : 'outline'} className="justify-start" onClick={() => handleSort('roomNo')}>
+              <SortAsc className="mr-2 h-4 w-4" />
+              Room Number {sortField === 'roomNo' && (sortOrder === 'asc' ? '↑' : '↓')}
+            </Button>
+            <Button variant={sortField === 'roomType' ? 'default' : 'outline'} className="justify-start" onClick={() => handleSort('roomType')}>
+              <SortAsc className="mr-2 h-4 w-4" />
+              Type {sortField === 'roomType' && (sortOrder === 'asc' ? '↑' : '↓')}
+            </Button>
+            <Button variant={sortField === 'roomCapacity' ? 'default' : 'outline'} className="justify-start" onClick={() => handleSort('roomCapacity')}>
+              <SortAsc className="mr-2 h-4 w-4" />
+              Capacity {sortField === 'roomCapacity' && (sortOrder === 'asc' ? '↑' : '↓')}
+            </Button>
+            <Button variant={sortField === 'roomBuildingLoc' ? 'default' : 'outline'} className="justify-start" onClick={() => handleSort('roomBuildingLoc')}>
+              <SortAsc className="mr-2 h-4 w-4" />
+              Building {sortField === 'roomBuildingLoc' && (sortOrder === 'asc' ? '↑' : '↓')}
+            </Button>
+            <Button variant={sortField === 'roomFloorLoc' ? 'default' : 'outline'} className="justify-start" onClick={() => handleSort('roomFloorLoc')}>
+              <SortAsc className="mr-2 h-4 w-4" />
+              Floor {sortField === 'roomFloorLoc' && (sortOrder === 'asc' ? '↑' : '↓')}
+            </Button>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setSortDialogOpen(false)}>Close</Button>
+          </DialogFooter>
         </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={() => setSortDialogOpen(false)}>Close</Button>
-        </DialogActions>
       </Dialog>
 
       {/* View Dialog */}
-      <Dialog
-        open={viewDialogOpen}
-        onClose={() => {
-          setViewDialogOpen(false);
-          setSelectedRoom(null);
-        }}
-        maxWidth="md"
-        fullWidth
-      >
-        <DialogTitle>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <MeetingRoomIcon color="primary" />
-            <Typography variant="h6">Room Details</Typography>
-          </Box>
-        </DialogTitle>
-        <DialogContent>
+      <Dialog open={viewDialogOpen} onOpenChange={open => { if (!open) { setViewDialogOpen(false); setSelectedRoom(null); } }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>
+              <div className="flex items-center gap-2">
+                <DoorOpen className="h-6 w-6 text-blue-600" />
+                Room Details
+              </div>
+            </DialogTitle>
+          </DialogHeader>
           {selectedRoom && (
-            <Box sx={{ mt: 2 }}>
-              <Grid container spacing={3}>
-                <Grid item xs={12}>
-                  <Paper sx={{ p: 2, bgcolor: 'background.default' }}>
-                    <Typography variant="h5" gutterBottom>
-                      {selectedRoom.roomNo}
-                    </Typography>
-                    <Typography variant="subtitle1" color="text.secondary" gutterBottom>
-                      {selectedRoom.roomBuildingLoc}
-                    </Typography>
-                    <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
-                      <Chip
-                        label={selectedRoom.roomType}
-                        color={selectedRoom.roomType === "CLASSROOM" ? "primary" : selectedRoom.roomType === "LABORATORY" ? "warning" : "success"}
-                        size="small"
-                      />
-                    </Box>
-                  </Paper>
-                </Grid>
-
-                <Grid item xs={12} md={6}>
-                  <Paper sx={{ p: 2 }}>
-                    <Typography variant="subtitle1" gutterBottom>
-                      Building
-                    </Typography>
-                    <Typography variant="body1">
-                      {selectedRoom.roomBuildingLoc}
-                    </Typography>
-                  </Paper>
-                </Grid>
-
-                <Grid item xs={12} md={6}>
-                  <Paper sx={{ p: 2 }}>
-                    <Typography variant="subtitle1" gutterBottom>
-                      Floor
-                    </Typography>
-                    <Typography variant="body1">
-                      {selectedRoom.roomFloorLoc}
-                    </Typography>
-                  </Paper>
-                </Grid>
-
-                <Grid item xs={12} md={6}>
-                  <Paper sx={{ p: 2 }}>
-                    <Typography variant="subtitle1" gutterBottom>
-                      Capacity
-                    </Typography>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <Typography variant="h4" color="primary">
-                        {selectedRoom.roomCapacity}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        students
-                      </Typography>
-                    </Box>
-                  </Paper>
-                </Grid>
-
-                <Grid item xs={12} md={6}>
-                  <Paper sx={{ p: 2 }}>
-                    <Typography variant="subtitle1" gutterBottom>
-                      RFID Reader
-                    </Typography>
-                    <Typography variant="body1">
-                      {selectedRoom.readerId}
-                    </Typography>
-                  </Paper>
-                </Grid>
-              </Grid>
-            </Box>
+            <div className="mt-4 space-y-6">
+              <div className="rounded-lg border bg-muted p-4">
+                <h2 className="text-xl font-bold mb-1">{selectedRoom.roomNo}</h2>
+                <div className="text-sm text-muted-foreground mb-2">{selectedRoom.roomBuildingLoc}</div>
+                <div className="flex gap-2 mt-2">
+                  <Badge variant={selectedRoom.roomType === 'CLASSROOM' ? 'success' : selectedRoom.roomType === 'LABORATORY' ? 'warning' : 'info'}>{selectedRoom.roomType}</Badge>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="rounded-lg border bg-background p-4">
+                  <div className="font-semibold text-sm mb-1">Building</div>
+                  <div className="text-base">{selectedRoom.roomBuildingLoc}</div>
+                </div>
+                <div className="rounded-lg border bg-background p-4">
+                  <div className="font-semibold text-sm mb-1">Floor</div>
+                  <div className="text-base">{selectedRoom.roomFloorLoc}</div>
+                </div>
+                <div className="rounded-lg border bg-background p-4">
+                  <div className="font-semibold text-sm mb-1">Capacity</div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-2xl font-bold text-blue-600">{selectedRoom.roomCapacity}</span>
+                    <span className="text-muted-foreground">students</span>
+                  </div>
+                </div>
+                <div className="rounded-lg border bg-background p-4">
+                  <div className="font-semibold text-sm mb-1">RFID Reader</div>
+                  <div className="text-base">{selectedRoom.readerId}</div>
+                </div>
+              </div>
+            </div>
           )}
+          <DialogFooter className="mt-6">
+            <Button variant="outline" onClick={() => { setViewDialogOpen(false); setSelectedRoom(null); }}>Close</Button>
+            <Button onClick={() => { if (selectedRoom) { setModalRoom(selectedRoom); setModalOpen(true); setViewDialogOpen(false); } }}>Edit Room</Button>
+          </DialogFooter>
         </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button
-            onClick={() => {
-              setViewDialogOpen(false);
-              setSelectedRoom(null);
-            }}
-          >
-            Close
-          </Button>
-          <Button
-            variant="contained"
-            startIcon={<EditIcon />}
-            onClick={() => {
-              if (selectedRoom) {
-                setModalRoom(selectedRoom);
-                setModalOpen(true);
-                setViewDialogOpen(false);
-              }
-            }}
-          >
-            Edit Room
-          </Button>
-        </DialogActions>
       </Dialog>
-    </Box>
+    </div>
   );
 } 

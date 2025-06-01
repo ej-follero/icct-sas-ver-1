@@ -1,7 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { TextField, Button, Grid, MenuItem, FormControl, InputLabel, Select } from "@mui/material";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
 
 interface ClassFormProps {
   type: "create" | "update";
@@ -26,95 +29,111 @@ const ClassForm = ({ type, data }: ClassFormProps) => {
     status: data?.status || "active",
   });
 
+  const handleChange = (field: keyof typeof formData, value: string | number) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     // TODO: Implement form submission
     console.log(formData);
   };
 
+  const handleCancel = () => {
+    // TODO: Implement cancel logic (e.g., close modal or reset form)
+  };
+
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      <Grid container spacing={3}>
-        <Grid item xs={12} md={6}>
-          <TextField
-            fullWidth
-            label="Class Name"
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Class Name */}
+        <div className="flex flex-col">
+          <Label htmlFor="name">Class Name</Label>
+          <Input
+            id="name"
+            type="text"
             value={formData.name}
-            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+            onChange={(e) => handleChange("name", e.target.value)}
             required
           />
-        </Grid>
-        <Grid item xs={12} md={6}>
-          <TextField
-            fullWidth
-            label="Class Code"
-            value={formData.code}
-            onChange={(e) => setFormData({ ...formData, code: e.target.value })}
-            required
-          />
-        </Grid>
-        <Grid item xs={12} md={6}>
-          <TextField
-            fullWidth
-            type="number"
-            label="Capacity"
-            value={formData.capacity}
-            onChange={(e) => setFormData({ ...formData, capacity: parseInt(e.target.value) })}
-            required
-            inputProps={{ min: 1 }}
-          />
-        </Grid>
-        <Grid item xs={12} md={6}>
-          <TextField
-            fullWidth
-            type="number"
-            label="Grade Level"
-            value={formData.grade}
-            onChange={(e) => setFormData({ ...formData, grade: parseInt(e.target.value) })}
-            required
-            inputProps={{ min: 1, max: 4 }}
-          />
-        </Grid>
-        <Grid item xs={12} md={6}>
-          <TextField
-            fullWidth
-            label="Supervisor"
-            value={formData.supervisor}
-            onChange={(e) => setFormData({ ...formData, supervisor: e.target.value })}
-            required
-          />
-        </Grid>
-        <Grid item xs={12} md={6}>
-          <FormControl fullWidth>
-            <InputLabel>Status</InputLabel>
-            <Select
-              value={formData.status}
-              label="Status"
-              onChange={(e) => setFormData({ ...formData, status: e.target.value as "active" | "inactive" })}
-              required
-            >
-              <MenuItem value="active">Active</MenuItem>
-              <MenuItem value="inactive">Inactive</MenuItem>
-            </Select>
-          </FormControl>
-        </Grid>
-      </Grid>
+        </div>
 
+        {/* Class Code */}
+        <div className="flex flex-col">
+          <Label htmlFor="code">Class Code</Label>
+          <Input
+            id="code"
+            type="text"
+            value={formData.code}
+            onChange={(e) => handleChange("code", e.target.value)}
+            required
+          />
+        </div>
+
+        {/* Capacity */}
+        <div className="flex flex-col">
+          <Label htmlFor="capacity">Capacity</Label>
+          <Input
+            id="capacity"
+            type="number"
+            min={1}
+            value={formData.capacity}
+            onChange={(e) => handleChange("capacity", Number(e.target.value))}
+            required
+          />
+        </div>
+
+        {/* Grade Level */}
+        <div className="flex flex-col">
+          <Label htmlFor="grade">Grade Level</Label>
+          <Input
+            id="grade"
+            type="number"
+            min={1}
+            max={4}
+            value={formData.grade}
+            onChange={(e) => handleChange("grade", Number(e.target.value))}
+            required
+          />
+        </div>
+
+        {/* Supervisor */}
+        <div className="flex flex-col">
+          <Label htmlFor="supervisor">Supervisor</Label>
+          <Input
+            id="supervisor"
+            type="text"
+            value={formData.supervisor}
+            onChange={(e) => handleChange("supervisor", e.target.value)}
+            required
+          />
+        </div>
+
+        {/* Status */}
+        <div className="flex flex-col">
+          <Label htmlFor="status">Status</Label>
+          <Select
+            value={formData.status}
+            onValueChange={(value) => handleChange("status", value as "active" | "inactive")}
+            required
+          >
+            <SelectTrigger id="status" className="w-full">
+              <SelectValue placeholder="Select status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="active">Active</SelectItem>
+              <SelectItem value="inactive">Inactive</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {/* Buttons */}
       <div className="flex justify-end gap-3">
-        <Button
-          variant="outlined"
-          color="primary"
-          onClick={() => {
-            // TODO: Handle cancel
-          }}
-        >
+        <Button variant="outline" onClick={handleCancel} type="button">
           Cancel
         </Button>
-        <Button
-          type="submit"
-          variant="contained"
-          color="primary"
-        >
+        <Button type="submit" variant="default">
           {type === "create" ? "Create Class" : "Update Class"}
         </Button>
       </div>
@@ -122,4 +141,4 @@ const ClassForm = ({ type, data }: ClassFormProps) => {
   );
 };
 
-export default ClassForm; 
+export default ClassForm;

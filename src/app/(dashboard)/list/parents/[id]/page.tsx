@@ -3,19 +3,18 @@
 import { useState } from "react";
 import { useParams } from "next/navigation";
 import { 
-  Person as PersonIcon,
-  Email as EmailIcon,
-  Phone as PhoneIcon,
-  LocationOn as LocationOnIcon,
-  Work as WorkIcon,
-  Bloodtype as BloodtypeIcon,
-  Cake as CakeIcon,
-  Wc as WcIcon,
-  School as SchoolIcon,
-  Edit as EditIcon,
-  Delete as DeleteIcon,
-  ArrowBack as ArrowBackIcon
-} from '@mui/icons-material';
+  User,
+  Mail,
+  Phone,
+  MapPin,
+  Briefcase,
+  Droplet,
+  Cake,
+  School,
+  Pencil,
+  Trash2,
+  ArrowLeft,
+} from "lucide-react";
 import Link from "next/link";
 import FormModal from "@/components/FormModal";
 import ParentForm from "@/components/forms/ParentForm";
@@ -63,15 +62,15 @@ export default function ParentProfilePage() {
         id: 1,
         name: "Jane Doe",
         grade: 10,
-        class: "A"
+        class: "A",
       },
       {
         id: 2,
         name: "John Doe Jr.",
         grade: 8,
-        class: "B"
-      }
-    ]
+        class: "B",
+      },
+    ],
   };
 
   const handleDelete = async () => {
@@ -93,7 +92,7 @@ export default function ParentProfilePage() {
             href="/list/parents"
             className="p-2 hover:bg-gray-100 rounded-lg transition-colors duration-200"
           >
-            <ArrowBackIcon />
+            <ArrowLeft className="w-5 h-5" />
           </Link>
           <div>
             <h1 className="text-2xl font-semibold text-gray-900">
@@ -103,39 +102,44 @@ export default function ParentProfilePage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <FormModal
-            isOpen={isEditModalOpen}
-            onClose={() => setIsEditModalOpen(false)}
-            title="Update Parent"
-            type="update"
-          >
-            <ParentForm type="update" data={parent} />
-          </FormModal>
+          {/* Edit Modal Trigger */}
           <button
             onClick={() => setIsEditModalOpen(true)}
             className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 hover:text-blue-600 transition-colors duration-200"
           >
-            <EditIcon style={{ fontSize: 20 }} />
+            <Pencil className="w-5 h-5" />
             Edit
           </button>
+          {/* TODO: Implement Edit Modal with correct FormModal props and schema */}
+          {/* {isEditModalOpen && (
           <FormModal
-            isOpen={isDeleteModalOpen}
-            onClose={() => setIsDeleteModalOpen(false)}
-            title="Delete Parent"
-            type="delete"
-            onConfirm={handleDelete}
-          >
-            <p className="text-gray-600">
-              Are you sure you want to delete this parent? This action cannot be undone.
-            </p>
-          </FormModal>
+              open={isEditModalOpen}
+              onClose={() => setIsEditModalOpen(false)}
+              onSubmit={() => {}}
+              title="Update Parent"
+              schema={parentSchema}
+              fields={parentFields}
+            />
+          )} */}
+          {/* Delete Modal Trigger */}
           <button
             onClick={() => setIsDeleteModalOpen(true)}
             className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 hover:text-red-600 transition-colors duration-200"
           >
-            <DeleteIcon style={{ fontSize: 20 }} />
+            <Trash2 className="w-5 h-5" />
             Delete
           </button>
+          {/* TODO: Implement Delete Modal with correct FormModal props and schema */}
+          {/* {isDeleteModalOpen && (
+            <FormModal
+              open={isDeleteModalOpen}
+              onClose={() => setIsDeleteModalOpen(false)}
+              onSubmit={handleDelete}
+              title="Delete Parent"
+              schema={deleteSchema}
+              fields={deleteFields}
+            />
+          )} */}
         </div>
       </div>
 
@@ -146,7 +150,7 @@ export default function ParentProfilePage() {
             <div className="flex items-center gap-2">
               <div className="h-6 w-1 bg-blue-600 rounded-full"></div>
               <div className="flex items-center gap-2">
-                <PersonIcon className="text-blue-600" style={{ fontSize: 20 }} />
+                <User className="text-blue-600 w-5 h-5" />
                 <h2 className="text-lg font-semibold text-gray-900">Personal Information</h2>
               </div>
             </div>
@@ -157,19 +161,22 @@ export default function ParentProfilePage() {
               </div>
               <div>
                 <p className="text-sm text-gray-500">Sex</p>
-                <p className="text-gray-900 capitalize">{parent.sex}</p>
+                <p className="text-gray-900 capitalize flex items-center gap-1">
+                  <User className="w-4 h-4 text-blue-500" />
+                  {parent.sex}
+                </p>
               </div>
               <div>
                 <p className="text-sm text-gray-500">Blood Type</p>
-                <p className="text-gray-900">{parent.bloodType}</p>
+                <p className="text-gray-900 flex items-center gap-1"><Droplet className="w-4 h-4 text-red-500" />{parent.bloodType}</p>
               </div>
               <div>
                 <p className="text-sm text-gray-500">Birthday</p>
-                <p className="text-gray-900">{new Date(parent.birthday).toLocaleDateString()}</p>
+                <p className="text-gray-900 flex items-center gap-1"><Cake className="w-4 h-4 text-yellow-500" />{new Date(parent.birthday).toLocaleDateString()}</p>
               </div>
               <div>
                 <p className="text-sm text-gray-500">Occupation</p>
-                <p className="text-gray-900">{parent.occupation}</p>
+                <p className="text-gray-900 flex items-center gap-1"><Briefcase className="w-4 h-4 text-gray-500" />{parent.occupation}</p>
               </div>
             </div>
           </div>
@@ -179,22 +186,22 @@ export default function ParentProfilePage() {
             <div className="flex items-center gap-2">
               <div className="h-6 w-1 bg-green-600 rounded-full"></div>
               <div className="flex items-center gap-2">
-                <EmailIcon className="text-green-600" style={{ fontSize: 20 }} />
+                <Mail className="text-green-600 w-5 h-5" />
                 <h2 className="text-lg font-semibold text-gray-900">Contact Information</h2>
               </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <p className="text-sm text-gray-500">Email Address</p>
-                <p className="text-gray-900">{parent.email}</p>
+                <p className="text-gray-900 flex items-center gap-1"><Mail className="w-4 h-4 text-green-500" />{parent.email}</p>
               </div>
               <div>
                 <p className="text-sm text-gray-500">Phone Number</p>
-                <p className="text-gray-900">{parent.phone}</p>
+                <p className="text-gray-900 flex items-center gap-1"><Phone className="w-4 h-4 text-blue-500" />{parent.phone}</p>
               </div>
               <div className="md:col-span-2">
                 <p className="text-sm text-gray-500">Address</p>
-                <p className="text-gray-900">{parent.address}</p>
+                <p className="text-gray-900 flex items-center gap-1"><MapPin className="w-4 h-4 text-gray-500" />{parent.address}</p>
               </div>
             </div>
           </div>
@@ -205,7 +212,7 @@ export default function ParentProfilePage() {
           <div className="flex items-center gap-2">
             <div className="h-6 w-1 bg-purple-600 rounded-full"></div>
             <div className="flex items-center gap-2">
-              <SchoolIcon className="text-purple-600" style={{ fontSize: 20 }} />
+              <School className="text-purple-600 w-5 h-5" />
               <h2 className="text-lg font-semibold text-gray-900">Associated Students</h2>
             </div>
           </div>

@@ -433,11 +433,16 @@ async function main() {
         courseCode: 'CS101',
         courseName: 'Introduction to Programming',
         courseType: CourseType.MANDATORY,
+        courseStatus: CourseStatus.ACTIVE,
+        description: 'Introduction to programming concepts and problem-solving using modern programming languages.',
         academicYear: '2024-2025',
         semester: SemesterType.SECOND_SEMESTER,
         totalUnits: 3,
+        totalSections: 1,
+        totalStudents: 0,
         departmentId: departments[0].departmentId,
         semesterId: semesters[0].semesterId,
+        major: 'Computer Science',
       },
     }),
     prisma.courseOffering.create({
@@ -445,11 +450,16 @@ async function main() {
         courseCode: 'IT101',
         courseName: 'Web Development',
         courseType: CourseType.ELECTIVE,
+        courseStatus: CourseStatus.ACTIVE,
+        description: 'Introduction to web development technologies and frameworks.',
         academicYear: '2024-2025',
         semester: SemesterType.SECOND_SEMESTER,
         totalUnits: 3,
+        totalSections: 1,
+        totalStudents: 0,
         departmentId: departments[1].departmentId,
         semesterId: semesters[0].semesterId,
+        major: 'Information Technology',
       },
     }),
     prisma.courseOffering.create({
@@ -457,11 +467,16 @@ async function main() {
         courseCode: 'CE101',
         courseName: 'Digital Logic Design',
         courseType: CourseType.MANDATORY,
+        courseStatus: CourseStatus.ACTIVE,
+        description: 'Fundamentals of digital logic design and computer organization.',
         academicYear: '2024-2025',
         semester: SemesterType.SECOND_SEMESTER,
         totalUnits: 3,
+        totalSections: 1,
+        totalStudents: 0,
         departmentId: departments[2].departmentId,
         semesterId: semesters[0].semesterId,
+        major: 'Computer Engineering',
       },
     }),
     prisma.courseOffering.create({
@@ -469,11 +484,16 @@ async function main() {
         courseCode: 'IS101',
         courseName: 'Database Management',
         courseType: CourseType.MANDATORY,
+        courseStatus: CourseStatus.ACTIVE,
+        description: 'Introduction to database design, implementation, and management.',
         academicYear: '2024-2025',
         semester: SemesterType.SECOND_SEMESTER,
         totalUnits: 3,
+        totalSections: 1,
+        totalStudents: 0,
         departmentId: departments[3].departmentId,
         semesterId: semesters[0].semesterId,
+        major: 'Information Systems',
       },
     }),
     prisma.courseOffering.create({
@@ -481,11 +501,16 @@ async function main() {
         courseCode: 'SE101',
         courseName: 'Software Engineering',
         courseType: CourseType.MANDATORY,
+        courseStatus: CourseStatus.ACTIVE,
+        description: 'Introduction to software engineering principles and practices.',
         academicYear: '2024-2025',
         semester: SemesterType.SECOND_SEMESTER,
         totalUnits: 3,
+        totalSections: 1,
+        totalStudents: 0,
         departmentId: departments[4].departmentId,
         semesterId: semesters[0].semesterId,
+        major: 'Software Engineering',
       },
     }),
   ]);
@@ -725,6 +750,34 @@ async function main() {
         endTime: '10:30',
         semesterId: semesters[0].semesterId,
         academicYear: '2024-2025',
+      },
+    }),
+  ]);
+
+  // Create student schedules
+  await Promise.all([
+    prisma.studentSchedule.create({
+      data: {
+        studentId: students[0].studentId,
+        scheduleId: subjectSchedules[0].subjectSchedId,
+        status: ScheduleStatus.ACTIVE,
+        notes: 'Regular enrollment'
+      },
+    }),
+    prisma.studentSchedule.create({
+      data: {
+        studentId: students[1].studentId,
+        scheduleId: subjectSchedules[1].subjectSchedId,
+        status: ScheduleStatus.ACTIVE,
+        notes: 'Regular enrollment'
+      },
+    }),
+    prisma.studentSchedule.create({
+      data: {
+        studentId: students[2].studentId,
+        scheduleId: subjectSchedules[2].subjectSchedId,
+        status: ScheduleStatus.ACTIVE,
+        notes: 'Regular enrollment'
       },
     }),
   ]);

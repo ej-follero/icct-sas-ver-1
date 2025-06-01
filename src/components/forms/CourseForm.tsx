@@ -4,13 +4,23 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useState } from "react";
-import { Button, TextField, FormControl, Select, MenuItem, FormHelperText } from "@mui/material";
-import { 
-  School as SchoolIcon,
-  Business as BusinessIcon,
-  Info as InfoIcon,
-  Description as DescriptionIcon,
-} from '@mui/icons-material';
+import {
+  School,
+  Building2,
+  Info,
+  FileText,
+} from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
 
 // Define the course schema
 const courseSchema = z.object({
@@ -18,7 +28,7 @@ const courseSchema = z.object({
   code: z.string().min(1, "Course code is required"),
   department: z.string().min(1, "Department is required"),
   description: z.string().optional(),
-  units: z.number().min(1, "Units must be at least 1"),
+  units: z.coerce.number().min(1, "Units must be at least 1"),
   status: z.enum(["active", "inactive"]),
 });
 
@@ -44,6 +54,8 @@ export default function CourseForm({ type, data, id }: CourseFormProps) {
   const {
     register,
     handleSubmit,
+    setValue,
+    watch,
     formState: { errors },
   } = useForm<Course>({
     resolver: zodResolver(courseSchema),
@@ -61,14 +73,9 @@ export default function CourseForm({ type, data, id }: CourseFormProps) {
     try {
       setIsSubmitting(true);
       setError(null);
-
       // TODO: Replace with actual API call
       console.log("Form submitted:", formData);
-      
-      // Simulate API call
       await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      // Handle success
       window.location.reload();
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
@@ -81,14 +88,9 @@ export default function CourseForm({ type, data, id }: CourseFormProps) {
     try {
       setIsSubmitting(true);
       setError(null);
-
       // TODO: Replace with actual API call
       console.log("Deleting course:", id);
-      
-      // Simulate API call
       await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      // Handle success
       window.location.reload();
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
@@ -113,19 +115,16 @@ export default function CourseForm({ type, data, id }: CourseFormProps) {
         )}
         <div className="flex justify-end gap-3">
           <Button
-            variant="outlined"
+            variant="outline"
             onClick={() => window.location.reload()}
             disabled={isSubmitting}
-            className="text-gray-600 hover:text-gray-900"
           >
             Cancel
           </Button>
           <Button
-            variant="contained"
-            color="error"
+            variant="destructive"
             onClick={handleDelete}
             disabled={isSubmitting}
-            className="bg-red-600 hover:bg-red-700"
           >
             {isSubmitting ? "Deleting..." : "Delete"}
           </Button>
@@ -139,10 +138,10 @@ export default function CourseForm({ type, data, id }: CourseFormProps) {
       {/* Form Title */}
       <div className="space-y-2">
         <h1 className="text-2xl font-semibold text-gray-900">
-          Create New Course
+          {type === "update" ? "Update Course" : "Create New Course"}
         </h1>
         <p className="text-sm text-gray-500">
-          Fill in the details below to add a new course to the system
+          Fill in the details below to {type === "update" ? "update" : "add"} a course to the system
         </p>
       </div>
 
@@ -151,50 +150,51 @@ export default function CourseForm({ type, data, id }: CourseFormProps) {
         <div className="flex items-center gap-2">
           <div className="h-6 w-1 bg-blue-600 rounded-full"></div>
           <div className="flex items-center gap-2">
-            <SchoolIcon className="text-blue-600" style={{ fontSize: 20 }} />
+            <School className="text-blue-600 w-5 h-5" />
             <h2 className="text-lg font-semibold text-gray-900">Basic Information</h2>
           </div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1.5">
-              Course Name
-            </label>
-            <TextField
+            <Label htmlFor="name">Course Name</Label>
+            <Input
               id="name"
-              fullWidth
               {...register("name")}
-              error={!!errors.name}
-              helperText={errors.name?.message}
-              className="[&_.MuiOutlinedInput-root]:rounded-xl [&_.MuiOutlinedInput-root]:bg-gray-50/50"
+              className={errors.name && "border-red-500"}
+              aria-invalid={!!errors.name}
+              aria-describedby={errors.name ? "name-error" : undefined}
             />
+            {errors.name && (
+              <p id="name-error" className="text-sm text-red-600 mt-1">{errors.name.message}</p>
+            )}
           </div>
           <div>
-            <label htmlFor="code" className="block text-sm font-medium text-gray-700 mb-1.5">
-              Course Code
-            </label>
-            <TextField
+            <Label htmlFor="code">Course Code</Label>
+            <Input
               id="code"
-              fullWidth
               {...register("code")}
-              error={!!errors.code}
-              helperText={errors.code?.message}
-              className="[&_.MuiOutlinedInput-root]:rounded-xl [&_.MuiOutlinedInput-root]:bg-gray-50/50"
+              className={errors.code && "border-red-500"}
+              aria-invalid={!!errors.code}
+              aria-describedby={errors.code ? "code-error" : undefined}
             />
+            {errors.code && (
+              <p id="code-error" className="text-sm text-red-600 mt-1">{errors.code.message}</p>
+            )}
           </div>
           <div>
-            <label htmlFor="units" className="block text-sm font-medium text-gray-700 mb-1.5">
-              Units
-            </label>
-            <TextField
+            <Label htmlFor="units">Units</Label>
+            <Input
               id="units"
               type="number"
-              fullWidth
+              min={1}
               {...register("units", { valueAsNumber: true })}
-              error={!!errors.units}
-              helperText={errors.units?.message}
-              className="[&_.MuiOutlinedInput-root]:rounded-xl [&_.MuiOutlinedInput-root]:bg-gray-50/50"
+              className={errors.units && "border-red-500"}
+              aria-invalid={!!errors.units}
+              aria-describedby={errors.units ? "units-error" : undefined}
             />
+            {errors.units && (
+              <p id="units-error" className="text-sm text-red-600 mt-1">{errors.units.message}</p>
+            )}
           </div>
         </div>
       </div>
@@ -204,32 +204,32 @@ export default function CourseForm({ type, data, id }: CourseFormProps) {
         <div className="flex items-center gap-2">
           <div className="h-6 w-1 bg-green-600 rounded-full"></div>
           <div className="flex items-center gap-2">
-            <BusinessIcon className="text-green-600" style={{ fontSize: 20 }} />
+            <Building2 className="text-green-600 w-5 h-5" />
             <h2 className="text-lg font-semibold text-gray-900">Department</h2>
           </div>
         </div>
         <div className="grid grid-cols-1 gap-4">
           <div>
-            <label htmlFor="department" className="block text-sm font-medium text-gray-700 mb-1.5">
-              Department
-            </label>
-            <FormControl fullWidth error={!!errors.department}>
-              <Select
-                id="department"
-                {...register("department")}
-                defaultValue={data?.department || ""}
-                className="[&_.MuiOutlinedInput-root]:rounded-xl [&_.MuiOutlinedInput-root]:bg-gray-50/50"
-              >
+            <Label htmlFor="department">Department</Label>
+            <Select
+              value={watch("department")}
+              onValueChange={(value) => setValue("department", value)}
+              required
+            >
+              <SelectTrigger id="department">
+                <SelectValue placeholder="Select department" />
+              </SelectTrigger>
+              <SelectContent>
                 {departments.map((dept) => (
-                  <MenuItem key={dept.id} value={dept.name}>
+                  <SelectItem key={dept.id} value={dept.name}>
                     {dept.name}
-                  </MenuItem>
+                  </SelectItem>
                 ))}
-              </Select>
-              {errors.department && (
-                <FormHelperText>{errors.department.message}</FormHelperText>
-              )}
-            </FormControl>
+              </SelectContent>
+            </Select>
+            {errors.department && (
+              <p className="text-sm text-red-600 mt-1">{errors.department.message}</p>
+            )}
           </div>
         </div>
       </div>
@@ -239,25 +239,26 @@ export default function CourseForm({ type, data, id }: CourseFormProps) {
         <div className="flex items-center gap-2">
           <div className="h-6 w-1 bg-purple-600 rounded-full"></div>
           <div className="flex items-center gap-2">
-            <DescriptionIcon className="text-purple-600" style={{ fontSize: 20 }} />
+            <FileText className="text-purple-600 w-5 h-5" />
             <h2 className="text-lg font-semibold text-gray-900">Description</h2>
           </div>
         </div>
         <div className="grid grid-cols-1 gap-4">
           <div>
-            <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1.5">
-              Course Description
-            </label>
-            <TextField
+            <Label htmlFor="description">Course Description</Label>
+            <Textarea
               id="description"
-              fullWidth
-              multiline
               rows={4}
               {...register("description")}
-              error={!!errors.description}
-              helperText={errors.description?.message}
-              className="[&_.MuiOutlinedInput-root]:rounded-xl [&_.MuiOutlinedInput-root]:bg-gray-50/50"
+              className={errors.description && "border-red-500"}
+              aria-invalid={!!errors.description}
+              aria-describedby={errors.description ? "description-error" : undefined}
             />
+            {errors.description && (
+              <p id="description-error" className="text-sm text-red-600 mt-1">
+                {errors.description.message}
+              </p>
+            )}
           </div>
         </div>
       </div>
@@ -267,30 +268,29 @@ export default function CourseForm({ type, data, id }: CourseFormProps) {
         <div className="flex items-center gap-2">
           <div className="h-6 w-1 bg-orange-600 rounded-full"></div>
           <div className="flex items-center gap-2">
-            <InfoIcon className="text-orange-600" style={{ fontSize: 20 }} />
+            <Info className="text-orange-600 w-5 h-5" />
             <h2 className="text-lg font-semibold text-gray-900">Status</h2>
           </div>
         </div>
         <div className="grid grid-cols-1 gap-4">
           <div>
-            <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-1.5">
-              Course Status
-            </label>
-            <FormControl fullWidth error={!!errors.status}>
-              <Select
-                id="status"
-                label="Status"
-                {...register("status")}
-                defaultValue={data?.status || "active"}
-                className="[&_.MuiOutlinedInput-root]:rounded-xl [&_.MuiOutlinedInput-root]:bg-gray-50/50"
-              >
-                <MenuItem value="active">Active</MenuItem>
-                <MenuItem value="inactive">Inactive</MenuItem>
-              </Select>
-              {errors.status && (
-                <FormHelperText>{errors.status.message}</FormHelperText>
-              )}
-            </FormControl>
+            <Label htmlFor="status">Course Status</Label>
+            <Select
+              value={watch("status")}
+              onValueChange={(value) => setValue("status", value as "active" | "inactive")}
+              required
+            >
+              <SelectTrigger id="status">
+                <SelectValue placeholder="Select status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="inactive">Inactive</SelectItem>
+              </SelectContent>
+            </Select>
+            {errors.status && (
+              <p className="text-sm text-red-600 mt-1">{errors.status.message}</p>
+            )}
           </div>
         </div>
       </div>
@@ -304,28 +304,32 @@ export default function CourseForm({ type, data, id }: CourseFormProps) {
       {/* Submit Button */}
       <div className="flex items-center justify-between pt-4 border-t border-gray-100">
         <div className="flex items-center gap-2 text-sm text-gray-500">
-          <InfoIcon style={{ fontSize: 16 }} />
+          <Info className="w-4 h-4" />
           <span>All fields marked with * are required</span>
         </div>
         <div className="flex gap-3">
           <Button
-            variant="outlined"
+            variant="outline"
+            type="button"
             onClick={() => window.location.reload()}
             disabled={isSubmitting}
-            className="text-gray-600 hover:text-gray-900"
           >
             Cancel
           </Button>
           <Button
             type="submit"
-            variant="contained"
             disabled={isSubmitting}
-            className="bg-sasBlue hover:bg-sasBlue/90"
           >
-            {isSubmitting ? "Saving..." : "Create Course"}
+            {isSubmitting
+              ? type === "update"
+                ? "Saving..."
+                : "Saving..."
+              : type === "update"
+                ? "Update Course"
+                : "Create Course"}
           </Button>
         </div>
       </div>
     </form>
   );
-} 
+}

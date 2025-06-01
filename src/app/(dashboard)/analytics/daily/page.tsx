@@ -1,23 +1,22 @@
 "use client";
 
 import { useState } from "react";
-import { DatePicker } from "@mui/x-date-pickers/DatePicker";
-import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
-import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
 import {
-  School as SchoolIcon,
-  Group as GroupIcon,
-  CheckCircle as CheckCircleIcon,
-  AccessTime as AccessTimeIcon,
-  Cancel as CancelIcon,
-  Person as PersonIcon,
-  Warning as WarningIcon,
-  FileDownload as FileDownloadIcon,
-  Print as PrintIcon,
-} from "@mui/icons-material";
+  School,
+  Users,
+  CheckCircle,
+  Clock,
+  XCircle,
+  User,
+  AlertTriangle,
+  Download,
+  Printer,
+  Calendar as CalendarIcon,
+} from "lucide-react";
+import { motion } from "framer-motion";
 import {
-  BarChart,
-  Bar,
+  AreaChart,
+  Area,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -25,407 +24,281 @@ import {
   ResponsiveContainer,
 } from "recharts";
 
-// Mock data - replace with actual API calls later
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { Avatar, AvatarImage } from "@/components/ui/avatar";
+import { Divider } from "@/components/ui/divider";
+import Link from "next/link";
+
 const mockSummaryData = {
   totalClasses: 48,
   totalStudentsExpected: 1200,
   totalPresent: 1050,
   totalLate: 120,
   totalAbsent: 150,
-  totalInstructorsExpected: 38,
-  instructorsPresent: 36,
-  rfidIssues: 5,
 };
 
-const mockInstructorData = [
+const mockTableData = [
   {
     id: 1,
-    name: "Mr. Santos",
-    subject: "ICT 101",
-    section: "BSIT 2A",
-    time: "8:00-9:00 AM",
-    room: "203",
-    status: "present",
+    className: "Math 101",
+    teacher: "John Doe",
+    studentsPresent: 25,
+    studentsLate: 2,
+    studentsAbsent: 3,
   },
   {
     id: 2,
-    name: "Ms. Reyes",
-    subject: "Math 102",
-    section: "BSED 1B",
-    time: "10:00-11:00 AM",
-    room: "102",
-    status: "absent",
+    className: "History 201",
+    teacher: "Jane Smith",
+    studentsPresent: 20,
+    studentsLate: 1,
+    studentsAbsent: 5,
   },
+  // Add more rows as needed
 ];
 
-const mockSectionData = [
-  {
-    id: 1,
-    section: "BSIT 2A",
-    scheduled: 40,
-    present: 36,
-    late: 2,
-    absent: 2,
-    rate: 90,
-  },
-  {
-    id: 2,
-    section: "BSED 1B",
-    scheduled: 35,
-    present: 28,
-    late: 5,
-    absent: 2,
-    rate: 80,
-  },
+const mockChartData = [
+  { date: "2023-09-01", present: 1000, late: 100, absent: 100 },
+  { date: "2023-09-02", present: 1020, late: 90, absent: 90 },
+  { date: "2023-09-03", present: 1050, late: 120, absent: 30 },
+  { date: "2023-09-04", present: 1030, late: 110, absent: 60 },
+  { date: "2023-09-05", present: 1070, late: 100, absent: 30 },
 ];
 
-const mockTimeData = [
-  { hour: "7:00-8:00", scans: 150 },
-  { hour: "8:00-9:00", scans: 380 },
-  { hour: "9:00-10:00", scans: 220 },
-  { hour: "10:00-11:00", scans: 300 },
-  { hour: "11:00-12:00", scans: 250 },
-  { hour: "12:00-1:00", scans: 100 },
-  { hour: "1:00-2:00", scans: 280 },
-  { hour: "2:00-3:00", scans: 320 },
-  { hour: "3:00-4:00", scans: 180 },
-];
+function CustomDatePicker({ date, setDate }: { date: Date; setDate: (date: Date) => void }) {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="outline" className="w-64 justify-start text-left font-normal">
+          <CalendarIcon className="mr-2 h-5 w-5" />
+          {date ? date.toLocaleDateString() : <span>Pick a date</span>}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-0" align="start">
+        <Calendar
+          mode="single"
+          selected={date}
+          onSelect={(selectedDate: Date | undefined) => selectedDate && setDate(selectedDate)}
+          initialFocus
+        />
+      </PopoverContent>
+    </Popover>
+  );
+}
 
-const mockAlerts = [
-  {
-    id: 1,
-    type: "missing_instructor",
-    message: "Mr. Dela Cruz has not scanned in for ICT 101 (BSIT 2A)",
-    severity: "high",
-  },
-  {
-    id: 2,
-    type: "unknown_rfid",
-    message: "Unknown RFID scan detected at Room 203",
-    severity: "medium",
-  },
-  {
-    id: 3,
-    type: "duplicate_scan",
-    message: "Multiple scans detected for Student ID: 2023-0001",
-    severity: "low",
-  },
-];
-
-const DailySummaryPage = () => {
+export default function DailySummaryPage() {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [filterLate, setFilterLate] = useState(false);
+  const [filterAbsent, setFilterAbsent] = useState(false);
 
-  const handleExportPDF = () => {
-    // TODO: Implement PDF export
-    console.log("Exporting to PDF...");
-  };
-
-  const handleExportExcel = () => {
-    // TODO: Implement Excel export
-    console.log("Exporting to Excel...");
-  };
-
-  const handlePrint = () => {
-    // TODO: Implement print functionality
-    console.log("Printing...");
-  };
+  // Filter table data based on selected filters
+  const filteredTableData = mockTableData.filter((row) => {
+    if (filterLate && row.studentsLate === 0) return false;
+    if (filterAbsent && row.studentsAbsent === 0) return false;
+    return true;
+  });
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100/50">
       <div className="max-w-[1920px] mx-auto p-6">
         <div className="bg-white rounded-2xl shadow-lg ring-1 ring-gray-100/50 backdrop-blur-sm">
           {/* Header */}
-          <div className="p-8 border-b border-gray-100">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
-              <div>
-                <h1 className="text-3xl font-bold text-gray-900 bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
-                  Daily Attendance Summary
-                </h1>
-                <p className="text-sm text-gray-500 mt-2">
-                  View and analyze attendance data for any date
-                </p>
-              </div>
-              <div className="flex items-center gap-4">
-                <LocalizationProvider dateAdapter={AdapterDateFns}>
-                  <DatePicker
-                    value={selectedDate}
-                    onChange={(newValue) => newValue && setSelectedDate(newValue)}
-                    className="w-full sm:w-64"
-                  />
-                </LocalizationProvider>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={handleExportPDF}
-                    className="p-3 rounded-xl text-gray-500 hover:text-gray-900 hover:bg-gray-50 transition-all duration-200"
-                  >
-                    <FileDownloadIcon style={{ fontSize: 20 }} />
-                  </button>
-                  <button
-                    onClick={handlePrint}
-                    className="p-3 rounded-xl text-gray-500 hover:text-gray-900 hover:bg-gray-50 transition-all duration-200"
-                  >
-                    <PrintIcon style={{ fontSize: 20 }} />
-                  </button>
-                </div>
+          <div className="p-8 border-b border-gray-100 flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
+                Daily Attendance Summary
+              </h1>
+              <p className="text-sm text-gray-500 mt-2">
+                View and analyze attendance data for any date
+              </p>
+            </div>
+            <div className="flex items-center gap-4">
+              <CustomDatePicker date={selectedDate} setDate={setSelectedDate} />
+              <div className="flex items-center gap-2">
+                <Button variant="ghost" size="icon" onClick={() => alert("Download clicked")}>
+                  <Download className="w-5 h-5" />
+                </Button>
+                <Button variant="ghost" size="icon" onClick={() => alert("Print clicked")}>
+                  <Printer className="w-5 h-5" />
+                </Button>
               </div>
             </div>
           </div>
 
           {/* Summary Cards */}
           <div className="p-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <div className="bg-white rounded-xl p-6 shadow-sm ring-1 ring-gray-100">
-              <div className="flex items-center gap-4">
+            <Card>
+              <CardContent className="flex items-center gap-4 p-6">
                 <div className="p-3 bg-blue-50 rounded-lg">
-                  <SchoolIcon className="text-blue-500" style={{ fontSize: 24 }} />
+                  <School className="text-blue-500 w-6 h-6" />
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">Total Classes</p>
                   <p className="text-2xl font-semibold text-gray-900">{mockSummaryData.totalClasses}</p>
                 </div>
-              </div>
-            </div>
-            <div className="bg-white rounded-xl p-6 shadow-sm ring-1 ring-gray-100">
-              <div className="flex items-center gap-4">
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="flex items-center gap-4 p-6">
                 <div className="p-3 bg-green-50 rounded-lg">
-                  <GroupIcon className="text-green-500" style={{ fontSize: 24 }} />
+                  <Users className="text-green-500 w-6 h-6" />
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">Total Present</p>
                   <p className="text-2xl font-semibold text-gray-900">{mockSummaryData.totalPresent}</p>
                   <p className="text-sm text-gray-500">of {mockSummaryData.totalStudentsExpected} expected</p>
                 </div>
-              </div>
-            </div>
-            <div className="bg-white rounded-xl p-6 shadow-sm ring-1 ring-gray-100">
-              <div className="flex items-center gap-4">
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="flex items-center gap-4 p-6">
                 <div className="p-3 bg-yellow-50 rounded-lg">
-                  <AccessTimeIcon className="text-yellow-500" style={{ fontSize: 24 }} />
+                  <Clock className="text-yellow-500 w-6 h-6" />
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">Late Arrivals</p>
                   <p className="text-2xl font-semibold text-gray-900">{mockSummaryData.totalLate}</p>
                 </div>
-              </div>
-            </div>
-            <div className="bg-white rounded-xl p-6 shadow-sm ring-1 ring-gray-100">
-              <div className="flex items-center gap-4">
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="flex items-center gap-4 p-6">
                 <div className="p-3 bg-red-50 rounded-lg">
-                  <CancelIcon className="text-red-500" style={{ fontSize: 24 }} />
+                  <XCircle className="text-red-500 w-6 h-6" />
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">Absent</p>
                   <p className="text-2xl font-semibold text-gray-900">{mockSummaryData.totalAbsent}</p>
                 </div>
-              </div>
-            </div>
+              </CardContent>
+            </Card>
           </div>
 
-          {/* Instructor Attendance */}
-          <div className="p-8 border-t border-gray-100">
-            <h2 className="text-xl font-semibold text-gray-900 mb-6">Instructor Attendance</h2>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="bg-gray-50">
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Instructor
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Subject
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Section
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Time
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Room
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Status
-                    </th>
+          {/* Filter Section */}
+          <div className="px-8 pb-4 flex flex-wrap gap-4 items-center">
+            <Label className="flex items-center space-x-2 cursor-pointer">
+              <Checkbox
+                id="filterLate"
+                checked={filterLate}
+                onCheckedChange={(checked: boolean) => setFilterLate(Boolean(checked))}
+              />
+              <span>Show only classes with late arrivals</span>
+            </Label>
+            <Label className="flex items-center space-x-2 cursor-pointer">
+              <Checkbox
+                id="filterAbsent"
+                checked={filterAbsent}
+                onCheckedChange={(checked: boolean) => setFilterAbsent(Boolean(checked))}
+              />
+              <span>Show only classes with absences</span>
+            </Label>
+          </div>
+
+          {/* Table */}
+          <div className="overflow-x-auto px-8 pb-8">
+            <table className="w-full border-collapse border border-gray-200 text-sm">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="border border-gray-200 p-3 text-left font-semibold">Class Name</th>
+                  <th className="border border-gray-200 p-3 text-left font-semibold">Teacher</th>
+                  <th className="border border-gray-200 p-3 text-center font-semibold">Present</th>
+                  <th className="border border-gray-200 p-3 text-center font-semibold">Late</th>
+                  <th className="border border-gray-200 p-3 text-center font-semibold">Absent</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredTableData.map((row) => (
+                  <tr key={row.id} className="even:bg-gray-50">
+                    <td className="border border-gray-200 p-3">{row.className}</td>
+                    <td className="border border-gray-200 p-3">{row.teacher}</td>
+                    <td className="border border-gray-200 p-3 text-center">{row.studentsPresent}</td>
+                    <td className="border border-gray-200 p-3 text-center">{row.studentsLate}</td>
+                    <td className="border border-gray-200 p-3 text-center">{row.studentsAbsent}</td>
                   </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-100">
-                  {mockInstructorData.map((instructor) => (
-                    <tr key={instructor.id} className="hover:bg-gray-50/50 transition-colors duration-200">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 bg-blue-50 rounded-lg">
-                            <PersonIcon className="text-blue-500" style={{ fontSize: 20 }} />
-                          </div>
-                          <div>
-                            <p className="text-sm font-medium text-gray-900">{instructor.name}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {instructor.subject}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {instructor.section}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {instructor.time}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {instructor.room}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span
-                          className={`inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold ${
-                            instructor.status === "present"
-                              ? "bg-green-50 text-green-700 ring-1 ring-green-100"
-                              : "bg-red-50 text-red-700 ring-1 ring-red-100"
-                          }`}
-                        >
-                          {instructor.status.charAt(0).toUpperCase() + instructor.status.slice(1)}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                ))}
+              </tbody>
+            </table>
           </div>
 
-          {/* Section Summary */}
-          <div className="p-8 border-t border-gray-100">
-            <h2 className="text-xl font-semibold text-gray-900 mb-6">Section Summary</h2>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="bg-gray-50">
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Section
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Scheduled
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Present
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Late
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Absent
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Attendance Rate
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-100">
-                  {mockSectionData.map((section) => (
-                    <tr
-                      key={section.id}
-                      className="hover:bg-gray-50/50 transition-colors duration-200 cursor-pointer"
-                      onClick={() => {
-                        // TODO: Navigate to section details
-                        console.log("Navigate to section:", section.section);
-                      }}
-                    >
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 bg-purple-50 rounded-lg">
-                            <SchoolIcon className="text-purple-500" style={{ fontSize: 20 }} />
-                          </div>
-                          <div>
-                            <p className="text-sm font-medium text-gray-900">{section.section}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {section.scheduled}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {section.present}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {section.late}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {section.absent}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center gap-2">
-                          <div className="w-16 bg-gray-100 rounded-full h-2">
-                            <div
-                              className="bg-blue-500 h-2 rounded-full"
-                              style={{ width: `${section.rate}%` }}
-                            />
-                          </div>
-                          <span className="text-sm font-medium text-gray-900">{section.rate}%</span>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Time-Based Attendance Chart */}
-          <div className="p-8 border-t border-gray-100">
-            <h2 className="text-xl font-semibold text-gray-900 mb-6">Attendance by Hour</h2>
-            <div className="h-80">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={mockTimeData}>
+          {/* Chart Section */}
+          <div className="px-8 pb-8">
+            <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+              <Users className="w-6 h-6 text-gray-700" />
+              Attendance Over Time
+            </h2>
+            <div className="w-full h-64">
+              <ResponsiveContainer>
+                <AreaChart data={mockChartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="colorPresent" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#10B981" stopOpacity={0.8} />
+                      <stop offset="95%" stopColor="#10B981" stopOpacity={0} />
+                    </linearGradient>
+                    <linearGradient id="colorLate" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#FBBF24" stopOpacity={0.8} />
+                      <stop offset="95%" stopColor="#FBBF24" stopOpacity={0} />
+                    </linearGradient>
+                    <linearGradient id="colorAbsent" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#EF4444" stopOpacity={0.8} />
+                      <stop offset="95%" stopColor="#EF4444" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
                   <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="hour" />
+                  <XAxis dataKey="date" />
                   <YAxis />
                   <Tooltip />
-                  <Bar dataKey="scans" fill="#3B82F6" />
-                </BarChart>
+                  <Area
+                    type="monotone"
+                    dataKey="present"
+                    stroke="#10B981"
+                    fillOpacity={1}
+                    fill="url(#colorPresent)"
+                    name="Present"
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="late"
+                    stroke="#FBBF24"
+                    fillOpacity={1}
+                    fill="url(#colorLate)"
+                    name="Late"
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="absent"
+                    stroke="#EF4444"
+                    fillOpacity={1}
+                    fill="url(#colorAbsent)"
+                    name="Absent"
+                  />
+                </AreaChart>
               </ResponsiveContainer>
             </div>
           </div>
 
-          {/* Alerts Panel */}
-          <div className="p-8 border-t border-gray-100">
-            <h2 className="text-xl font-semibold text-gray-900 mb-6">Alerts & Issues</h2>
-            <div className="space-y-4">
-              {mockAlerts.map((alert) => (
-                <div
-                  key={alert.id}
-                  className="flex items-start gap-4 p-4 rounded-xl bg-white shadow-sm ring-1 ring-gray-100"
-                >
-                  <div
-                    className={`p-2 rounded-lg ${
-                      alert.severity === "high"
-                        ? "bg-red-50"
-                        : alert.severity === "medium"
-                        ? "bg-yellow-50"
-                        : "bg-blue-50"
-                    }`}
-                  >
-                    <WarningIcon
-                      className={
-                        alert.severity === "high"
-                          ? "text-red-500"
-                          : alert.severity === "medium"
-                          ? "text-yellow-500"
-                          : "text-blue-500"
-                      }
-                      style={{ fontSize: 20 }}
-                    />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">{alert.message}</p>
-                    <p className="text-xs text-gray-500 mt-1">
-                      {alert.type.split("_").map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(" ")}
-                    </p>
-                  </div>
-                </div>
-              ))}
+          {/* Alerts */}
+          <div className="px-8 pb-8 space-y-4">
+            <div className="flex items-center gap-3 rounded-lg bg-green-50 p-4 text-green-700">
+              <CheckCircle className="w-6 h-6" />
+              <p>All systems operational.</p>
+            </div>
+            <div className="flex items-center gap-3 rounded-lg bg-yellow-50 p-4 text-yellow-700">
+              <AlertTriangle className="w-6 h-6" />
+              <p>Some students are late today.</p>
+            </div>
+            <div className="flex items-center gap-3 rounded-lg bg-red-50 p-4 text-red-700">
+              <XCircle className="w-6 h-6" />
+              <p>Several absences reported.</p>
             </div>
           </div>
         </div>
       </div>
     </div>
   );
-};
-
-export default DailySummaryPage; 
+}

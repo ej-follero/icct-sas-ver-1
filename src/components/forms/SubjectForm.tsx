@@ -3,17 +3,23 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useState, useEffect } from "react";
-import { School as SchoolIcon } from '@mui/icons-material';
 import { z } from "zod";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectItem, SelectContent, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form";
+import { School, Book, Layers, Loader2, FileDiff } from "lucide-react";
 
 type SubjectFormData = {
   name: string;
   description: string;
   code: string;
   type: "lecture" | "laboratory" | "both";
-  lecture_units: number;
-  laboratory_units: number;
-  units: number;
+  lecture_units?: number;
+  laboratory_units?: number;
+  units?: number;
   semester: "1st" | "2nd" | "3rd";
   year_level: "1st" | "2nd" | "3rd" | "4th";
   department: string;
@@ -60,7 +66,6 @@ const schema = z.object({
         message: "Laboratory units cannot exceed 3",
       });
     }
-    // units is not required in this case
   } else {
     if (data.units === undefined || data.units < 1) {
       ctx.addIssue({
@@ -75,7 +80,6 @@ const schema = z.object({
         message: "Units cannot exceed 6",
       });
     }
-    // lecture_units and laboratory_units are not required in this case
   }
 });
 
@@ -86,19 +90,23 @@ type Props = {
   isLoading?: boolean;
 };
 
-const SubjectForm = ({ type, data, onSubmit, isLoading = false }: Props) => {
+export default function SubjectForm({ type, data, onSubmit, isLoading = false }: Props) {
   const [selectedPrerequisites, setSelectedPrerequisites] = useState<string[]>(data?.prerequisites || []);
   const [subjectType, setSubjectType] = useState<"lecture" | "laboratory" | "both">(data?.type || "lecture");
+
+  const form = useForm<SubjectFormData>({
+    resolver: zodResolver(schema),
+    defaultValues: data,
+  });
 
   const {
     register,
     handleSubmit,
     watch,
     formState: { errors },
-  } = useForm<SubjectFormData>({
-    resolver: zodResolver(schema),
-    defaultValues: data,
-  });
+    setValue,
+    control,
+  } = form;
 
   const watchType = watch("type");
 
@@ -113,295 +121,289 @@ const SubjectForm = ({ type, data, onSubmit, isLoading = false }: Props) => {
     });
   };
 
+  // Dummy prerequisites (replace with your data)
+  const allPrerequisites = [
+    "Introduction to Programming",
+    "Mathematics I",
+    "Discrete Structures",
+    "Data Structures",
+  ];
+
+  const togglePrerequisite = (prereq: string) => {
+    setSelectedPrerequisites((prev) =>
+      prev.includes(prereq) ? prev.filter((p) => p !== prereq) : [...prev, prereq]
+    );
+  };
+
   return (
-    <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-6">
+    <Form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-8 max-w-2xl mx-auto">
       {/* Header */}
-      <div className="pb-4 border-b border-gray-200">
-        <h2 className="text-xl font-semibold text-gray-800">
+      <div className="pb-4 border-b">
+        <h2 className="text-2xl font-bold flex items-center gap-2">
+          <Book className="w-6 h-6 text-blue-600" />
           {type === "create" ? "Add New Subject" : "Update Subject"}
         </h2>
-        <p className="mt-1 text-sm text-gray-500">
+        <p className="mt-1 text-sm text-muted-foreground">
           Fill in the subject details below. Fields marked with * are required.
         </p>
       </div>
 
-      {/* Basic Information Section */}
+      {/* Basic Information */}
       <div className="space-y-6">
-        <h3 className="text-lg font-medium text-gray-800">Basic Information</h3>
-        
+        <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+          <School className="w-5 h-5 text-blue-500" />
+          Basic Information
+        </h3>
         {/* Subject Name */}
-        <div>
-          <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
-            Subject Name *
-          </label>
-          <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <SchoolIcon className="text-gray-400" style={{ fontSize: 20 }} />
+        <FormField control={control} name="name" render={({ field }) => (
+          <FormItem>
+            <FormLabel>Subject Name *</FormLabel>
+            <div className="relative">
+              <FormControl field={field}>
+                <Input
+                  id="name"
+                  placeholder="e.g., Introduction to Programming"
+                  className="pl-10"
+                  {...field}
+                />
+              </FormControl>
+              <School className="absolute left-3 top-2.5 w-5 h-5 text-muted-foreground pointer-events-none" />
             </div>
-            <input
-              type="text"
-              id="name"
-              {...register("name")}
-              className={`pl-10 w-full px-4 py-2.5 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 ${
-                errors.name ? "border-red-300" : "border-gray-200"
-              }`}
-              placeholder="e.g., Introduction to Programming"
-            />
-          </div>
-          {errors.name && (
-            <p className="mt-1 text-sm text-red-600">{errors.name.message}</p>
-          )}
-        </div>
+            <FormMessage>{errors.name?.message}</FormMessage>
+          </FormItem>
+        )} />
 
         {/* Subject Code */}
-        <div>
-          <label htmlFor="code" className="block text-sm font-medium text-gray-700 mb-1">
-            Subject Code *
-          </label>
-          <input
-            type="text"
-            id="code"
-            {...register("code")}
-            className={`w-full px-4 py-2.5 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 ${
-              errors.code ? "border-red-300" : "border-gray-200"
-            }`}
-            placeholder="e.g., CS101"
-          />
-          <p className="mt-1 text-sm text-gray-500">Enter the official subject code</p>
-          {errors.code && (
-            <p className="mt-1 text-sm text-red-600">{errors.code.message}</p>
-          )}
-        </div>
+        <FormField control={control} name="code" render={({ field }) => (
+          <FormItem>
+            <FormLabel>Subject Code *</FormLabel>
+            <FormControl field={field}>
+              <Input
+                id="code"
+                placeholder="e.g., CS101"
+                {...field}
+              />
+            </FormControl>
+            <span className="text-xs text-muted-foreground">
+              Enter the official subject code
+            </span>
+            <FormMessage>{errors.code?.message}</FormMessage>
+          </FormItem>
+        )} />
 
         {/* Description */}
-        <div>
-          <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">
-            Description *
-          </label>
-          <textarea
-            id="description"
-            {...register("description")}
-            rows={3}
-            className={`w-full px-4 py-2.5 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 ${
-              errors.description ? "border-red-300" : "border-gray-200"
-            }`}
-            placeholder="Provide a brief description of the subject"
-          />
-          {errors.description && (
-            <p className="mt-1 text-sm text-red-600">{errors.description.message}</p>
-          )}
-        </div>
+        <FormField control={control} name="description" render={({ field }) => (
+          <FormItem>
+            <FormLabel>Description *</FormLabel>
+            <FormControl field={field}>
+              <Textarea
+                id="description"
+                rows={3}
+                placeholder="Provide a brief description of the subject"
+                {...field}
+              />
+            </FormControl>
+            <FormMessage>{errors.description?.message}</FormMessage>
+          </FormItem>
+        )} />
       </div>
 
-      {/* Subject Details Section */}
-      <div className="space-y-6 pt-4 border-t border-gray-200">
-        <h3 className="text-lg font-medium text-gray-800">Subject Details</h3>
+      {/* Subject Details */}
+      <div className="space-y-6 pt-4 border-t">
+        <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+          <Layers className="w-5 h-5 text-blue-500" />
+          Subject Details
+        </h3>
 
-        {/* Type */}
-        <div>
-          <label htmlFor="type" className="block text-sm font-medium text-gray-700 mb-1">
-            Subject Type *
-          </label>
-          <select
-            id="type"
-            {...register("type")}
-            className={`w-full px-4 py-2.5 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 ${
-              errors.type ? "border-red-300" : "border-gray-200"
-            }`}
-          >
-            <option value="">Select type</option>
-            <option value="lecture">Lecture</option>
-            <option value="laboratory">Laboratory</option>
-            <option value="both">Lecture and Laboratory</option>
-          </select>
-          <p className="mt-1 text-sm text-gray-500">Choose whether this is a lecture, laboratory, or both</p>
-          {errors.type && (
-            <p className="mt-1 text-sm text-red-600">{errors.type.message}</p>
-          )}
-        </div>
+        {/* Subject Type */}
+        <FormField control={control} name="type" render={({ field }) => (
+          <FormItem>
+            <FormLabel>Subject Type *</FormLabel>
+            <FormControl field={field}>
+              <Select
+                defaultValue={data?.type || ""}
+                onValueChange={(v: any) => setValue("type", v)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="lecture">Lecture</SelectItem>
+                  <SelectItem value="laboratory">Laboratory</SelectItem>
+                  <SelectItem value="both">Lecture and Laboratory</SelectItem>
+                </SelectContent>
+              </Select>
+            </FormControl>
+            <span className="text-xs text-muted-foreground">
+              Choose whether this is a lecture, laboratory, or both
+            </span>
+            <FormMessage>{errors.type?.message}</FormMessage>
+          </FormItem>
+        )} />
 
-        {/* Units Section */}
+        {/* Units */}
         {subjectType === "both" ? (
-          <div className="space-y-4 bg-gray-50 p-4 rounded-lg">
-            <h4 className="text-sm font-medium text-gray-700">Units Breakdown</h4>
+          <div className="bg-muted p-4 rounded-lg space-y-4">
+            <h4 className="text-sm font-medium">Units Breakdown</h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label htmlFor="lecture_units" className="block text-sm font-medium text-gray-700 mb-1">
-                  Lecture Units *
-                </label>
-                <input
-                  type="number"
-                  id="lecture_units"
-                  {...register("lecture_units")}
-                  min={1}
-                  max={3}
-                  disabled={!subjectType}
-                  className={`w-full px-4 py-2.5 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 ${
-                    errors.lecture_units ? "border-red-300" : "border-gray-200"
-                  } ${!subjectType ? "bg-gray-100 cursor-not-allowed" : ""}`}
-                  placeholder={!subjectType ? "Select subject type first" : "Enter lecture units"}
-                />
-                {errors.lecture_units && (
-                  <p className="mt-1 text-sm text-red-600">{errors.lecture_units.message}</p>
-                )}
-              </div>
-              <div>
-                <label htmlFor="laboratory_units" className="block text-sm font-medium text-gray-700 mb-1">
-                  Laboratory Units *
-                </label>
-                <input
-                  type="number"
-                  id="laboratory_units"
-                  {...register("laboratory_units")}
-                  min={1}
-                  max={3}
-                  disabled={!subjectType}
-                  className={`w-full px-4 py-2.5 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 ${
-                    errors.laboratory_units ? "border-red-300" : "border-gray-200"
-                  } ${!subjectType ? "bg-gray-100 cursor-not-allowed" : ""}`}
-                  placeholder={!subjectType ? "Select subject type first" : "Enter laboratory units"}
-                />
-                {errors.laboratory_units && (
-                  <p className="mt-1 text-sm text-red-600">{errors.laboratory_units.message}</p>
-                )}
-              </div>
+              <FormField control={control} name="lecture_units" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Lecture Units *</FormLabel>
+                  <FormControl field={field}>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={3}
+                      placeholder="Enter lecture units"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage>{errors.lecture_units?.message}</FormMessage>
+                </FormItem>
+              )} />
+              <FormField control={control} name="laboratory_units" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Laboratory Units *</FormLabel>
+                  <FormControl field={field}>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={3}
+                      placeholder="Enter laboratory units"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage>{errors.laboratory_units?.message}</FormMessage>
+                </FormItem>
+              )} />
             </div>
           </div>
         ) : (
-          <div>
-            <label htmlFor="units" className="block text-sm font-medium text-gray-700 mb-1">
-              Units *
-            </label>
-            <input
-              type="number"
-              id="units"
-              {...register("units")}
-              min={1}
-              max={6}
-              disabled={!subjectType}
-              className={`w-full px-4 py-2.5 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 ${
-                errors.units ? "border-red-300" : "border-gray-200"
-              } ${!subjectType ? "bg-gray-100 cursor-not-allowed" : ""}`}
-              placeholder={!subjectType ? "Select subject type first" : "Enter number of units"}
-            />
-            <p className="mt-1 text-sm text-gray-500">
-              {!subjectType 
-                ? "Please select a subject type first"
-                : "Enter the total number of units (1-6)"}
-            </p>
-            {errors.units && (
-              <p className="mt-1 text-sm text-red-600">{errors.units.message}</p>
-            )}
-          </div>
+          <FormField control={control} name="units" render={({ field }) => (
+            <FormItem>
+              <FormLabel>Units *</FormLabel>
+              <FormControl field={field}>
+                <Input
+                  type="number"
+                  min={1}
+                  max={6}
+                  placeholder="Enter number of units"
+                  {...field}
+                />
+              </FormControl>
+              <span className="text-xs text-muted-foreground">
+                Enter the total number of units (1-6)
+              </span>
+              <FormMessage>{errors.units?.message}</FormMessage>
+            </FormItem>
+          )} />
         )}
 
         {/* Semester and Year Level */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label htmlFor="semester" className="block text-sm font-medium text-gray-700 mb-1">
-              Semester *
-            </label>
-            <select
-              id="semester"
-              {...register("semester")}
-              className={`w-full px-4 py-2.5 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 ${
-                errors.semester ? "border-red-300" : "border-gray-200"
-              }`}
-            >
-              <option value="">Select semester</option>
-              <option value="1st">1st Semester</option>
-              <option value="2nd">2nd Semester</option>
-              <option value="3rd">3rd Semester</option>
-            </select>
-            {errors.semester && (
-              <p className="mt-1 text-sm text-red-600">{errors.semester.message}</p>
-            )}
-          </div>
-
-          <div>
-            <label htmlFor="year_level" className="block text-sm font-medium text-gray-700 mb-1">
-              Year Level *
-            </label>
-            <select
-              id="year_level"
-              {...register("year_level")}
-              className={`w-full px-4 py-2.5 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 ${
-                errors.year_level ? "border-red-300" : "border-gray-200"
-              }`}
-            >
-              <option value="">Select year level</option>
-              <option value="1st">1st Year</option>
-              <option value="2nd">2nd Year</option>
-              <option value="3rd">3rd Year</option>
-              <option value="4th">4th Year</option>
-            </select>
-            {errors.year_level && (
-              <p className="mt-1 text-sm text-red-600">{errors.year_level.message}</p>
-            )}
-          </div>
+          <FormField control={control} name="semester" render={({ field }) => (
+            <FormItem>
+              <FormLabel>Semester *</FormLabel>
+              <FormControl field={field}>
+                <Select
+                  defaultValue={data?.semester || ""}
+                  onValueChange={(v: any) => setValue("semester", v)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select semester" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1st">1st Semester</SelectItem>
+                    <SelectItem value="2nd">2nd Semester</SelectItem>
+                    <SelectItem value="3rd">3rd Semester</SelectItem>
+                  </SelectContent>
+                </Select>
+              </FormControl>
+              <FormMessage>{errors.semester?.message}</FormMessage>
+            </FormItem>
+          )} />
+          <FormField control={control} name="year_level" render={({ field }) => (
+            <FormItem>
+              <FormLabel>Year Level *</FormLabel>
+              <FormControl field={field}>
+                <Select
+                  defaultValue={data?.year_level || ""}
+                  onValueChange={(v: any) => setValue("year_level", v)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select year level" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1st">1st Year</SelectItem>
+                    <SelectItem value="2nd">2nd Year</SelectItem>
+                    <SelectItem value="3rd">3rd Year</SelectItem>
+                    <SelectItem value="4th">4th Year</SelectItem>
+                  </SelectContent>
+                </Select>
+              </FormControl>
+              <FormMessage>{errors.year_level?.message}</FormMessage>
+            </FormItem>
+          )} />
         </div>
 
         {/* Department */}
-        <div>
-          <label htmlFor="department" className="block text-sm font-medium text-gray-700 mb-1">
-            Department *
-          </label>
-          <select
-            id="department"
-            {...register("department")}
-            className={`w-full px-4 py-2.5 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 ${
-              errors.department ? "border-red-300" : "border-gray-200"
-            }`}
-          >
-            <option value="">Select department</option>
-            <option value="Computer Science">Computer Science</option>
-            <option value="Information Technology">Information Technology</option>
-            <option value="Information Systems">Information Systems</option>
-            <option value="Computer Engineering">Computer Engineering</option>
-          </select>
-          {errors.department && (
-            <p className="mt-1 text-sm text-red-600">{errors.department.message}</p>
-          )}
-        </div>
+        <FormField control={control} name="department" render={({ field }) => (
+          <FormItem>
+            <FormLabel>Department *</FormLabel>
+            <FormControl field={field}>
+              <Select
+                defaultValue={data?.department || ""}
+                onValueChange={(v: any) => setValue("department", v)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select department" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Computer Science">Computer Science</SelectItem>
+                  <SelectItem value="Information Technology">Information Technology</SelectItem>
+                  <SelectItem value="Information Systems">Information Systems</SelectItem>
+                  <SelectItem value="Computer Engineering">Computer Engineering</SelectItem>
+                </SelectContent>
+              </Select>
+            </FormControl>
+            <FormMessage>{errors.department?.message}</FormMessage>
+          </FormItem>
+        )} />
 
         {/* Prerequisites */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Prerequisites
-          </label>
-          <div className="space-y-2">
-            <p className="text-sm text-gray-500">
-              Select any subjects that must be completed before taking this subject
-            </p>
-            {/* Add your prerequisites selection UI here */}
+          <Label>Prerequisites</Label>
+          <p className="text-xs text-muted-foreground mb-2">
+            Select any subjects that must be completed before taking this subject
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {allPrerequisites.map((prereq) => (
+              <Button
+                key={prereq}
+                type="button"
+                variant={selectedPrerequisites.includes(prereq) ? "default" : "outline"}
+                size="sm"
+                onClick={() => togglePrerequisite(prereq)}
+                className="rounded-full"
+              >
+                {prereq}
+              </Button>
+            ))}
           </div>
         </div>
       </div>
 
       {/* Submit Button */}
-      <div className="pt-6 border-t border-gray-200">
-        <button
+      <div className="pt-6 border-t flex">
+        <Button
           type="submit"
           disabled={isLoading}
-          className={`w-full px-4 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200 ${
-            isLoading ? "opacity-50 cursor-not-allowed" : ""
-          }`}
+          className="w-full flex items-center justify-center gap-2"
         >
-          {isLoading ? (
-            <span className="flex items-center justify-center">
-              <svg className="w-5 h-5 mr-2 animate-spin" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-              </svg>
-              Processing...
-            </span>
-          ) : (
-            type === "create" ? "Add Subject" : "Update Subject"
-          )}
-        </button>
+          {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+          {type === "create" ? "Add Subject" : "Update Subject"}
+        </Button>
       </div>
-    </form>
+    </Form>
   );
-};
-
-export default SubjectForm; 
+}

@@ -1,50 +1,30 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Dialog, DialogContent, DialogTitle, IconButton } from "@mui/material";
-import CloseIcon from "@mui/icons-material/Close";
-import EditIcon from "@mui/icons-material/Edit";
-import DeleteIcon from "@mui/icons-material/Delete";
-import AddIcon from "@mui/icons-material/Add";
-import dynamic from "next/dynamic";
-import {
-  DialogActions,
-  Button,
-  Box,
-  TextField,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-} from "@mui/material";
+import { useEffect } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 
-// Dynamically import form components
-const TeacherForm = dynamic(() => import("./forms/TeacherForm"));
-const StudentForm = dynamic(() => import("./forms/StudentForm"));
-const ParentForm = dynamic(() => import("./forms/ParentForm"));
-const SubjectForm = dynamic(() => import("./forms/SubjectForm"));
-const DepartmentForm = dynamic(() => import("./forms/DepartmentForm").then(mod => mod.DepartmentForm));
-const CourseForm = dynamic(() => import("./forms/CourseForm"));
-const ClassForm = dynamic(() => import("./forms/ClassForm"));
-
-// Mock data for instructors and courses
-const instructors = [
-  { id: "1", name: "Mr. J. Dela Cruz" },
-  { id: "2", name: "Dr. Maria Santos" },
-  { id: "3", name: "Prof. John Smith" },
-];
-
-const courses = [
-  { id: "1", name: "BSIT" },
-  { id: "2", name: "BSCS" },
-  { id: "3", name: "BSIS" },
-  { id: "4", name: "BSE" },
-  { id: "5", name: "BEE" },
-  { id: "6", name: "BPE" },
-];
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogTrigger,
+  DialogClose,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import { X } from "lucide-react";
 
 interface FormModalProps {
   open: boolean;
@@ -75,17 +55,40 @@ export default function FormModal({
   const {
     control,
     handleSubmit,
+    reset,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(schema),
     defaultValues,
   });
 
+  // Reset form when modal closes or defaultValues change
+  useEffect(() => {
+    if (!open) {
+      reset(defaultValues);
+    }
+  }, [open, reset, defaultValues]);
+
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>{title}</DialogTitle>
-      <DialogContent>
-        <Box component="form" sx={{ mt: 2 }}>
+    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
+      <DialogContent className="sm:max-w-lg sm:p-8">
+        <DialogHeader className="flex justify-between items-center">
+          <DialogTitle className="text-lg font-semibold">{title}</DialogTitle>
+          <DialogClose asChild>
+            <button
+              aria-label="Close"
+              className="rounded-md p-1 hover:bg-gray-200 dark:hover:bg-gray-700"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </DialogClose>
+        </DialogHeader>
+
+        <form
+          onSubmit={handleSubmit(onSubmit)}
+          className="mt-4 space-y-4"
+          noValidate
+        >
           {fields.map((field) => (
             <Controller
               key={field.name}
@@ -94,48 +97,76 @@ export default function FormModal({
               render={({ field: { onChange, value } }) => {
                 if (field.type === "select") {
                   return (
-                    <FormControl fullWidth margin="normal" error={!!errors[field.name]}>
-                      <InputLabel>{field.label}</InputLabel>
+                    <div>
+                      <Label htmlFor={field.name} className="mb-1">
+                        {field.label}
+                      </Label>
                       <Select
+                        onValueChange={onChange}
                         value={value || ""}
-                        label={field.label}
-                        onChange={onChange}
+                        defaultValue={value || ""}
                       >
-                        {field.options?.map((option) => (
-                          <MenuItem key={option.value} value={option.value}>
-                            {option.label}
-                          </MenuItem>
-                        ))}
+                        <SelectTrigger id={field.name}>
+                          <SelectValue placeholder={`Select ${field.label}`} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {field.options?.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
                       </Select>
-                    </FormControl>
+                      {errors[field.name] && (
+                        <p className="text-sm text-red-600 mt-1">
+                          {errors[field.name]?.message as string}
+                        </p>
+                      )}
+                    </div>
                   );
                 }
 
                 return (
-                  <TextField
-                    fullWidth
-                    label={field.label}
-                    value={value || ""}
-                    onChange={onChange}
-                    error={!!errors[field.name]}
-                    helperText={errors[field.name]?.message as string}
-                    margin="normal"
-                    type={field.type === "number" ? "number" : "text"}
-                    multiline={field.type === "multiline"}
-                    rows={field.type === "multiline" ? 3 : 1}
-                  />
+                  <div>
+                    <Label htmlFor={field.name} className="mb-1">
+                      {field.label}
+                    </Label>
+                    {field.type === "multiline" ? (
+                      <textarea
+                        id={field.name}
+                        value={value || ""}
+                        onChange={onChange}
+                        placeholder={field.label}
+                        className="resize-y h-24 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                      />
+                    ) : (
+                      <Input
+                        id={field.name}
+                        type={field.type === "number" ? "number" : "text"}
+                        value={value || ""}
+                        onChange={onChange}
+                        placeholder={field.label}
+                      />
+                    )}
+                    {errors[field.name] && (
+                      <p className="text-sm text-red-600 mt-1">
+                        {errors[field.name]?.message as string}
+                      </p>
+                    )}
+                  </div>
                 );
               }}
             />
           ))}
-        </Box>
+
+          <DialogFooter className="pt-6 flex justify-end space-x-2">
+            <Button variant="outline" onClick={onClose} type="button">
+              Cancel
+            </Button>
+            <Button type="submit">{submitLabel}</Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
-        <Button variant="contained" onClick={handleSubmit(onSubmit)}>
-          {submitLabel}
-        </Button>
-      </DialogActions>
     </Dialog>
   );
 }
