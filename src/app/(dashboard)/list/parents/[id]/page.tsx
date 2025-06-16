@@ -18,60 +18,18 @@ import {
 import Link from "next/link";
 import FormModal from "@/components/FormModal";
 import ParentForm from "@/components/forms/ParentForm";
-
-interface Parent {
-  id: number;
-  username: string;
-  email: string;
-  firstName: string;
-  lastName: string;
-  phone: string;
-  address: string;
-  bloodType: string;
-  birthday: string;
-  sex: string;
-  occupation: string;
-  students: {
-    id: number;
-    name: string;
-    grade: number;
-    class: string;
-  }[];
-}
+import { parentsData, Parent } from "@/lib/data";
 
 export default function ParentProfilePage() {
   const params = useParams();
+  const parentId = Number(params.id);
+  const parent = parentsData.find(p => p.id === parentId);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
-  // Mock data - replace with actual API call
-  const parent: Parent = {
-    id: 1,
-    username: "parent123",
-    email: "parent@example.com",
-    firstName: "John",
-    lastName: "Doe",
-    phone: "+1234567890",
-    address: "123 Parent Street, City",
-    bloodType: "O+",
-    birthday: "1980-01-01",
-    sex: "male",
-    occupation: "Engineer",
-    students: [
-      {
-        id: 1,
-        name: "Jane Doe",
-        grade: 10,
-        class: "A",
-      },
-      {
-        id: 2,
-        name: "John Doe Jr.",
-        grade: 8,
-        class: "B",
-      },
-    ],
-  };
+  if (!parent) {
+    return <div className="p-8 text-center text-gray-500">Parent not found.</div>;
+  }
 
   const handleDelete = async () => {
     try {
@@ -96,9 +54,9 @@ export default function ParentProfilePage() {
           </Link>
           <div>
             <h1 className="text-2xl font-semibold text-gray-900">
-              {parent.firstName} {parent.lastName}
+              {parent.firstName || ""} {parent.lastName || ""} {(!parent.firstName && !parent.lastName) ? parent.name : ""}
             </h1>
-            <p className="text-sm text-gray-500">Parent ID: {parent.username}</p>
+            <p className="text-sm text-gray-500">Parent ID: {parent.username || parent.id}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -172,7 +130,7 @@ export default function ParentProfilePage() {
               </div>
               <div>
                 <p className="text-sm text-gray-500">Birthday</p>
-                <p className="text-gray-900 flex items-center gap-1"><Cake className="w-4 h-4 text-yellow-500" />{new Date(parent.birthday).toLocaleDateString()}</p>
+                <p className="text-gray-900 flex items-center gap-1"><Cake className="w-4 h-4 text-yellow-500" />{parent.birthday ? new Date(parent.birthday).toLocaleDateString() : "N/A"}</p>
               </div>
               <div>
                 <p className="text-sm text-gray-500">Occupation</p>
@@ -226,9 +184,11 @@ export default function ParentProfilePage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="font-medium text-gray-900">{student.name}</p>
-                    <p className="text-sm text-gray-500">
-                      Grade {student.grade} - Section {student.class}
-                    </p>
+                    {(student.grade || student.class) && (
+                      <p className="text-sm text-gray-500">
+                        {student.grade ? `Grade ${student.grade}` : ""}{student.grade && student.class ? " - " : ""}{student.class ? `Section ${student.class}` : ""}
+                      </p>
+                    )}
                   </div>
                 </div>
               </Link>

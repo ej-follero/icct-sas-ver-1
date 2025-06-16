@@ -30,7 +30,7 @@ interface MockStats {
 
 interface RecentActivity {
   id: number;
-  type: 'class_start' | 'late_arrival' | 'rfid_register';
+  type: string;
   title: string;
   details: string;
   status: 'success' | 'warning' | 'info';
@@ -111,37 +111,33 @@ const quickActions: QuickAction[] = [
   }
 ];
 
-const StatCard: React.FC<StatCardProps> = ({ title, value, change, icon, color }) => (
-  <motion.div
-    initial={{ opacity: 0, y: 20 }}
-    animate={{ opacity: 1, y: 0 }}
-    transition={{ duration: 0.3 }}
-  >
-    <Card className="hover:shadow-lg transition-all duration-300 border-none bg-white/50 backdrop-blur-sm">
-      <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <CardTitle className="text-sm font-medium text-gray-600">{title}</CardTitle>
-        <div className={`p-2 rounded-full ${color}`}>
+const StatCard = ({ title, value, change, icon, color }: StatCardProps) => (
+  <Card className={`${color} border border-blue-100`}>
+    <CardContent className="p-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-medium text-gray-600">{title}</p>
+          <h3 className="text-2xl font-bold text-blue-800 mt-1">{value}</h3>
+          <div className="flex items-center mt-2">
+            {change > 0 ? (
+              <ArrowUpRight className="w-4 h-4 text-green-500" />
+            ) : (
+              <ArrowDownRight className="w-4 h-4 text-red-500" />
+            )}
+            <span className={`text-sm font-medium ${change > 0 ? 'text-green-500' : 'text-red-500'}`}>
+              {Math.abs(change)}%
+            </span>
+          </div>
+        </div>
+        <div className="p-3 bg-white rounded-full shadow-sm">
           {icon}
         </div>
-      </CardHeader>
-      <CardContent>
-        <div className="text-2xl font-bold">{value}</div>
-        <div className="flex items-center space-x-2 mt-1">
-          {change > 0 ? (
-            <ArrowUpRight className="h-4 w-4 text-green-500" />
-          ) : (
-            <ArrowDownRight className="h-4 w-4 text-red-500" />
-          )}
-          <p className="text-xs text-gray-500">
-            {Math.abs(change)}% from last month
-          </p>
-        </div>
-      </CardContent>
-    </Card>
-  </motion.div>
+      </div>
+    </CardContent>
+  </Card>
 );
 
-export default function OverviewPage() {
+export default function DashboardPage() {
   const [hoveredAction, setHoveredAction] = useState<number | null>(null);
   const [currentTime, setCurrentTime] = useState<string>('');
   const [search, setSearch] = useState('');
@@ -165,7 +161,7 @@ export default function OverviewPage() {
       {/* Sticky glassy header */}
       <div className="sticky top-0 z-20 bg-white/80 backdrop-blur border-b border-blue-100 shadow flex items-center justify-between px-6 py-3">
         <div>
-          <h1 className="text-2xl md:text-3xl font-extrabold text-blue-800 tracking-tight">Dashboard Overview</h1>
+          <h1 className="text-2xl md:text-3xl font-extrabold text-blue-800 tracking-tight">Dashboard</h1>
           <p className="text-xs md:text-sm text-gray-500 mt-1">Welcome back! Here's what's happening today.</p>
         </div>
         <div className="flex items-center gap-3">

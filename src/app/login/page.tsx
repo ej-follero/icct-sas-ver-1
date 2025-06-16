@@ -40,16 +40,47 @@ const LoginPage = () => {
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError("");
+    
     if (formData.password.length < MIN_PASSWORD_LENGTH) {
       setError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters.`);
       return;
     }
+
     setIsLoading(true);
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      router.push("/dashboard");
-    } catch {
-      setError("Invalid email or password");
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Login failed');
+      }
+
+      // Redirect based on user role
+      switch (data.user.role) {
+        case 'ADMIN':
+          router.push('/dashboard');
+          break;
+        case 'TEACHER':
+          router.push('/dashboard');
+          break;
+        case 'STUDENT':
+          router.push('/dashboard');
+          break;
+        case 'GUARDIAN':
+          router.push('/dashboard');
+          break;
+        default:
+          router.push('/dashboard');
+      }
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'An error occurred during login');
     } finally {
       setIsLoading(false);
     }

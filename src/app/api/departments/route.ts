@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Status } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
@@ -43,13 +43,13 @@ export async function GET() {
       description: dept.departmentDescription,
       headOfDepartment: dept.Instructor[0] ? `${dept.Instructor[0].firstName} ${dept.Instructor[0].lastName}` : 'Not Assigned',
       totalInstructors: dept._count.Instructor,
-      status: dept.departmentStatus ? 'active' : 'inactive',
+      status: dept.departmentStatus === Status.ACTIVE ? 'active' : 'inactive',
       courseOfferings: dept.CourseOffering.map(course => ({
         id: course.courseId.toString(),
         name: course.courseName,
         code: course.courseCode,
-        description: course.courseDescription,
-        status: course.courseStatus ? 'active' : 'inactive',
+        description: course.description,
+        status: course.courseStatus === 'ACTIVE' ? 'active' : 'inactive',
         totalStudents: course._count.Student,
         totalSections: course._count.Section,
       })),
@@ -78,7 +78,7 @@ export async function POST(request: Request) {
         departmentName: name,
         departmentCode: code,
         departmentDescription: description,
-        departmentStatus: status === 'active', // Convert string to boolean
+        departmentStatus: status === 'active' ? Status.ACTIVE : Status.INACTIVE,
       },
     });
 
@@ -88,7 +88,7 @@ export async function POST(request: Request) {
       name: newDepartment.departmentName,
       code: newDepartment.departmentCode,
       description: newDepartment.departmentDescription,
-      status: newDepartment.departmentStatus ? 'active' : 'inactive',
+      status: newDepartment.departmentStatus === Status.ACTIVE ? 'active' : 'inactive',
       totalInstructors: 0,
     };
 

@@ -44,7 +44,7 @@ const menuConfig: Record<Role, MenuSection[]> = {
     {
       title: "DASHBOARD",
       items: [
-        { icon: <LayoutDashboard className="w-5 h-5" />, label: "Overview", href: "/overview" },
+        { icon: <LayoutDashboard className="w-5 h-5" />, label: "Dashboard", href: "/dashboard" },
       ],
     },
     {
@@ -70,7 +70,7 @@ const menuConfig: Record<Role, MenuSection[]> = {
       title: "USER MANAGEMENT",
       items: [
         { icon: <User className="w-5 h-5" />, label: "Students", href: "/list/students" },
-        { icon: <User className="w-5 h-5" />, label: "Instructors", href: "/list/instructorsn" },
+        { icon: <User className="w-5 h-5" />, label: "Instructors", href: "/list/instructors" },
         { icon: <User className="w-5 h-5" />, label: "Parents", href: "/list/parents" },
       ],
     },
@@ -79,7 +79,6 @@ const menuConfig: Record<Role, MenuSection[]> = {
       items: [
         { icon: <ScanLine className="w-5 h-5" />, label: "RFID Readers", href: "/list/rfid/readers" },
         { icon: <ScanLine className="w-5 h-5" />, label: "RFID Tags", href: "/list/rfid/tags" },
-        { icon: <ScanLine className="w-5 h-5" />, label: "Tag Assignments", href: "/list/rfid/assignments" },
         { icon: <ScanLine className="w-5 h-5" />, label: "Reader Logs", href: "/list/rfid/logs" },
       ],
     },

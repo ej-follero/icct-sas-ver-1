@@ -2,7 +2,7 @@
 
 import FormModal from "@/components/FormModal";
 import Table from "@/components/Table";
-import { parentsData, role } from "@/lib/data";
+import { parentsData, role, Parent } from "@/lib/data";
 import Image from "next/image";
 import Link from "next/link";
 import { useState, useMemo } from "react";
@@ -18,15 +18,6 @@ import { Eye, Filter, SortAsc, Plus, Trash2, Pencil, Mail, Phone, MapPin, School
 import ParentForm from "@/components/forms/ParentForm";
 import { z } from 'zod';
 
-type Parent = {
-  id: number;
-  name: string;
-  email?: string;
-  students: string[];
-  phone: string;
-  address: string;
-};
-
 type SortField = 'name' | 'students' | 'phone' | 'address';
 type SortOrder = 'asc' | 'desc';
 
@@ -34,27 +25,27 @@ const columns = [
   {
     header: "Parent Info",
     accessor: "info",
-    className: "w-[300px]",
+    className: "w-[300px] text-center",
   },
   {
     header: "Students",
     accessor: "students",
-    className: "hidden md:table-cell w-[250px]",
+    className: "hidden md:table-cell w-[250px] text-center",
   },
   {
     header: "Contact",
     accessor: "phone",
-    className: "hidden lg:table-cell w-[150px]",
+    className: "hidden lg:table-cell w-[150px] text-center",
   },
   {
     header: "Location",
     accessor: "address",
-    className: "hidden lg:table-cell w-[200px]",
+    className: "hidden lg:table-cell w-[200px] text-center",
   },
   {
     header: "Actions",
     accessor: "action",
-    className: "w-[120px]",
+    className: "w-[120px] text-center",
   },
 ];
 
@@ -84,7 +75,7 @@ const ParentListPage = () => {
   const uniqueStudents = useMemo(() => {
     const students = new Set<string>();
     parentsData.forEach(parent => {
-      parent.students.forEach(student => students.add(student));
+      parent.students.forEach(student => students.add(student.name));
     });
     return Array.from(students);
   }, []);
@@ -99,16 +90,16 @@ const ParentListPage = () => {
       result = result.filter(parent => 
         parent.name.toLowerCase().includes(query) ||
         parent.email?.toLowerCase().includes(query) ||
-        parent.phone.includes(query) ||
-        parent.address.toLowerCase().includes(query) ||
-        parent.students.some(student => student.toLowerCase().includes(query))
+        parent.phone?.includes(query) ||
+        parent.address?.toLowerCase().includes(query) ||
+        parent.students.some(student => student.name.toLowerCase().includes(query))
       );
     }
 
     // Apply student filters
     if (filters.students.length > 0) {
       result = result.filter(parent =>
-        filters.students.some(student => parent.students.includes(student))
+        filters.students.some(studentName => parent.students.some(s => s.name === studentName))
       );
     }
 
@@ -120,13 +111,13 @@ const ParentListPage = () => {
           comparison = a.name.localeCompare(b.name);
           break;
         case 'students':
-          comparison = a.students.join(',').localeCompare(b.students.join(','));
+          comparison = a.students.map(s => s.name).join(',').localeCompare(b.students.map(s => s.name).join(','));
           break;
         case 'phone':
-          comparison = a.phone.localeCompare(b.phone);
+          comparison = (a.phone || '').localeCompare(b.phone || '');
           break;
         case 'address':
-          comparison = a.address.localeCompare(b.address);
+          comparison = (a.address || '').localeCompare(b.address || '');
           break;
       }
       return sortOrder === 'asc' ? comparison : -comparison;
@@ -186,18 +177,15 @@ const ParentListPage = () => {
   ];
 
   const renderRow = (item: Parent) => (
-    <tr
-      key={item.id}
-      className="border-b border-gray-100 hover:bg-gray-50/50 transition-colors duration-200 group"
-    >
-      <td className="p-4">
-        <div className="flex items-center gap-4">
+    <>
+      <td className="p-4 text-center">
+        <div className="flex items-center gap-4 justify-center">
           <div className="relative w-12 h-12 rounded-xl overflow-hidden bg-gray-50 ring-1 ring-gray-100 flex-shrink-0 group-hover:ring-2 group-hover:ring-blue-100 transition-all duration-200">
             <div className="w-full h-full flex items-center justify-center">
               <User className="text-gray-300 w-7 h-7" />
             </div>
           </div>
-          <div className="flex flex-col min-w-0">
+          <div className="flex flex-col min-w-0 text-left">
             <h3 className="font-medium text-gray-900 truncate group-hover:text-blue-600 transition-colors duration-200">{item.name}</h3>
             <div className="flex items-center gap-1.5 text-xs text-gray-500">
               <Mail className="w-3.5 h-3.5 text-gray-400" />
@@ -206,27 +194,27 @@ const ParentListPage = () => {
           </div>
         </div>
       </td>
-      <td className="hidden md:table-cell p-4">
+      <td className="hidden md:table-cell p-4 text-center">
         <div className="flex flex-wrap gap-1.5 justify-center">
           {item.students.map((student, index) => (
             <Badge key={index} variant="info" className="flex items-center gap-1">
               <School className="w-3.5 h-3.5 mr-1 text-blue-700" />
-              {student}
+              {student.name}
             </Badge>
           ))}
         </div>
       </td>
-      <td className="hidden lg:table-cell p-4">
+      <td className="hidden lg:table-cell p-4 text-center">
         <span className="text-sm text-gray-600 bg-gray-50/50 px-3 py-1.5 rounded-lg block text-center">
           {item.phone}
         </span>
       </td>
-      <td className="hidden lg:table-cell p-4">
+      <td className="hidden lg:table-cell p-4 text-center">
         <span className="text-sm text-gray-600 bg-gray-50/50 px-3 py-1.5 rounded-lg block text-center truncate max-w-[180px]">
           {item.address}
         </span>
       </td>
-      <td className="p-4">
+      <td className="p-4 text-center">
         <div className="flex items-center justify-center gap-1.5">
           <Link href={`/list/parents/${item.id}`}>
             <Button variant="ghost" size="icon">
@@ -241,7 +229,7 @@ const ParentListPage = () => {
           </Button>
         </div>
       </td>
-    </tr>
+    </>
   );
 
   return (

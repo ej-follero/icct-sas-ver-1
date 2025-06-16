@@ -325,43 +325,82 @@ export const studentsData: Student[] = [
   },
 ];
 
-export const parentsData = [
+export interface Parent {
+  id: number;
+  name: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  username?: string;
+  firstName?: string;
+  lastName?: string;
+  bloodType?: string;
+  birthday?: string;
+  sex?: string;
+  occupation?: string;
+  students: {
+    id: number;
+    name: string;
+    grade?: number;
+    class?: string;
+  }[];
+}
+
+export const parentsData: Parent[] = [
   {
     id: 1,
     name: "John Doe",
-    students: ["Sarah Brewer"],
+    username: "parent123",
+    firstName: "John",
+    lastName: "Doe",
     email: "john@doe.com",
     phone: "1234567890",
     address: "123 Main St, Anytown, USA",
+    bloodType: "O+",
+    birthday: "1980-01-01",
+    sex: "male",
+    occupation: "Engineer",
+    students: [
+      { id: 1, name: "Sarah Brewer", grade: 10, class: "A" },
+    ],
   },
   {
     id: 2,
     name: "Jane Doe",
-    students: ["Cecilia Bradley"],
     email: "jane@doe.com",
+    students: [
+      { id: 2, name: "Cecilia Bradley", grade: 9, class: "B" },
+    ],
     phone: "1234567890",
     address: "123 Main St, Anytown, USA",
   },
   {
     id: 3,
     name: "Mike Geller",
-    students: ["Fanny Caldwell"],
     email: "mike@geller.com",
+    students: [
+      { id: 3, name: "Fanny Caldwell", grade: 8, class: "C" },
+    ],
     phone: "1234567890",
     address: "123 Main St, Anytown, USA",
   },
   {
     id: 4,
     name: "Jay French",
-    students: ["Mollie Fitzgerald", "Ian Bryant"],
     email: "mike@geller.com",
+    students: [
+      { id: 4, name: "Mollie Fitzgerald", grade: 7, class: "A" },
+      { id: 5, name: "Ian Bryant", grade: 7, class: "B" },
+    ],
     phone: "1234567890",
     address: "123 Main St, Anytown, USA",
   },
   {
     id: 5,
     name: "Jane Smith",
-    students: ["Mable Harvey"],
+    students: [
+      { id: 6, name: "Mable Harvey", grade: 6, class: "A" },
+    ],
     email: "mike@geller.com",
     phone: "1234567890",
     address: "123 Main St, Anytown, USA",
@@ -369,7 +408,9 @@ export const parentsData = [
   {
     id: 6,
     name: "Anna Santiago",
-    students: ["Joel Lambert"],
+    students: [
+      { id: 7, name: "Joel Lambert", grade: 5, class: "A" },
+    ],
     email: "mike@geller.com",
     phone: "1234567890",
     address: "123 Main St, Anytown, USA",
@@ -377,7 +418,10 @@ export const parentsData = [
   {
     id: 7,
     name: "Allen Black",
-    students: ["Carrie Tucker", "Lilly Underwood"],
+    students: [
+      { id: 8, name: "Carrie Tucker", grade: 4, class: "A" },
+      { id: 9, name: "Lilly Underwood", grade: 4, class: "B" },
+    ],
     email: "mike@geller.com",
     phone: "1234567890",
     address: "123 Main St, Anytown, USA",
@@ -385,7 +429,9 @@ export const parentsData = [
   {
     id: 8,
     name: "Ophelia Castro",
-    students: ["Alexander Blair"],
+    students: [
+      { id: 10, name: "Alexander Blair", grade: 3, class: "A" },
+    ],
     email: "mike@geller.com",
     phone: "1234567890",
     address: "123 Main St, Anytown, USA",
@@ -393,7 +439,10 @@ export const parentsData = [
   {
     id: 9,
     name: "Derek Briggs",
-    students: ["Susan Webster", "Maude Stone"],
+    students: [
+      { id: 11, name: "Susan Webster", grade: 2, class: "A" },
+      { id: 12, name: "Maude Stone", grade: 2, class: "B" },
+    ],
     email: "mike@geller.com",
     phone: "1234567890",
     address: "123 Main St, Anytown, USA",
@@ -401,7 +450,9 @@ export const parentsData = [
   {
     id: 10,
     name: "John Glover",
-    students: ["Stella Scott"],
+    students: [
+      { id: 13, name: "Stella Scott", grade: 1, class: "A" },
+    ],
     email: "mike@geller.com",
     phone: "1234567890",
     address: "123 Main St, Anytown, USA",

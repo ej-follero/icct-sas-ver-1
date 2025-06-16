@@ -105,13 +105,13 @@ const SearchBar = ({
     <div className="flex flex-col space-y-4">
       <div className="flex items-center space-x-4">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 h-5 w-5" />
           <input
             type="text"
             placeholder="Search by name or ID..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full pl-10 pr-4 py-2 border rounded-md focus:outline-none focus:ring-blue-500"
           />
         </div>
         <div className="flex items-center space-x-2">
@@ -119,18 +119,18 @@ const SearchBar = ({
             type="date"
             value={filters.dateRange.from}
             onChange={(e) => setFilters({ ...filters, dateRange: { ...filters.dateRange, from: e.target.value } })}
-            className="px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="px-3 py-2 border rounded-md focus:outline-none focus:ring-blue-500"
           />
           <span className="text-gray-500">to</span>
           <input
             type="date"
             value={filters.dateRange.to}
             onChange={(e) => setFilters({ ...filters, dateRange: { ...filters.dateRange, to: e.target.value } })}
-            className="px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="px-3 py-2 border rounded-md focus:outline-none focus:ring-blue-500"
           />
         </div>
         <DropdownMenu>
-          <DropdownMenuTrigger className="flex items-center space-x-2 px-4 py-2 border rounded-md hover:bg-gray-50">
+          <DropdownMenuTrigger className="flex items-center space-x-2 px-4 py-2 border rounded-md hover:bg-blue-50">
             <Filter className="h-5 w-5" />
             <span>Filters</span>
             <ChevronDown className="h-4 w-4" />
@@ -138,11 +138,11 @@ const SearchBar = ({
           <DropdownMenuContent className="w-56 p-4">
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Student</label>
+                <label className="block text-sm font-medium text-gray-900 mb-1">Student</label>
                 <select
                   value={filters.student}
                   onChange={(e) => setFilters({ ...filters, student: e.target.value })}
-                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-blue-500"
                 >
                   <option value="">All Students</option>
                   {students.map(student => (
@@ -152,11 +152,11 @@ const SearchBar = ({
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Course</label>
+                <label className="block text-sm font-medium text-gray-900 mb-1">Course</label>
                 <select
                   value={filters.course}
                   onChange={(e) => setFilters({ ...filters, course: e.target.value })}
-                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-blue-500"
                 >
                   <option value="">All Courses</option>
                   {courses.map(course => (
@@ -166,11 +166,11 @@ const SearchBar = ({
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Year Level</label>
+                <label className="block text-sm font-medium text-gray-900 mb-1">Year Level</label>
                 <select
                   value={filters.yearLevel}
                   onChange={(e) => setFilters({ ...filters, yearLevel: e.target.value })}
-                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-blue-500"
                 >
                   <option value="">All Year Levels</option>
                   {yearLevels.map(year => (
@@ -180,11 +180,11 @@ const SearchBar = ({
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Section</label>
+                <label className="block text-sm font-medium text-gray-900 mb-1">Section</label>
                 <select
                   value={filters.section}
                   onChange={(e) => setFilters({ ...filters, section: e.target.value })}
-                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-blue-500"
                 >
                   <option value="">All Sections</option>
                   {sections.map(section => (
@@ -194,11 +194,11 @@ const SearchBar = ({
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Subject</label>
+                <label className="block text-sm font-medium text-gray-900 mb-1">Subject</label>
                 <select
                   value={filters.subject}
                   onChange={(e) => setFilters({ ...filters, subject: e.target.value })}
-                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-blue-500"
                 >
                   <option value="">All Subjects</option>
                   {subjects.map(subject => (
@@ -208,11 +208,11 @@ const SearchBar = ({
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                <label className="block text-sm font-medium text-gray-900 mb-1">Status</label>
                 <select
                   value={filters.status}
                   onChange={(e) => setFilters({ ...filters, status: e.target.value })}
-                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-blue-500"
                 >
                   <option value="">All Status</option>
                   <option value="PRESENT">Present</option>
@@ -249,7 +249,7 @@ const InsightsSection = ({
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
             <CardTitle className="text-sm font-medium text-gray-500">Total Sessions</CardTitle>
-            <BookOpen className="h-4 w-4 text-gray-400" />
+            <BookOpen className="h-4 w-4 text-gray-500" />
           </div>
         </CardHeader>
         <CardContent>
@@ -262,7 +262,7 @@ const InsightsSection = ({
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
             <CardTitle className="text-sm font-medium text-gray-500">Present</CardTitle>
-            <Users className="h-4 w-4 text-green-500" />
+            <Users className="h-4 w-4 text-green-600" />
           </div>
         </CardHeader>
         <CardContent>
@@ -279,7 +279,7 @@ const InsightsSection = ({
           </div>
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold text-yellow-600">{totalLate}</div>
+          <div className="text-2xl font-bold text-yellow-500">{totalLate}</div>
           <p className="text-xs text-gray-500 mt-1">Late arrivals</p>
         </CardContent>
       </Card>
@@ -288,7 +288,7 @@ const InsightsSection = ({
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
             <CardTitle className="text-sm font-medium text-gray-500">Absent</CardTitle>
-            <AlertCircle className="h-4 w-4 text-red-500" />
+            <AlertCircle className="h-4 w-4 text-red-600" />
           </div>
         </CardHeader>
         <CardContent>
@@ -301,7 +301,7 @@ const InsightsSection = ({
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
             <CardTitle className="text-sm font-medium text-gray-500">Attendance Rate</CardTitle>
-            <TrendingUp className="h-4 w-4 text-blue-500" />
+            <TrendingUp className="h-4 w-4 text-blue-600" />
           </div>
         </CardHeader>
         <CardContent>
@@ -314,11 +314,11 @@ const InsightsSection = ({
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
             <CardTitle className="text-sm font-medium text-gray-500">Class Average</CardTitle>
-            <User className="h-4 w-4 text-purple-500" />
+            <User className="h-4 w-4 text-blue-800" />
           </div>
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold text-purple-600">{classAverage.toFixed(1)}%</div>
+          <div className="text-2xl font-bold text-blue-800">{classAverage.toFixed(1)}%</div>
           <p className="text-xs text-gray-500 mt-1">Class attendance rate</p>
         </CardContent>
       </Card>
@@ -406,21 +406,21 @@ const ExportButton = ({ records }: { records: AttendanceRecord[] }) => {
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger className="flex items-center space-x-2 px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600">
+      <DropdownMenuTrigger className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
         <Download className="h-5 w-5" />
         <span>Export</span>
         <ChevronDown className="h-4 w-4" />
       </DropdownMenuTrigger>
       <DropdownMenuContent className="bg-white border rounded-md shadow-lg">
-        <DropdownMenuItem onClick={exportToPDF} className="flex items-center space-x-2 bg-white hover:bg-gray-100 cursor-pointer">
+        <DropdownMenuItem onClick={exportToPDF} className="flex items-center space-x-2 bg-white hover:bg-blue-50 cursor-pointer">
           <FileText className="h-4 w-4" />
           <span>Export as PDF</span>
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={exportToExcel} className="flex items-center space-x-2 bg-white hover:bg-gray-100 cursor-pointer">
+        <DropdownMenuItem onClick={exportToExcel} className="flex items-center space-x-2 bg-white hover:bg-blue-50 cursor-pointer">
           <FileSpreadsheet className="h-4 w-4" />
           <span>Export as Excel</span>
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={exportToCSV} className="flex items-center space-x-2 bg-white hover:bg-gray-100 cursor-pointer">
+        <DropdownMenuItem onClick={exportToCSV} className="flex items-center space-x-2 bg-white hover:bg-blue-50 cursor-pointer">
           <File className="h-4 w-4" />
           <span>Export as CSV</span>
         </DropdownMenuItem>
@@ -446,7 +446,6 @@ const AttendanceTable = ({ records }: { records: AttendanceRecord[] }) => {
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
-        <h2 className="text-lg font-semibold">Attendance Records</h2>
         </div>
       <div className="border rounded-lg">
         <div className="overflow-x-auto">
@@ -608,7 +607,7 @@ export default function StudentAttendancePage() {
           <p className="text-gray-600">{error}</p>
           <button
             onClick={() => window.location.reload()}
-            className="mt-4 px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600"
+            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
           >
             Try Again
           </button>
@@ -620,7 +619,7 @@ export default function StudentAttendancePage() {
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold">Student Attendance</h1>
+        <h1 className="text-2xl font-bold text-blue-900">Student Attendance</h1>
         <div className="flex space-x-2">
           <ExportButton records={attendanceRecords} />
           <button className="flex items-center space-x-2 px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600">

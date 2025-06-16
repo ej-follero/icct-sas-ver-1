@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
-import { Plus, Filter, SortAsc, Eye, Pencil, Trash2, Download, Printer } from "lucide-react";
+import { Plus, Filter, SortAsc, Eye, Pencil, Trash2, Download, Printer, CheckSquare, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -28,6 +28,24 @@ type SortField = 'name' | 'code' | 'department' | 'units' | 'totalStudents' | 't
 type SortOrder = 'asc' | 'desc';
 const ITEMS_PER_PAGE = 10;
 
+const Checkbox = ({ checked, indeterminate, onCheckedChange, ...props }: { checked?: boolean, indeterminate?: boolean, onCheckedChange?: (checked: boolean) => void } & React.ButtonHTMLAttributes<HTMLButtonElement>) => (
+  <button
+    type="button"
+    aria-checked={checked}
+    onClick={e => { e.stopPropagation(); onCheckedChange?.(!checked); }}
+    className={`w-5 h-5 flex items-center justify-center border rounded transition-colors ${checked ? 'bg-blue-600 border-blue-600' : 'bg-white border-gray-300'} ${indeterminate ? 'bg-gray-200' : ''}`}
+    {...props}
+  >
+    {indeterminate ? (
+      <span className="w-3 h-0.5 bg-gray-500 rounded" />
+    ) : checked ? (
+      <CheckSquare className="w-4 h-4 text-white" />
+    ) : (
+      <Square className="w-4 h-4 text-gray-400" />
+    )}
+  </button>
+);
+
 export default function CourseListPage() {
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
@@ -41,6 +59,21 @@ export default function CourseListPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [courseToDelete, setCourseToDelete] = useState<Course | null>(null);
   const [columnStatusFilter, setColumnStatusFilter] = useState("all");
+  const [filterDialogOpen, setFilterDialogOpen] = useState(false);
+  const [sortDialogOpen, setSortDialogOpen] = useState(false);
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [exportFormat, setExportFormat] = useState<'pdf' | 'excel' | 'csv' | null>(null);
+  const exportableColumns = [
+    { key: 'name', label: 'Course Name' },
+    { key: 'code', label: 'Code' },
+    { key: 'department', label: 'Department' },
+    { key: 'units', label: 'Units' },
+    { key: 'totalInstructors', label: 'Instructors' },
+    { key: 'totalStudents', label: 'Students' },
+    { key: 'status', label: 'Status' },
+  ];
+  const [exportColumns, setExportColumns] = useState(exportableColumns.map(col => col.key));
+  const [selectedIds, setSelectedIds] = useState<(string | number)[]>([]);
 
   useEffect(() => {
     async function fetchCourses() {
@@ -91,8 +124,22 @@ export default function CourseListPage() {
     currentPage * ITEMS_PER_PAGE
   );
 
+  const isAllSelected = paginatedCourses.length > 0 && paginatedCourses.every(c => selectedIds.includes(c.id));
+  const isIndeterminate = selectedIds.length > 0 && !isAllSelected;
+  const handleSelectAll = () => {
+    if (isAllSelected) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(paginatedCourses.map(c => c.id));
+    }
+  };
+  const handleSelectRow = (id: string | number) => {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  };
+
   // Table columns
   const columns = [
+    { header: <Checkbox checked={isAllSelected} indeterminate={isIndeterminate} onCheckedChange={handleSelectAll} />, accessor: "select", className: "w-12 text-center" },
     { header: "Course Name", accessor: "name" },
     { header: "Code", accessor: "code" },
     { header: "Department", accessor: "department" },
@@ -106,29 +153,74 @@ export default function CourseListPage() {
   // Table row renderer
   const renderRow = (item: Course) => (
     <TableRow key={item.id}>
+      <TableCell className="text-center align-middle">
+        <Checkbox checked={selectedIds.includes(item.id)} onCheckedChange={() => handleSelectRow(item.id)} aria-label={`Select course ${item.name}`} />
+      </TableCell>
       <TableCell>{item.name}</TableCell>
       <TableCell>{item.code}</TableCell>
-                    <TableCell>{item.department}</TableCell>
-                    <TableCell>{item.units}</TableCell>
-                    <TableCell>{item.totalInstructors}</TableCell>
-                    <TableCell>{item.totalStudents}</TableCell>
-                    <TableCell>
-        <Badge variant={item.status === "active" ? "success" : "error"}>{item.status}</Badge>
-                    </TableCell>
+      <TableCell>{item.department}</TableCell>
+      <TableCell>{item.units}</TableCell>
+      <TableCell className="text-center">{item.totalInstructors}</TableCell>
+      <TableCell className="text-center">{item.totalStudents}</TableCell>
       <TableCell>
-        <div className="flex gap-2 justify-center">
-          <Button variant="ghost" size="icon" aria-label="View Course">
-            <Eye className="h-4 w-4 text-blue-600" />
-          </Button>
-          <Button variant="ghost" size="icon" aria-label="Edit Course" onClick={() => { setModalCourse(item); setModalOpen(true); }}>
-            <Pencil className="h-4 w-4 text-green-600" />
-          </Button>
-          <Button variant="ghost" size="icon" aria-label="Delete Course" onClick={() => { setCourseToDelete(item); setDeleteDialogOpen(true); }}>
-            <Trash2 className="h-4 w-4 text-red-600" />
-          </Button>
+        <Badge variant={item.status === "active" ? "success" : "destructive"}>{item.status.charAt(0).toUpperCase() + item.status.slice(1)}</Badge>
+      </TableCell>
+      <TableCell>
+        <div className="hidden 2xl:flex gap-2 justify-center">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" aria-label={`View Course ${item.name}`} className="hover:bg-blue-50">
+                  <Eye className="h-4 w-4 text-blue-600" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>View course details</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" aria-label={`Edit Course ${item.name}`} onClick={() => { setModalCourse(item); setModalOpen(true); }} className="hover:bg-green-50">
+                  <Pencil className="h-4 w-4 text-green-600" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Edit course</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" aria-label={`Delete Course ${item.name}`} onClick={() => { setCourseToDelete(item); setDeleteDialogOpen(true); }} className="hover:bg-red-50">
+                  <Trash2 className="h-4 w-4 text-red-600" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Delete course</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
-                    </TableCell>
-                  </TableRow>
+        <div className="2xl:hidden flex justify-center">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" aria-label="More actions">
+                <span className="sr-only">More</span>
+                <svg className="h-5 w-5 text-blue-700" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1.5"/><circle cx="19.5" cy="12" r="1.5"/><circle cx="4.5" cy="12" r="1.5"/></svg>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => {}}>
+                <Eye className="h-4 w-4 text-blue-600 mr-2" /> View
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => { setModalCourse(item); setModalOpen(true); }}>
+                <Pencil className="h-4 w-4 text-green-600 mr-2" /> Edit
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => { setCourseToDelete(item); setDeleteDialogOpen(true); }}>
+                <Trash2 className="h-4 w-4 text-red-600 mr-2" /> Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </TableCell>
+    </TableRow>
   );
 
   // Export to CSV handler
@@ -235,111 +327,146 @@ export default function CourseListPage() {
   return (
     <div className="bg-white/80 backdrop-blur-md p-6 rounded-xl shadow-xl border border-blue-100 flex-1 m-4 mt-0">
       {/* TOP */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-blue-900">All Courses</h1>
-          <p className="text-sm text-blue-700/80">Manage and view all course information</p>
+      <div className="print:hidden">
+        {/* Responsive header row for small screens */}
+        <div className="flex flex-col gap-4 mb-6 lg:hidden">
+          <div className="flex items-center justify-between w-full">
+            <div className="flex flex-col gap-1">
+              <h1 className="text-2xl font-bold text-blue-900">All Courses</h1>
+              <p className="text-sm text-blue-700/80">Manage and view all course information</p>
+            </div>
+            {/* Controls: filter, sort, export, print, add */}
+            <div className="flex flex-row gap-1 items-center">
+              <TooltipProvider delayDuration={0}>
+                {/* Filter Button */}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button variant="ghost" size="icon" className="rounded border-0 hover:bg-blue-50" aria-label="Filter" onClick={() => setFilterDialogOpen(true)}>
+                      <Filter className="h-4 w-4 text-blue-700/70" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="bg-blue-900 text-white">Filter</TooltipContent>
+                </Tooltip>
+                {/* Sort Button */}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button variant="ghost" size="icon" className="rounded border-0 hover:bg-blue-50" aria-label="Sort" onClick={() => setSortDialogOpen(true)}>
+                      <SortAsc className="h-4 w-4 text-blue-700" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="bg-blue-900 text-white">Sort</TooltipContent>
+                </Tooltip>
+                {/* Export Button */}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button variant="ghost" size="icon" className="rounded border-0 hover:bg-blue-50" aria-label="Export" onClick={() => setExportDialogOpen(true)}>
+                      <Download className="h-4 w-4 text-blue-700" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="bg-blue-900 text-white">Export</TooltipContent>
+                </Tooltip>
+                {/* Print Button */}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button variant="ghost" size="icon" aria-label="Print" onClick={handlePrint}>
+                      <Printer className="h-4 w-4 text-blue-700" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="bg-blue-900 text-white">Print</TooltipContent>
+                </Tooltip>
+                {/* Add Course Button (icon only) */}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button variant="default" size="icon" className="bg-blue-700 hover:bg-blue-800 text-white shadow ml-1" aria-label="Add Course" onClick={() => { setModalCourse(undefined); setModalOpen(true); }}>
+                      <Plus className="h-5 w-5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="bg-blue-900 text-white">Add new course</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
+          </div>
+          {/* Search bar for small screens */}
+          <TableSearch value={search} onChange={setSearch} placeholder="Search courses..." className="h-10 w-full px-3 rounded-full shadow-sm border border-blue-200 focus:border-blue-400 focus:ring-blue-400 mt-2" />
         </div>
-        <div className="flex flex-col md:flex-row items-center gap-4 w-full md:w-auto">
-          <TableSearch value={search} onChange={setSearch} placeholder="Search courses..." className="h-10 w-10 min-w-0 px-3 rounded-full" />
-          <div className="flex items-center gap-2 self-end">
-            {/* Filter Dropdown */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="icon" className="border-blue-200 hover:bg-blue-50" aria-label="Filter">
-                  <Filter className="h-4 w-4 text-blue-700" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-36 bg-white/90 border border-blue-100 shadow-lg rounded-xl mt-2">
-                <DropdownMenuItem onClick={() => setColumnStatusFilter('all')} className={columnStatusFilter === 'all' ? 'font-bold text-blue-700' : ''}>
-                  All Statuses
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setColumnStatusFilter('active')} className={columnStatusFilter === 'active' ? 'font-bold text-blue-700' : ''}>
-                  Active
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setColumnStatusFilter('inactive')} className={columnStatusFilter === 'inactive' ? 'font-bold text-blue-700' : ''}>
-                  Inactive
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            {/* Sort Dropdown */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="icon" className="border-blue-200 hover:bg-blue-50" aria-label="Sort">
-                  <SortAsc className="h-4 w-4 text-blue-700" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-36 bg-white/90 border border-blue-100 shadow-lg rounded-xl mt-2">
-                <DropdownMenuItem onClick={() => { setSortField('name'); setSortOrder(sortField === 'name' && sortOrder === 'asc' ? 'desc' : 'asc'); }} className={sortField === 'name' ? 'font-bold text-blue-700' : ''}>
-                  Name {sortField === 'name' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => { setSortField('code'); setSortOrder(sortField === 'code' && sortOrder === 'asc' ? 'desc' : 'asc'); }} className={sortField === 'code' ? 'font-bold text-blue-700' : ''}>
-                  Code {sortField === 'code' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => { setSortField('department'); setSortOrder(sortField === 'department' && sortOrder === 'asc' ? 'desc' : 'asc'); }} className={sortField === 'department' ? 'font-bold text-blue-700' : ''}>
-                  Department {sortField === 'department' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => { setSortField('units'); setSortOrder(sortField === 'units' && sortOrder === 'asc' ? 'desc' : 'asc'); }} className={sortField === 'units' ? 'font-bold text-blue-700' : ''}>
-                  Units {sortField === 'units' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => { setSortField('totalInstructors'); setSortOrder(sortField === 'totalInstructors' && sortOrder === 'asc' ? 'desc' : 'asc'); }} className={sortField === 'totalInstructors' ? 'font-bold text-blue-700' : ''}>
-                  Instructors {sortField === 'totalInstructors' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => { setSortField('totalStudents'); setSortOrder(sortField === 'totalStudents' && sortOrder === 'asc' ? 'desc' : 'asc'); }} className={sortField === 'totalStudents' ? 'font-bold text-blue-700' : ''}>
-                  Students {sortField === 'totalStudents' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            {/* Export Dropdown */}
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="outline" size="icon" className="border-blue-200 hover:bg-blue-50" aria-label="Export">
+        {/* Existing layout for large screens and up */}
+        <div className="hidden lg:block relative flex flex-col gap-4 mb-6">
+          <div className="flex flex-col gap-1">
+            <h1 className="text-2xl font-bold text-blue-900">All Courses</h1>
+            <p className="text-sm text-blue-700/80">Manage and view all course information</p>
+          </div>
+          {/* Controls: stacked below label on mobile, absolutely right-aligned on lg+ */}
+          <div className="flex flex-col gap-2 mt-2 w-full lg:absolute lg:right-0 lg:top-0 lg:flex-row lg:items-center lg:justify-end lg:w-auto">
+            <div className="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
+              <TableSearch value={search} onChange={setSearch} placeholder="Search courses..." className="h-10 w-full sm:w-64 px-3 rounded-full shadow-sm border border-blue-200 focus:border-blue-400 focus:ring-blue-400" />
+              <div className="flex flex-row gap-0 rounded-lg shadow-sm overflow-hidden">
+                <TooltipProvider delayDuration={0}>
+                  {/* Filter Button */}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button variant="ghost" size="icon" className="rounded-none border-0 hover:bg-blue-50 relative" aria-label="Filter" onClick={() => setFilterDialogOpen(true)}>
+                        <Filter className="h-4 w-4 text-blue-700/70" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" className="bg-blue-900 text-white">Filter</TooltipContent>
+                  </Tooltip>
+                  {/* Sort Button */}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button variant="ghost" size="icon" className="rounded-none border-0 hover:bg-blue-50" aria-label="Sort" onClick={() => setSortDialogOpen(true)}>
+                        <SortAsc className="h-4 w-4 text-blue-700" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" className="bg-blue-900 text-white">Sort</TooltipContent>
+                  </Tooltip>
+                  {/* Export Button */}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button variant="ghost" size="icon" className="rounded-none border-0 hover:bg-blue-50" aria-label="Export" onClick={() => setExportDialogOpen(true)}>
                         <Download className="h-4 w-4 text-blue-700" />
                       </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-36 bg-white/90 border border-blue-100 shadow-lg rounded-xl mt-2">
-                      <DropdownMenuItem onClick={handleExportPDF}>
-                        Export as PDF
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={handleExportExcel}>
-                        Export as Excel
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={handleExport}>
-                        Export as CSV
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </TooltipTrigger>
-                <TooltipContent>Export</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            {/* Print Button */}
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" className="bg-blue-900 text-white">Export</TooltipContent>
+                  </Tooltip>
+                  {/* Print Button */}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button variant="ghost" size="icon" aria-label="Print" onClick={handlePrint}>
+                        <Printer className="h-4 w-4 text-blue-700" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" className="bg-blue-900 text-white">Print</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
+            </div>
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="outline" size="icon" className="border-blue-200 hover:bg-blue-50" aria-label="Print" onClick={handlePrint}>
-                    <Printer className="h-4 w-4 text-blue-700" />
+                  <Button variant="default" className="bg-blue-700 hover:bg-blue-800 text-white shadow flex items-center gap-2 px-3 py-1 text-sm font-semibold w-full lg:w-auto" aria-label="Add Course" onClick={() => { setModalCourse(undefined); setModalOpen(true); }}>
+                    <Plus className="h-2 w-2" />
+                    Add Course
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent>Print</TooltipContent>
+                <TooltipContent side="bottom" className="bg-blue-900 text-white">Add new course</TooltipContent>
               </Tooltip>
             </TooltipProvider>
-            <Button variant="default" size="icon" className="bg-blue-700 hover:bg-blue-800 text-white shadow" aria-label="Add Course" onClick={() => { setModalCourse(undefined); setModalOpen(true); }}>
-              <Plus className="h-4 w-4" />
-            </Button>
           </div>
         </div>
       </div>
       {/* LIST */}
-      <div className="overflow-x-auto rounded-xl border border-blue-100 bg-white/70 shadow-md">
+      {/* Table layout for xl+ only */}
+      <div className="hidden xl:block overflow-x-auto rounded-xl border border-blue-100 bg-white/70 shadow-md">
         <Table>
           <TableHeader className="bg-blue-50">
             <TableRow>
               {columns.map((col, i) => (
-                <TableHead key={i} className="text-blue-900 font-semibold text-sm py-3 px-2 border-b border-blue-100">{col.header}</TableHead>
+                <TableHead
+                  key={i}
+                  className={`text-blue-900 font-semibold text-sm border-b border-blue-100${col.accessor === "actions" ? " !p-2 text-center" : ""}`}
+                >
+                  {col.header}
+                </TableHead>
               ))}
             </TableRow>
           </TableHeader>
@@ -354,8 +481,86 @@ export default function CourseListPage() {
           </TableBody>
         </Table>
       </div>
+      {/* Card layout for small screens */}
+      <div className="block xl:hidden w-full space-y-4">
+        {paginatedCourses.length === 0 ? (
+          <div className="text-center text-gray-500 py-8">No courses found.</div>
+        ) : (
+          paginatedCourses.map((item) => (
+            <div
+              key={item.id}
+              className="relative bg-white border border-blue-200 rounded-2xl shadow-lg p-4 flex flex-col gap-3 transition-shadow duration-150 active:shadow-xl focus-within:ring-2 focus-within:ring-blue-400"
+              tabIndex={0}
+              role="button"
+              aria-label={`View details for course ${item.name}`}
+            >
+              {/* Status */}
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-mono text-blue-500 bg-blue-50 rounded px-2 py-0.5">{item.code}</span>
+                <Badge variant={item.status === "active" ? "success" : "destructive"} className="text-xs px-2 py-1 rounded-full">
+                  {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+                </Badge>
+              </div>
+              {/* Course Name */}
+              <div className="text-lg font-bold text-blue-900">{item.name}</div>
+              {/* Info Section */}
+              <div className="flex flex-wrap gap-3 text-sm text-blue-800">
+                <div className="flex items-center gap-1">
+                  <span className="font-semibold">Department:</span>
+                  <span>{item.department}</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="font-semibold">Units:</span>
+                  <span>{item.units}</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="font-semibold">Instructors:</span>
+                  <span>{item.totalInstructors}</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="font-semibold">Students:</span>
+                  <span>{item.totalStudents}</span>
+                </div>
+              </div>
+              {/* Actions */}
+              <div className="flex justify-end gap-2 mt-2">
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button variant="outline" size="icon" aria-label={`View Course ${item.name}`} className="hover:bg-blue-50">
+                        <Eye className="h-4 w-4 text-blue-600" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>View course details</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button variant="outline" size="icon" aria-label={`Edit Course ${item.name}`} onClick={() => { setModalCourse(item); setModalOpen(true); }} className="hover:bg-green-50">
+                        <Pencil className="h-4 w-4 text-green-600" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Edit course</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button variant="outline" size="icon" aria-label={`Delete Course ${item.name}`} onClick={() => { setCourseToDelete(item); setDeleteDialogOpen(true); }} className="hover:bg-red-50">
+                        <Trash2 className="h-4 w-4 text-red-600" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Delete course</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
       {/* PAGINATION */}
-      <div className="mt-6">
+      <div className="mt-6 flex justify-center">
         <Pagination
           currentPage={currentPage}
           totalPages={totalPages}
@@ -385,6 +590,245 @@ export default function CourseListPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setModalOpen(false)}>Cancel</Button>
             <Button>{modalCourse ? "Update" : "Add"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* FILTER DIALOG */}
+      <Dialog open={filterDialogOpen} onOpenChange={setFilterDialogOpen}>
+        <DialogContent className="sm:max-w-[500px] bg-white/90 border border-blue-100 shadow-lg rounded-xl py-8 px-6">
+          <DialogHeader>
+            <DialogTitle className="text-blue-900 text-xl flex items-center gap-2 mb-6">
+              Filter Courses
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-8">
+            {/* Status Section */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-md font-semibold text-blue-900">Status</h3>
+                </div>
+                <Badge variant="outline" className="text-xs font-normal bg-blue-50 text-blue-700 border-blue-200">
+                  {columnStatusFilter === 'all' ? 'All' : columnStatusFilter.charAt(0).toUpperCase() + columnStatusFilter.slice(1)}
+                </Badge>
+              </div>
+              <div className="h-px bg-blue-100 w-full mb-8"></div>
+              <div className="grid grid-cols-3 gap-2 mt-6">
+                <Button
+                  variant={columnStatusFilter === 'all' ? "default" : "outline"}
+                  size="sm"
+                  className={`w-full ${columnStatusFilter === 'all' ? 'bg-blue-600 hover:bg-blue-700' : 'hover:bg-blue-50'}`}
+                  onClick={() => setColumnStatusFilter('all')}
+                >
+                  All
+                </Button>
+                <Button
+                  variant={columnStatusFilter === 'active' ? "default" : "outline"}
+                  size="sm"
+                  className={`w-full ${columnStatusFilter === 'active' ? 'bg-blue-600 hover:bg-blue-700' : 'hover:bg-blue-50'}`}
+                  onClick={() => setColumnStatusFilter('active')}
+                >
+                  Active
+                </Button>
+                <Button
+                  variant={columnStatusFilter === 'inactive' ? "default" : "outline"}
+                  size="sm"
+                  className={`w-full ${columnStatusFilter === 'inactive' ? 'bg-blue-600 hover:bg-blue-700' : 'hover:bg-blue-50'}`}
+                  onClick={() => setColumnStatusFilter('inactive')}
+                >
+                  Inactive
+                </Button>
+              </div>
+            </div>
+          </div>
+          <DialogFooter className="gap-4 mt-10">
+            <Button
+              variant="outline"
+              onClick={() => setColumnStatusFilter('all')}
+              className="w-32 border border-blue-300 text-blue-500"
+            >
+              Reset
+            </Button>
+            <Button 
+              onClick={() => setFilterDialogOpen(false)}
+              className="w-32 bg-blue-600 hover:bg-blue-700 text-white">
+              Apply Filters
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* SORT DIALOG */}
+      <Dialog open={sortDialogOpen} onOpenChange={setSortDialogOpen}>
+        <DialogContent className="sm:max-w-[500px] bg-white/90 border border-blue-100 shadow-lg rounded-xl py-8 px-6">
+          <DialogHeader>
+            <DialogTitle className="text-blue-900 text-xl flex items-center gap-2 mb-6">
+              Sort Courses
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-8">
+            {/* Sort By Section */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-md font-semibold text-blue-900">Sort By</h3>
+                </div>
+              </div>
+              <div className="h-px bg-blue-100 w-full mb-8"></div>
+              <div className="grid grid-cols-2 gap-4 mt-6">
+                {['name','code','department','units','totalInstructors','totalStudents','status'].map(field => (
+                  <Button
+                    key={field}
+                    variant={sortField === field ? "default" : "outline"}
+                    size="sm"
+                    className={`w-full ${sortField === field ? 'bg-blue-600 hover:bg-blue-700' : 'hover:bg-blue-50'}`}
+                    onClick={() => setSortField(field as SortField)}
+                  >
+                    {exportableColumns.find(c => c.key === field)?.label || field}
+                  </Button>
+                ))}
+              </div>
+            </div>
+            {/* Sort Order Section */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-md font-semibold text-blue-900">Sort Order</h3>
+                </div>
+              </div>
+              <div className="h-px bg-blue-100 w-full mb-8"></div>
+              <div className="grid grid-cols-2 gap-4 mt-6">
+                <Button
+                  variant={sortOrder === 'asc' ? "default" : "outline"}
+                  size="sm"
+                  className={`w-full ${sortOrder === 'asc' ? 'bg-blue-600 hover:bg-blue-700' : 'hover:bg-blue-50'}`}
+                  onClick={() => setSortOrder('asc')}
+                >
+                  Ascending
+                </Button>
+                <Button
+                  variant={sortOrder === 'desc' ? "default" : "outline"}
+                  size="sm"
+                  className={`w-full ${sortOrder === 'desc' ? 'bg-blue-600 hover:bg-blue-700' : 'hover:bg-blue-50'}`}
+                  onClick={() => setSortOrder('desc')}
+                >
+                  Descending
+                </Button>
+              </div>
+            </div>
+          </div>
+          <DialogFooter className="gap-4 mt-10">
+            <Button
+              variant="outline"
+              onClick={() => { setSortField('name'); setSortOrder('asc'); }}
+              className="w-32 border border-blue-300 text-blue-500"
+            >
+              Reset
+            </Button>
+            <Button 
+              onClick={() => setSortDialogOpen(false)}
+              className="w-32 bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              Apply Sort
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* EXPORT DIALOG */}
+      <Dialog open={exportDialogOpen} onOpenChange={setExportDialogOpen}>
+        <DialogContent className="sm:max-w-[500px] bg-white/90 border border-blue-100 shadow-lg rounded-xl py-8 px-6">
+          <DialogHeader>
+            <DialogTitle className="text-blue-900 text-xl flex items-center gap-2 mb-6">
+              Export Courses
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-8">
+            {/* Export Format Section */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-md font-semibold text-blue-900">Export Format</h3>
+                </div>
+              </div>
+              <div className="h-px bg-blue-100 w-full mb-8"></div>
+              <div className="grid grid-cols-3 gap-4 mt-6">
+                <Button
+                  variant={exportFormat === 'pdf' ? "default" : "outline"}
+                  size="sm"
+                  className={`w-full flex flex-col items-center gap-1 py-3 ${exportFormat === 'pdf' ? 'bg-blue-600 hover:bg-blue-700' : 'hover:bg-blue-50'}`}
+                  onClick={() => setExportFormat('pdf')}
+                >
+                  PDF
+                </Button>
+                <Button
+                  variant={exportFormat === 'excel' ? "default" : "outline"}
+                  size="sm"
+                  className={`w-full flex flex-col items-center gap-1 py-3 ${exportFormat === 'excel' ? 'bg-blue-600 hover:bg-blue-700' : 'hover:bg-blue-50'}`}
+                  onClick={() => setExportFormat('excel')}
+                >
+                  Excel
+                </Button>
+                <Button
+                  variant={exportFormat === 'csv' ? "default" : "outline"}
+                  size="sm"
+                  className={`w-full flex flex-col items-center gap-1 py-3 ${exportFormat === 'csv' ? 'bg-blue-600 hover:bg-blue-700' : 'hover:bg-blue-50'}`}
+                  onClick={() => setExportFormat('csv')}
+                >
+                  CSV
+                </Button>
+              </div>
+            </div>
+            {/* Export Options Section */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-md font-semibold text-blue-900">Export Options</h3>
+                </div>
+              </div>
+              <div className="h-px bg-blue-100 w-full mb-8"></div>
+              <div className="space-y-6">
+                {exportableColumns.map((column) => (
+                  <div key={column.key} className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      checked={exportColumns.includes(column.key)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setExportColumns([...exportColumns, column.key]);
+                        } else {
+                          setExportColumns(exportColumns.filter((c) => c !== column.key));
+                        }
+                      }}
+                      className="border-blue-200"
+                    />
+                    <label className="text-sm text-blue-900 cursor-pointer">
+                      {column.label}
+                    </label>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+          <DialogFooter className="gap-4 mt-10">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setExportFormat(null);
+                setExportColumns(exportableColumns.map(col => col.key));
+              }}
+              className="w-32 border border-blue-300 text-blue-500"
+            >
+              Reset
+            </Button>
+            <Button 
+              onClick={() => {
+                // Implement export logic here, similar to handleExport/handleExportExcel/handleExportPDF
+                setExportDialogOpen(false);
+              }}
+              className="w-32 bg-blue-600 hover:bg-blue-700 text-white"
+              disabled={!exportFormat}
+            >
+              Export
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

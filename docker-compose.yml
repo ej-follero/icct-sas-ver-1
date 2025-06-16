@@ -4,8 +4,8 @@ services:
     image: postgres:latest
     container_name: icct-sas-db
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
       POSTGRES_DB: icct-sas
     ports:
       - "5433:5432"

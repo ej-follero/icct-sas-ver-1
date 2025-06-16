@@ -17,7 +17,7 @@ const TableSearch = ({
   className = "",
 }: TableSearchProps) => {
   return (
-    <div className={`flex items-center gap-2 rounded-full ring-1 ring-gray-300 px-3 py-1 w-full md:w-auto max-w-xs ${className}`}>
+    <div className={`flex items-center gap-2 rounded-full ring-1 ring-gray-300 px-3 py-1 w-full md:w-auto max-w-[800px] ${className}`}>
       <Search className="w-4 h-4 text-gray-400" aria-hidden="true" />
       <Input
         type="search"

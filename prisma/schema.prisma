@@ -458,6 +458,7 @@ model RFIDTags {
   assignedByUser   User?       @relation("TagAssignment", fields: [assignedBy], references: [userId])
   instructor       Instructor? @relation(fields: [instructorId], references: [instructorId])
   student          Student?    @relation(fields: [studentId], references: [studentId])
+  assignmentLogs   RFIDTagAssignmentLog[]
 
   @@unique([studentId, instructorId], name: "unique_student_or_instructor")
   @@index([status])
@@ -584,6 +585,21 @@ model Announcement {
   subject        Subjects?   @relation(fields: [subjectId], references: [subjectId], map: "Announcement_subjectId_fkey")
 
   @@index([createdby, userType])
+}
+
+model RFIDTagAssignmentLog {
+  id              Int      @id @default(autoincrement())
+  tagId           Int
+  action          String   // 'ASSIGN' or 'UNASSIGN'
+  assignedToType  String?  // 'STUDENT', 'INSTRUCTOR', or null
+  assignedToId    Int?
+  assignedToName  String?
+  performedBy     Int?     // userId of the admin/user who performed the action
+  performedByName String?
+  timestamp       DateTime @default(now())
+  notes           String?
+
+  RFIDTag         RFIDTags @relation(fields: [tagId], references: [tagId])
 }
 
 enum UserStatus {
