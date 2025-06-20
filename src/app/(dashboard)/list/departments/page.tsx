@@ -9,7 +9,7 @@ import TableSearch from "@/components/TableSearch";
 import Pagination from "@/components/Pagination";
 import { DepartmentForm } from "@/components/forms/DepartmentForm";
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuCheckboxItem } from "@/components/ui/dropdown-menu";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -17,40 +17,24 @@ import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import Fuse from "fuse.js";
 import React from "react";
-import { Plus, Filter, SortAsc, Eye, Pencil, Trash2, CheckSquare, Square, Download, Printer, Loader2, ArrowUp, ArrowDown, BadgeInfo, Hash, SortDesc, FileText, FileSpreadsheet, HelpCircle, Settings2, ArrowUpDown, MoreHorizontal } from "lucide-react";
+import { Plus, Filter, SortAsc, Eye, Pencil, Trash2, CheckSquare, Square, Download, Printer, Loader2, ArrowUp, ArrowDown, BadgeInfo, Hash, SortDesc, FileText, FileSpreadsheet, HelpCircle, Settings2, ArrowUpDown, MoreHorizontal, RefreshCw, ChevronRight, ListTodo } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { DepartmentViewDialog } from "@/components/forms/DepartmentViewDialog";
+import { ViewDialog } from '@/components/ViewDialog';
+import { Checkbox as SharedCheckbox } from '@/components/ui/checkbox';
+import { FilterDialog } from '@/components/FilterDialog';
+import { ExportDialog } from '@/components/ExportDialog';
+import { SortDialog, SortFieldOption } from '@/components/SortDialog';
+import { BulkActionsBar } from '@/components/BulkActionsBar';
+import { PrintLayout } from '@/components/PrintLayout';
+import { TableHeaderSection } from '@/components/TableHeaderSection';
+import { TableCardView } from '@/components/TableCardView';
+import { TableRowActions } from '@/components/TableRowActions';
+import { TableList, TableListColumn } from '@/components/TableList';
+import { ConfirmDeleteDialog } from '@/components/ConfirmDeleteDialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { TableExpandedRow } from '@/components/TableExpandedRow';
 
-// Minimal shadcn/ui-style Checkbox
-interface CheckboxProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  checked?: boolean;
-  indeterminate?: boolean;
-  onCheckedChange?: (checked: boolean) => void;
-}
-
-function Checkbox({ checked, indeterminate, onCheckedChange, ...props }: CheckboxProps) {
-  return (
-    <button
-      type="button"
-      aria-checked={checked}
-      onClick={e => {
-        e.stopPropagation();
-        onCheckedChange?.(!checked);
-      }}
-      className={`w-5 h-5 flex items-center justify-center border rounded transition-colors ${checked ? 'bg-primary border-primary' : 'bg-white border-gray-300'} ${indeterminate ? 'bg-gray-200' : ''}`}
-      {...props}
-    >
-      {indeterminate ? (
-        <span className="w-3 h-0.5 bg-gray-500 rounded" />
-      ) : checked ? (
-        <CheckSquare className="w-4 h-4 text-primary" />
-      ) : (
-        <Square className="w-4 h-4 text-gray-400" />
-      )}
-    </button>
-  );
-}
 
 interface Course {
   id: string;
@@ -90,6 +74,15 @@ const sortFieldOptions: { value: SortFieldKey; label: string }[] = [
   { value: 'status', label: 'Status' },
 ];
 
+const departmentSortFieldOptions: SortFieldOption<string>[] = [
+  { value: 'name', label: 'Department Name' },
+  { value: 'code', label: 'Department Code' },
+  { value: 'head', label: 'Head of Department' },
+  { value: 'totalCourses', label: 'Total Courses' },
+  { value: 'totalInstructors', label: 'Total Instructors' },
+  { value: 'status', label: 'Status' },
+];
+
 // Helper for highlighting
 function highlightMatch(text: string, matches: readonly [number, number][] | undefined) {
   if (!matches || matches.length === 0) return text;
@@ -104,42 +97,212 @@ function highlightMatch(text: string, matches: readonly [number, number][] | und
   return result;
 }
 
+// Define column configuration once
+const DEPARTMENT_COLUMNS: TableListColumn<Department>[] = [
+  { header: "Department Name", accessor: "name", className: "text-blue-900 align-middle", sortable: true },
+  { header: "Code", accessor: "code", className: "text-blue-900 align-middle", sortable: true },
+  { header: "Head of Department", accessor: "headOfDepartment", className: "text-blue-900 text-center align-middle", sortable: true },
+  { header: "Description", accessor: "description", className: "text-blue-900 text-center align-middle" },
+  { 
+    header: "Total Courses", 
+    accessor: "totalCourses", 
+    className: "text-blue-900 text-center align-middle", 
+    render: (item: Department) => item.courseOfferings?.length || 0,
+    sortable: true
+  },
+  { header: "Total Instructors", accessor: "totalInstructors", className: "text-blue-900 text-center align-middle", sortable: true },
+  { 
+    header: "Status", 
+    accessor: "status", 
+    className: "text-center align-middle", 
+    render: (item: Department) => (
+      <Badge variant={item.status === "active" ? "success" : "destructive"} className="text-xs px-3 py-1 rounded-full">
+        {item.status.toUpperCase()}
+      </Badge>
+    ),
+    sortable: true
+  },
+];
+
+// Add API response types
+interface ApiResponse<T> {
+  data?: T;
+  error?: string;
+}
+
+interface DepartmentResponse extends Department {
+  courseOfferings: Course[];
+  totalInstructors: number;
+}
+
+// Add interfaces for better type safety
+interface PageState {
+  loading: boolean;
+  isRefreshing: boolean;
+  isDeleting: boolean;
+  isExporting: boolean;
+  isPrinting: boolean;
+  isFiltering: boolean;
+  error: string | null;
+  operationInProgress: {
+    type: 'fetch' | 'refresh' | 'delete' | 'export' | 'print' | null;
+    retryCount: number;
+  };
+}
+
+interface FilterState {
+  name: string;
+  code: string;
+  head: string;
+  minCourses: string;
+  maxCourses: string;
+  minInstructors: string;
+  maxInstructors: string;
+  status: string;
+}
+
+interface SortState {
+  field: SortFieldKey;
+  order: SortOrder;
+  fields: MultiSortField[];
+}
+
+interface DialogState {
+  modalOpen: boolean;
+  deleteDialogOpen: boolean;
+  filterDialogOpen: boolean;
+  sortDialogOpen: boolean;
+  exportDialogOpen: boolean;
+  viewDialogOpen: boolean;
+  departmentToDelete: {
+    id: string;
+    name: string;
+  } | null;
+}
+
+interface EditableCell {
+  rowId: string;
+  columnAccessor: string;
+}
+
+// Add validation utilities
+const validateDepartment = (dept: any): dept is DepartmentResponse => {
+  return (
+    typeof dept === 'object' &&
+    dept !== null &&
+    typeof dept.id === 'string' &&
+    typeof dept.name === 'string' &&
+    typeof dept.code === 'string' &&
+    typeof dept.headOfDepartment === 'string' &&
+    Array.isArray(dept.courseOfferings) &&
+    typeof dept.totalInstructors === 'number' &&
+    (dept.status === 'active' || dept.status === 'inactive')
+  );
+};
+
+const validateDepartments = (data: any[]): data is DepartmentResponse[] => {
+  return Array.isArray(data) && data.every(validateDepartment);
+};
+
+// Add retry utility
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 1000; // 1 second
+
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+const retryOperation = async <T,>(
+  operation: () => Promise<T>,
+  retryCount: number = 0
+): Promise<T> => {
+  try {
+    return await operation();
+  } catch (error) {
+    if (retryCount < MAX_RETRIES) {
+      await delay(RETRY_DELAY * (retryCount + 1)); // Exponential backoff
+      return retryOperation(operation, retryCount + 1);
+    }
+    throw error;
+  }
+};
+
+// Add user-friendly error messages
+const getErrorMessage = (error: unknown, operation: string): string => {
+  if (error instanceof Error) {
+    if (error.message.includes('Failed to fetch')) {
+      return `Unable to ${operation}. Please check your internet connection and try again.`;
+    }
+    if (error.message.includes('not found')) {
+      return `The requested department could not be found.`;
+    }
+    if (error.message.includes('permission')) {
+      return `You don't have permission to ${operation}. Please contact your administrator.`;
+    }
+    return `An error occurred while trying to ${operation}: ${error.message}`;
+  }
+  return `An unexpected error occurred while trying to ${operation}. Please try again later.`;
+};
+
 export default function DepartmentListPage() {
+  // State declarations with proper types
+  const [pageState, setPageState] = useState<PageState>({
+    loading: true,
+    isRefreshing: false,
+    isDeleting: false,
+    isExporting: false,
+    isPrinting: false,
+    isFiltering: false,
+    error: null,
+    operationInProgress: {
+      type: null,
+      retryCount: 0
+    }
+  });
+
   const [departments, setDepartments] = useState<Department[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
-  const [sortFields, setSortFields] = useState<MultiSortField[]>([
-    { field: 'name', order: 'asc' }
-  ]);
-  const [sortField, setSortField] = useState<SortFieldKey>('name');
-  const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
-  const [currentPage, setCurrentPage] = useState(1);
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [filterDialogOpen, setFilterDialogOpen] = useState(false);
-  const [sortDialogOpen, setSortDialogOpen] = useState(false);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [modalDepartment, setModalDepartment] = useState<Department | undefined>();
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [departmentToDelete, setDepartmentToDelete] = useState<Department | null>(null);
-  const [columnStatusFilter, setColumnStatusFilter] = useState("all");
-  const [instructors, setInstructors] = useState<any[]>([]);
-  const [advancedFilters, setAdvancedFilters] = useState({
+  const [filters, setFilters] = useState<FilterState>({
+    name: '',
+    code: '',
     head: '',
     minCourses: '',
     maxCourses: '',
     minInstructors: '',
-    maxInstructors: ''
+    maxInstructors: '',
+    status: 'all'
   });
-  const [columnNameFilter, setColumnNameFilter] = useState('');
-  const [columnCodeFilter, setColumnCodeFilter] = useState('');
-  const [columnHeadFilter, setColumnHeadFilter] = useState('');
-  const [columnLocationFilter, setColumnLocationFilter] = useState('');
-  const router = useRouter();
+
+  const [sortState, setSortState] = useState<SortState>({
+    field: 'name',
+    order: 'asc',
+    fields: [{ field: 'name', order: 'asc' }]
+  });
+
+  const [dialogState, setDialogState] = useState<DialogState>({
+    modalOpen: false,
+    deleteDialogOpen: false,
+    filterDialogOpen: false,
+    sortDialogOpen: false,
+    exportDialogOpen: false,
+    viewDialogOpen: false,
+    departmentToDelete: null
+  });
+
+  // Other state variables
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [itemsPerPage, setItemsPerPage] = useState<number>(10);
   const [exportFormat, setExportFormat] = useState<'pdf' | 'excel' | 'csv' | null>(null);
-  const [showPrint, setShowPrint] = useState(false);
-  const [viewDialogOpen, setViewDialogOpen] = useState(false);
+  const [modalDepartment, setModalDepartment] = useState<Department | undefined>();
   const [viewDepartment, setViewDepartment] = useState<Department | undefined>();
-  const [isPrinting, setIsPrinting] = useState(false);
+  const [search, setSearch] = useState<string>("");
+  const [instructors, setInstructors] = useState<any[]>([]);
+  const router = useRouter();
+  const [showPrint, setShowPrint] = useState<boolean>(false);
+  const [isPrinting, setIsPrinting] = useState<boolean>(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const [visibleColumns, setVisibleColumns] = useState<string[]>(DEPARTMENT_COLUMNS.map(c => c.accessor));
+  const [expandedRowIds, setExpandedRowIds] = useState<string[]>([]);
+  const [editingCell, setEditingCell] = useState<EditableCell | null>(null);
 
   const fuse = React.useMemo(() => new Fuse(departments, {
     keys: ["name", "code"],
@@ -154,37 +317,37 @@ export default function DepartmentListPage() {
 
   const filteredDepartments = useMemo(() => {
     let result = fuzzyResults.map(r => r.item);
-    if (columnStatusFilter !== 'all') {
-      result = result.filter((dept) => dept.status === columnStatusFilter);
+    if (filters.status !== 'all') {
+      result = result.filter((dept) => dept.status === filters.status);
     }
     // Advanced filters
-    if (advancedFilters.head) {
-      result = result.filter(dept => dept.headOfDepartment?.toLowerCase().includes(advancedFilters.head.toLowerCase()));
+    if (filters.head) {
+      result = result.filter(dept => dept.headOfDepartment?.toLowerCase().includes(filters.head.toLowerCase()));
     }
-    if (advancedFilters.minCourses) {
-      result = result.filter(dept => (dept.courseOfferings?.length || 0) >= Number(advancedFilters.minCourses));
+    if (filters.minCourses) {
+      result = result.filter(dept => (dept.courseOfferings?.length || 0) >= Number(filters.minCourses));
     }
-    if (advancedFilters.maxCourses) {
-      result = result.filter(dept => (dept.courseOfferings?.length || 0) <= Number(advancedFilters.maxCourses));
+    if (filters.maxCourses) {
+      result = result.filter(dept => (dept.courseOfferings?.length || 0) <= Number(filters.maxCourses));
     }
-    if (advancedFilters.minInstructors) {
-      result = result.filter(dept => (dept.totalInstructors || 0) >= Number(advancedFilters.minInstructors));
+    if (filters.minInstructors) {
+      result = result.filter(dept => (dept.totalInstructors || 0) >= Number(filters.minInstructors));
     }
-    if (advancedFilters.maxInstructors) {
-      result = result.filter(dept => (dept.totalInstructors || 0) <= Number(advancedFilters.maxInstructors));
+    if (filters.maxInstructors) {
+      result = result.filter(dept => (dept.totalInstructors || 0) <= Number(filters.maxInstructors));
     }
-    if (columnNameFilter) {
-      result = result.filter(dept => dept.name.toLowerCase().includes(columnNameFilter.toLowerCase()));
+    if (filters.name) {
+      result = result.filter(dept => dept.name.toLowerCase().includes(filters.name.toLowerCase()));
     }
-    if (columnCodeFilter) {
-      result = result.filter(dept => dept.code.toLowerCase().includes(columnCodeFilter.toLowerCase()));
+    if (filters.code) {
+      result = result.filter(dept => dept.code.toLowerCase().includes(filters.code.toLowerCase()));
     }
-    if (columnHeadFilter) {
-      result = result.filter(dept => dept.headOfDepartment?.toLowerCase().includes(columnHeadFilter.toLowerCase()));
+    if (filters.head) {
+      result = result.filter(dept => dept.headOfDepartment?.toLowerCase().includes(filters.head.toLowerCase()));
     }
     // Multi-column sort
     result.sort((a, b) => {
-      for (const { field, order } of sortFields) {
+      for (const { field, order } of sortState.fields) {
       let aValue: string | number;
       let bValue: string | number;
         if (field === 'totalCourses') {
@@ -206,12 +369,12 @@ export default function DepartmentListPage() {
       return 0;
     });
     return result;
-  }, [fuzzyResults, columnStatusFilter, sortFields, advancedFilters, columnNameFilter, columnCodeFilter, columnHeadFilter]);
+  }, [fuzzyResults, filters, sortState.fields]);
 
-  const totalPages = Math.ceil(filteredDepartments.length / ITEMS_PER_PAGE);
+  const totalPages = Math.ceil(filteredDepartments.length / itemsPerPage);
   const paginatedDepartments = filteredDepartments.slice(
-    (currentPage - 1) * ITEMS_PER_PAGE,
-    currentPage * ITEMS_PER_PAGE
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
   );
 
   // Checkbox logic
@@ -229,16 +392,58 @@ export default function DepartmentListPage() {
   };
 
   // Table columns
-  const columns = [
-    { header: <div className="flex justify-center items-center"><Checkbox checked={isAllSelected} indeterminate={isIndeterminate} onCheckedChange={handleSelectAll} /></div>, accessor: "select", className: "w-12 text-center" },
-    { header: <div className="text-left">Department Name</div>, accessor: "name" },
-    { header: <div className="text-center">Code</div>, accessor: "code" },
-    { header: <div className="text-center">Head of Department</div>, accessor: "headOfDepartment" },
-    { header: <div className="text-center">Description</div>, accessor: "description" },
-    { header: <div className="text-center">Total Courses</div>, accessor: "totalCourses" },
-    { header: <div className="text-center">Total Instructors</div>, accessor: "totalInstructors" },
-    { header: <div className="text-center">Status</div>, accessor: "status" },
-    { header: <div className="text-center">Actions</div>, accessor: "actions" },
+  const columns: TableListColumn<Department>[] = [
+    {
+      header: '',
+      accessor: 'expander',
+      className: 'w-12 text-center',
+      expandedContent: (item: Department) => (
+        <TableExpandedRow
+          colSpan={columns.length + 1}
+          title="Courses Offered"
+          headers={["Course Name", "Code", "Status", "Students"]}
+          rows={item.courseOfferings}
+          renderRow={course => (
+            <TableRow key={course.id}>
+              <TableCell>{course.name}</TableCell>
+              <TableCell>{course.code}</TableCell>
+              <TableCell>
+                <Badge variant={course.status === 'active' ? 'success' : 'destructive'}>
+                  {course.status}
+                </Badge>
+              </TableCell>
+              <TableCell className="text-center">{course.totalStudents}</TableCell>
+            </TableRow>
+          )}
+          emptyMessage="No courses offered by this department."
+        />
+      ),
+    },
+    {
+      header: (
+        <div className="flex justify-center items-center">
+          <SharedCheckbox checked={isAllSelected} indeterminate={isIndeterminate} onCheckedChange={handleSelectAll} />
+        </div>
+      ),
+      accessor: 'select',
+      className: 'w-12 text-center',
+    },
+    ...DEPARTMENT_COLUMNS.filter(col => visibleColumns.includes(col.accessor)),
+    { 
+      header: "Actions", 
+      accessor: "actions", 
+      className: "text-center align-middle", 
+      render: (item: Department) => (
+        <TableRowActions
+          onView={() => { setViewDepartment(item); setDialogState(prev => ({ ...prev, viewDialogOpen: true })); }}
+          onEdit={() => { setModalDepartment(item); setDialogState(prev => ({ ...prev, modalOpen: true })); }}
+          onDelete={() => { handleDelete(item); }}
+          itemName={item.name}
+          disabled={item.status === "active" || item.courseOfferings?.length > 0 || item.totalInstructors > 0}
+          deleteTooltip={getDeleteTooltip(item)}
+        />
+      )
+    },
   ];
 
   // Table row renderer
@@ -273,7 +478,7 @@ export default function DepartmentListPage() {
             return (
               <TableCell key={colIdx} className="w-12 text-center align-middle">
                 <div className="flex justify-center items-center">
-                  <Checkbox checked={selectedIds.includes(item.id)} onCheckedChange={() => handleSelectRow(item.id)} aria-label={`Select department ${item.name}`} />
+                  <SharedCheckbox checked={selectedIds.includes(item.id)} onCheckedChange={() => handleSelectRow(item.id)} aria-label={`Select department ${item.name}`} />
                 </div>
               </TableCell>
             );
@@ -332,7 +537,7 @@ export default function DepartmentListPage() {
             return (
               <TableCell key={colIdx} className="text-center align-middle">
                 <Badge variant={item.status === "active" ? "success" : "destructive"}>
-                  {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+                  {item.status.toUpperCase()}
                 </Badge>
               </TableCell>
             );
@@ -340,7 +545,22 @@ export default function DepartmentListPage() {
           if (col.accessor === "actions") {
             return (
               <TableCell key={colIdx} className="text-center align-middle">
-                {/* Actions (edit, delete, etc.) go here */}
+                <TableRowActions
+                  onView={() => {
+                    setViewDepartment(item);
+                    setDialogState(prev => ({ ...prev, viewDialogOpen: true }));
+                  }}
+                  onEdit={() => {
+                    setModalDepartment(item);
+                    setDialogState(prev => ({ ...prev, modalOpen: true }));
+                  }}
+                  onDelete={() => {
+                    handleDelete(item);
+                  }}
+                  itemName={item.name}
+                  disabled={item.status === "active" || item.courseOfferings?.length > 0 || item.totalInstructors > 0}
+                  deleteTooltip={getDeleteTooltip(item)}
+                />
               </TableCell>
             );
           }
@@ -351,140 +571,150 @@ export default function DepartmentListPage() {
     );
   };
 
+  // Update exportableColumns to use the shared configuration
+  const exportableColumns = DEPARTMENT_COLUMNS.map(col => ({
+    key: col.accessor,
+    label: typeof col.header === 'string' ? col.header : col.accessor
+  }));
+
+  // Update printColumns to use the shared configuration
+  const printColumns = DEPARTMENT_COLUMNS.map(col => ({
+    header: typeof col.header === 'string' ? col.header : col.accessor,
+    accessor: col.accessor
+  }));
+
   // Add export columns state
-  const exportableColumns = [
-    { key: 'name', label: 'Department Name' },
-    { key: 'code', label: 'Code' },
-    { key: 'headOfDepartment', label: 'Head of Department' },
-    { key: 'description', label: 'Description' },
-    { key: 'totalCourses', label: 'Total Courses' },
-    { key: 'totalInstructors', label: 'Total Instructors' },
-    { key: 'status', label: 'Status' },
-  ];
-  const [exportColumns, setExportColumns] = useState(exportableColumns.map(col => col.key));
-  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [exportColumns, setExportColumns] = useState<string[]>(exportableColumns.map(col => col.key));
 
   // Export handlers
-  const handleExport = () => {
+  const handleExport = async () => {
     if (!exportFormat) {
       toast.error("Please select an export format");
       return;
     }
 
-    const selectedColumns = exportableColumns.filter(col => exportColumns.includes(col.key));
-    const headers = selectedColumns.map(col => col.label);
-    const rows = filteredDepartments.map((dept) =>
-      selectedColumns.map((col) => {
-        if (col.key === 'totalCourses') return String(dept.courseOfferings?.length || 0);
-        if (col.key === 'totalInstructors') return String(dept.totalInstructors || 0);
-        return String(dept[col.key as keyof Department] || '');
-      })
-    );
+    try {
+      setPageState(prev => ({ 
+        ...prev, 
+        isExporting: true, 
+        error: null,
+        operationInProgress: { type: 'export', retryCount: 0 }
+      }));
 
-    switch (exportFormat) {
-      case 'pdf':
-        const doc = new jsPDF();
-        // Add title
-        doc.setFontSize(16);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(12, 37, 86); // Dark blue color
-        doc.text('Department List', doc.internal.pageSize.width / 2, 20, { align: 'center' });
-        
-        // Add subtitle with date
-        doc.setFontSize(10);
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(128, 128, 128); // Light gray color
-        const currentDate = new Date().toLocaleDateString('en-US', {
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric'
-        });
-        doc.text(`Generated on ${currentDate}`, doc.internal.pageSize.width / 2, 28, { align: 'center' });
+      const selectedColumns = exportableColumns.filter(col => exportColumns.includes(col.key));
+      const headers = selectedColumns.map(col => col.label);
+      const rows = filteredDepartments.map((dept) =>
+        selectedColumns.map((col) => {
+          if (col.key === 'totalCourses') return String(dept.courseOfferings?.length || 0);
+          if (col.key === 'totalInstructors') return String(dept.totalInstructors || 0);
+          return String(dept[col.key as keyof Department] || '');
+        })
+      );
 
-        // Reset text color for table
-        doc.setTextColor(0, 0, 0);
-
-        // Add some spacing
-        doc.setFontSize(12);
-        autoTable(doc, {
-          head: [headers] as string[][],
-          body: rows as string[][],
-          startY: 35,
-          styles: { 
-            fontSize: 8,
-            cellPadding: 3,
-            overflow: 'linebreak',
-            cellWidth: 'wrap',
-          },
-          headStyles: { 
-            fillColor: [12, 37, 86],
-            textColor: [255, 255, 255],
-            halign: 'center',
-            fontStyle: 'bold',
-          },
-          columnStyles: {
-            0: { cellWidth: 'auto' }, // Department Name
-            1: { cellWidth: 'auto' }, // Code
-            2: { cellWidth: 'auto' }, // Head of Department
-            3: { cellWidth: 'auto' }, // Description
-            4: { cellWidth: 'auto', halign: 'center' }, // Total Courses
-            5: { cellWidth: 'auto', halign: 'center' }, // Total Instructors
-            6: { cellWidth: 'auto', halign: 'center' }, // Status
-          },
-          margin: { top: 16, right: 10, bottom: 10, left: 10 },
-          theme: 'grid',
-        });
-        doc.save("departments.pdf");
-        break;
-
-      case 'excel':
-        const wsData = [headers, ...rows] as string[][];
-        const ws = XLSX.utils.aoa_to_sheet(wsData);
-        
-        // Set column widths based on content
-        const colWidths = headers.map((_, index) => {
-          const maxLength = Math.max(
-            ...wsData.map(row => (row[index] || '').toString().length),
-            headers[index].length
-          );
-          return { wch: Math.min(Math.max(maxLength + 2, 10), 50) }; // Min width 10, max width 50
-        });
-        ws['!cols'] = colWidths;
-
-        // Style the header row
-        const headerRange = XLSX.utils.decode_range(ws['!ref'] || 'A1');
-        for (let C = headerRange.s.c; C <= headerRange.e.c; ++C) {
-          const cellRef = XLSX.utils.encode_cell({ r: 0, c: C });
-          if (!ws[cellRef]) continue;
+      switch (exportFormat) {
+        case 'pdf':
+          const doc = new jsPDF();
+          // Add title
+          doc.setFontSize(16);
+          doc.setFont('helvetica', 'bold');
+          doc.setTextColor(12, 37, 86); // Dark blue color
+          doc.text('Department List', doc.internal.pageSize.width / 2, 20, { align: 'center' });
           
-          // Make headers uppercase and bold
-          ws[cellRef].v = ws[cellRef].v.toString().toUpperCase();
-          ws[cellRef].s = {
-            font: { bold: true },
-            alignment: { horizontal: 'center', vertical: 'center' }
-          };
-        }
+          // Add subtitle with date
+          doc.setFontSize(10);
+          doc.setFont('helvetica', 'normal');
+          doc.setTextColor(128, 128, 128); // Light gray color
+          const currentDate = new Date().toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+          });
+          doc.text(`Generated on ${currentDate}`, doc.internal.pageSize.width / 2, 28, { align: 'center' });
 
-        // Center align data cells (without bold)
-        for (let R = 1; R <= headerRange.e.r; ++R) {
+          // Reset text color for table
+          doc.setTextColor(0, 0, 0);
+
+          // Add some spacing
+          doc.setFontSize(12);
+          autoTable(doc, {
+            head: [headers] as string[][],
+            body: rows as string[][],
+            startY: 35,
+            styles: { 
+              fontSize: 8,
+              cellPadding: 3,
+              overflow: 'linebreak',
+              cellWidth: 'wrap',
+            },
+            headStyles: { 
+              fillColor: [12, 37, 86],
+              textColor: [255, 255, 255],
+              halign: 'center',
+              fontStyle: 'bold',
+            },
+            columnStyles: {
+              0: { cellWidth: 'auto' }, // Department Name
+              1: { cellWidth: 'auto' }, // Code
+              2: { cellWidth: 'auto' }, // Head of Department
+              3: { cellWidth: 'auto' }, // Description
+              4: { cellWidth: 'auto', halign: 'center' }, // Total Courses
+              5: { cellWidth: 'auto', halign: 'center' }, // Total Instructors
+              6: { cellWidth: 'auto', halign: 'center' }, // Status
+            },
+            margin: { top: 16, right: 10, bottom: 10, left: 10 },
+            theme: 'grid',
+          });
+          doc.save("departments.pdf");
+          break;
+
+        case 'excel':
+          const wsData = [headers, ...rows] as string[][];
+          const ws = XLSX.utils.aoa_to_sheet(wsData);
+          
+          // Set column widths based on content
+          const colWidths = headers.map((_, index) => {
+            const maxLength = Math.max(
+              ...wsData.map(row => (row[index] || '').toString().length),
+              headers[index].length
+            );
+            return { wch: Math.min(Math.max(maxLength + 2, 10), 50) }; // Min width 10, max width 50
+          });
+          ws['!cols'] = colWidths;
+
+          // Style the header row
+          const headerRange = XLSX.utils.decode_range(ws['!ref'] || 'A1');
           for (let C = headerRange.s.c; C <= headerRange.e.c; ++C) {
-            const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
+            const cellRef = XLSX.utils.encode_cell({ r: 0, c: C });
             if (!ws[cellRef]) continue;
             
-            // Apply styling to data cells
+            // Make headers uppercase and bold
+            ws[cellRef].v = ws[cellRef].v.toString().toUpperCase();
             ws[cellRef].s = {
+              font: { bold: true },
               alignment: { horizontal: 'center', vertical: 'center' }
             };
           }
-        }
 
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Departments");
-        XLSX.writeFile(wb, "departments.xlsx");
-        break;
+          // Center align data cells (without bold)
+          for (let R = 1; R <= headerRange.e.r; ++R) {
+            for (let C = headerRange.s.c; C <= headerRange.e.c; ++C) {
+              const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
+              if (!ws[cellRef]) continue;
+              
+              // Apply styling to data cells
+              ws[cellRef].s = {
+                alignment: { horizontal: 'center', vertical: 'center' }
+              };
+            }
+          }
 
-      case 'csv':
-        const csvRows = [headers, ...rows] as string[][];
+          const wb = XLSX.utils.book_new();
+          XLSX.utils.book_append_sheet(wb, ws, "Departments");
+          XLSX.writeFile(wb, "departments.xlsx");
+          break;
+
+        case 'csv':
+          const csvRows = [headers, ...rows] as string[][];
     const csvContent = csvRows.map((row) => row.map(String).map(cell => '"' + cell.replace(/"/g, '""') + '"').join(",")).join("\n");
     const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
@@ -493,23 +723,49 @@ export default function DepartmentListPage() {
     a.download = 'departments.csv';
     a.click();
     URL.revokeObjectURL(url);
-        break;
-    }
+          break;
+      }
 
-    toast.success(`Exported to ${exportFormat.toUpperCase()}`);
-    setExportDialogOpen(false);
+      toast.success(`Successfully exported departments to ${exportFormat.toUpperCase()}`);
+    } catch (error) {
+      const errorMessage = getErrorMessage(error, 'export departments');
+      setPageState(prev => ({ 
+        ...prev, 
+        error: errorMessage,
+        isExporting: false,
+        operationInProgress: { type: null, retryCount: 0 }
+      }));
+      toast.error(errorMessage);
+    } finally {
+      setPageState(prev => ({ 
+        ...prev, 
+        isExporting: false,
+        operationInProgress: { type: null, retryCount: 0 }
+      }));
+    }
   };
 
-  // Print handler
+  // Print handler using PrintLayout
   const handlePrint = () => {
-    window.print();
+    const printData = filteredDepartments.map((d) => ({
+      ...d,
+      totalCourses: d.courseOfferings?.length?.toString() || '0',
+      totalInstructors: d.totalInstructors?.toString() || '0',
+    }));
+    const printFunction = PrintLayout({
+      title: 'Department List',
+      data: printData,
+      columns: printColumns,
+      totalItems: filteredDepartments.length,
+    });
+    printFunction();
   };
 
   // Bulk delete handler
   const handleBulkDelete = async () => {
     if (selectedIds.length === 0) return;
     if (!window.confirm(`Are you sure you want to delete ${selectedIds.length} selected department(s)? This action cannot be undone.`)) return;
-    setLoading(true);
+    setPageState(prev => ({ ...prev, loading: true }));
     try {
       // Simulate API call
       await new Promise(res => setTimeout(res, 1000));
@@ -519,7 +775,7 @@ export default function DepartmentListPage() {
     } catch (err) {
       toast.error("Failed to delete departments.");
     }
-    setLoading(false);
+    setPageState(prev => ({ ...prev, loading: false }));
   };
 
   // Export selected to CSV handler
@@ -558,41 +814,78 @@ export default function DepartmentListPage() {
   };
 
   // Count active advanced filters
-  const activeAdvancedFilterCount = Object.values(advancedFilters).filter(Boolean).length;
+  const activeAdvancedFilterCount = Object.values(filters).filter(Boolean).length;
 
   // Add handleSort function
-  const handleSort = () => {
-    setSortFields([{ field: sortField, order: sortOrder }]);
+  const handleSort = (field: string) => {
+    setSortState(prev => {
+      if (prev.field === field) {
+        return { ...prev, order: prev.order === 'asc' ? 'desc' : 'asc' };
+      }
+      return { ...prev, field: field as SortFieldKey, order: 'asc' };
+    });
   };
 
-  // Fetch departments from API
+  // Fetch departments from API with proper error handling, retry logic, and validation
   useEffect(() => {
-    setLoading(true);
-    fetch('/api/departments')
-      .then(res => {
-        if (!res.ok) throw new Error('Failed to fetch departments');
-        return res.json();
-      })
-      .then(data => {
-        setDepartments(data);
-        setLoading(false);
-      })
-      .catch(err => {
-        setDepartments([]);
-        setLoading(false);
-      });
+    const fetchDepartments = async () => {
+      try {
+        setPageState(prev => ({ 
+          ...prev, 
+          loading: true, 
+          error: null,
+          operationInProgress: { type: 'fetch', retryCount: 0 }
+        }));
+
+        const response = await retryOperation(async () => {
+          const res = await fetch('/api/departments');
+          if (!res.ok) {
+            throw new Error(`Failed to fetch departments: ${res.statusText}`);
+          }
+          return res;
+        });
+
+        const data: ApiResponse<DepartmentResponse[]> = await response.json();
+        
+        if (data.error) {
+          throw new Error(data.error);
+        }
+
+        if (!data.data || !validateDepartments(data.data)) {
+          throw new Error('Invalid department data received from server');
+        }
+
+        setDepartments(data.data);
+        setPageState(prev => ({ 
+          ...prev, 
+          loading: false,
+          operationInProgress: { type: null, retryCount: 0 }
+        }));
+      } catch (error) {
+        const errorMessage = getErrorMessage(error, 'load departments');
+        setPageState(prev => ({ 
+          ...prev, 
+          error: errorMessage,
+          loading: false,
+          operationInProgress: { type: null, retryCount: 0 }
+        }));
+        toast.error(errorMessage);
+      }
+    };
+
+    fetchDepartments();
   }, []);
 
   // Reset pagination on filter/search change
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, columnStatusFilter, columnNameFilter, columnCodeFilter, columnHeadFilter, advancedFilters]);
+  }, [search, sortState.fields, filters]);
 
   useEffect(() => {
     if (showPrint) {
       const timer = setTimeout(() => {
         window.print();
-        setShowPrint(false);
+        setPageState((prev: PageState) => ({ ...prev, isPrinting: false }));
       }, 500);
       return () => clearTimeout(timer);
     }
@@ -605,1171 +898,544 @@ export default function DepartmentListPage() {
     return () => mediaQueryList.removeEventListener('change', handlePrint);
   }, []);
 
-  return (
-    <>
-    <style jsx global>{`
-      @media print {
-        body * {
-          visibility: hidden !important;
+  // Add refresh function with proper error handling, retry logic, and validation
+  const refreshDepartments = async () => {
+    try {
+      setPageState(prev => ({ 
+        ...prev, 
+        isRefreshing: true, 
+        error: null,
+        operationInProgress: { type: 'refresh', retryCount: 0 }
+      }));
+
+      const response = await retryOperation(async () => {
+        const res = await fetch('/api/departments');
+        if (!res.ok) {
+          throw new Error(`Failed to refresh departments: ${res.statusText}`);
         }
-        .print-content, .print-content * {
-          visibility: visible !important;
-        }
-        html, body {
-          margin: 0 !important;
-          padding: 0 !important;
-          width: 100% !important;
-          max-width: 100% !important;
-          height: auto !important;
-          min-height: 0 !important;
-          font-family: Arial, Helvetica, sans-serif !important;
-        }
-        #__next, .print-wrapper, .main-container {
-          margin: 0 !important;
-          padding: 0 !important;
-          width: 100% !important;
-          max-width: 100% !important;
-        }
-        .print-content, .print-header, .print-content > *, .print-header > *, .w-full, .min-w-full, .max-w-full, .container, .main-container, .rounded-xl, .border, .shadow-md, .flex, .items-stretch, .justify-center, .m-0, .p-0 {
-          width: 100% !important;
-          max-width: 100% !important;
-          min-width: 100% !important;
-          margin: 0 !important;
-          padding: 0 !important;
-          float: none !important;
-          display: block !important;  Removed to avoid breaking table, tr, th, td
-          text-align: center !important;
-          box-sizing: border-box !important;
-        }
-        .print-content {
-          position: static !important;
-          top: 0 !important;
-          margin-top: 0 !important;
-          padding-top: 0 !important;
-        }
-        table, th, td {
-          border: 1px solid #e5e7eb !important;
-          border-collapse: collapse !important;
-        }
-        th, td {
-          border-width: 1px !important;
-          border-style: solid !important;
-          border-color: #e5e7eb !important;
-          padding: 10px 8px !important;
-          font-size: 10pt !important;
-          font-family: Arial, Helvetica, sans-serif !important;
-          font-weight: normal !important;
-          white-space: normal !important;
-          text-align: left !important;
-        }
-        .print-header {
-          margin-top: 0 !important;
-          margin-bottom: 16px !important;
-          text-align: center !important;
-        }
-        .print-header h1 {
-          color: #183153 !important;
-          font-size: 16pt !important;
-          font-weight: bold !important;
-          margin: 0 0 4px 0 !important;
-          padding: 0 !important;
-        }
-        .print-header p {
-          color: #888 !important;
-          font-size: 10pt !important;
-          font-weight: normal !important;
-          margin: 0 0 16px 0 !important;
-          padding: 0 !important;
-        }
-        td.status-cell {
-          text-align: center !important;
-        }
-        .print-content .badge, .print-content [class*="badge"], .print-content [class*="Badge"] {
-          color: #222 !important;
-          background: none !important;
-          font-size: 10pt !important;
-          font-weight: normal !important;
-          border: none !important;
-          padding: 0 !important;
-          box-shadow: none !important;
-          text-transform: none !important;
-        }
-        a, a:visited, a:active {
-          color: #222 !important;
-          text-decoration: none !important;
-          font-weight: normal !important;
-        }
-        @page {
-          margin: 0.5cm !important;
-          size: auto;
-        }
-        @media print and (orientation: landscape) {
-          @page {
-            margin: 0.3cm !important;
-          }
-        }
-        th:last-child, td:last-child {
-          display: none !important;
-        }
+        return res;
+      });
+
+      const data: ApiResponse<DepartmentResponse[]> = await response.json();
+      
+      if (data.error) {
+        throw new Error(data.error);
       }
-    `}</style>
-    {/* Normal UI */}
-    <div className="bg-white/80 backdrop-blur-md p-6 rounded-xl shadow-xl border border-blue-100 flex-1 m-4 mt-0">
-      {/* TOP */}
-      <div className="print:hidden">
-        {/* Responsive header row for small screens */}
-        <div className="flex flex-col gap-4 mb-6 lg:hidden">
-          <div className="flex items-center justify-between w-full">
-            <div className="flex flex-col gap-1">
-              <h1 className="text-2xl font-bold text-blue-900">All Departments</h1>
-              <p className="text-sm text-blue-700/80">Manage and view all department information</p>
-            </div>
-            {/* Controls: sort, filter, export, print, add */}
-            <div className="flex flex-row gap-1 items-center">
-              <TooltipProvider delayDuration={0}>
-                {/* Filter Button */}
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button variant="ghost" size="icon" className="rounded border-0 hover:bg-blue-50" aria-label="Filter" onClick={() => setFilterDialogOpen(true)}>
-                      <Filter className="h-4 w-4 text-blue-700/70" />
-                      {activeAdvancedFilterCount > 0 && (
-                        <span className="absolute -top-1 -right-1 bg-blue-600 text-white text-xs rounded-full px-1.5 py-0.5">{activeAdvancedFilterCount}</span>
-                      )}
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" className="bg-blue-900 text-white">
-                    Filter
-                  </TooltipContent>
-                </Tooltip>
-                {/* Sort Button */}
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button variant="ghost" size="icon" className="rounded border-0 hover:bg-blue-50" aria-label="Sort" onClick={() => setSortDialogOpen(true)}>
-                      <SortAsc className="h-4 w-4 text-blue-700" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" className="bg-blue-900 text-white">
-                    Sort
-                  </TooltipContent>
-                </Tooltip>
-                {/* Export Button */}
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button variant="ghost" size="icon" className="rounded border-0 hover:bg-blue-50" aria-label="Export" onClick={() => setExportDialogOpen(true)}>
-                      <Download className="h-4 w-4 text-blue-700" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" className="bg-blue-900 text-white">
-                    Export
-                  </TooltipContent>
-                </Tooltip>
-                {/* Print Button */}
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button variant="ghost" size="icon" aria-label="Print" onClick={handlePrint}>
-                      <Printer className="h-4 w-4 text-blue-700" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" className="bg-blue-900 text-white">
-                    Print
-                  </TooltipContent>
-                </Tooltip>
-                {/* Add Department Button (icon only) */}
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button variant="default" size="icon" className="bg-blue-700 hover:bg-blue-800 text-white shadow ml-1" aria-label="Add Department" onClick={() => { setModalDepartment(undefined); setModalOpen(true); }}>
-                      <Plus className="h-5 w-5" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" className="bg-blue-900 text-white">
-                    Create a new department
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            </div>
-          </div>
-          {/* Search bar for small screens */}
-          <TableSearch value={search} onChange={setSearch} placeholder="Search departments..." className="h-10 w-full px-3 rounded-full shadow-sm border border-blue-200 focus:border-blue-400 focus:ring-blue-400 mt-2" />
-        </div>
-        {/* Existing layout for large screens and up */}
-        <div className="hidden lg:block relative flex flex-col gap-4 mb-6">
-          <div className="flex flex-col gap-1">
-            <h1 className="text-2xl font-bold text-blue-900">All Departments</h1>
-            <p className="text-sm text-blue-700/80">Manage and view all department information</p>
-          </div>
-          {/* Controls: stacked below label on mobile, absolutely right-aligned on lg+ */}
-          <div className="flex flex-col gap-2 mt-2 w-full lg:absolute lg:right-0 lg:top-0 lg:flex-row lg:items-center lg:justify-end lg:w-auto">
-            <div className="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
-              <TableSearch value={search} onChange={setSearch} placeholder="Search departments..." className="h-10 w-full sm:w-64 px-3 rounded-full shadow-sm border border-blue-200 focus:border-blue-400 focus:ring-blue-400" />
-              <div className="flex flex-row gap-0 rounded-lg shadow-sm overflow-hidden">
-                <TooltipProvider delayDuration={0}>
-                  {/* Filter Button */}
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button variant="ghost" size="icon" className="rounded-none border-0 hover:bg-blue-50 relative" aria-label="Filter" onClick={() => setFilterDialogOpen(true)}>
-                        <Filter className="h-4 w-4 text-blue-700/70" />
-                        {activeAdvancedFilterCount > 0 && (
-                          <span className="absolute -top-1 -right-1 bg-blue-600 text-white text-xs rounded-full px-1.5 py-0.5">{activeAdvancedFilterCount}</span>
-                        )}
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom" className="bg-blue-900 text-white">
-                      Filter
-                    </TooltipContent>
-                  </Tooltip>
-                  {/* Sort Button */}
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button variant="ghost" size="icon" className="rounded-none border-0 hover:bg-blue-50" aria-label="Sort" onClick={() => setSortDialogOpen(true)}>
-                        <SortAsc className="h-4 w-4 text-blue-700" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom" className="bg-blue-900 text-white">
-                      Sort
-                    </TooltipContent>
-                  </Tooltip>
-                  {/* Export Button */}
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button variant="ghost" size="icon" className="rounded-none border-0 hover:bg-blue-50" aria-label="Export" onClick={() => setExportDialogOpen(true)}>
-                        <Download className="h-4 w-4 text-blue-700" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom" className="bg-blue-900 text-white">
-                      Export
-                    </TooltipContent>
-                  </Tooltip>
-                  {/* Print Button */}
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button variant="ghost" size="icon" aria-label="Print" onClick={handlePrint}>
-                        <Printer className="h-4 w-4 text-blue-700" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom" className="bg-blue-900 text-white">
-                      Print
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              </div>
-            </div>
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button variant="default" className="bg-blue-700 hover:bg-blue-800 text-white shadow flex items-center gap-2 px-3 py-1 text-sm font-semibold w-full lg:w-auto" aria-label="Add Department" onClick={() => { setModalDepartment(undefined); setModalOpen(true); }}>
-                    <Plus className="h-2 w-2" />
-                    Add Department
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" className="bg-blue-900 text-white">
-                  Create a new department
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </div>
-        </div>
-      </div>
 
-      {/* Print Header and Table - Only visible when printing */}
-      <div className="print-content">
-        <div className="hidden print:block mb-6 print-header">
-          <h1 className="text-xl font-bold text-blue-900">Department List</h1>
-          <p className="text-sm text-gray-600">Generated on {new Date().toLocaleDateString()}</p>
-        </div>
-        {/* Table layout for xl+ only */}
-        <div className="hidden xl:block w-full min-w-0 rounded-xl border border-blue-100 bg-white/70 shadow-md min-h-[200px] flex items-stretch justify-center p-0 print:border-none print:shadow-none overflow-x-auto">
-          <div className="w-full min-w-0 overflow-x-auto m-0 p-0 print:block">
-            <div className="inline-block align-middle m-0 p-0 w-full min-w-0">
-              <div className="overflow-hidden m-0 p-0 min-w-0">
-                <table className="min-w-[900px] w-full table-auto min-w-0">
-                  <thead className="bg-blue-50 sticky top-0 z-10 print:table-header-group">
-                    <tr className="print:table-row">
-                      <th className="text-center px-1 py-1 sm:px-2 sm:py-2 lg:px-3 lg:py-3 print:hidden text-blue-900">
-                        <div className="flex justify-center items-center">
-                          <Checkbox checked={isAllSelected} indeterminate={isIndeterminate} onCheckedChange={handleSelectAll} />
-                        </div>
-                      </th>
-                      <th className="text-left truncate text-blue-900 px-1 py-1 sm:px-2 sm:py-2 lg:px-3 lg:py-3 print:table-cell">Department Name</th>
-                      <th className="text-center truncate text-blue-900 px-1 py-1 sm:px-2 sm:py-2 lg:px-3 lg:py-3 print:table-cell">Code</th>
-                      <th className="text-center truncate text-blue-900 px-1 py-1 sm:px-2 sm:py-2 lg:px-3 lg:py-3 print:table-cell">Head of Department</th>
-                      <th className="text-center truncate text-blue-900 px-1 py-1 sm:px-2 sm:py-2 lg:px-3 lg:py-3 print:table-cell">Description</th>
-                      <th className="text-center truncate text-blue-900 px-1 py-1 sm:px-2 sm:py-2 lg:px-3 lg:py-3 print:table-cell">Courses</th>
-                      <th className="text-center truncate text-blue-900 px-1 py-1 sm:px-2 sm:py-2 lg:px-3 lg:py-3 print:table-cell">Instructors</th>
-                      <th className="text-center truncate text-blue-900 px-1 py-1 sm:px-2 sm:py-2 lg:px-3 lg:py-3 print:table-cell">Status</th>
-                      {!isPrinting && (
-                        <th className="text-center truncate text-blue-900 px-1 py-1 sm:px-2 sm:py-2 lg:px-3 lg:py-3 print:hidden">Actions</th>
-                      )}
-                    </tr>
-                  </thead>
-                  <tbody className="print:table-row-group">
-                    {paginatedDepartments.map((item, idx) => (
-                      <tr
-                        key={item.id}
-                        className={`${selectedIds.includes(item.id) ? "bg-blue-50" : idx % 2 === 0 ? "bg-white" : "bg-blue-50/40"} hover:bg-blue-100 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-400 transition-shadow duration-150 print:table-row`}
-                        tabIndex={0}
-                        role="button"
-                        aria-pressed={selectedIds.includes(item.id)}
-                        aria-label={`View details for department ${item.name}`}
-                        onClick={() => router.push(`/dashboard/list/departments/${item.id}`)}
-                        onKeyDown={e => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            router.push(`/dashboard/list/departments/${item.id}`);
-                          }
-                        }}
-                      >
-                        {/* Checkbox column */}
-                        <td className="text-center align-middle px-1 py-1 sm:px-2 sm:py-2 lg:px-3 lg:py-3 print:hidden">
-                          <div className="flex justify-center items-center">
-                            <Checkbox checked={selectedIds.includes(item.id)} onCheckedChange={() => handleSelectRow(item.id)} aria-label={`Select department ${item.name}`} />
-                          </div>
-                        </td>
-                        {/* Department Name */}
-                        <td className="text-left truncate min-w-0 font-medium text-blue-900 px-1 py-1 sm:px-2 sm:py-2 lg:px-3 lg:py-3 print:table-cell">
-                          {item.name}
-                        </td>
-                        {/* Code */}
-                        <td className="text-center truncate min-w-0 text-blue-800 px-1 py-1 sm:px-2 sm:py-2 lg:px-3 lg:py-3 print:table-cell">
-                          {item.code}
-                        </td>
-                        {/* Head of Department */}
-                        <td className="text-center truncate min-w-0 text-blue-800 px-1 py-1 sm:px-2 sm:py-2 lg:px-3 lg:py-3 print:table-cell">
-                          {item.headOfDepartment || <span className="italic text-gray-400">Not Assigned</span>}
-                        </td>
-                        {/* Description */}
-                        <td className="text-center truncate min-w-0 text-blue-800 px-1 py-1 sm:px-2 sm:py-2 lg:px-3 lg:py-3 print:table-cell">
-                          {item.description || <span className="italic text-gray-400">No description</span>}
-                        </td>
-                        {/* Total Courses */}
-                        <td className="text-center truncate min-w-0 text-blue-800 px-1 py-1 sm:px-2 sm:py-2 lg:px-3 lg:py-3 print:table-cell">
-                          {item.courseOfferings?.length || 0}
-                        </td>
-                        {/* Total Instructors */}
-                        <td className="text-center truncate min-w-0 text-blue-800 whitespace-nowrap px-3 py-2 print:table-cell">
-                          {item.totalInstructors || 0}
-                        </td>
-                        {/* Status */}
-                        <td className="text-center truncate min-w-0 text-xs sm:text-sm md:text-base px-3 py-2 print:table-cell status-cell">
-                          <Badge variant={item.status === "active" ? "success" : "destructive"}>
-                            {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
-                          </Badge>
-                        </td>
-                        {/* Actions */}
-                        {!isPrinting && (
-                          <td className="text-center truncate min-w-0 px-3 py-2 print:hidden">
-                            <div className="hidden 2xl:flex gap-2 justify-center">
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button variant="ghost" size="icon" aria-label={`View Department ${item.name}`} onClick={e => {
-                                      e.stopPropagation();
-                                      setViewDepartment(item);
-                                      setViewDialogOpen(true);
-                                    }}>
-                                      <Eye className="h-4 w-4 text-blue-600" />
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>View department details</TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button variant="ghost" size="icon" aria-label={`Edit Department ${item.name}`} onClick={(e) => { e.stopPropagation(); setModalDepartment(item); setModalOpen(true); }}>
-                                      <Pencil className="h-4 w-4 text-green-600" />
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>Edit department</TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                              <TooltipProvider delayDuration={0}>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <div
-                                      style={{ display: 'inline-block' }}
-                                      onClick={e => {
-                                        e.stopPropagation();
-                                        if (item.courseOfferings?.length > 0 || item.totalInstructors > 0) {
-                                          toast.error('Cannot delete department', {
-                                            description: 'This department has active courses or instructors. Please remove them first.',
-                                            duration: 4000,
-                                            position: 'top-center',
-                                          });
-                                          return;
-                                        }
-                                        setDepartmentToDelete(item);
-                                        setDeleteDialogOpen(true);
-                                      }}
-                                    >
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        aria-label={`Delete Department ${item.name}`}
-                                        disabled={item.courseOfferings?.length > 0 || item.totalInstructors > 0}
-                                        className="relative pointer-events-none"
-                                        tabIndex={-1}
-                                      >
-                                        <Trash2 className="h-4 w-4 text-red-600" />
-                                      </Button>
-                                    </div>
-                                  </TooltipTrigger>
-                                  <TooltipContent side="top" className="bg-red-50 text-red-700 border border-red-200">
-                                    {item.courseOfferings?.length > 0 || item.totalInstructors > 0
-                                      ? "Cannot delete department with active courses or instructors"
-                                      : "Delete department"}
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                            </div>
-                            <div className="2xl:hidden flex justify-center">
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="icon" aria-label="More actions" onClick={(e) => e.stopPropagation()}>
-                                    <MoreHorizontal className="h-5 w-5 text-blue-700" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  <DropdownMenuItem onClick={e => {
-                                    e.stopPropagation();
-                                    setViewDepartment(item);
-                                    setViewDialogOpen(true);
-                                  }}>
-                                    <Eye className="h-4 w-4 text-blue-600 mr-2" /> View
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setModalDepartment(item); setModalOpen(true); }}>
-                                    <Pencil className="h-4 w-4 text-green-600 mr-2" /> Edit
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    disabled={item.courseOfferings?.length > 0 || item.totalInstructors > 0}
-                                    className="relative"
-                                  >
-                                    <TooltipProvider delayDuration={0}>
-                                      <Tooltip>
-                                        <TooltipTrigger asChild>
-                                          <div
-                                            className="flex items-center w-full"
-                                            onClick={e => {
-                                              e.stopPropagation();
-                                              if (item.courseOfferings?.length > 0 || item.totalInstructors > 0) {
-                                                toast.error('Cannot delete department', {
-                                                  description: 'This department has active courses or instructors. Please remove them first.',
-                                                  duration: 4000,
-                                                  position: 'top-center',
-                                                });
-                                                return;
-                                              }
-                                              setDepartmentToDelete(item);
-                                              setDeleteDialogOpen(true);
-                                            }}
-                                          >
-                                            <span className="pointer-events-none">
-                                              <Trash2 className="h-4 w-4 text-red-600 mr-2" /> Delete
-                                            </span>
-                                          </div>
-                                        </TooltipTrigger>
-                                        <TooltipContent side="right" className="bg-red-50 text-red-700 border border-red-200">
-                                          {item.courseOfferings?.length > 0 || item.totalInstructors > 0
-                                            ? "Cannot delete department with active courses or instructors"
-                                            : "Delete department"}
-                                        </TooltipContent>
-                                      </Tooltip>
-                                    </TooltipProvider>
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </div>
-                          </td>
-                        )}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+      if (!data.data || !validateDepartments(data.data)) {
+        throw new Error('Invalid department data received from server');
+      }
 
-      {/* Card layout for small screens */}
-      <div className="block xl:hidden w-full space-y-4">
-        {paginatedDepartments.length === 0 ? (
-          <div className="text-center text-gray-500 py-8">No departments found.</div>
-        ) : (
-          paginatedDepartments.map((item) => (
-            <div
-              key={item.id}
-              className={`relative bg-white border border-blue-200 rounded-2xl shadow-lg p-4 flex flex-col gap-3 transition-shadow duration-150 active:shadow-xl focus-within:ring-2 focus-within:ring-blue-400 ${selectedIds.includes(item.id) ? 'ring-2 ring-blue-400' : ''}`}
-              tabIndex={0}
-              role="button"
-              aria-label={`View details for department ${item.name}`}
-              onClick={() => router.push(`/dashboard/list/departments/${item.id}`)}
-              onKeyDown={e => {
-                if (e.key === "Enter" || e.key === " ") {
-                  router.push(`/dashboard/list/departments/${item.id}`);
-                }
-              }}
-            >
-              {/* Checkbox and Status */}
-              <div className="flex items-center justify-between">
-                <Checkbox
-                  checked={selectedIds.includes(item.id)}
-                  onCheckedChange={() => handleSelectRow(item.id)}
-                  aria-label={`Select department ${item.name}`}
-                />
-                <Badge
-                  variant={item.status === "active" ? "success" : "destructive"}
-                  className="text-xs px-2 py-1 rounded-full"
-                >
-                  {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
-                </Badge>
-              </div>
+      setDepartments(data.data);
+      toast.success('Departments refreshed successfully');
+    } catch (error) {
+      const errorMessage = getErrorMessage(error, 'refresh departments');
+      setPageState(prev => ({ 
+        ...prev, 
+        error: errorMessage,
+        isRefreshing: false,
+        operationInProgress: { type: null, retryCount: 0 }
+      }));
+      toast.error(errorMessage);
+    } finally {
+      setPageState(prev => ({ 
+        ...prev, 
+        isRefreshing: false,
+        operationInProgress: { type: null, retryCount: 0 }
+      }));
+    }
+  };
 
-              {/* Department Name */}
-              <div className="flex items-center gap-2">
-                <span className="text-xl font-bold text-blue-900">{item.name}</span>
-                <span className="ml-2 text-xs font-mono text-blue-500 bg-blue-50 rounded px-2 py-0.5">
-                  {item.code}
-                </span>
-              </div>
+  // Helper function for delete tooltip
+  const getDeleteTooltip = (item: Department) => {
+    if (item.status === "active") return "Cannot delete an active department";
+    if (item.courseOfferings?.length > 0) return "Cannot delete department with courses";
+    if (item.totalInstructors > 0) return "Cannot delete department with instructors";
+    return undefined;
+  };
 
-              {/* Info Section */}
-              <div className="flex flex-wrap gap-3 text-sm text-blue-800">
-                <div className="flex items-center gap-1">
-                  <span className="font-semibold">Head:</span>
-                  <span>{item.headOfDepartment || <span className="italic text-gray-400">Not Assigned</span>}</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <span className="font-semibold">Courses:</span>
-                  <span>{item.courseOfferings?.length || 0}</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <span className="font-semibold">Instructors:</span>
-                  <span>{item.totalInstructors || 0}</span>
-                </div>
-              </div>
+  // Update filter dialog to use consolidated state
+  const handleFilterChange = (newFilters: Partial<FilterState>) => {
+    setFilters((prev: FilterState) => ({ ...prev, ...newFilters }));
+  };
 
-              {/* Description */}
-              {item.description && (
-                <div className="text-xs text-gray-500 border-t border-blue-50 pt-2 mt-2">
-                  {item.description}
-                </div>
-              )}
+  // Update filter reset
+  const handleFilterReset = () => {
+    setFilters({
+      name: '',
+      code: '',
+      head: '',
+      minCourses: '',
+      maxCourses: '',
+      minInstructors: '',
+      maxInstructors: '',
+      status: 'all'
+    });
+  };
 
-              {/* Actions */}
-              {!isPrinting && (
-                <div className="flex justify-end gap-2 mt-2">
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    aria-label={`View Department ${item.name}`}
-                    onClick={e => {
-                      e.stopPropagation();
-                      setViewDepartment(item);
-                      setViewDialogOpen(true);
-                    }}
-                    className="hover:bg-blue-50"
-                  >
-                    <Eye className="h-4 w-4 text-blue-600" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    aria-label={`Edit Department ${item.name}`}
-                    onClick={e => { e.stopPropagation(); setModalDepartment(item); setModalOpen(true); }}
-                    className="hover:bg-green-50"
-                  >
-                    <Pencil className="h-4 w-4 text-green-600" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    aria-label={`Delete Department ${item.name}`}
-                    onClick={e => { e.stopPropagation(); setDepartmentToDelete(item); setDeleteDialogOpen(true); }}
-                    disabled={item.courseOfferings?.length > 0 || item.totalInstructors > 0}
-                    className="hover:bg-red-50"
-                  >
-                    <Trash2 className="h-4 w-4 text-red-600" />
-                  </Button>
-                </div>
-              )}
-            </div>
-          ))
-        )}
-      </div>
+  // State setters with proper types
+  const setLoading = (loading: boolean) => setPageState((prev: PageState) => ({ ...prev, loading }));
+  const setError = (error: string | null) => setPageState((prev: PageState) => ({ ...prev, error }));
+  const setRefreshing = (isRefreshing: boolean) => setPageState((prev: PageState) => ({ ...prev, isRefreshing }));
+  const setDeleting = (isDeleting: boolean) => setPageState((prev: PageState) => ({ ...prev, isDeleting }));
+  const setExporting = (isExporting: boolean) => setPageState((prev: PageState) => ({ ...prev, isExporting }));
+  const setPrinting = (isPrinting: boolean) => setPageState((prev: PageState) => ({ ...prev, isPrinting }));
+  const setFiltering = (isFiltering: boolean) => setPageState((prev: PageState) => ({ ...prev, isFiltering }));
 
-      {/* Bulk Actions Bar */}
-      {selectedIds.length > 0 && (
-        <div className="flex items-center gap-2 p-2 bg-blue-50 rounded-lg mt-2 mb-2 border border-blue-100">
-          <span className="font-medium text-blue-900">{selectedIds.length} selected</span>
-          <Button variant="destructive" size="sm" onClick={handleBulkDelete} disabled={loading}>
-            {loading ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : null}
-            Delete Selected
-          </Button>
-          <Button variant="outline" size="sm" onClick={handleExportSelected} disabled={loading}>
-            Export Selected
-          </Button>
-        </div>
-      )}
+  // Dialog state setters
+  const setModalOpen = (open: boolean) => setDialogState((prev: DialogState) => ({ ...prev, modalOpen: open }));
+  const setDeleteDialogOpen = (open: boolean) => setDialogState((prev: DialogState) => ({ ...prev, deleteDialogOpen: open }));
+  const setFilterDialogOpen = (open: boolean) => setDialogState((prev: DialogState) => ({ ...prev, filterDialogOpen: open }));
+  const setSortDialogOpen = (open: boolean) => setDialogState((prev: DialogState) => ({ ...prev, sortDialogOpen: open }));
+  const setExportDialogOpen = (open: boolean) => setDialogState((prev: DialogState) => ({ ...prev, exportDialogOpen: open }));
+  const setViewDialogOpen = (open: boolean) => setDialogState((prev: DialogState) => ({ ...prev, viewDialogOpen: open }));
 
-      {/* PAGINATION */}
-      <div className="mt-6">
-        <Pagination
-          currentPage={currentPage}
-          totalPages={totalPages}
-          onPageChange={setCurrentPage}
-        />
-      </div>
+  // Sort state setters
+  const setSortField = (field: SortFieldKey) => setSortState((prev: SortState) => ({ ...prev, field }));
+  const setSortOrder = (order: SortOrder) => setSortState((prev: SortState) => ({ ...prev, order }));
+  const setSortFields = (fields: MultiSortField[]) => setSortState((prev: SortState) => ({ ...prev, fields }));
 
-      {/* Filter Dialog */}
-      <Dialog open={filterDialogOpen} onOpenChange={setFilterDialogOpen}>
-        <DialogContent className="sm:max-w-[500px] bg-white/90 border border-blue-100 shadow-lg rounded-xl py-8 px-6">
-          <DialogHeader>
-            <DialogTitle className="text-blue-900 text-xl flex items-center gap-2 mb-6">
-              Filter Departments
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="text-blue-400 cursor-pointer">
-                      <BadgeInfo className="w-4 h-4" />
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent side="right" className="bg-blue-900 text-white">
-                    Filter departments by multiple criteria. Use advanced filters for more specific conditions.
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-8">
-            {/* Status Section */}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <h3 className="text-md font-semibold text-blue-900">Status</h3>
-                </div>
-                <Badge variant="outline" className="text-xs font-normal bg-blue-50 text-blue-700 border-blue-200">
-                  {columnStatusFilter === 'all' ? 'All' : columnStatusFilter.charAt(0).toUpperCase() + columnStatusFilter.slice(1)}
-                </Badge>
-              </div>
-              <div className="h-px bg-blue-100 w-full mb-8"></div>
-              <div className="grid grid-cols-3 gap-2 mt-6">
-                <Button
-                  variant={columnStatusFilter === 'all' ? "default" : "outline"}
-                  size="sm"
-                  className={`w-full ${columnStatusFilter === 'all' ? 'bg-blue-600 hover:bg-blue-700' : 'hover:bg-blue-50'}`}
-                  onClick={() => setColumnStatusFilter('all')}
-                >
-                  All
-                </Button>
-                <Button
-                  variant={columnStatusFilter === 'active' ? "default" : "outline"}
-                  size="sm"
-                  className={`w-full ${columnStatusFilter === 'active' ? 'bg-blue-600 hover:bg-blue-700' : 'hover:bg-blue-50'}`}
-                  onClick={() => setColumnStatusFilter('active')}
-                >
-                  Active
-                </Button>
-                <Button
-                  variant={columnStatusFilter === 'inactive' ? "default" : "outline"}
-                  size="sm"
-                  className={`w-full ${columnStatusFilter === 'inactive' ? 'bg-blue-600 hover:bg-blue-700' : 'hover:bg-blue-50'}`}
-                  onClick={() => setColumnStatusFilter('inactive')}
-                >
-                  Inactive
-                </Button>
-              </div>
-            </div>
-            {/* Advanced Filters Section */}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <h3 className="text-md font-semibold text-blue-900">Advanced Filters</h3>
-                </div>
-                {Object.values(advancedFilters).some(Boolean) && (
-                  <Badge variant="outline" className="text-xs font-normal bg-blue-50 text-blue-700 border-blue-200">
-                    {Object.values(advancedFilters).filter(Boolean).length} active
-                  </Badge>
-                )}
-              </div>
-              <div className="h-px bg-blue-100 w-full mb-8"></div>
-              <div className="space-y-6">
-                {/* Department Name */}
-                <div className="space-y-2">
-                  <Label htmlFor="name-filter" className="text-sm text-blue-900 flex items-center gap-2">
-                    Department Name
-                    {columnNameFilter && (
-                      <Badge variant="outline" className="text-xs font-normal bg-blue-50 text-blue-700 border-blue-200">
-                        Active
-                      </Badge>
-                    )}
-                  </Label>
-                  <Input
-                    id="name-filter"
-                    placeholder="Filter by department name..."
-                    value={columnNameFilter}
-                    onChange={(e) => setColumnNameFilter(e.target.value)}
-                    className="border-blue-200 focus:border-blue-400 focus:ring-blue-400"
-                />
-              </div>
+  // Update handleDelete to use dialogState
+  const handleDelete = (department: Department) => {
+    setDialogState(prev => ({
+      ...prev,
+      deleteDialogOpen: true,
+      departmentToDelete: {
+        id: department.id,
+        name: department.name
+      }
+    }));
+  };
 
-                {/* Department Code */}
-                <div className="space-y-2">
-                  <Label htmlFor="code-filter" className="text-sm text-blue-900 flex items-center gap-2">
-                    Department Code
-                    {columnCodeFilter && (
-                      <Badge variant="outline" className="text-xs font-normal bg-blue-50 text-blue-700 border-blue-200">
-                        Active
-                      </Badge>
-                    )}
-                  </Label>
-                  <Input
-                    id="code-filter"
-                    placeholder="Filter by department code..."
-                    value={columnCodeFilter}
-                    onChange={(e) => setColumnCodeFilter(e.target.value)}
-                    className="border-blue-200 focus:border-blue-400 focus:ring-blue-400"
-                  />
-                </div>
+  // Update confirmDelete to use dialogState
+  const confirmDelete = async () => {
+    const departmentToDelete = dialogState.departmentToDelete;
+    if (!departmentToDelete) {
+      toast.error('No department selected for deletion');
+      return;
+    }
 
-                {/* Head of Department */}
-                <div className="space-y-2">
-                  <Label htmlFor="head-filter" className="text-sm text-blue-900 flex items-center gap-2">
-                    Head of Department
-                    {columnHeadFilter && (
-                      <Badge variant="outline" className="text-xs font-normal bg-blue-50 text-blue-700 border-blue-200">
-                        Active
-                      </Badge>
-                    )}
-                  </Label>
-                  <Input
-                    id="head-filter"
-                    placeholder="Filter by head of department..."
-                    value={columnHeadFilter}
-                    onChange={(e) => setColumnHeadFilter(e.target.value)}
-                    className="border-blue-200 focus:border-blue-400 focus:ring-blue-400"
-                  >
-                  </Input>
-                </div>
+    try {
+      setPageState(prev => ({ 
+        ...prev, 
+        isDeleting: true, 
+        error: null,
+        operationInProgress: { type: 'delete', retryCount: 0 }
+      }));
 
-                {/* Total Courses Range */}
-                <div className="space-y-2">
-                  <Label className="text-sm text-blue-900 flex items-center gap-2">
-                    Total Courses
-                    {(advancedFilters.minCourses || advancedFilters.maxCourses) && (
-                      <Badge variant="outline" className="text-xs font-normal bg-blue-50 text-blue-700 border-blue-200">
-                        Range
-                      </Badge>
-                    )}
-                  </Label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="relative">
-                      <Input
-                    type="number"
-                        placeholder="Min courses"
-                    value={advancedFilters.minCourses}
-                        onChange={(e) => setAdvancedFilters(prev => ({ ...prev, minCourses: e.target.value }))}
-                        className="border-blue-200 focus:border-blue-400 focus:ring-blue-400 pr-8"
-                  />
-                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">min</span>
-                </div>
-                    <div className="relative">
-                      <Input
-                    type="number"
-                        placeholder="Max courses"
-                    value={advancedFilters.maxCourses}
-                        onChange={(e) => setAdvancedFilters(prev => ({ ...prev, maxCourses: e.target.value }))}
-                        className="border-blue-200 focus:border-blue-400 focus:ring-blue-400 pr-8"
-                  />
-                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">max</span>
-                </div>
-              </div>
-                </div>
-
-                {/* Total Instructors Range */}
-                <div className="space-y-2">
-                  <Label className="text-sm text-blue-900 flex items-center gap-2">
-                    Total Instructors
-                    {(advancedFilters.minInstructors || advancedFilters.maxInstructors) && (
-                      <Badge variant="outline" className="text-xs font-normal bg-blue-50 text-blue-700 border-blue-200">
-                        Range
-                      </Badge>
-                    )}
-                  </Label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="relative">
-                      <Input
-                    type="number"
-                        placeholder="Min instructors"
-                    value={advancedFilters.minInstructors}
-                        onChange={(e) => setAdvancedFilters(prev => ({ ...prev, minInstructors: e.target.value }))}
-                        className="border-blue-200 focus:border-blue-400 focus:ring-blue-400 pr-8"
-                  />
-                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">min</span>
-                </div>
-                    <div className="relative">
-                      <Input
-                    type="number"
-                        placeholder="Max instructors"
-                    value={advancedFilters.maxInstructors}
-                        onChange={(e) => setAdvancedFilters(prev => ({ ...prev, maxInstructors: e.target.value }))}
-                        className="border-blue-200 focus:border-blue-400 focus:ring-blue-400 pr-8"
-                  />
-                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">max</span>
-                </div>
-              </div>
-            </div>
-              </div>
-            </div>
-          </div>
-          <DialogFooter className="gap-4 mt-10">
-            <Button
-              variant="outline"
-              onClick={() => {
-                setColumnStatusFilter('all');
-                setAdvancedFilters({
-                  head: '',
-                  minCourses: '',
-                  maxCourses: '',
-                  minInstructors: '',
-                  maxInstructors: ''
-                });
-                setColumnNameFilter('');
-                setColumnCodeFilter('');
-                setColumnHeadFilter('');
-                setColumnLocationFilter('');
-              }}
-              className="w-32 border border-blue-300 text-blue-500"
-            >
-              Reset
-            </Button>
-            <Button 
-              onClick={() => setFilterDialogOpen(false)}
-              className="w-32 bg-blue-600 hover:bg-blue-700 text-white">
-              Apply Filters
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      {/* DELETE CONFIRMATION DIALOG */}
-      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <DialogContent className="backdrop-blur-md bg-white/90 border border-blue-100 rounded-xl">
-          <DialogTitle className="sr-only">Delete Department</DialogTitle>
-          <DialogHeader>
-            <DialogTitle className="text-blue-900">Delete Department</DialogTitle>
-          </DialogHeader>
-          <div className="text-blue-900">Are you sure you want to delete the department "{departmentToDelete?.name}"? This action cannot be undone.</div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => { setDeleteDialogOpen(false); setDepartmentToDelete(null); }}>Cancel</Button>
-            <Button 
-              variant="destructive" 
-              onClick={async () => {
-                if (!departmentToDelete) return;
-                try {
-                  const response = await fetch(`/api/departments/${parseInt(departmentToDelete.id)}`, {
-                    method: 'DELETE',
-                  });
-                  
-                  if (!response.ok) {
-                    const error = await response.json();
-                    throw new Error(error.message || 'Failed to delete department');
-                  }
-
-                  // Update the departments list
-                  setDepartments(prev => prev.filter(d => d.id !== departmentToDelete.id));
-                  toast.success('Department deleted successfully');
-                  setDeleteDialogOpen(false);
-                  setDepartmentToDelete(null);
-                } catch (error) {
-                  console.error('Error deleting department:', error);
-                  toast.error('Failed to delete department', {
-                    description: error instanceof Error ? error.message : 'An unexpected error occurred',
-                    duration: 4000,
-                  });
-                }
-              }}
-            >
-              Delete
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      {/* MODAL FOR CREATE/EDIT */}
-    <DepartmentForm
-      open={modalOpen}
-      onOpenChange={setModalOpen}
-      initialData={modalDepartment}
-      instructors={instructors}
-      onSuccess={async () => {
-        setModalOpen(false);
-        // Refresh department list after create/edit
-        setLoading(true);
-        try {
-          const res = await fetch('/api/departments');
-          if (!res.ok) throw new Error('Failed to fetch departments');
-          const data = await res.json();
-          setDepartments(data);
-        } catch {
-          setDepartments([]);
+      const response = await retryOperation(async () => {
+        const res = await fetch(`/api/departments/${departmentToDelete.id}`, {
+          method: 'DELETE',
+        });
+        if (!res.ok) {
+          throw new Error(`Failed to delete department: ${res.statusText}`);
         }
-        setLoading(false);
-      }}
-    />
-    {/* Export Dialog */}
-    <Dialog open={exportDialogOpen} onOpenChange={setExportDialogOpen}>
-      <DialogContent className="sm:max-w-[500px] bg-white/90 border border-blue-100 shadow-lg rounded-xl py-8 px-6">
-        <DialogHeader>
-          <DialogTitle className="text-blue-900 text-xl flex items-center gap-2 mb-6">
-            Export Departments
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span className="text-blue-400 cursor-pointer">
-                    <BadgeInfo className="w-4 h-4" />
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent side="right" className="bg-blue-900 text-white">
-                  Export department data in various formats. Choose your preferred export options.
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </DialogTitle>
-        </DialogHeader>
-        <div className="space-y-8">
-          {/* Export Format Section */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <h3 className="text-md font-semibold text-blue-900">Export Format</h3>
-              </div>
-            </div>
-            <div className="h-px bg-blue-100 w-full mb-8"></div>
-            <div className="grid grid-cols-3 gap-4 mt-6">
-              <Button
-                variant={exportFormat === 'pdf' ? "default" : "outline"}
-                size="sm"
-                className={`w-full flex flex-col items-center gap-1 py-3 ${exportFormat === 'pdf' ? 'bg-blue-600 hover:bg-blue-700' : 'hover:bg-blue-50'}`}
-                onClick={() => setExportFormat('pdf')}
-              >
-                <FileText className="h-5 w-5 text-blue-700" />
-                <span className="text-xs">PDF</span>
-              </Button>
-              <Button
-                variant={exportFormat === 'excel' ? "default" : "outline"}
-                size="sm"
-                className={`w-full flex flex-col items-center gap-1 py-3 ${exportFormat === 'excel' ? 'bg-blue-600 hover:bg-blue-700' : 'hover:bg-blue-50'}`}
-                onClick={() => setExportFormat('excel')}
-              >
-                <FileSpreadsheet className="h-5 w-5 text-blue-700" />
-                <span className="text-xs">Excel</span>
-              </Button>
-              <Button
-                variant={exportFormat === 'csv' ? "default" : "outline"}
-                size="sm"
-                className={`w-full flex flex-col items-center gap-1 py-3 ${exportFormat === 'csv' ? 'bg-blue-600 hover:bg-blue-700' : 'hover:bg-blue-50'}`}
-                onClick={() => setExportFormat('csv')}
-              >
-                <FileSpreadsheet className="h-5 w-5 text-blue-700" />
-                <span className="text-xs">CSV</span>
-              </Button>
-            </div>
-          </div>
+        return res;
+      });
 
-          {/* Export Options Section */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <h3 className="text-md font-semibold text-blue-900">Export Options</h3>
-              </div>
-            </div>
-            <div className="h-px bg-blue-100 w-full mb-8"></div>
-            <div className="space-y-6">
-              {exportableColumns.map((column) => (
-                <div key={column.key} className="flex items-center space-x-2">
-                  <Checkbox
-                    id={`export-${column.key}`}
-                    checked={exportColumns.includes(column.key)}
-                    onCheckedChange={(checked) => {
-                      if (checked) {
-                        setExportColumns([...exportColumns, column.key]);
-                      } else {
-                        setExportColumns(exportColumns.filter((c) => c !== column.key));
-                      }
-                    }}
-                    className="border-blue-200 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
-                  />
-                  <Label
-                    htmlFor={`export-${column.key}`}
-                    className="text-sm text-blue-900 cursor-pointer"
-                  >
-                    {column.label}
-                  </Label>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-        <DialogFooter className="gap-4 mt-10">
-          <Button
-            variant="outline"
-            onClick={() => {
-              setExportFormat(null);
-              setExportColumns(exportableColumns.map(col => col.key));
-            }}
-            className="w-32 border border-blue-300 text-blue-500"
-          >
-            Reset
-          </Button>
-          <Button 
-            onClick={handleExport}
-            className="w-32 bg-blue-600 hover:bg-blue-700 text-white"
-            disabled={!exportFormat}
-          >
-            Export
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-    {/* Sort Dialog */}
-    <Dialog open={sortDialogOpen} onOpenChange={setSortDialogOpen}>
-      <DialogContent className="sm:max-w-[500px] bg-white/90 border border-blue-100 shadow-lg rounded-xl py-8 px-6">
-        <DialogHeader>
-          <DialogTitle className="text-blue-900 text-xl flex items-center gap-2 mb-6">
-            Sort Departments
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span className="text-blue-400 cursor-pointer">
-                    <BadgeInfo className="w-4 h-4" />
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent side="right" className="bg-blue-900 text-white">
-                  Sort departments by different fields. Choose the field and order to organize your list.
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </DialogTitle>
-        </DialogHeader>
-        <div className="space-y-8">
-          {/* Sort By Section */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <h3 className="text-md font-semibold text-blue-900">Sort By</h3>
-              </div>
-            </div>
-            <div className="h-px bg-blue-100 w-full mb-8"></div>
-            <div className="grid grid-cols-2 gap-4 mt-6">
-              <Button
-                variant={sortField === 'name' ? "default" : "outline"}
-                size="sm"
-                className={`w-full ${sortField === 'name' ? 'bg-blue-600 hover:bg-blue-700' : 'hover:bg-blue-50'}`}
-                onClick={() => setSortField('name')}
-              >
-                Department Name
-              </Button>
-              <Button
-                variant={sortField === 'code' ? "default" : "outline"}
-                size="sm"
-                className={`w-full ${sortField === 'code' ? 'bg-blue-600 hover:bg-blue-700' : 'hover:bg-blue-50'}`}
-                onClick={() => setSortField('code')}
-              >
-                Department Code
-              </Button>
-              <Button
-                variant={sortField === 'head' ? "default" : "outline"}
-                size="sm"
-                className={`w-full ${sortField === 'head' ? 'bg-blue-600 hover:bg-blue-700' : 'hover:bg-blue-50'}`}
-                onClick={() => setSortField('head')}
-              >
-                Head of Department
-              </Button>
-              <Button
-                variant={sortField === 'totalCourses' ? "default" : "outline"}
-                size="sm"
-                className={`w-full ${sortField === 'totalCourses' ? 'bg-blue-600 hover:bg-blue-700' : 'hover:bg-blue-50'}`}
-                onClick={() => setSortField('totalCourses')}
-              >
-                Total Courses
-              </Button>
-              <Button
-                variant={sortField === 'totalInstructors' ? "default" : "outline"}
-                size="sm"
-                className={`w-full ${sortField === 'totalInstructors' ? 'bg-blue-600 hover:bg-blue-700' : 'hover:bg-blue-50'}`}
-                onClick={() => setSortField('totalInstructors')}
-              >
-                Total Instructors
-              </Button>
-              <Button
-                variant={sortField === 'status' ? "default" : "outline"}
-                size="sm"
-                className={`w-full ${sortField === 'status' ? 'bg-blue-600 hover:bg-blue-700' : 'hover:bg-blue-50'}`}
-                onClick={() => setSortField('status')}
-              >
-                Status
-              </Button>
-            </div>
-          </div>
+      const data: ApiResponse<{ success: boolean }> = await response.json();
+      
+      if (data.error) {
+        throw new Error(data.error);
+      }
 
-          {/* Sort Order Section */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <h3 className="text-md font-semibold text-blue-900">Sort Order</h3>
-              </div>
-            </div>
-            <div className="h-px bg-blue-100 w-full mb-8"></div>
-            <div className="grid grid-cols-2 gap-4 mt-6">
-              <Button
-                variant={sortOrder === 'asc' ? "default" : "outline"}
-                size="sm"
-                className={`w-full ${sortOrder === 'asc' ? 'bg-blue-600 hover:bg-blue-700' : 'hover:bg-blue-50'}`}
-                onClick={() => setSortOrder('asc')}
-              >
-                Ascending
-              </Button>
-              <Button
-                variant={sortOrder === 'desc' ? "default" : "outline"}
-                size="sm"
-                className={`w-full ${sortOrder === 'desc' ? 'bg-blue-600 hover:bg-blue-700' : 'hover:bg-blue-50'}`}
-                onClick={() => setSortOrder('desc')}
-              >
-                Descending
-              </Button>
-            </div>
-          </div>
-        </div>
-        <DialogFooter className="gap-4 mt-10">
-          <Button
-            variant="outline"
-            onClick={() => {
-              setSortField('name');
-              setSortOrder('asc');
-              setSortFields([{ field: 'name', order: 'asc' }]);
-            }}
-            className="w-32 border border-blue-300 text-blue-500"
-          >
-            Reset
-          </Button>
-          <Button 
-            onClick={() => {
-              handleSort();
-              setSortDialogOpen(false);
-            }}
-            className="w-32 bg-blue-600 hover:bg-blue-700 text-white"
-          >
-            Apply Sort
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-    <DepartmentViewDialog
-      open={viewDialogOpen}
-      onOpenChange={(open) => {
-        setViewDialogOpen(open);
-        if (!open) setViewDepartment(undefined);
-      }}
-      department={viewDepartment}
-    />
+      setDepartments(prev => prev.filter(d => d.id !== departmentToDelete.id));
+      toast.success('Department deleted successfully');
+      setDialogState(prev => ({ 
+        ...prev, 
+        deleteDialogOpen: false,
+        departmentToDelete: null 
+      }));
+    } catch (error) {
+      const errorMessage = getErrorMessage(error, 'delete department');
+      setPageState(prev => ({ 
+        ...prev, 
+        error: errorMessage,
+        isDeleting: false,
+        operationInProgress: { type: null, retryCount: 0 }
+      }));
+      toast.error(errorMessage);
+    } finally {
+      setPageState(prev => ({ 
+        ...prev, 
+        isDeleting: false,
+        operationInProgress: { type: null, retryCount: 0 }
+      }));
+    }
+  };
+
+  // Add handler functions for view and edit
+  const handleView = (department: Department) => {
+    setViewDepartment(department);
+    setDialogState(prev => ({ ...prev, viewDialogOpen: true }));
+  };
+
+  const handleEdit = (department: Department) => {
+    setModalDepartment(department);
+    setDialogState(prev => ({ ...prev, modalOpen: true }));
+  };
+
+  // Update TableRowActions to use new handleDelete
+  const renderRowActions = (department: Department) => (
+    <div className="flex items-center gap-2">
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={() => handleView(department)}
+        title="View Details"
+      >
+        <Eye className="h-4 w-4" />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={() => handleEdit(department)}
+        title="Edit Department"
+      >
+        <Pencil className="h-4 w-4" />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={() => handleDelete(department)}
+        title="Delete Department"
+      >
+        <Trash2 className="h-4 w-4" />
+      </Button>
     </div>
-    </>
+  );
+
+  return (
+    <div className="space-y-4">
+      {/* Normal UI */}
+      <div className="bg-white/80 backdrop-blur-md p-6 rounded-xl shadow-xl border border-blue-100 flex-1 m-4 mt-0">
+        {/* TOP */}
+        <TableHeaderSection
+          title="All Departments"
+          description="Manage and view all department information"
+          searchValue={search}
+          onSearchChange={setSearch}
+          onRefresh={refreshDepartments}
+          isRefreshing={pageState.isRefreshing}
+          onFilterClick={() => setFilterDialogOpen(true)}
+          onSortClick={() => setSortDialogOpen(true)}
+          onExportClick={() => setExportDialogOpen(true)}
+          onPrintClick={handlePrint}
+          onAddClick={() => { setModalDepartment(undefined); setDialogState(prev => ({ ...prev, modalOpen: true })); }}
+          activeFilterCount={Object.values({
+            name: filters.name,
+            code: filters.code,
+            head: filters.head,
+            minCourses: filters.minCourses,
+            maxCourses: filters.maxCourses,
+            minInstructors: filters.minInstructors,
+            maxInstructors: filters.maxInstructors,
+          }).filter(Boolean).length}
+          searchPlaceholder="Search departments..."
+          addButtonLabel="Add Department"
+          columnOptions={DEPARTMENT_COLUMNS.map(col => ({ accessor: col.accessor, label: typeof col.header === 'string' ? col.header : col.accessor }))}
+          visibleColumns={visibleColumns}
+          setVisibleColumns={setVisibleColumns}
+        />
+        {/* Print Header and Table - Only visible when printing */}
+        <div className="print-content">
+          {/* Table layout for xl+ only */}
+          <div className="hidden xl:block">
+            <div className="overflow-x-auto rounded-xl border border-blue-100 bg-white/70 shadow-md relative">
+              {/* Loader overlay when refreshing */}
+              {pageState.isRefreshing && (
+                <div className="absolute inset-0 bg-white/70 flex items-center justify-center z-20">
+                  <Loader2 className="h-12 w-12 text-blue-600 animate-spin" />
+                </div>
+              )}
+              <TableList
+                columns={columns}
+                data={paginatedDepartments}
+                loading={pageState.loading}
+                selectedIds={selectedIds}
+                onSelectRow={handleSelectRow}
+                onSelectAll={handleSelectAll}
+                isAllSelected={isAllSelected}
+                isIndeterminate={isIndeterminate}
+                getItemId={(item) => item.id}
+                expandedRowIds={expandedRowIds}
+                onToggleExpand={(itemId) => {
+                  setExpandedRowIds(current => 
+                    current.includes(itemId) 
+                      ? current.filter(id => id !== itemId)
+                      : [...current, itemId]
+                  );
+                }}
+                editingCell={editingCell}
+                onCellClick={(item, columnAccessor) => {
+                  if (['name', 'code', 'headOfDepartment'].includes(columnAccessor)) {
+                    setEditingCell({ rowId: item.id, columnAccessor });
+                  }
+                }}
+                onCellChange={async (rowId, columnAccessor, value) => {
+                  setEditingCell(null);
+                  const originalDepartments = [...departments];
+                  const updatedDepartments = departments.map(d =>
+                    d.id === rowId ? { ...d, [columnAccessor]: value } : d
+                  );
+                  setDepartments(updatedDepartments);
+
+                  try {
+                    const response = await fetch(`/api/departments/${rowId}`, {
+                      method: 'PATCH',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ [columnAccessor]: value }),
+                    });
+                    if (!response.ok) {
+                      throw new Error('Failed to update department');
+                    }
+                    toast.success('Department updated successfully');
+                  } catch (error) {
+                    setDepartments(originalDepartments);
+                    toast.error(getErrorMessage(error, 'update department'));
+                  }
+                }}
+                sortState={sortState}
+                onSort={handleSort}
+              />
+            </div>
+          </div>
+          {/* Card layout for small screens */}
+          <div className="block xl:hidden">
+            <TableCardView
+              items={paginatedDepartments}
+              selectedIds={selectedIds}
+              onSelect={handleSelectRow}
+              onView={(item) => {
+                setViewDepartment(item);
+                setDialogState(prev => ({ ...prev, viewDialogOpen: true }));
+              }}
+              onEdit={(item) => {
+                setModalDepartment(item);
+                setDialogState(prev => ({ ...prev, modalOpen: true }));
+              }}
+              onDelete={(item) => {
+                handleDelete(item);
+              }}
+              getItemId={(item) => item.id}
+              getItemName={(item) => item.name}
+              getItemCode={(item) => item.code}
+              getItemStatus={(item) => item.status}
+              getItemDescription={(item) => item.description}
+              getItemDetails={(item) => [
+                { label: 'Head', value: item.headOfDepartment || 'Not Assigned' },
+                { label: 'Courses', value: item.courseOfferings?.length || 0 },
+                { label: 'Instructors', value: item.totalInstructors || 0 },
+              ]}
+              disabled={(item) => item.status === "active" || item.courseOfferings?.length > 0 || item.totalInstructors > 0}
+              deleteTooltip={(item) => item.status === "active" ? "Cannot delete an active department" : 
+                item.courseOfferings?.length > 0 ? "Cannot delete department with courses" :
+                item.totalInstructors > 0 ? "Cannot delete department with instructors" : undefined}
+              isLoading={pageState.loading}
+            />
+          </div>
+        </div>
+
+        {/* Bulk Actions Bar*/}
+        {selectedIds.length > 0 && (
+          <BulkActionsBar
+            selectedCount={selectedIds.length}
+            entityLabel="department"
+            actions={[
+              {
+                key: 'delete',
+                label: 'Delete Selected',
+                icon: pageState.loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Trash2 className="w-4 h-4 mr-2" />,
+                onClick: handleBulkDelete,
+                loading: pageState.loading,
+                disabled: pageState.loading,
+                tooltip: 'Delete selected departments',
+                variant: 'destructive',
+              },
+            ]}
+            onClear={() => setSelectedIds([])}
+            className="mt-4 mb-2"
+          />
+        )}
+
+        {/* PAGINATION */}
+        <div className="flex items-center justify-between mt-6">
+        <div>
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+          />
+          </div>
+          <div className="flex items-center gap-2">
+    <span className="text-sm text-gray-600">Rows per page:</span>
+    <Select value={String(itemsPerPage)} onValueChange={(value) => {
+        setItemsPerPage(Number(value));
+        setCurrentPage(1);
+    }}>
+      <SelectTrigger className="w-24">
+        <SelectValue placeholder={itemsPerPage} />
+      </SelectTrigger>
+      <SelectContent>
+        {[10, 20, 30, 40, 50].map(size => (
+          <SelectItem key={size} value={String(size)}>{size}</SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  </div>
+        </div>
+
+        {/* Filter Dialog */}
+        <FilterDialog
+          open={dialogState.filterDialogOpen}
+          onOpenChange={(open) => setFilterDialogOpen(open)}
+          statusFilter={filters.status}
+          setStatusFilter={(status) => setFilters((prev: FilterState) => ({ ...prev, status }))}
+          statusOptions={[
+            { value: 'all', label: 'All' },
+            { value: 'active', label: 'Active' },
+            { value: 'inactive', label: 'Inactive' },
+          ]}
+          advancedFilters={{
+            name: filters.name,
+            code: filters.code,
+            head: filters.head,
+            minCourses: filters.minCourses,
+            maxCourses: filters.maxCourses,
+            minInstructors: filters.minInstructors,
+            maxInstructors: filters.maxInstructors,
+          }}
+          setAdvancedFilters={handleFilterChange}
+          fields={[
+            { key: 'name', label: 'Department Name', type: 'text', badgeType: 'active' },
+            { key: 'code', label: 'Department Code', type: 'text', badgeType: 'active' },
+            { key: 'head', label: 'Head of Department', type: 'text', badgeType: 'active' },
+            { key: 'minCourses', label: 'Total Courses', type: 'number', badgeType: 'range', minKey: 'minCourses', maxKey: 'maxCourses' },
+            { key: 'minInstructors', label: 'Total Instructors', type: 'number', badgeType: 'range', minKey: 'minInstructors', maxKey: 'maxInstructors' },
+          ]}
+          onReset={handleFilterReset}
+          onApply={() => setFilterDialogOpen(false)}
+          activeAdvancedCount={Object.values({
+            name: filters.name,
+            code: filters.code,
+            head: filters.head,
+            minCourses: filters.minCourses,
+            maxCourses: filters.maxCourses,
+            minInstructors: filters.minInstructors,
+            maxInstructors: filters.maxInstructors,
+          }).filter(Boolean).length}
+          title="Filter Departments"
+          tooltip="Filter departments by multiple criteria. Use advanced filters for more specific conditions."
+        />
+        {/* DELETE CONFIRMATION DIALOG */}
+        <ConfirmDeleteDialog
+          open={dialogState.deleteDialogOpen}
+          onOpenChange={(open) => {
+            if (!open) {
+              setDialogState(prev => ({ 
+                ...prev, 
+                deleteDialogOpen: false,
+                departmentToDelete: null 
+              }));
+            }
+          }}
+          itemName={dialogState.departmentToDelete?.name ?? ''}
+          onDelete={confirmDelete}
+          onCancel={() => {
+            setDialogState(prev => ({ 
+              ...prev, 
+              deleteDialogOpen: false,
+              departmentToDelete: null 
+            }));
+          }}
+          canDelete={true}
+          deleteError={pageState.error}
+          loading={pageState.isDeleting}
+          description={dialogState.departmentToDelete ? 
+            `Are you sure you want to delete the department "${dialogState.departmentToDelete.name}"? This action cannot be undone.` :
+            'Are you sure you want to delete this department? This action cannot be undone.'}
+        />
+        {/* MODAL FOR CREATE/EDIT */}
+      <DepartmentForm
+        open={dialogState.modalOpen}
+        onOpenChange={(open) => setModalOpen(open)}
+        initialData={modalDepartment}
+        instructors={instructors}
+        onSuccess={async () => {
+          setModalOpen(false);
+          // Refresh department list after create/edit
+          setLoading(true);
+          try {
+            const res = await fetch('/api/departments');
+            if (!res.ok) throw new Error('Failed to fetch departments');
+            const data = await res.json();
+            setDepartments(data);
+          } catch {
+            setDepartments([]);
+          }
+          setLoading(false);
+        }}
+      />
+      {/* Export Dialog */}
+      <ExportDialog
+        open={dialogState.exportDialogOpen}
+        onOpenChange={(open) => setExportDialogOpen(open)}
+        exportableColumns={exportableColumns}
+        exportColumns={exportColumns}
+        setExportColumns={setExportColumns}
+        exportFormat={exportFormat}
+        setExportFormat={setExportFormat}
+        onExport={handleExport}
+        title="Export Departments"
+        tooltip="Export department data in various formats. Choose your preferred export options."
+      />
+      {/* Sort Dialog */}
+      <SortDialog
+        open={dialogState.sortDialogOpen}
+        onOpenChange={(open) => setSortDialogOpen(open)}
+        sortField={sortState.field}
+        setSortField={(field) => setSortField(field as SortFieldKey)}
+        sortOrder={sortState.order}
+        setSortOrder={(order) => setSortOrder(order as SortOrder)}
+        sortFieldOptions={departmentSortFieldOptions}
+        onApply={() => {
+          setSortFields([{ field: sortState.field, order: sortState.order }]);
+        }}
+        onReset={() => {
+                setSortField('name');
+                setSortOrder('asc');
+                setSortFields([{ field: 'name', order: 'asc' }]);
+              }}
+        title="Sort Departments"
+        tooltip="Sort departments by different fields. Choose the field and order to organize your list."
+      />
+      {/* View Dialog */}
+      <ViewDialog
+        open={dialogState.viewDialogOpen}
+        onOpenChange={(open) => {
+          setViewDialogOpen(open);
+          if (!open) setViewDepartment(undefined);
+        }}
+        title={viewDepartment?.name || ''}
+        subtitle={viewDepartment?.code}
+        status={viewDepartment ? {
+          value: viewDepartment.status,
+          variant: viewDepartment.status === "active" ? "success" : "destructive"
+        } : undefined}
+        sections={[
+          {
+            title: "Department Information",
+            fields: [
+              { label: 'Head of Department', value: viewDepartment?.headOfDepartment || 'Not Assigned' },
+              { label: 'Total Courses', value: viewDepartment?.courseOfferings?.length || 0, type: 'number' },
+              { label: 'Total Instructors', value: viewDepartment?.totalInstructors || 0, type: 'number' }
+            ]
+          }
+        ]}
+        description={viewDepartment?.description}
+        tooltipText="View detailed department information"
+      />
+      </div>
+    </div>
   );
 }

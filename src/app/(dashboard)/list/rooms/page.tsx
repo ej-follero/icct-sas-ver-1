@@ -1,23 +1,27 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
-import { Dialog, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
+import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
-import { Plus, Search, Filter, SortAsc, FileDown, Printer, Eye, Pencil, Trash2, Building2, DoorOpen } from "lucide-react";
+import { Eye, Pencil, Trash2, Loader2 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { jsPDF } from "jspdf";
-import "jspdf-autotable";
-import type { UserOptions } from "jspdf-autotable";
+import autoTable from "jspdf-autotable";
 import { z } from "zod";
 import { toast } from "sonner";
-import FormModal from "@/components/FormModal";
+import { TableHeaderSection } from "@/components/TableHeaderSection";
+import { TableCardView } from "@/components/TableCardView";
+import { BulkActionsBar } from "@/components/BulkActionsBar";
+import { FilterDialog } from "@/components/FilterDialog";
+import { SortDialog } from "@/components/SortDialog";
+import { ExportDialog } from "@/components/ExportDialog";
+import { PrintLayout } from "@/components/PrintLayout";
+import { TableList, TableListColumn } from "@/components/TableList";
+import { Checkbox } from "@/components/ui/checkbox";
+import Pagination from "@/components/Pagination";
+import RoomFormDialog from "@/components/forms/RoomFormDialog";
+import { ViewDialog } from "@/components/ViewDialog";
+import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
+import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 
 // Define the room schema
 const roomSchema = z.object({
@@ -30,7 +34,7 @@ const roomSchema = z.object({
   readerId: z.string().min(1, "RFID reader ID is required"),
 });
 
-type Room = z.infer<typeof roomSchema>;
+type Room = z.infer<typeof roomSchema> & { hasRelatedEntities?: boolean };
 
 // Update the form schema to match the form fields
 const roomFormSchema = z.object({
@@ -54,6 +58,7 @@ const initialRooms: Room[] = [
     roomBuildingLoc: "Main Building",
     roomFloorLoc: "1st Floor",
     readerId: "RFID001",
+    hasRelatedEntities: true,
   },
   {
     roomId: 2,
@@ -63,6 +68,7 @@ const initialRooms: Room[] = [
     roomBuildingLoc: "Science Wing",
     roomFloorLoc: "2nd Floor",
     readerId: "RFID002",
+    hasRelatedEntities: false,
   },
 ];
 
@@ -71,231 +77,41 @@ type SortOrder = 'asc' | 'desc';
 
 export default function RoomsPage() {
   const [rooms, setRooms] = useState(initialRooms);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  const [showFilters, setShowFilters] = useState(false);
-  const [showSort, setShowSort] = useState(false);
   const [sortField, setSortField] = useState<SortField>('roomNo');
   const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [modalRoom, setModalRoom] = useState<Room | undefined>();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [roomToDelete, setRoomToDelete] = useState<Room | null>(null);
   const [filterDialogOpen, setFilterDialogOpen] = useState(false);
   const [sortDialogOpen, setSortDialogOpen] = useState(false);
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [viewDialogOpen, setViewDialogOpen] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [showPrint, setShowPrint] = useState(false);
   const [filters, setFilters] = useState({
     type: "all",
     building: "all",
     floor: "all",
   });
-  const [viewDialogOpen, setViewDialogOpen] = useState(false);
-  const [exportMenuAnchorEl, setExportMenuAnchorEl] = useState<null | HTMLElement>(null);
 
-  const handleSort = (field: SortField) => {
-    if (sortField === field) {
-      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortField(field);
-      setSortOrder('asc');
-    }
-    setSortDialogOpen(false);
-  };
+  // Export state
+  const exportableColumns = [
+    { key: 'roomNo', label: 'Room Number' },
+    { key: 'roomType', label: 'Type' },
+    { key: 'roomCapacity', label: 'Capacity' },
+    { key: 'roomBuildingLoc', label: 'Building' },
+    { key: 'roomFloorLoc', label: 'Floor' },
+    { key: 'readerId', label: 'RFID Reader' },
+  ];
+  const [exportColumns, setExportColumns] = useState<string[]>(exportableColumns.map(col => col.key));
+  const [exportFormat, setExportFormat] = useState<'pdf' | 'excel' | 'csv' | null>(null);
 
-  const handlePageChange = (event: React.ChangeEvent<unknown>, value: number) => {
-    setCurrentPage(value);
-  };
-
-  const handleExportMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
-    setExportMenuAnchorEl(event.currentTarget);
-  };
-
-  const handleExportMenuClose = () => {
-    setExportMenuAnchorEl(null);
-  };
-
-  async function handleDeleteRoom(id: number) {
-    try {
-      const response = await fetch(`/api/rooms/${id}`, {
-        method: "DELETE",
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to delete room");
-      }
-
-      setRooms(rooms.filter(room => room.roomId !== id));
-      toast.success("Room deleted successfully");
-      setDeleteDialogOpen(false);
-      setRoomToDelete(null);
-    } catch (error) {
-      console.error("Error deleting room:", error);
-      toast.error("Failed to delete room");
-    }
-  }
-
-  const handleExportToCSV = () => {
-    const headers = ["Room No.", "Type", "Capacity", "Building", "Floor", "RFID Reader"];
-    const csvContent = [
-      headers.join(","),
-      ...rooms.map(room => [
-        room.roomNo,
-        room.roomType,
-        room.roomCapacity,
-        room.roomBuildingLoc,
-        room.roomFloorLoc,
-        room.readerId
-      ].join(","))
-    ].join("\n");
-
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", "rooms.csv");
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  const handleExportToExcel = () => {
-    const headers = ["Room No.", "Type", "Capacity", "Building", "Floor", "RFID Reader"];
-    const rows = rooms.map(room => [
-      room.roomNo,
-      room.roomType,
-      room.roomCapacity,
-      room.roomBuildingLoc,
-      room.roomFloorLoc,
-      room.readerId
-    ]);
-
-    const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Rooms");
-    
-    XLSX.writeFile(workbook, "rooms.xlsx");
-  };
-
-  const handleExportToPDF = () => {
-    const doc = new jsPDF();
-    
-    doc.setFontSize(16);
-    doc.text("Rooms List", 14, 15);
-    
-    const headers = ["Room No.", "Type", "Capacity", "Building", "Floor", "RFID Reader"];
-    const rows = rooms.map(room => [
-      room.roomNo,
-      room.roomType,
-      room.roomCapacity.toString(),
-      room.roomBuildingLoc,
-      room.roomFloorLoc,
-      room.readerId
-    ]);
-
-    (doc as any).autoTable({
-      head: [headers],
-      body: rows,
-      startY: 25,
-      theme: 'grid',
-      styles: { fontSize: 8 },
-      headStyles: { fillColor: [41, 128, 185] }
-    });
-
-    doc.save("rooms.pdf");
-  };
-
-  const handlePrint = () => {
-    const printWindow = window.open("", "_blank");
-    if (printWindow) {
-      printWindow.document.write(`
-        <html>
-          <head>
-            <title>Rooms List</title>
-            <style>
-              body { font-family: Arial, sans-serif; margin: 20px; }
-              .print-header { text-align: center; margin-bottom: 20px; }
-              .print-header h1 { font-size: 24px; margin: 0; color: #1a1a1a; }
-              .print-header p { font-size: 14px; color: #666; margin: 5px 0 0 0; }
-              table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-              th { background-color: #f3f4f6; color: #374151; font-weight: 600; text-align: left; padding: 12px; border-bottom: 2px solid #e5e7eb; }
-              td { padding: 12px; border-bottom: 1px solid #e5e7eb; color: #1f2937; }
-              .room-info { display: flex; align-items: center; gap: 12px; }
-              .room-code { background-color: #2563eb; color: white; padding: 8px 12px; border-radius: 8px; font-weight: 600; }
-              .room-name { font-weight: 500; }
-              .room-code-text { font-size: 12px; color: #6b7280; }
-              @media print {
-                body { margin: 0; padding: 20px; }
-                table { page-break-inside: auto; }
-                tr { page-break-inside: avoid; page-break-after: auto; }
-                thead { display: table-header-group; }
-              }
-            </style>
-          </head>
-          <body>
-            <div class="print-header">
-              <h1>Rooms List</h1>
-              <p>Generated on ${new Date().toLocaleDateString()}</p>
-            </div>
-            <table>
-              <thead>
-                <tr>
-                  <th>Room Info</th>
-                  <th>Type</th>
-                  <th>Capacity</th>
-                  <th>Building</th>
-                  <th>Floor</th>
-                  <th>RFID Reader</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${rooms.map(room => `
-                  <tr>
-                    <td>
-                      <div class="room-info">
-                        <div class="room-code">${room.roomNo}</div>
-                        <div>
-                          <div class="room-name">${room.roomType}</div>
-                          <div class="room-code-text">${room.roomBuildingLoc}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td>${room.roomType}</td>
-                    <td>${room.roomCapacity}</td>
-                    <td>${room.roomBuildingLoc}</td>
-                    <td>${room.roomFloorLoc}</td>
-                    <td>${room.readerId}</td>
-                  </tr>
-                `).join("")}
-              </tbody>
-            </table>
-          </body>
-        </html>
-      `);
-      printWindow.document.close();
-      printWindow.print();
-    }
-  };
-
-  const handleFilterChange = (field: string, value: string) => {
-    setFilters(prev => ({
-      ...prev,
-      [field]: value
-    }));
-  };
-
-  const handleApplyFilters = () => {
-    setFilterDialogOpen(false);
-  };
-
-  const handleResetFilters = () => {
-    setFilters({
-      type: "all",
-      building: "all",
-      floor: "all",
-    });
-  };
-
+  // Memoized filtered and sorted rooms
   const filteredRooms = useMemo(() => {
     return rooms.filter(room => {
       const matchesSearch = room.roomNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -326,369 +142,512 @@ export default function RoomsPage() {
 
   const totalPages = Math.ceil(sortedRooms.length / itemsPerPage);
 
-  return (
-    <div className="min-h-screen bg-background p-3">
-      <Card>
-        <CardContent>
-          {/* Header */}
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
-            <div>
-              <h1 className="text-2xl font-bold mb-1">All Rooms</h1>
-              <p className="text-muted-foreground text-sm">Manage and view all room information</p>
-            </div>
-            <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-              <div className="relative w-full sm:w-56">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-4 w-4" />
-                <Input
-                  className="pl-9"
-                  placeholder="Search rooms..."
-                  value={searchTerm}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
-                />
-              </div>
-              <Button variant="outline" onClick={() => setFilterDialogOpen(true)} className="flex items-center gap-2">
-                <Filter className="h-4 w-4" />
-                <span className="hidden sm:inline">Filter</span>
-              </Button>
-              <Button variant="outline" onClick={() => setSortDialogOpen(true)} className="flex items-center gap-2">
-                <SortAsc className="h-4 w-4" />
-                <span className="hidden sm:inline">Sort</span>
-              </Button>
-              <Button onClick={() => { setModalRoom(undefined); setModalOpen(true); }} className="flex items-center gap-2">
-                <Plus className="h-4 w-4" />
-                <span className="hidden sm:inline">Add Room</span>
-              </Button>
-            </div>
-          </div>
-
-          {/* Table */}
-          <div className="overflow-x-auto rounded-lg border bg-white shadow">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-blue-100/60">
-                  <TableHead>Room Info</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Capacity</TableHead>
-                  <TableHead>Building</TableHead>
-                  <TableHead>Floor</TableHead>
-                  <TableHead>RFID Reader</TableHead>
-                  <TableHead className="text-center w-32">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {paginatedRooms.map((item) => (
-                  <TableRow key={item.roomId} className="hover:bg-gray-50">
-                    <TableCell>
-                      <div className="font-medium">{item.roomNo}</div>
-                      <div className="text-xs text-muted-foreground">{item.roomBuildingLoc}</div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={item.roomType === "CLASSROOM" ? "success" : item.roomType === "LABORATORY" ? "warning" : "info"}>{item.roomType}</Badge>
-                    </TableCell>
-                    <TableCell>{item.roomCapacity}</TableCell>
-                    <TableCell>{item.roomBuildingLoc}</TableCell>
-                    <TableCell>{item.roomFloorLoc}</TableCell>
-                    <TableCell>
-                      <Badge variant="info">{item.readerId}</Badge>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <div className="flex gap-2 justify-center">
-                        <Button variant="ghost" size="icon" onClick={e => { e.stopPropagation(); setSelectedRoom(item); setViewDialogOpen(true); }}>
-                          <Eye className="h-4 w-4 text-blue-600" />
-                        </Button>
-                        <Button variant="ghost" size="icon" onClick={e => { e.stopPropagation(); setModalRoom(item); setModalOpen(true); }}>
-                          <Pencil className="h-4 w-4 text-green-600" />
-                        </Button>
-                        <Button variant="ghost" size="icon" onClick={e => { e.stopPropagation(); setRoomToDelete(item); setDeleteDialogOpen(true); }}>
-                          <Trash2 className="h-4 w-4 text-red-600" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-
-          {/* Export/Print and Pagination */}
-          <div className="mt-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <div className="text-sm text-muted-foreground">
-              Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, sortedRooms.length)} of {sortedRooms.length} entries
-            </div>
-            <div className="flex gap-2">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" className="flex items-center gap-2">
-                    <FileDown className="h-4 w-4" />
-                    Export
+  // Table columns
+  const columns: TableListColumn<Room>[] = [
+    {
+      header: (
+        <div className="flex justify-center items-center">
+          <Checkbox
+            checked={selectedIds.length === paginatedRooms.length}
+            onCheckedChange={(checked: boolean) => {
+              if (checked) {
+                setSelectedIds(paginatedRooms.map(room => room.roomId.toString()));
+              } else {
+                setSelectedIds([]);
+              }
+            }}
+          />
+        </div>
+      ),
+      accessor: 'select',
+      className: 'w-12 text-center',
+    },
+    { header: "Room Info", accessor: "roomNo", className: "text-blue-900 align-middle" },
+    { header: "Type", accessor: "roomType", className: "text-blue-800 align-middle" },
+    { header: "Capacity", accessor: "roomCapacity", className: "text-blue-800 text-center align-middle" },
+    { header: "Building", accessor: "roomBuildingLoc", className: "text-blue-800 align-middle" },
+    { header: "Floor", accessor: "roomFloorLoc", className: "text-blue-800 align-middle" },
+    { header: "RFID Reader", accessor: "readerId", className: "text-blue-800 align-middle" },
+    {
+      header: "Actions",
+      accessor: "actions",
+      className: "text-center align-middle",
+      render: (item) => (
+        <div className="flex gap-2 justify-center">
+          <Button variant="ghost" size="icon" onClick={() => { setSelectedRoom(item); setViewDialogOpen(true); }}>
+            <Eye className="h-4 w-4 text-blue-600" />
+          </Button>
+          <Button variant="ghost" size="icon" onClick={() => { setRoomFormType('update'); setRoomFormData(item); setRoomFormDialogOpen(true); }}>
+            <Pencil className="h-4 w-4 text-green-600" />
+          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span>
+                  <Button variant="ghost" size="icon" onClick={() => { setRoomToDelete(item); setDeleteDialogOpen(true); }} disabled={!!item.hasRelatedEntities}>
+                    <Trash2 className="h-4 w-4 text-red-600" />
                   </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={handleExportToCSV}>Export as CSV</DropdownMenuItem>
-                  <DropdownMenuItem onClick={handleExportToExcel}>Export as Excel</DropdownMenuItem>
-                  <DropdownMenuItem onClick={handleExportToPDF}>Export as PDF</DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-              <Button variant="outline" className="flex items-center gap-2" onClick={handlePrint}>
-                <Printer className="h-4 w-4" />
-                Print
-              </Button>
-            </div>
-          </div>
-          <div className="mt-4 flex justify-center">
-            <div className="inline-flex items-center gap-2">
-              <Button variant="outline" size="sm" disabled={currentPage === 1} onClick={() => setCurrentPage(currentPage - 1)}>
-                Prev
-              </Button>
-              <span className="text-sm font-medium">
-                Page {currentPage} of {totalPages}
-              </span>
-              <Button variant="outline" size="sm" disabled={currentPage === totalPages} onClick={() => setCurrentPage(currentPage + 1)}>
-                Next
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>{getDeleteTooltip(item)}</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
+      ),
+    },
+  ];
 
-      {/* Delete Confirmation Dialog */}
-      <Dialog open={deleteDialogOpen} onOpenChange={open => { if (!open) { setDeleteDialogOpen(false); setRoomToDelete(null); } }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete Room</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete the room "{roomToDelete?.roomNo}"? This action cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => { setDeleteDialogOpen(false); setRoomToDelete(null); }}>Cancel</Button>
-            <Button variant="destructive" onClick={() => roomToDelete && handleDeleteRoom(roomToDelete.roomId)}>Delete</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortOrder('asc');
+    }
+    setSortDialogOpen(false);
+  };
+  // Unified export handler
+  const handleExport = async () => {
+    if (!exportFormat) {
+      toast.error("Please select an export format");
+      return;
+    }
+    const selectedColumns = exportableColumns.filter(col => exportColumns.includes(col.key));
+    const headers = selectedColumns.map(col => col.label);
+    const rows = filteredRooms.map(room => selectedColumns.map(col => String(room[col.key as keyof Room] ?? '')));
+    try {
+      switch (exportFormat) {
+        case 'pdf': {
+          const doc = new jsPDF();
+          doc.setFontSize(16);
+          doc.setFont('helvetica', 'bold');
+          doc.setTextColor(12, 37, 86);
+          doc.text('Rooms List', doc.internal.pageSize.width / 2, 20, { align: 'center' });
+          doc.setFontSize(10);
+          doc.setFont('helvetica', 'normal');
+          doc.setTextColor(128, 128, 128);
+          const currentDate = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+          doc.text(`Generated on ${currentDate}`, doc.internal.pageSize.width / 2, 28, { align: 'center' });
+          doc.setTextColor(0, 0, 0);
+          doc.setFontSize(12);
+          autoTable(doc, {
+            head: [headers],
+            body: rows,
+            startY: 35,
+            styles: { fontSize: 8, cellPadding: 3, overflow: 'linebreak', cellWidth: 'wrap' },
+            headStyles: { fillColor: [12, 37, 86], textColor: [255, 255, 255], halign: 'center', fontStyle: 'bold' },
+            margin: { top: 16, right: 10, bottom: 10, left: 10 },
+            theme: 'grid',
+          });
+          doc.save('rooms.pdf');
+          break;
+        }
+        case 'excel': {
+          const wsData = [headers, ...rows];
+          const ws = XLSX.utils.aoa_to_sheet(wsData);
+          const colWidths = headers.map((_, idx) => {
+            const maxLength = Math.max(...wsData.map(row => (row[idx] || '').toString().length), headers[idx].length);
+            return { wch: Math.min(Math.max(maxLength + 2, 10), 50) };
+          });
+          ws['!cols'] = colWidths;
+          const wb = XLSX.utils.book_new();
+          XLSX.utils.book_append_sheet(wb, ws, 'Rooms');
+          XLSX.writeFile(wb, 'rooms.xlsx');
+          break;
+        }
+        case 'csv': {
+          const csvRows = [headers, ...rows];
+          const csvContent = csvRows.map(row => row.map(cell => '"' + cell.replace(/"/g, '""') + '"').join(",")).join("\n");
+          const blob = new Blob([csvContent], { type: 'text/csv' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'rooms.csv';
+          a.click();
+          URL.revokeObjectURL(url);
+          break;
+        }
+      }
+      toast.success(`Successfully exported rooms to ${exportFormat.toUpperCase()}`);
+    } catch (error) {
+      toast.error('Failed to export rooms');
+    }
+  };
 
-      {/* Room Form Modal */}
-      <FormModal
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        onSubmit={async (data: RoomFormData) => {
-          try {
-            const url = modalRoom ? `/api/rooms/${modalRoom.roomId}` : "/api/rooms";
-            const method = modalRoom ? "PUT" : "POST";
-            const response = await fetch(url, {
-              method,
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(data),
-            });
+  // Print handler using PrintLayout
+  const printColumns = exportableColumns.map(col => ({ header: col.label, accessor: col.key }));
+  const handlePrint = () => {
+    const printData = filteredRooms.map(room => ({ ...room }));
+    const printFunction = PrintLayout({
+      title: 'Rooms List',
+      data: printData,
+      columns: printColumns,
+      totalItems: filteredRooms.length,
+    });
+    printFunction();
+  };
 
-            if (!response.ok) throw new Error("Failed to save room");
+  const handleFilterChange = (field: string, value: string) => {
+    setFilters(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
 
-            if (modalRoom) {
-              setRooms(rooms.map(room => 
-                room.roomId === modalRoom.roomId ? { ...room, ...data } : room
-              ));
-              toast.success("Room updated successfully");
-            } else {
-              const newRoom = await response.json();
-              setRooms([...rooms, newRoom]);
-              toast.success("Room created successfully");
-            }
+  const handleApplyFilters = () => {
+    setFilterDialogOpen(false);
+  };
 
-            setModalOpen(false);
-          } catch (error) {
-            console.error("Error saving room:", error);
-            toast.error("Failed to save room");
-          }
+  const handleResetFilters = () => {
+    setFilters({
+      type: "all",
+      building: "all",
+      floor: "all",
+    });
+  };
+
+  // Fetch rooms on component mount
+  useEffect(() => {
+    const fetchRooms = async () => {
+      try {
+        setLoading(true);
+        const response = await fetch('/api/rooms');
+        if (!response.ok) {
+          throw new Error('Failed to fetch rooms');
+        }
+        const data = await response.json();
+        setRooms(data);
+      } catch (error) {
+        console.error('Error fetching rooms:', error);
+        toast.error('Failed to fetch rooms');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchRooms();
+  }, []);
+
+  // Update refreshRooms function
+  const refreshRooms = async () => {
+    try {
+      setIsRefreshing(true);
+      const response = await fetch('/api/rooms');
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      setRooms(data);
+      toast.success('Rooms refreshed successfully');
+    } catch (err) {
+      console.error('Error refreshing rooms:', err);
+      toast.error('Failed to refresh rooms. Please try again later.');
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  // Handle bulk delete
+  const handleBulkDelete = async () => {
+    try {
+      const promises = selectedIds.map(id => 
+        fetch(`/api/rooms/${id}`, { method: 'DELETE' })
+      );
+      await Promise.all(promises);
+      setRooms(rooms.filter(room => !selectedIds.includes(room.roomId.toString())));
+      setSelectedIds([]);
+      toast.success('Selected rooms deleted successfully');
+    } catch (error) {
+      console.error('Error deleting rooms:', error);
+      toast.error('Failed to delete some rooms');
+    }
+  };
+
+  // Update handleDeleteRoom function
+  async function handleDeleteRoom(id: number) {
+    try {
+      const response = await fetch(`/api/rooms/${id}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to delete room");
+      }
+
+      setRooms(rooms.filter(room => room.roomId !== id));
+      toast.success("Room deleted successfully");
+      setDeleteDialogOpen(false);
+      setRoomToDelete(null);
+    } catch (error) {
+      console.error("Error deleting room:", error);
+      toast.error("Failed to delete room");
+    }
+  }
+
+  const [roomFormDialogOpen, setRoomFormDialogOpen] = useState(false);
+  const [roomFormType, setRoomFormType] = useState<'create' | 'update'>('create');
+  const [roomFormData, setRoomFormData] = useState<Room | undefined>();
+
+  // Helper for delete tooltip
+  function getDeleteTooltip(room: Room) {
+    if (room.hasRelatedEntities) return "Cannot delete: Room has related schedules, assignments, or other dependencies.";
+    return "Delete";
+  }
+
+  return (
+    <div className="bg-white/80 backdrop-blur-md p-6 rounded-xl shadow-xl border border-blue-100 flex-1 m-4 mt-0">
+      {/* Header */}
+      <TableHeaderSection
+        title="All Rooms"
+        description="Manage and view all room information"
+        searchValue={searchTerm}
+        onSearchChange={setSearchTerm}
+        onRefresh={refreshRooms}
+        isRefreshing={isRefreshing}
+        onFilterClick={() => setFilterDialogOpen(true)}
+        onSortClick={() => setSortDialogOpen(true)}
+        onExportClick={() => setExportDialogOpen(true)}
+        onPrintClick={handlePrint}
+        onAddClick={() => {
+          setRoomFormType('create');
+          setRoomFormData(undefined);
+          setRoomFormDialogOpen(true);
         }}
-        title={modalRoom ? "Edit Room" : "Add New Room"}
-        submitLabel={modalRoom ? "Update" : "Add"}
-        defaultValues={modalRoom}
-        schema={roomFormSchema}
-        fields={[
-          {
-            name: "roomNo",
-            label: "Room Number",
-            type: "text",
-          },
-          {
-            name: "roomType",
-            label: "Type",
-            type: "select",
-            options: [
-              { value: "CLASSROOM", label: "Classroom" },
-              { value: "LABORATORY", label: "Laboratory" },
-              { value: "OFFICE", label: "Office" },
-              { value: "CONFERENCE", label: "Conference Room" },
-            ],
-          },
-          {
-            name: "roomCapacity",
-            label: "Capacity",
-            type: "number",
-          },
-          {
-            name: "roomBuildingLoc",
-            label: "Building Location",
-            type: "text",
-          },
-          {
-            name: "roomFloorLoc",
-            label: "Floor Location",
-            type: "text",
-          },
-          {
-            name: "readerId",
-            label: "RFID Reader ID",
-            type: "text",
-          },
-        ]}
+        activeFilterCount={Object.values(filters).filter(f => f !== "all").length}
+        searchPlaceholder="Search rooms..."
+        addButtonLabel="Add Room"
       />
 
-      {/* Filter Dialog */}
-      <Dialog open={filterDialogOpen} onOpenChange={open => setFilterDialogOpen(open)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Filter Rooms</DialogTitle>
-            <DialogDescription>Filter the list of rooms by the following criteria.</DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="filter-type">Type</Label>
-                <Select value={filters.type} onValueChange={value => handleFilterChange('type', value)}>
-                  <SelectTrigger id="filter-type">
-                    <SelectValue placeholder="All" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All</SelectItem>
-                    <SelectItem value="CLASSROOM">Classroom</SelectItem>
-                    <SelectItem value="LABORATORY">Laboratory</SelectItem>
-                    <SelectItem value="OFFICE">Office</SelectItem>
-                    <SelectItem value="CONFERENCE">Conference Room</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label htmlFor="filter-building">Building</Label>
-                <Select value={filters.building} onValueChange={value => handleFilterChange('building', value)}>
-                  <SelectTrigger id="filter-building">
-                    <SelectValue placeholder="All" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All</SelectItem>
-                    <SelectItem value="Main Building">Main Building</SelectItem>
-                    <SelectItem value="Science Wing">Science Wing</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label htmlFor="filter-floor">Floor</Label>
-                <Select value={filters.floor} onValueChange={value => handleFilterChange('floor', value)}>
-                  <SelectTrigger id="filter-floor">
-                    <SelectValue placeholder="All" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All</SelectItem>
-                    <SelectItem value="1st Floor">1st Floor</SelectItem>
-                    <SelectItem value="2nd Floor">2nd Floor</SelectItem>
-                    <SelectItem value="3rd Floor">3rd Floor</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={handleResetFilters}>Reset</Button>
-            <Button variant="ghost" onClick={() => setFilterDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleApplyFilters}>Apply Filters</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Sort Dialog */}
-      <Dialog open={sortDialogOpen} onOpenChange={open => setSortDialogOpen(open)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Sort Rooms</DialogTitle>
-            <DialogDescription>Sort the list of rooms by the following fields.</DialogDescription>
-          </DialogHeader>
-          <div className="flex flex-col gap-2 py-4">
-            <Button variant={sortField === 'roomNo' ? 'default' : 'outline'} className="justify-start" onClick={() => handleSort('roomNo')}>
-              <SortAsc className="mr-2 h-4 w-4" />
-              Room Number {sortField === 'roomNo' && (sortOrder === 'asc' ? '↑' : '↓')}
-            </Button>
-            <Button variant={sortField === 'roomType' ? 'default' : 'outline'} className="justify-start" onClick={() => handleSort('roomType')}>
-              <SortAsc className="mr-2 h-4 w-4" />
-              Type {sortField === 'roomType' && (sortOrder === 'asc' ? '↑' : '↓')}
-            </Button>
-            <Button variant={sortField === 'roomCapacity' ? 'default' : 'outline'} className="justify-start" onClick={() => handleSort('roomCapacity')}>
-              <SortAsc className="mr-2 h-4 w-4" />
-              Capacity {sortField === 'roomCapacity' && (sortOrder === 'asc' ? '↑' : '↓')}
-            </Button>
-            <Button variant={sortField === 'roomBuildingLoc' ? 'default' : 'outline'} className="justify-start" onClick={() => handleSort('roomBuildingLoc')}>
-              <SortAsc className="mr-2 h-4 w-4" />
-              Building {sortField === 'roomBuildingLoc' && (sortOrder === 'asc' ? '↑' : '↓')}
-            </Button>
-            <Button variant={sortField === 'roomFloorLoc' ? 'default' : 'outline'} className="justify-start" onClick={() => handleSort('roomFloorLoc')}>
-              <SortAsc className="mr-2 h-4 w-4" />
-              Floor {sortField === 'roomFloorLoc' && (sortOrder === 'asc' ? '↑' : '↓')}
-            </Button>
-          </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setSortDialogOpen(false)}>Close</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* View Dialog */}
-      <Dialog open={viewDialogOpen} onOpenChange={open => { if (!open) { setViewDialogOpen(false); setSelectedRoom(null); } }}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>
-              <div className="flex items-center gap-2">
-                <DoorOpen className="h-6 w-6 text-blue-600" />
-                Room Details
-              </div>
-            </DialogTitle>
-          </DialogHeader>
-          {selectedRoom && (
-            <div className="mt-4 space-y-6">
-              <div className="rounded-lg border bg-muted p-4">
-                <h2 className="text-xl font-bold mb-1">{selectedRoom.roomNo}</h2>
-                <div className="text-sm text-muted-foreground mb-2">{selectedRoom.roomBuildingLoc}</div>
-                <div className="flex gap-2 mt-2">
-                  <Badge variant={selectedRoom.roomType === 'CLASSROOM' ? 'success' : selectedRoom.roomType === 'LABORATORY' ? 'warning' : 'info'}>{selectedRoom.roomType}</Badge>
-                </div>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="rounded-lg border bg-background p-4">
-                  <div className="font-semibold text-sm mb-1">Building</div>
-                  <div className="text-base">{selectedRoom.roomBuildingLoc}</div>
-                </div>
-                <div className="rounded-lg border bg-background p-4">
-                  <div className="font-semibold text-sm mb-1">Floor</div>
-                  <div className="text-base">{selectedRoom.roomFloorLoc}</div>
-                </div>
-                <div className="rounded-lg border bg-background p-4">
-                  <div className="font-semibold text-sm mb-1">Capacity</div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-2xl font-bold text-blue-600">{selectedRoom.roomCapacity}</span>
-                    <span className="text-muted-foreground">students</span>
-                  </div>
-                </div>
-                <div className="rounded-lg border bg-background p-4">
-                  <div className="font-semibold text-sm mb-1">RFID Reader</div>
-                  <div className="text-base">{selectedRoom.readerId}</div>
-                </div>
-              </div>
+      {/* Table layout for xl+ only */}
+      <div className="hidden xl:block">
+        <div className="overflow-x-auto rounded-xl border border-blue-100 bg-white/70 shadow-md relative">
+          {isRefreshing && (
+            <div className="absolute inset-0 bg-white/70 flex items-center justify-center z-20">
+              <Loader2 className="h-12 w-12 text-blue-600 animate-spin" />
             </div>
           )}
-          <DialogFooter className="mt-6">
-            <Button variant="outline" onClick={() => { setViewDialogOpen(false); setSelectedRoom(null); }}>Close</Button>
-            <Button onClick={() => { if (selectedRoom) { setModalRoom(selectedRoom); setModalOpen(true); setViewDialogOpen(false); } }}>Edit Room</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          <TableList
+            columns={columns}
+            data={paginatedRooms}
+            loading={loading}
+            selectedIds={selectedIds}
+            onSelectRow={(id) => setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id])}
+            onSelectAll={() => {
+              if (selectedIds.length === paginatedRooms.length) {
+                setSelectedIds([]);
+              } else {
+                setSelectedIds(paginatedRooms.map(room => room.roomId.toString()));
+              }
+            }}
+            isAllSelected={selectedIds.length === paginatedRooms.length}
+            isIndeterminate={selectedIds.length > 0 && selectedIds.length < paginatedRooms.length}
+            getItemId={(item) => item.roomId.toString()}
+          />
+        </div>
+      </div>
+
+      {/* Card layout for small screens */}
+      <div className="block xl:hidden">
+        <TableCardView
+          items={paginatedRooms}
+          selectedIds={selectedIds}
+          onSelect={(id) => setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id])}
+          onView={(item) => {
+            setSelectedRoom(item);
+            setViewDialogOpen(true);
+          }}
+          onEdit={(item) => {
+            setRoomFormType('update');
+            setRoomFormData(item);
+            setRoomFormDialogOpen(true);
+          }}
+          onDelete={(item) => {
+            setRoomToDelete(item);
+            setDeleteDialogOpen(true);
+          }}
+          getItemId={(item) => item.roomId.toString()}
+          getItemName={(item) => item.roomNo}
+          getItemCode={(item) => item.roomType}
+          getItemStatus={(item) => item.roomType === 'CLASSROOM' ? 'active' : 'inactive'}
+          getItemDescription={(item) => item.roomBuildingLoc}
+          getItemDetails={(item) => [
+            { label: 'Capacity', value: item.roomCapacity },
+            { label: 'Building', value: item.roomBuildingLoc },
+            { label: 'Floor', value: item.roomFloorLoc },
+            { label: 'RFID Reader', value: item.readerId },
+          ]}
+          isLoading={loading}
+        />
+      </div>
+
+      {/* Bulk Actions Bar */}
+      {selectedIds.length > 0 && (
+        <BulkActionsBar
+          selectedCount={selectedIds.length}
+          entityLabel="room"
+          actions={[
+            {
+              key: 'delete',
+              label: 'Delete Selected',
+              icon: loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Trash2 className="w-4 h-4 mr-2" />,
+              onClick: handleBulkDelete,
+              loading: loading,
+              disabled: loading,
+              tooltip: 'Delete selected rooms',
+              variant: 'destructive',
+            },
+          ]}
+          onClear={() => setSelectedIds([])}
+          className="mt-4 mb-2"
+        />
+      )}
+
+      {/* PAGINATION */}
+      <div className="mt-6">
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={setCurrentPage}
+        />
+      </div>
+
+      {/* Filter Dialog */}
+      <FilterDialog
+        open={filterDialogOpen}
+        onOpenChange={setFilterDialogOpen}
+        statusFilter={filters.type}
+        setStatusFilter={(value) => setFilters(prev => ({ ...prev, type: value }))}
+        statusOptions={[
+          { value: 'all', label: 'All' },
+          { value: 'CLASSROOM', label: 'Classroom' },
+          { value: 'LABORATORY', label: 'Laboratory' },
+          { value: 'OFFICE', label: 'Office' },
+          { value: 'CONFERENCE', label: 'Conference Room' },
+        ]}
+        advancedFilters={{
+          building: filters.building,
+          floor: filters.floor,
+        }}
+        setAdvancedFilters={(filters) => setFilters(prev => ({ ...prev, ...filters }))}
+        fields={[
+          { key: 'building', label: 'Building', type: 'text', badgeType: 'active' },
+          { key: 'floor', label: 'Floor', type: 'text', badgeType: 'active' },
+        ]}
+        onReset={handleResetFilters}
+        onApply={handleApplyFilters}
+        activeAdvancedCount={Object.values(filters).filter(f => f !== "all").length}
+        title="Filter Rooms"
+        tooltip="Filter rooms by multiple criteria. Use advanced filters for more specific conditions."
+      />
+
+      {/* Sort Dialog */}
+      <SortDialog
+        open={sortDialogOpen}
+        onOpenChange={setSortDialogOpen}
+        sortField={sortField}
+        setSortField={setSortField}
+        sortOrder={sortOrder}
+        setSortOrder={setSortOrder}
+        sortFieldOptions={[
+          { value: 'roomNo', label: 'Room Number' },
+          { value: 'roomType', label: 'Type' },
+          { value: 'roomCapacity', label: 'Capacity' },
+          { value: 'roomBuildingLoc', label: 'Building' },
+          { value: 'roomFloorLoc', label: 'Floor' },
+        ]}
+        onApply={() => setSortDialogOpen(false)}
+        onReset={() => {
+          setSortField('roomNo');
+          setSortOrder('asc');
+        }}
+        title="Sort Rooms"
+        tooltip="Sort rooms by different fields. Choose the field and order to organize your list."
+      />
+
+      {/* Export Dialog */}
+      <ExportDialog
+        open={exportDialogOpen}
+        onOpenChange={setExportDialogOpen}
+        exportableColumns={exportableColumns}
+        exportColumns={exportColumns}
+        setExportColumns={setExportColumns}
+        exportFormat={exportFormat}
+        setExportFormat={setExportFormat}
+        onExport={handleExport}
+        title="Export Rooms"
+        tooltip="Export room data in various formats. Choose your preferred export options."
+      />
+
+      {/* View Dialog */}
+      <ViewDialog
+        open={viewDialogOpen}
+        onOpenChange={open => { if (!open) { setViewDialogOpen(false); setSelectedRoom(null); } }}
+        title={selectedRoom ? `Room: ${selectedRoom.roomNo}` : "Room Details"}
+        status={selectedRoom ? {
+          value: selectedRoom.roomType,
+          variant: selectedRoom.roomType === 'CLASSROOM' ? 'success' : selectedRoom.roomType === 'LABORATORY' ? 'warning' : 'secondary',
+        } : undefined}
+        sections={selectedRoom ? [
+          {
+            title: "Room Information",
+            columns: 2,
+            fields: [
+              { label: "Room Number", value: selectedRoom.roomNo },
+              { label: "Type", value: selectedRoom.roomType },
+              { label: "Capacity", value: selectedRoom.roomCapacity, type: 'number' },
+              { label: "Building", value: selectedRoom.roomBuildingLoc },
+              { label: "Floor", value: selectedRoom.roomFloorLoc },
+              { label: "RFID Reader", value: selectedRoom.readerId },
+            ],
+          },
+        ] : []}
+        isLoading={false}
+        actions={[]}
+      />
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDeleteDialog
+        open={deleteDialogOpen}
+        onOpenChange={open => { if (!open) { setDeleteDialogOpen(false); setRoomToDelete(null); } }}
+        itemName={roomToDelete?.roomNo}
+        onDelete={() => { if (roomToDelete) { handleDeleteRoom(roomToDelete.roomId); } }}
+        onCancel={() => { setDeleteDialogOpen(false); setRoomToDelete(null); }}
+        canDelete={roomToDelete ? !roomToDelete.hasRelatedEntities : true}
+        description={roomToDelete && roomToDelete.hasRelatedEntities ? getDeleteTooltip(roomToDelete) : undefined}
+        loading={loading}
+      />
+
+      {/* Room Form Dialog */}
+      <RoomFormDialog
+        open={roomFormDialogOpen}
+        onOpenChange={setRoomFormDialogOpen}
+        type={roomFormType}
+        data={roomFormData}
+        id={roomFormData?.roomId}
+        onSuccess={async (formData) => {
+          try {
+            const url = roomFormType === 'update' ? `/api/rooms/${roomFormData?.roomId}` : '/api/rooms';
+            const method = roomFormType === 'update' ? 'PUT' : 'POST';
+            const response = await fetch(url, {
+              method,
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(formData),
+            });
+            if (!response.ok) throw new Error('Failed to save room');
+            const result = await response.json();
+            if (roomFormType === 'update') {
+              setRooms(rooms.map(room => room.roomId === roomFormData?.roomId ? result : room));
+            } else {
+              setRooms([...rooms, result]);
+            }
+            setRoomFormDialogOpen(false);
+          } catch (error) {
+            toast.error('Failed to save room');
+          }
+        }}
+      />
     </div>
   );
 } 

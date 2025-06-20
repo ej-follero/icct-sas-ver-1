@@ -1,14 +1,12 @@
 "use client";
 
-import React from "react";
-import { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import * as XLSX from "xlsx";
 import { jsPDF } from "jspdf";
-import "jspdf-autotable";
+import autoTable from "jspdf-autotable";
 import type { UserOptions } from "jspdf-autotable";
 import { z } from "zod";
 import { toast } from "sonner";
-import FormModal from "@/components/FormModal";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -18,11 +16,23 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuIte
 import { Dialog, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Plus, Search, Filter, SortAsc, FileDown, Printer, Eye, Pencil, Trash2, School, CheckSquare, Square, ChevronUp, ChevronDown, Loader2, Inbox } from "lucide-react";
+import { Plus, Search, Filter, SortAsc, FileDown, Printer, Eye, Pencil, Trash2, School, CheckSquare, Square, ChevronUp, ChevronDown, Loader2, Inbox, RefreshCw } from "lucide-react";
 import TableSearch from "@/components/TableSearch";
 import Pagination from "@/components/Pagination";
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
-import FilterBar from './FilterBar';
+import { FilterDialog } from '@/components/FilterDialog';
+import { ExportDialog } from '@/components/ExportDialog';
+import { SortDialog } from '@/components/SortDialog';
+import { BulkActionsBar } from '@/components/BulkActionsBar';
+import { TableHeaderSection } from '@/components/TableHeaderSection';
+import { TableCardView } from '@/components/TableCardView';
+import { TableList, TableListColumn } from '@/components/TableList';
+import { TableRowActions } from '@/components/TableRowActions';
+import { Checkbox as SharedCheckbox } from '@/components/ui/checkbox';
+import { PrintLayout } from '@/components/PrintLayout';
+import SectionFormDialog from '@/components/forms/SectionFormDialog';
+import { ViewDialog } from '@/components/ViewDialog';
+import { ConfirmDeleteDialog } from '@/components/ConfirmDeleteDialog';
 
 // Define the section schema
 const sectionSchema = z.object({
@@ -116,35 +126,94 @@ function Checkbox({ checked, indeterminate, onChange, ...props }: any) {
 
 const ITEMS_PER_PAGE = 10;
 
+// Define FilterField type locally to match FilterDialog
+type FilterField = {
+  key: string;
+  label: string;
+  type: 'text' | 'number' | 'select';
+  badgeType?: 'active' | 'range';
+  minKey?: string;
+  maxKey?: string;
+  options?: { value: string; label: string }[];
+};
+
+// DRY constants
+const DEFAULT_FILTERS = { type: "all", status: "all", yearLevel: "all", course: "all" };
+const SECTION_TYPE_OPTIONS = [
+  { value: 'all', label: 'All Types' },
+  { value: 'REGULAR', label: 'Regular' },
+  { value: 'IRREGULAR', label: 'Irregular' },
+  { value: 'SUMMER', label: 'Summer' },
+];
+const YEAR_LEVEL_OPTIONS = [
+  { value: 'all', label: 'All Years' },
+  { value: '1', label: '1st Year' },
+  { value: '2', label: '2nd Year' },
+  { value: '3', label: '3rd Year' },
+  { value: '4', label: '4th Year' },
+];
+const COURSE_OPTIONS = [
+  { value: 'all', label: 'All Courses' },
+  { value: '1', label: 'BSIT' },
+  { value: '2', label: 'BSCS' },
+  { value: '3', label: 'BSIS' },
+];
+const SECTION_COLUMNS = [
+  { key: "sectionName", label: "Section Name", className: "text-blue-900 align-middle" },
+  { key: "sectionType", label: "Type", className: "text-blue-800 align-middle" },
+  { key: "sectionCapacity", label: "Capacity", className: "text-blue-800 text-center align-middle" },
+  { key: "yearLevel", label: "Year Level", className: "text-blue-800 text-center align-middle" },
+  { key: "course", label: "Course", className: "text-blue-800 text-center align-middle" },
+  { key: "totalStudents", label: "Students", className: "text-blue-800 text-center align-middle" },
+  { key: "totalSubjects", label: "Subjects", className: "text-blue-800 text-center align-middle" },
+  { key: "sectionStatus", label: "Status", className: "text-center align-middle" },
+];
+
+function getStatusBadgeVariant(status: string) {
+  return status.toLowerCase() === "active" ? "success" : "destructive";
+}
+
+function mapSectionForExport(section: Section, columns: typeof SECTION_COLUMNS) {
+  const row: Record<string, any> = {};
+  columns.forEach(col => {
+    if (col.key === "course") {
+      row[col.key] = section.Course?.courseName || "";
+    } else {
+      row[col.key] = section[col.key as keyof Section];
+    }
+  });
+  return row;
+}
+
 export default function SectionsPage() {
   const [sections, setSections] = useState(initialSections);
   const [search, setSearch] = useState("");
   const [sortField, setSortField] = useState<SortField>('sectionName');
   const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
   const [currentPage, setCurrentPage] = useState(1);
-  const [selectedIds, setSelectedIds] = useState<number[]>([]);
-  const [columnStatusFilter, setColumnStatusFilter] = useState("all");
-  const [modalOpen, setModalOpen] = useState(false);
-  const [modalSection, setModalSection] = useState<Section | undefined>();
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [sectionToDelete, setSectionToDelete] = useState<Section | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [showSort, setShowSort] = useState(false);
-  const [filters, setFilters] = useState({
-    type: "all",
-    status: "all",
-    yearLevel: "all",
-    course: "all",
-  });
+  const [filters, setFilters] = useState(DEFAULT_FILTERS);
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
-  const [exportMenuAnchorEl, setExportMenuAnchorEl] = useState<null | HTMLElement>(null);
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [columnsToExport, setColumnsToExport] = useState<string[]>(["sectionName", "sectionType", "sectionCapacity", "sectionStatus", "yearLevel", "course"]);
   const [pendingExportType, setPendingExportType] = useState<"csv" | "excel" | "pdf" | null>(null);
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
-  const [recentlyDeleted, setRecentlyDeleted] = useState<Section[] | null>(null);
-  const [undoTimeout, setUndoTimeout] = useState<NodeJS.Timeout | null>(null);
+  const [showPrint, setShowPrint] = useState(false);
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editSection, setEditSection] = useState<Section | undefined>();
+  const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
+  const [bulkDeleteLoading, setBulkDeleteLoading] = useState(false);
+  const [filterDialogOpen, setFilterDialogOpen] = useState(false);
+  const [sortDialogOpen, setSortDialogOpen] = useState(false);
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [viewSection, setViewSection] = useState<Section | undefined>();
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -160,33 +229,6 @@ export default function SectionsPage() {
     setCurrentPage(value);
   };
 
-  const handleExportMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
-    setExportMenuAnchorEl(event.currentTarget);
-  };
-
-  const handleExportMenuClose = () => {
-    setExportMenuAnchorEl(null);
-  };
-
-  const handleDeleteSection = (id: number) => {
-    const deleted = sections.filter(section => section.sectionId === id);
-    setSections(sections.filter(section => section.sectionId !== id));
-    setRecentlyDeleted(deleted);
-    if (undoTimeout) clearTimeout(undoTimeout);
-    const timeout = setTimeout(() => setRecentlyDeleted(null), 5000);
-    setUndoTimeout(timeout);
-    toast(
-      <span>
-        Section deleted. <button className="underline ml-2" onClick={() => {
-          setSections(prev => [...deleted, ...prev]);
-          setRecentlyDeleted(null);
-          if (undoTimeout) clearTimeout(undoTimeout);
-        }}>Undo</button>
-      </span>,
-      { duration: 5000 }
-    );
-  };
-
   const handleFilterChange = (field: string, value: string) => {
     setFilters(prev => ({
       ...prev,
@@ -198,14 +240,7 @@ export default function SectionsPage() {
     setShowSort(false);
   };
 
-  const handleResetFilters = () => {
-    setFilters({
-      type: "all",
-      status: "all",
-      yearLevel: "all",
-      course: "all",
-    });
-  };
+  const handleResetFilters = () => setFilters(DEFAULT_FILTERS);
 
   const filteredSections = useMemo(() => {
     let result = [...sections];
@@ -216,8 +251,17 @@ export default function SectionsPage() {
           section.Course?.courseName.toLowerCase().includes(search.toLowerCase())
       );
     }
-    if (columnStatusFilter !== 'all') {
-      result = result.filter((section) => section.sectionStatus === columnStatusFilter);
+    if (filters.status !== 'all') {
+      result = result.filter((section) => section.sectionStatus.toLowerCase() === filters.status.toLowerCase());
+    }
+    if (filters.type !== 'all') {
+      result = result.filter((section) => section.sectionType === filters.type);
+    }
+    if (filters.yearLevel !== 'all') {
+      result = result.filter((section) => String(section.yearLevel) === filters.yearLevel);
+    }
+    if (filters.course !== 'all') {
+      result = result.filter((section) => String(section.courseId) === filters.course);
     }
     result.sort((a, b) => {
       let aValue: string | number = a[sortField as keyof Section] as string | number;
@@ -229,7 +273,7 @@ export default function SectionsPage() {
       return ((aValue as number) - (bValue as number)) * modifier;
     });
     return result;
-  }, [sections, search, columnStatusFilter, sortField, sortOrder]);
+  }, [sections, search, filters, sortField, sortOrder]);
 
   const totalPages = Math.ceil(filteredSections.length / ITEMS_PER_PAGE);
   const paginatedSections = filteredSections.slice(
@@ -238,102 +282,88 @@ export default function SectionsPage() {
   );
 
   // Checkbox logic
-  const isAllSelected = paginatedSections.length > 0 && paginatedSections.every(s => selectedIds.includes(s.sectionId));
+  const isAllSelected = paginatedSections.length > 0 && paginatedSections.every(s => selectedIds.includes(s.sectionId.toString()));
   const isIndeterminate = selectedIds.length > 0 && !isAllSelected;
   const handleSelectAll = () => {
     if (isAllSelected) {
       setSelectedIds([]);
     } else {
-      setSelectedIds(paginatedSections.map(s => s.sectionId));
+      setSelectedIds(paginatedSections.map(s => s.sectionId.toString()));
     }
   };
-  const handleSelectRow = (id: number) => {
+  const handleSelectRow = (id: string) => {
     setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
   };
 
   // Table columns
-  const columns = [
-    { header: <Checkbox checked={isAllSelected} indeterminate={isIndeterminate} onChange={handleSelectAll} />, accessor: "select" },
-    { header: "Section Name", accessor: "sectionName" },
-    { header: "Type", accessor: "sectionType" },
-    { header: "Capacity", accessor: "sectionCapacity" },
-    { header: "Status", accessor: "sectionStatus" },
-    { header: "Year Level", accessor: "yearLevel" },
-    { header: "Course", accessor: "course" },
-    { header: "Actions", accessor: "actions" },
-  ];
-
-  // Table row renderer
-  const renderRow = (item: Section) => (
-    <TableRow
-      key={item.sectionId}
-      className={selectedIds.includes(item.sectionId) ? "bg-blue-50" : ""}
-      tabIndex={0}
-      aria-label={`Section ${item.sectionName}`}
-      aria-expanded={expandedRow === item.sectionId}
-      onClick={() => setExpandedRow(expandedRow === item.sectionId ? null : item.sectionId)}
-      onKeyDown={e => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          setExpandedRow(expandedRow === item.sectionId ? null : item.sectionId);
-          e.preventDefault();
-        }
-      }}
-      style={{ cursor: 'pointer', outline: 'none' }}
-    >
-      <TableCell>
-        <Checkbox checked={selectedIds.includes(item.sectionId)} onChange={() => handleSelectRow(item.sectionId)} aria-label={`Select section ${item.sectionName}`} />
-      </TableCell>
-      <TableCell>{item.sectionName}</TableCell>
-      <TableCell><Badge variant={item.sectionType === "REGULAR" ? "success" : item.sectionType === "IRREGULAR" ? "warning" : "info"}>{item.sectionType}</Badge></TableCell>
-      <TableCell>{item.sectionCapacity}</TableCell>
-      <TableCell><Badge variant={item.sectionStatus === "ACTIVE" ? "success" : "destructive"}>{item.sectionStatus}</Badge></TableCell>
-      <TableCell>{item.yearLevel}</TableCell>
-      <TableCell>{item.Course?.courseName}</TableCell>
-      <TableCell>
-        <div className="flex gap-2 justify-center">
-          <TooltipProvider><Tooltip><TooltipTrigger asChild>
-            <Button variant="ghost" size="icon" aria-label={`View details for section ${item.sectionName}`}>
-              <Eye className="h-4 w-4 text-blue-600" />
-            </Button>
-          </TooltipTrigger><TooltipContent>View</TooltipContent></Tooltip></TooltipProvider>
-          <TooltipProvider><Tooltip><TooltipTrigger asChild>
-            <Button variant="ghost" size="icon" aria-label={`Edit section ${item.sectionName}`} onClick={e => { e.stopPropagation(); setModalSection(item); setModalOpen(true); }}>
-              <Pencil className="h-4 w-4 text-green-600" />
-            </Button>
-          </TooltipTrigger><TooltipContent>Edit</TooltipContent></Tooltip></TooltipProvider>
-          <TooltipProvider><Tooltip><TooltipTrigger asChild>
-            <Button variant="ghost" size="icon" aria-label={`Delete section ${item.sectionName}`} onClick={e => { e.stopPropagation(); setSectionToDelete(item); setDeleteDialogOpen(true); }}>
-              <Trash2 className="h-4 w-4 text-red-600" />
-            </Button>
-          </TooltipTrigger><TooltipContent>Delete</TooltipContent></Tooltip></TooltipProvider>
+  const columns: TableListColumn<Section>[] = [
+    {
+      header: (
+        <div className="flex justify-center items-center">
+          <SharedCheckbox checked={isAllSelected} indeterminate={isIndeterminate} onCheckedChange={handleSelectAll} />
         </div>
-      </TableCell>
-    </TableRow>
-  );
-
-  const allExportColumns = [
-    { key: "sectionName", label: "Section Name" },
-    { key: "sectionType", label: "Type" },
-    { key: "sectionCapacity", label: "Capacity" },
-    { key: "sectionStatus", label: "Status" },
-    { key: "yearLevel", label: "Year Level" },
-    { key: "course", label: "Course" },
+      ),
+      accessor: 'select',
+      className: 'w-12 text-center',
+    },
+    ...SECTION_COLUMNS.map(col => {
+      if (col.key === "sectionStatus") {
+        return {
+          header: col.label,
+          accessor: col.key,
+          className: col.className,
+          render: (item: Section) => (
+            <Badge variant={getStatusBadgeVariant(item.sectionStatus)} className="text-xs px-3 py-1 rounded-full">
+              {item.sectionStatus.charAt(0).toUpperCase() + item.sectionStatus.slice(1)}
+            </Badge>
+          )
+        };
+      }
+      if (col.key === "course") {
+        return {
+          header: col.label,
+          accessor: col.key,
+          className: col.className,
+          render: (item: Section) => item.Course?.courseName
+        };
+      }
+      return {
+        header: col.label,
+        accessor: col.key,
+        className: col.className
+      };
+    }),
+    {
+      header: "Actions",
+      accessor: "actions",
+      className: "text-center align-middle",
+      render: (item: Section) => {
+        const hasRelationships = (item.totalStudents ?? 0) > 0 || (item.totalSubjects ?? 0) > 0;
+        const deleteTooltip = hasRelationships
+          ? "Cannot delete section with enrolled students or assigned subjects."
+          : "Delete";
+        return (
+          <TableRowActions
+            onView={() => { setViewSection(item); setViewDialogOpen(true); }}
+            onEdit={() => { setEditSection(item); setEditDialogOpen(true); }}
+            onDelete={() => { if (!hasRelationships) { setSectionToDelete(item); setDeleteDialogOpen(true); } }}
+            itemName={item.sectionName}
+            disabled={hasRelationships}
+            deleteTooltip={deleteTooltip}
+          />
+        );
+      }
+    }
   ];
+
+  const allExportColumns = SECTION_COLUMNS.filter(col => [
+    "sectionName", "sectionType", "sectionCapacity", "sectionStatus", "yearLevel", "course"
+  ].includes(col.key));
 
   // Helper to get export data
   const getExportRows = () => {
-    const rows = (selectedIds.length > 0 ? sections.filter(s => selectedIds.includes(s.sectionId)) : sections)
-      .map(section => {
-        const row: Record<string, any> = {};
-        columnsToExport.forEach(col => {
-          if (col === "course") {
-            row[col] = section.Course?.courseName || "";
-          } else {
-            row[col] = section[col as keyof typeof section];
-          }
-        });
-        return row;
-      });
+    const rows = (selectedIds.length > 0 ? sections.filter(s => selectedIds.includes(s.sectionId.toString())) : sections)
+      .map(section => mapSectionForExport(section, allExportColumns));
     return rows;
   };
 
@@ -358,439 +388,445 @@ export default function SectionsPage() {
     } else if (pendingExportType === "excel") {
       const wsData = [columnsToExport.map(col => allExportColumns.find(c => c.key === col)?.label || col), ...rows.map(row => columnsToExport.map(col => row[col]))];
       const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+      // Set column widths based on content
+      const colWidths = columnsToExport.map((_, index) => {
+        const maxLength = Math.max(
+          ...wsData.map(row => (row[index] || '').toString().length),
+          wsData[0][index].length
+        );
+        return { wch: Math.min(Math.max(maxLength + 2, 10), 50) }; // Min width 10, max width 50
+      });
+      ws['!cols'] = colWidths;
+
+      // Style the header row
+      const headerRange = XLSX.utils.decode_range(ws['!ref'] || 'A1');
+      for (let C = headerRange.s.c; C <= headerRange.e.c; ++C) {
+        const cellRef = XLSX.utils.encode_cell({ r: 0, c: C });
+        if (!ws[cellRef]) continue;
+        // Make headers uppercase and bold
+        ws[cellRef].v = ws[cellRef].v.toString().toUpperCase();
+        ws[cellRef].s = {
+          font: { bold: true },
+          alignment: { horizontal: 'center', vertical: 'center' }
+        };
+      }
+
+      // Center align data cells (without bold)
+      for (let R = 1; R <= headerRange.e.r; ++R) {
+        for (let C = headerRange.s.c; C <= headerRange.e.c; ++C) {
+          const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
+          if (!ws[cellRef]) continue;
+          ws[cellRef].s = {
+            alignment: { horizontal: 'center', vertical: 'center' }
+          };
+        }
+      }
+
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Sections");
       XLSX.writeFile(wb, "sections.xlsx");
     } else if (pendingExportType === "pdf") {
       const doc = new jsPDF();
+      // Add centered title
+      doc.setFontSize(16);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(12, 37, 86); // Dark blue color
+      doc.text('Section List', doc.internal.pageSize.width / 2, 20, { align: 'center' });
+      // Add subtitle with date
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(128, 128, 128); // Light gray color
+      const currentDate = new Date().toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+      doc.text(`Generated on ${currentDate}`, doc.internal.pageSize.width / 2, 28, { align: 'center' });
+      // Table
       doc.setFontSize(12);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(0, 0, 0);
       const headers = columnsToExport.map(col => allExportColumns.find(c => c.key === col)?.label || col);
       const pdfRows = rows.map(row => columnsToExport.map(col => row[col]));
-      (doc as any).autoTable({ head: [headers], body: pdfRows, styles: { fontSize: 8 }, headStyles: { fillColor: [12, 37, 86] }, margin: { top: 16 } });
+      autoTable(doc, {
+        head: [headers],
+        body: pdfRows,
+        styles: { fontSize: 8 },
+        headStyles: { fillColor: [12, 37, 86], halign: 'center' },
+        bodyStyles: { halign: 'center' },
+        margin: { top: 16 },
+        startY: 36
+      });
       doc.save("sections.pdf");
     }
     setExportModalOpen(false);
     setPendingExportType(null);
   };
 
-  // Simulate loading for demonstration (replace with real API loading logic)
+  // Add refresh function
+  const refreshSections = async () => {
+    try {
+      setLoading(true);
+      // Fetch latest sections from API
+      const res = await fetch('/api/sections');
+      if (!res.ok) {
+        throw new Error(`Failed to refresh sections: ${res.statusText}`);
+      }
+      const data = await res.json();
+      if (!Array.isArray(data)) {
+        throw new Error('Invalid data received from server');
+      }
+      setSections(data);
+      toast.success('Sections refreshed successfully');
+    } catch (err: any) {
+      console.error('Error refreshing sections:', err);
+      toast.error('Failed to refresh sections. Please try again later.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Add handlePrint function
+  const handlePrint = () => {
+    const printColumns = columnsToExport.map(key => {
+      const col = allExportColumns.find(c => c.key === key);
+      return {
+        header: col?.label || key,
+        accessor: key,
+      };
+    });
+    const printData = filteredSections.map(section => {
+      const row: Record<string, any> = {};
+      columnsToExport.forEach(col => {
+        if (col === "course") {
+          row[col] = section.Course?.courseName || "";
+        } else {
+          row[col] = section[col as keyof typeof section];
+        }
+      });
+      return row;
+    });
+    const printFn = PrintLayout({
+      title: 'Section List',
+      data: printData,
+      columns: printColumns,
+      totalItems: filteredSections.length,
+    });
+    printFn();
+  };
+
+  // Add handleBulkDelete function
+  const handleBulkDelete = async () => {
+    setBulkDeleteLoading(true);
+    try {
+      // Simulate API call
+      await new Promise(res => setTimeout(res, 1000));
+      setSections(prev => prev.filter(s => !selectedIds.includes(s.sectionId.toString())));
+      setSelectedIds([]);
+      toast.success(`${selectedIds.length} section(s) deleted successfully.`);
+    } catch (err) {
+      toast.error("Failed to delete sections.");
+    }
+    setBulkDeleteLoading(false);
+    setBulkDeleteDialogOpen(false);
+  };
+
+  // Update status values to lowercase
+  const statusOptions = [
+    { value: 'all', label: 'All' },
+    { value: 'active', label: 'Active' },
+    { value: 'inactive', label: 'Inactive' },
+  ];
+
+  // Update status badge variant
+  const getStatusVariant = (status: string) => status.toLowerCase() === "active" ? "success" : "destructive";
+
+  // Add getItemId function
+  const getItemId = (item: Section) => item.sectionId.toString();
+
+  // Update status type
+  type Status = "active" | "inactive";
+
+  // Update getItemStatus to return correct type
+  const getItemStatus = (item: Section): Status => item.sectionStatus.toLowerCase() as Status;
+
+  // Update filterFields to use the local type
+  const filterFields: FilterField[] = [
+    { key: 'type', label: 'Section Type', type: 'select' as const, options: SECTION_TYPE_OPTIONS },
+    { key: 'yearLevel', label: 'Year Level', type: 'select' as const, options: YEAR_LEVEL_OPTIONS },
+    { key: 'course', label: 'Course', type: 'select' as const, options: COURSE_OPTIONS },
+  ];
+
+  // Reset pagination on filter change
   useEffect(() => {
-    setLoading(true);
-    const timer = setTimeout(() => setLoading(false), 800);
-    return () => clearTimeout(timer);
-  }, [sections]);
+    setCurrentPage(1);
+  }, [filters, search]);
+
+  // Update activeFilterCount to count all non-default filters
+  const activeFilterCount = Object.entries(filters).filter(([key, value]) => value !== 'all').length;
 
   return (
-    <div className="bg-white/80 backdrop-blur-md p-6 rounded-xl shadow-xl border border-blue-100 flex-1 m-4 mt-0">
-      {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-blue-900">All Sections</h1>
-        <p className="text-sm text-blue-700/80 mb-4">Manage and view all section information</p>
-        <div className="flex flex-col md:flex-row md:items-center gap-4">
-          <div className="flex-1">
-            <FilterBar
-              search={search}
-              setSearch={setSearch}
-              filters={filters}
-              setFilters={setFilters}
-              sortField={sortField}
-              setSortField={(v: string) => setSortField(v as SortField)}
-              sortOrder={sortOrder}
-              setSortOrder={(v: string) => setSortOrder(v as SortOrder)}
-              columnStatusFilter={columnStatusFilter}
-              setColumnStatusFilter={setColumnStatusFilter}
-              showFilters={showFilters}
-              setShowFilters={setShowFilters}
-              showSort={showSort}
-              setShowSort={setShowSort}
+    <>
+      {/* Normal UI */}
+      <div className="bg-white/80 backdrop-blur-md p-6 rounded-xl shadow-xl border border-blue-100 flex-1 m-4 mt-0">
+        {/* TOP */}
+        <TableHeaderSection
+          title="All Sections"
+          description="Manage and view all section information"
+          searchValue={search}
+          onSearchChange={setSearch}
+          onRefresh={refreshSections}
+          isRefreshing={loading}
+          onFilterClick={() => setFilterDialogOpen(true)}
+          onSortClick={() => setSortDialogOpen(true)}
+          onExportClick={() => setExportDialogOpen(true)}
+          onPrintClick={handlePrint}
+          onAddClick={() => setAddDialogOpen(true)}
+          activeFilterCount={activeFilterCount}
+          searchPlaceholder="Search sections..."
+          addButtonLabel="Add Section"
+        />
+
+        {/* Print Header and Table - Only visible when printing */}
+        <div className="print-content">
+          {/* Table layout for xl+ only */}
+          <div className="hidden xl:block">
+            <div className="overflow-x-auto rounded-xl border border-blue-100 bg-white/70 shadow-md relative">
+              <TableList
+                columns={columns}
+                data={paginatedSections}
+                loading={loading}
+                selectedIds={selectedIds}
+                onSelectRow={handleSelectRow}
+                onSelectAll={handleSelectAll}
+                isAllSelected={isAllSelected}
+                isIndeterminate={isIndeterminate}
+                getItemId={getItemId}
+              />
+            </div>
+          </div>
+
+          {/* Card layout for small screens */}
+          <div className="block xl:hidden">
+            <TableCardView
+              items={paginatedSections}
+              selectedIds={selectedIds}
+              onSelect={handleSelectRow}
+              onView={(item) => {
+                setViewSection(item);
+                setViewDialogOpen(true);
+              }}
+              onEdit={(item) => {
+                setEditSection(item);
+                setEditDialogOpen(true);
+              }}
+              onDelete={(item) => {
+                setSectionToDelete(item);
+                setDeleteDialogOpen(true);
+              }}
+              getItemId={getItemId}
+              getItemName={(item) => item.sectionName}
+              getItemCode={(item) => item.sectionType}
+              getItemStatus={getItemStatus}
+              getItemDescription={(item) => `Year Level ${item.yearLevel}`}
+              getItemDetails={(item) => [
+                { label: 'Capacity', value: item.sectionCapacity },
+                { label: 'Students', value: item.totalStudents ?? 0 },
+                { label: 'Subjects', value: item.totalSubjects ?? 0 },
+              ]}
+              isLoading={loading}
             />
           </div>
-          <div className="flex items-center gap-2">
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="outline" size="icon" className="border-blue-200 hover:bg-blue-50" aria-label="Export">
-                        <FileDown className="h-4 w-4 text-blue-700" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-36 bg-white/90 border border-blue-100 shadow-lg rounded-xl mt-2">
-                      <DropdownMenuItem onClick={() => handleExport("csv")}>Export as CSV</DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleExport("excel")}>Export as Excel</DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleExport("pdf")}>Export as PDF</DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </TooltipTrigger>
-                <TooltipContent>Export</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button variant="outline" size="icon" className="border-blue-200 hover:bg-blue-50" aria-label="Print" onClick={() => {
-                    const printWindow = window.open("", "_blank");
-                    if (printWindow) {
-                      printWindow.document.write(`
-                        <html>
-                          <head>
-                            <title>Sections List</title>
-                            <style>
-                              body { font-family: Arial, sans-serif; margin: 20px; }
-                              .print-header { text-align: center; margin-bottom: 20px; }
-                              .print-header h1 { font-size: 24px; margin: 0; color: #1a1a1a; }
-                              .print-header p { font-size: 14px; color: #666; margin: 5px 0 0 0; }
-                              table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-                              th { background-color: #f3f4f6; color: #374151; font-weight: 600; text-align: left; padding: 12px; border-bottom: 2px solid #e5e7eb; }
-                              td { padding: 12px; border-bottom: 1px solid #e5e7eb; color: #1f2937; }
-                              .section-info { display: flex; align-items: center; gap: 12px; }
-                              .section-code { background-color: #2563eb; color: white; padding: 8px 12px; border-radius: 8px; font-weight: 600; }
-                              .section-name { font-weight: 500; }
-                              .section-code-text { font-size: 12px; color: #6b7280; }
-                              @media print {
-                                body { margin: 0; padding: 20px; }
-                                table { page-break-inside: auto; }
-                                tr { page-break-inside: avoid; page-break-after: auto; }
-                                thead { display: table-header-group; }
-                              }
-                            </style>
-                          </head>
-                          <body>
-                            <div class="print-header">
-                              <h1>Sections List</h1>
-                              <p>Generated on ${new Date().toLocaleDateString()}</p>
-                            </div>
-                            <table>
-                              <thead>
-                                <tr>
-                                  <th>Section Info</th>
-                                  <th>Type</th>
-                                  <th>Capacity</th>
-                                  <th>Status</th>
-                                  <th>Year Level</th>
-                                  <th>Course</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                ${sections.map(section => `
-                                  <tr>
-                                    <td>
-                                      <div class="section-info">
-                                        <div class="section-code">${section.sectionName.slice(0, 2)}</div>
-                                        <div>
-                                          <div class="section-name">${section.sectionName}</div>
-                                          <div class="section-code-text">${section.Course?.courseName || ""}</div>
-                                        </div>
-                                      </div>
-                                    </td>
-                                    <td>${section.sectionType}</td>
-                                    <td>${section.sectionCapacity}</td>
-                                    <td>${section.sectionStatus}</td>
-                                    <td>${section.yearLevel}</td>
-                                    <td>${section.Course?.courseName || ""}</td>
-                                  </tr>
-                                `).join("")}
-                              </tbody>
-                            </table>
-                          </body>
-                        </html>
-                      `);
-                      printWindow.document.close();
-                      printWindow.print();
-                    }
-                  }}>
-                    <Printer className="h-4 w-4 text-blue-700" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Print</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            <Button
-              variant="default"
-              className="bg-blue-700 hover:bg-blue-800 text-white shadow flex items-center gap-2 px-4 py-2"
-              aria-label="Add Section"
-              onClick={() => {
-                setModalSection(undefined);
-                setModalOpen(true);
-              }}
-            >
-              <Plus className="h-4 w-4" />
-              <span className="hidden sm:inline">Add Section</span>
-            </Button>
-          </div>
         </div>
-      </div>
-      {/* Bulk Actions Bar */}
-      {selectedIds.length > 0 && (
-        <div className="flex items-center justify-between bg-blue-100 border border-blue-300 rounded-lg px-4 py-2 mb-4 shadow">
-          <span className="font-medium text-blue-900">{selectedIds.length} selected</span>
-          <div className="flex gap-2">
-            <Button variant="destructive" size="sm" onClick={() => {
-              const deleted = sections.filter(s => selectedIds.includes(s.sectionId));
-              setSections(sections.filter(s => !selectedIds.includes(s.sectionId)));
-              setSelectedIds([]);
-              setRecentlyDeleted(deleted);
-              if (undoTimeout) clearTimeout(undoTimeout);
-              const timeout = setTimeout(() => setRecentlyDeleted(null), 5000);
-              setUndoTimeout(timeout);
-              toast(
-                <span>
-                  {deleted.length} section(s) deleted. <button className="underline ml-2" onClick={() => {
-                    setSections(prev => [...deleted, ...prev]);
-                    setRecentlyDeleted(null);
-                    if (undoTimeout) clearTimeout(undoTimeout);
-                  }}>Undo</button>
-                </span>,
-                { duration: 5000 }
-              );
-            }}>
-              Delete Selected
-            </Button>
-            <Select onValueChange={status => {
-              setSections(sections.map(s => selectedIds.includes(s.sectionId) ? { ...s, sectionStatus: status as "ACTIVE" | "INACTIVE" } : s));
-              setSelectedIds([]);
-              // TODO: Add toast
-            }}>
-              <SelectTrigger className="w-36"><SelectValue placeholder="Change Status" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ACTIVE">Set Active</SelectItem>
-                <SelectItem value="INACTIVE">Set Inactive</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+
+        {/* Bulk Actions Bar*/}
+        {selectedIds.length > 0 && (
+          <BulkActionsBar
+            selectedCount={selectedIds.length}
+            entityLabel="section"
+            actions={[
+              {
+                key: 'delete',
+                label: 'Delete Selected',
+                icon: loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Trash2 className="w-4 h-4 mr-2" />,
+                onClick: () => setBulkDeleteDialogOpen(true),
+                loading: loading,
+                disabled: loading,
+                tooltip: 'Delete selected sections',
+                variant: 'destructive',
+              },
+            ]}
+            onClear={() => setSelectedIds([])}
+            className="mt-4 mb-2"
+          />
+        )}
+
+        {/* PAGINATION */}
+        <div className="mt-6">
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+          />
         </div>
-      )}
-      {/* Table */}
-      <div className="overflow-x-auto rounded-lg border bg-white shadow">
-        <Table>
-          <TableHeader>
-            <TableRow className="bg-blue-100/60 sticky top-0 z-10">
-              {columns.map((col, idx) => (
-                <TableHead
-                  key={idx}
-                  className={col.accessor !== 'select' && col.accessor !== 'actions' ? 'cursor-pointer select-none' : ''}
-                  onClick={col.accessor !== 'select' && col.accessor !== 'actions' ? () => {
-                    setSortField(col.accessor as SortField);
-                    setSortOrder(sortField === col.accessor ? (sortOrder === 'asc' ? 'desc' : 'asc') : 'asc');
-                  } : undefined}
-                >
-                  <span className="inline-flex items-center gap-1">
-                    {col.header}
-                    {sortField === col.accessor && (
-                      sortOrder === 'asc' ? <ChevronUp className="w-4 h-4 inline" /> : <ChevronDown className="w-4 h-4 inline" />
-                    )}
-                  </span>
-                </TableHead>
-              ))}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {loading ? (
-              // Skeleton rows
-              Array.from({ length: 5 }).map((_, idx) => (
-                <TableRow key={"skeleton-" + idx}>
-                  {columns.map((col, cidx) => (
-                    <TableCell key={cidx}>
-                      <div className="h-4 bg-gray-200 rounded animate-pulse w-full" />
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))
-            ) : paginatedSections.length === 0 ? (
-              // Empty state
-              <TableRow>
-                <TableCell colSpan={columns.length} className="py-12 text-center" aria-live="polite">
-                  <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                    <Inbox className="w-10 h-10 mb-2 text-gray-300" />
-                    <span className="font-semibold">No sections found</span>
-                    <span className="text-sm">Try adjusting your filters or search.</span>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ) : (
-              paginatedSections.map(item => (
-                <React.Fragment key={item.sectionId}>
-                  {renderRow(item)}
-                  {expandedRow === item.sectionId && (
-                    <TableRow key={item.sectionId + '-expanded'}>
-                      <TableCell colSpan={columns.length} className="bg-blue-50">
-                        <div className="py-4 px-6">
-                          <div className="font-semibold mb-2">Section Details</div>
-                          <div className="flex flex-wrap gap-6">
-                            <div>
-                              <div className="text-xs text-muted-foreground">Total Students</div>
-                              <div className="font-bold">{item.totalStudents ?? 'N/A'}</div>
-                            </div>
-                            <div>
-                              <div className="text-xs text-muted-foreground">Total Subjects</div>
-                              <div className="font-bold">{item.totalSubjects ?? 'N/A'}</div>
-                            </div>
-                            <div>
-                              <div className="text-xs text-muted-foreground">Course</div>
-                              <div>{item.Course?.courseName ?? 'N/A'}</div>
-                            </div>
-                            {/* Placeholder for students or more details */}
-                            <div>
-                              <div className="text-xs text-muted-foreground">Students</div>
-                              <div className="italic text-gray-400">(Student list placeholder)</div>
-                            </div>
-                          </div>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </React.Fragment>
-              ))
-            )}
-          </TableBody>
-        </Table>
+
+        {/* Filter Dialog */}
+        <FilterDialog
+          open={filterDialogOpen}
+          onOpenChange={setFilterDialogOpen}
+          statusFilter={filters.status}
+          setStatusFilter={(v) => setFilters(prev => ({ ...prev, status: v }))}
+          statusOptions={statusOptions}
+          advancedFilters={filters}
+          setAdvancedFilters={(newFilters) => setFilters(prev => ({ ...prev, ...newFilters }))}
+          fields={filterFields}
+          onReset={() => setFilters({
+            type: "all",
+            status: "all",
+            yearLevel: "all",
+            course: "all",
+          })}
+          onApply={() => setFilterDialogOpen(false)}
+          activeAdvancedCount={activeFilterCount}
+          title="Filter Sections"
+          tooltip="Filter sections by multiple criteria. Use advanced filters for more specific conditions."
+        />
+
+        {/* Export Dialog */}
+        <ExportDialog
+          open={exportDialogOpen}
+          onOpenChange={setExportDialogOpen}
+          exportableColumns={[
+            { key: 'sectionName', label: 'Section Name' },
+            { key: 'sectionType', label: 'Type' },
+            { key: 'sectionCapacity', label: 'Capacity' },
+            { key: 'yearLevel', label: 'Year Level' },
+            { key: 'course', label: 'Course' },
+            { key: 'totalStudents', label: 'Students' },
+            { key: 'totalSubjects', label: 'Subjects' },
+            { key: 'sectionStatus', label: 'Status' },
+          ]}
+          exportColumns={columnsToExport}
+          setExportColumns={setColumnsToExport}
+          exportFormat={pendingExportType}
+          setExportFormat={setPendingExportType}
+          onExport={doExport}
+          title="Export Sections"
+          tooltip="Export section data in various formats. Choose your preferred export options."
+        />
+
+        {/* Sort Dialog */}
+        <SortDialog
+          open={sortDialogOpen}
+          onOpenChange={setSortDialogOpen}
+          sortField={sortField}
+          setSortField={setSortField}
+          sortOrder={sortOrder}
+          setSortOrder={setSortOrder}
+          sortFieldOptions={[
+            { value: 'sectionName', label: 'Section Name' },
+            { value: 'sectionType', label: 'Type' },
+            { value: 'sectionCapacity', label: 'Capacity' },
+            { value: 'yearLevel', label: 'Year Level' },
+            { value: 'sectionStatus', label: 'Status' },
+          ]}
+          onApply={handleApplyFilters}
+          onReset={() => {
+            setSortField('sectionName');
+            setSortOrder('asc');
+          }}
+          title="Sort Sections"
+          tooltip="Sort sections by different fields. Choose the field and order to organize your list."
+        />
+
+        {/* Section Form Dialog */}
+        <SectionFormDialog
+          open={addDialogOpen}
+          onOpenChange={setAddDialogOpen}
+          type="create"
+          onSuccess={(newSection: Section) => {
+            setSections((prev) => [newSection, ...prev]);
+            setAddDialogOpen(false);
+            toast.success("Section added successfully");
+          }}
+        />
+
+        {/* Edit Section Dialog */}
+        <SectionFormDialog
+          open={editDialogOpen}
+          onOpenChange={setEditDialogOpen}
+          type="update"
+          data={editSection}
+          onSuccess={(updatedSection: SectionFormData) => {
+            if (!editSection) return;
+            setSections((prev) => prev.map(s =>
+              s.sectionId === editSection.sectionId
+                ? { ...s, ...updatedSection, yearLevel: Number(updatedSection.yearLevel), courseId: Number(updatedSection.courseId) }
+                : s
+            ));
+            setEditDialogOpen(false);
+            toast.success("Section updated successfully");
+          }}
+        />
+
+        {/* Section View Dialog */}
+        <ViewDialog
+          open={viewDialogOpen}
+          onOpenChange={setViewDialogOpen}
+          title={viewSection?.sectionName || 'Section Details'}
+          status={viewSection ? {
+            value: viewSection.sectionStatus,
+            variant: viewSection.sectionStatus === 'ACTIVE' ? 'success' : 'destructive',
+          } : undefined}
+          sections={viewSection ? [
+            {
+              title: 'Basic Information',
+              fields: [
+                { label: 'Section Name', value: viewSection.sectionName },
+                { label: 'Type', value: viewSection.sectionType },
+                { label: 'Year Level', value: viewSection.yearLevel },
+                { label: 'Course', value: viewSection.Course?.courseName || '' },
+              ],
+              columns: 2,
+            },
+            {
+              title: 'Capacity & Stats',
+              fields: [
+                { label: 'Capacity', value: viewSection.sectionCapacity },
+                { label: 'Students', value: viewSection.totalStudents ?? 0 },
+                { label: 'Subjects', value: viewSection.totalSubjects ?? 0 },
+              ],
+              columns: 2,
+            },
+          ] : []}
+        />
+
+        {/* Delete Section Dialog */}
+        <ConfirmDeleteDialog
+          open={deleteDialogOpen}
+          onOpenChange={setDeleteDialogOpen}
+          itemName={sectionToDelete?.sectionName}
+          onDelete={() => {
+            if (!sectionToDelete) return;
+            setSections(prev => prev.filter(s => s.sectionId !== sectionToDelete.sectionId));
+            setDeleteDialogOpen(false);
+            setSectionToDelete(null);
+            toast.success("Section deleted successfully");
+          }}
+          description="Are you sure you want to delete this section? This action cannot be undone."
+        />
+
+        {/* Bulk Delete Confirmation Dialog */}
+        <ConfirmDeleteDialog
+          open={bulkDeleteDialogOpen}
+          onOpenChange={setBulkDeleteDialogOpen}
+          itemName={`${selectedIds.length} selected section(s)`}
+          onDelete={handleBulkDelete}
+          loading={bulkDeleteLoading}
+          description={`Are you sure you want to delete ${selectedIds.length} selected section(s)? This action cannot be undone.`}
+        />
       </div>
-      {/* Pagination */}
-      <div className="mt-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div className="text-sm text-muted-foreground">
-          Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1} to {Math.min(currentPage * ITEMS_PER_PAGE, filteredSections.length)} of {filteredSections.length} entries
-        </div>
-        <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />
-      </div>
-      {/* Delete Confirmation Dialog */}
-      <Dialog open={deleteDialogOpen} onOpenChange={open => { if (!open) { setDeleteDialogOpen(false); setSectionToDelete(null); } }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete Section</DialogTitle>
-          </DialogHeader>
-          <div>Are you sure you want to delete the section "{sectionToDelete?.sectionName}"? This action cannot be undone.</div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => { setDeleteDialogOpen(false); setSectionToDelete(null); }}>Cancel</Button>
-            <Button variant="destructive" onClick={() => sectionToDelete && handleDeleteSection(sectionToDelete.sectionId)}>Delete</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      {/* Section Form Modal */}
-      <FormModal
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        onSubmit={async (data: SectionFormData) => {
-          try {
-            const formData = {
-              ...data,
-              yearLevel: parseInt(data.yearLevel, 10),
-              courseId: parseInt(data.courseId, 10),
-            };
-            const url = modalSection ? `/api/sections/${modalSection.sectionId}` : "/api/sections";
-            const method = modalSection ? "PUT" : "POST";
-            const response = await fetch(url, {
-              method,
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(formData),
-            });
-
-            if (!response.ok) throw new Error("Failed to save section");
-
-            if (modalSection) {
-              setSections(sections.map(section => 
-                section.sectionId === modalSection.sectionId ? { ...section, ...formData } : section
-              ));
-              toast.success("Section updated successfully");
-            } else {
-              const newSection = await response.json();
-              setSections([...sections, newSection]);
-              toast.success("Section created successfully");
-            }
-
-            setModalOpen(false);
-          } catch (error) {
-            console.error("Error saving section:", error);
-            toast.error("Failed to save section");
-          }
-        }}
-        title={modalSection ? "Edit Section" : "Add New Section"}
-        submitLabel={modalSection ? "Update" : "Add"}
-        defaultValues={modalSection ? {
-          ...modalSection,
-          yearLevel: modalSection.yearLevel.toString(),
-          courseId: modalSection.courseId.toString(),
-        } : undefined}
-        schema={sectionFormSchema}
-        fields={[
-          {
-            name: "sectionName",
-            label: "Section Name",
-            type: "text",
-          },
-          {
-            name: "sectionType",
-            label: "Type",
-            type: "select",
-            options: [
-              { value: "REGULAR", label: "Regular" },
-              { value: "IRREGULAR", label: "Irregular" },
-              { value: "SUMMER", label: "Summer" },
-            ],
-          },
-          {
-            name: "sectionCapacity",
-            label: "Capacity",
-            type: "number",
-          },
-          {
-            name: "sectionStatus",
-            label: "Status",
-            type: "select",
-            options: [
-              { value: "ACTIVE", label: "Active" },
-              { value: "INACTIVE", label: "Inactive" },
-            ],
-          },
-          {
-            name: "yearLevel",
-            label: "Year Level",
-            type: "select",
-            options: [
-              { value: "1", label: "1st Year" },
-              { value: "2", label: "2nd Year" },
-              { value: "3", label: "3rd Year" },
-              { value: "4", label: "4th Year" },
-            ],
-          },
-          {
-            name: "courseId",
-            label: "Course",
-            type: "select",
-            options: [
-              { value: "1", label: "Bachelor of Science in Information Technology" },
-              { value: "2", label: "Bachelor of Science in Computer Science" },
-              { value: "3", label: "Bachelor of Science in Information Systems" },
-            ],
-          },
-        ]}
-      />
-      {/* Export Modal */}
-      <Dialog open={exportModalOpen} onOpenChange={setExportModalOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Select Columns to Export</DialogTitle>
-          </DialogHeader>
-          <div className="flex flex-col gap-2 mb-4">
-            {allExportColumns.map(col => (
-              <label key={col.key} className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={columnsToExport.includes(col.key)}
-                  onChange={e => {
-                    if (e.target.checked) setColumnsToExport(cols => [...cols, col.key]);
-                    else setColumnsToExport(cols => cols.filter(k => k !== col.key));
-                  }}
-                />
-                <span>{col.label}</span>
-              </label>
-            ))}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setExportModalOpen(false)}>Cancel</Button>
-            <Button onClick={doExport}>Export</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
+    </>
   );
 }

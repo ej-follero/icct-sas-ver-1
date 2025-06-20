@@ -18,7 +18,8 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuIte
 import { Dialog, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Plus, Search, Filter, SortAsc, FileDown, Printer, Eye, Pencil, Trash2, User, Mail, Phone, MapPin, School, GraduationCap } from "lucide-react";
+import { Plus, Search, Filter, SortAsc, FileDown, Printer, Eye, Pencil, Trash2, User, Mail, Phone, MapPin, School, GraduationCap, Calendar, Users, CreditCard, Activity, TrendingUp, AlertCircle, CheckCircle, Clock, UserCheck, UserX, Home, Building, BookOpen, Shield, QrCode, Database, FileText, BarChart3, PieChart, LineChart } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 
 // Define the student schema
 const studentSchema = z.object({
@@ -37,6 +38,8 @@ const studentSchema = z.object({
   studentType: z.enum(["REGULAR", "IRREGULAR"]),
   status: z.enum(["ACTIVE", "INACTIVE"]),
   yearLevel: z.enum(["FIRST_YEAR", "SECOND_YEAR", "THIRD_YEAR", "FOURTH_YEAR"]),
+  courseId: z.number().optional(),
+  departmentId: z.number().optional(),
   guardianId: z.number(),
   userId: z.number(),
   section_name: z.string().optional(),
@@ -60,6 +63,8 @@ const studentFormSchema = z.object({
   studentType: z.enum(["REGULAR", "IRREGULAR"]),
   status: z.enum(["ACTIVE", "INACTIVE"]),
   yearLevel: z.enum(["FIRST_YEAR", "SECOND_YEAR", "THIRD_YEAR", "FOURTH_YEAR"]),
+  courseId: z.number().optional(),
+  departmentId: z.number().optional(),
   guardianId: z.number(),
   userId: z.number(),
   section_name: z.string().optional(),
@@ -90,9 +95,22 @@ export default function StudentsPage() {
     type: "all",
     section: "all",
     status: "all",
+    course: "all",
+    department: "all",
+    yearLevel: "all",
+    rfidStatus: "all",
   });
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [exportMenuAnchorEl, setExportMenuAnchorEl] = useState<null | HTMLElement>(null);
+  const [showAnalytics, setShowAnalytics] = useState(false);
+  const [showRFIDManagement, setShowRFIDManagement] = useState(false);
+  const [showBulkActions, setShowBulkActions] = useState(false);
+  const [selectedStudents, setSelectedStudents] = useState<number[]>([]);
+  const [showAttendanceSummary, setShowAttendanceSummary] = useState(false);
+  const [courseFilter, setCourseFilter] = useState('all');
+  const [departmentFilter, setDepartmentFilter] = useState('all');
+  const [yearLevelFilter, setYearLevelFilter] = useState('all');
+  const [rfidStatusFilter, setRfidStatusFilter] = useState('all');
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -305,7 +323,74 @@ export default function StudentsPage() {
       type: "all",
       section: "all",
       status: "all",
+      course: "all",
+      department: "all",
+      yearLevel: "all",
+      rfidStatus: "all",
     });
+  };
+
+  const handleBulkAction = (action: string) => {
+    if (selectedStudents.length === 0) {
+      toast.error("Please select students first");
+      return;
+    }
+
+    switch (action) {
+      case 'activate':
+        setStudents(students.map(student => 
+          selectedStudents.includes(student.studentId) 
+            ? { ...student, status: 'ACTIVE' as const }
+            : student
+        ));
+        toast.success(`${selectedStudents.length} student(s) activated`);
+        break;
+      case 'deactivate':
+        setStudents(students.map(student => 
+          selectedStudents.includes(student.studentId) 
+            ? { ...student, status: 'INACTIVE' as const }
+            : student
+        ));
+        toast.success(`${selectedStudents.length} student(s) deactivated`);
+        break;
+      case 'assignRFID':
+        setShowRFIDManagement(true);
+        break;
+      case 'exportSelected':
+        handleExportSelectedStudents();
+        break;
+      default:
+        break;
+    }
+    setSelectedStudents([]);
+  };
+
+  const handleExportSelectedStudents = () => {
+    const selectedData = students.filter(student => selectedStudents.includes(student.studentId));
+    // Implementation for exporting selected students
+    toast.success(`${selectedData.length} students exported`);
+  };
+
+  const getStudentStats = () => {
+    const total = students.length;
+    const active = students.filter(s => s.status === 'ACTIVE').length;
+    const inactive = students.filter(s => s.status === 'INACTIVE').length;
+    const regular = students.filter(s => s.studentType === 'REGULAR').length;
+    const irregular = students.filter(s => s.studentType === 'IRREGULAR').length;
+    
+    return { total, active, inactive, regular, irregular };
+  };
+
+  const getAttendanceSummary = () => {
+    // Mock attendance data - replace with actual API call
+    return {
+      totalSessions: 150,
+      averageAttendance: 85.5,
+      presentCount: 128,
+      absentCount: 15,
+      lateCount: 7,
+      excusedCount: 0
+    };
   };
 
   const filteredStudents = useMemo(() => {
@@ -316,8 +401,12 @@ export default function StudentsPage() {
       const matchesType = filters.type === "all" || student.studentType === filters.type;
       const matchesSection = filters.section === "all" || student.section_name === filters.section;
       const matchesStatus = filters.status === "all" || student.status === filters.status;
+      const matchesCourse = filters.course === "all" || student.courseId?.toString() === filters.course;
+      const matchesDepartment = filters.department === "all" || student.departmentId?.toString() === filters.department;
+      const matchesYearLevel = filters.yearLevel === "all" || student.yearLevel === filters.yearLevel;
       
-      return matchesSearch && matchesType && matchesSection && matchesStatus;
+      return matchesSearch && matchesType && matchesSection && matchesStatus && 
+             matchesCourse && matchesDepartment && matchesYearLevel;
     });
   }, [students, searchTerm, filters]);
 
@@ -358,15 +447,69 @@ export default function StudentsPage() {
 
   const totalPages = Math.ceil(sortedStudents.length / itemsPerPage);
 
+  const stats = getStudentStats();
+  const attendanceSummary = getAttendanceSummary();
+
   return (
     <div className="min-h-screen bg-background p-3">
+      {/* Statistics Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Total Students</p>
+                <p className="text-2xl font-bold">{stats.total}</p>
+              </div>
+              <Users className="h-8 w-8 text-blue-600" />
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Active Students</p>
+                <p className="text-2xl font-bold text-green-600">{stats.active}</p>
+              </div>
+              <UserCheck className="h-8 w-8 text-green-600" />
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Regular Students</p>
+                <p className="text-2xl font-bold text-blue-600">{stats.regular}</p>
+              </div>
+              <GraduationCap className="h-8 w-8 text-blue-600" />
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">Avg Attendance</p>
+                <p className="text-2xl font-bold text-orange-600">{attendanceSummary.averageAttendance}%</p>
+              </div>
+              <TrendingUp className="h-8 w-8 text-orange-600" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
       <Card>
         <CardContent>
-          {/* Header */}
+          {/* Enhanced Header */}
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
             <div>
-              <h1 className="text-2xl font-bold mb-1">All Students</h1>
-              <p className="text-muted-foreground text-sm">Manage and view all student information</p>
+              <h1 className="text-2xl font-bold mb-1">Student Management</h1>
+              <p className="text-muted-foreground text-sm">Manage and view all student information with advanced analytics</p>
             </div>
             <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
               <div className="relative w-full sm:w-56">
@@ -386,6 +529,10 @@ export default function StudentsPage() {
                 <SortAsc className="h-4 w-4" />
                 <span className="hidden sm:inline">Sort</span>
               </Button>
+              <Button variant="outline" onClick={() => setShowAnalytics(true)} className="flex items-center gap-2">
+                <BarChart3 className="h-4 w-4" />
+                <span className="hidden sm:inline">Analytics</span>
+              </Button>
               <Button onClick={() => { setModalStudent(undefined); setModalOpen(true); }} className="flex items-center gap-2">
                 <Plus className="h-4 w-4" />
                 <span className="hidden sm:inline">Add Student</span>
@@ -393,24 +540,79 @@ export default function StudentsPage() {
             </div>
           </div>
 
-          {/* Table */}
+          {/* Bulk Actions */}
+          {selectedStudents.length > 0 && (
+            <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-blue-900">
+                  {selectedStudents.length} student(s) selected
+                </span>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => handleBulkAction('activate')}>
+                    <UserCheck className="h-4 w-4 mr-1" />
+                    Activate
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => handleBulkAction('deactivate')}>
+                    <UserX className="h-4 w-4 mr-1" />
+                    Deactivate
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => handleBulkAction('assignRFID')}>
+                    <QrCode className="h-4 w-4 mr-1" />
+                    Assign RFID
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => handleBulkAction('exportSelected')}>
+                    <FileText className="h-4 w-4 mr-1" />
+                    Export Selected
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Enhanced Table */}
           <div className="overflow-x-auto rounded-lg border bg-white shadow">
             <Table>
               <TableHeader>
                 <TableRow className="bg-blue-100/60">
+                  <TableHead className="w-12">
+                    <Checkbox 
+                      checked={selectedStudents.length === paginatedStudents.length && paginatedStudents.length > 0}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          setSelectedStudents(paginatedStudents.map(s => s.studentId));
+                        } else {
+                          setSelectedStudents([]);
+                        }
+                      }}
+                    />
+                  </TableHead>
                   <TableHead>Student Info</TableHead>
                   <TableHead>Student ID</TableHead>
                   <TableHead>RFID Tag</TableHead>
                   <TableHead>Type</TableHead>
+                  <TableHead>Year Level</TableHead>
                   <TableHead>Contact</TableHead>
                   <TableHead>Section</TableHead>
                   <TableHead>Guardian</TableHead>
+                  <TableHead>Status</TableHead>
                   <TableHead className="text-center w-32">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {paginatedStudents.map((item) => (
                   <TableRow key={item.studentId} className="hover:bg-gray-50">
+                    <TableCell>
+                      <Checkbox 
+                        checked={selectedStudents.includes(item.studentId)}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setSelectedStudents([...selectedStudents, item.studentId]);
+                          } else {
+                            setSelectedStudents(selectedStudents.filter(id => id !== item.studentId));
+                          }
+                        }}
+                      />
+                    </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold text-lg">
@@ -430,11 +632,19 @@ export default function StudentsPage() {
                       <Badge variant={item.studentType === "REGULAR" ? "success" : "warning"}>{item.studentType}</Badge>
                     </TableCell>
                     <TableCell>
+                      <Badge variant="outline">{item.yearLevel.replace('_', ' ')}</Badge>
+                    </TableCell>
+                    <TableCell>
                       <div className="text-sm">{item.email}</div>
                       <div className="text-xs text-muted-foreground">{item.phoneNumber}</div>
                     </TableCell>
                     <TableCell>{item.section_name || '-'}</TableCell>
                     <TableCell>{item.guardian_name || '-'}</TableCell>
+                    <TableCell>
+                      <Badge variant={item.status === "ACTIVE" ? "success" : "destructive"}>
+                        {item.status}
+                      </Badge>
+                    </TableCell>
                     <TableCell className="text-center">
                       <div className="flex gap-2 justify-center">
                         <Button variant="ghost" size="icon" onClick={e => { e.stopPropagation(); setSelectedStudent(item); setViewDialogOpen(true); }}>

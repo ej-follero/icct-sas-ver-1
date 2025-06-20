@@ -1,23 +1,47 @@
 import * as React from "react";
+import { CheckSquare, Square } from "lucide-react";
 
-export interface CheckboxProps extends React.InputHTMLAttributes<HTMLInputElement> {
+export interface CheckboxProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   checked?: boolean;
+  indeterminate?: boolean;
   onCheckedChange?: (checked: boolean) => void;
+  "aria-label"?: string;
 }
 
-export const Checkbox = React.forwardRef<HTMLInputElement, CheckboxProps>(
-  ({ checked, onCheckedChange, className, ...props }, ref) => (
-    <input
-      type="checkbox"
+export const Checkbox = React.forwardRef<HTMLButtonElement, CheckboxProps>(
+  ({ checked, indeterminate, onCheckedChange, className, "aria-label": ariaLabel, ...props }, ref) => (
+    <button
+      type="button"
+      aria-checked={checked}
+      aria-label={ariaLabel || "Checkbox"}
       ref={ref}
-      checked={checked}
-      onChange={e => onCheckedChange?.(e.target.checked)}
+      tabIndex={0}
+      onClick={e => {
+        e.stopPropagation();
+        onCheckedChange?.(!checked);
+      }}
       className={
-        "h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 " +
-        (className || "")
+        [
+          "w-6 h-6 min-w-[1.5rem] min-h-[1.5rem] flex items-center justify-center border-0 rounded transition-all duration-150 outline-none ring-offset-2",
+          checked
+            ? "bg-blue-600 text-white focus-visible:ring-2 focus-visible:ring-blue-500"
+            : "bg-white text-gray-400 focus-visible:ring-2 focus-visible:ring-gray-300",
+          indeterminate ? "bg-gray-200" : "",
+          !checked && !indeterminate ? "hover:bg-blue-50" : "hover:bg-blue-700",
+          "focus-visible:z-10",
+          className || ""
+        ].join(" ")
       }
       {...props}
-    />
+    >
+      {indeterminate ? (
+        <span className="block w-3 h-0.5 bg-blue-600 rounded transition-all duration-150" />
+      ) : checked ? (
+        <CheckSquare className="w-4 h-4 transition-colors duration-150" />
+      ) : (
+        <Square className="w-4 h-4 transition-colors duration-150" />
+      )}
+    </button>
   )
 );
 Checkbox.displayName = "Checkbox"; 

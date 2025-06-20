@@ -6,6 +6,8 @@ import { School, User, Book, Users, ArrowLeft, Pencil, Trash2 } from "lucide-rea
 import FormModal from "@/components/FormModal";
 import { courseSchema } from "@/lib/validations/course";
 import { z } from "zod";
+import CourseFormDialog from '@/components/forms/CourseFormDialog';
+import { ConfirmDeleteDialog } from '@/components/ConfirmDeleteDialog';
 
 export default function CourseViewPage() {
   const params = useParams();
@@ -38,7 +40,7 @@ export default function CourseViewPage() {
 
   const handleEditSubmit = async (data: any) => {
     try {
-      const response = await fetch(`/api/courses/${course.code}`, {
+      const response = await fetch(`/api/courses/${params.code}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
@@ -56,7 +58,7 @@ export default function CourseViewPage() {
 
   const handleDeleteSubmit = async () => {
     try {
-      const response = await fetch(`/api/courses/${course.code}`, {
+      const response = await fetch(`/api/courses/${params.code}`, {
         method: "DELETE",
       });
 
@@ -222,61 +224,27 @@ export default function CourseViewPage() {
       </div>
 
       {/* Edit Modal */}
-      <FormModal
+      <CourseFormDialog
         open={editModalOpen}
-        onClose={() => setEditModalOpen(false)}
-        onSubmit={handleEditSubmit}
-        title="Edit Course"
-        submitLabel="Update"
-        defaultValues={course}
-        schema={courseSchema}
-        fields={[
-          {
-            name: "name",
-            label: "Course Name",
-            type: "text",
-          },
-          {
-            name: "code",
-            label: "Course Code",
-            type: "text",
-          },
-          {
-            name: "department",
-            label: "Department",
-            type: "text",
-          },
-          {
-            name: "units",
-            label: "Units",
-            type: "number",
-          },
-          {
-            name: "description",
-            label: "Description",
-            type: "multiline",
-          },
-          {
-            name: "status",
-            label: "Status",
-            type: "select",
-            options: [
-              { value: "active", label: "Active" },
-              { value: "inactive", label: "Inactive" },
-            ],
-          },
-        ]}
+        onOpenChange={setEditModalOpen}
+        type="update"
+        data={course}
+        id={course?.id}
+        onSuccess={() => {
+          setEditModalOpen(false);
+          // Optionally refetch course data here
+        }}
       />
 
       {/* Delete Confirmation Modal */}
-      <FormModal
+      <ConfirmDeleteDialog
         open={deleteModalOpen}
-        onClose={() => setDeleteModalOpen(false)}
-        onSubmit={handleDeleteSubmit}
-        title="Delete Course"
-        submitLabel="Delete"
-        schema={z.object({})}
-        fields={[]}
+        onOpenChange={setDeleteModalOpen}
+        itemName={course?.name}
+        onDelete={handleDeleteSubmit}
+        onCancel={() => setDeleteModalOpen(false)}
+        canDelete={true}
+        description={course ? `Are you sure you want to delete the course "${course.name}"? This action cannot be undone.` : undefined}
       />
       </div>
     </div>

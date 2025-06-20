@@ -12,6 +12,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { motion } from 'framer-motion';
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { Input } from '@/components/ui/input';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface StatCardProps {
   title: string;
@@ -138,10 +139,27 @@ const StatCard = ({ title, value, change, icon, color }: StatCardProps) => (
 );
 
 export default function DashboardPage() {
+  const [isLoading, setIsLoading] = useState(true);
   const [hoveredAction, setHoveredAction] = useState<number | null>(null);
   const [currentTime, setCurrentTime] = useState<string>('');
   const [search, setSearch] = useState('');
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    // Simulate loading data
+    const loadData = async () => {
+      try {
+        // Add your actual data fetching logic here
+        await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API call
+        setIsLoading(false);
+      } catch (error) {
+        console.error('Error loading dashboard data:', error);
+        setIsLoading(false);
+      }
+    };
+
+    loadData();
+  }, []);
 
   useEffect(() => {
     setCurrentTime(new Date().toLocaleTimeString());
@@ -155,6 +173,24 @@ export default function DashboardPage() {
   const handleDownload = () => {
     alert('Download report (stub)');
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-gray-100 p-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {[...Array(4)].map((_, i) => (
+            <Card key={i} className="border border-blue-100">
+              <CardContent className="p-6">
+                <Skeleton className="h-8 w-24 mb-2" />
+                <Skeleton className="h-12 w-32 mb-2" />
+                <Skeleton className="h-4 w-16" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-gray-100 p-0">

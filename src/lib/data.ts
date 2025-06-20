@@ -23,6 +23,8 @@ type Student = {
   studentType: "REGULAR" | "IRREGULAR";
   status: "ACTIVE" | "INACTIVE";
   yearLevel: "FIRST_YEAR" | "SECOND_YEAR" | "THIRD_YEAR" | "FOURTH_YEAR";
+  courseId?: number;
+  departmentId?: number;
   guardianId: number;
   userId: number;
   section_name?: string;
@@ -192,6 +194,8 @@ export const studentsData: Student[] = [
     studentType: "REGULAR",
     status: "ACTIVE",
     yearLevel: "FIRST_YEAR",
+    courseId: 1,
+    departmentId: 1,
     guardianId: 1,
     userId: 1,
     section_name: "Section A",
@@ -213,6 +217,8 @@ export const studentsData: Student[] = [
     studentType: "IRREGULAR",
     status: "ACTIVE",
     yearLevel: "SECOND_YEAR",
+    courseId: 2,
+    departmentId: 1,
     guardianId: 2,
     userId: 2,
     section_name: "Section B",
@@ -234,6 +240,8 @@ export const studentsData: Student[] = [
     studentType: "REGULAR",
     status: "ACTIVE",
     yearLevel: "THIRD_YEAR",
+    courseId: 3,
+    departmentId: 1,
     guardianId: 3,
     userId: 3,
     section_name: "Section A",
@@ -255,6 +263,8 @@ export const studentsData: Student[] = [
     studentType: "REGULAR",
     status: "ACTIVE",
     yearLevel: "FIRST_YEAR",
+    courseId: 4,
+    departmentId: 1,
     guardianId: 4,
     userId: 4,
     section_name: "Section B",
@@ -276,6 +286,8 @@ export const studentsData: Student[] = [
     studentType: "REGULAR",
     status: "ACTIVE",
     yearLevel: "FIRST_YEAR",
+    courseId: 5,
+    departmentId: 1,
     guardianId: 5,
     userId: 5,
     section_name: "Section A",
@@ -297,6 +309,8 @@ export const studentsData: Student[] = [
     studentType: "REGULAR",
     status: "ACTIVE",
     yearLevel: "FIRST_YEAR",
+    courseId: 6,
+    departmentId: 1,
     guardianId: 6,
     userId: 6,
     section_name: "Section A",
@@ -318,6 +332,8 @@ export const studentsData: Student[] = [
     studentType: "REGULAR",
     status: "ACTIVE",
     yearLevel: "FIRST_YEAR",
+    courseId: 7,
+    departmentId: 1,
     guardianId: 7,
     userId: 7,
     section_name: "Section B",

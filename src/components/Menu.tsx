@@ -22,6 +22,7 @@ import {
   Calendar,
   MessageCircle,
   AppWindow,
+  Mail,
 } from "lucide-react";
 import { cn } from "@/lib/utils"; // shadcn classnames utility
 
@@ -38,8 +39,10 @@ type MenuSection = {
 
 type Role = "admin" | "teacher" | "student" | "parent";
 
+type MenuConfig = Record<Role, MenuSection[]>;
+
 // --- FULL MENU CONFIG ---
-const menuConfig: Record<Role, MenuSection[]> = {
+const menuConfig: MenuConfig = {
   admin: [
     {
       title: "DASHBOARD",
@@ -53,7 +56,8 @@ const menuConfig: Record<Role, MenuSection[]> = {
         { icon: <Clock className="w-5 h-5" />, label: "Live Attendance Feed", href: "/list/live-attendance" },
         { icon: <AppWindow className="w-5 h-5" />, label: "Student Attendance", href: "/list/attendance/students" },
         { icon: <User className="w-5 h-5" />, label: "Instructor Attendance", href: "/list/attendance/instructors" },
-        { icon: <Clock className="w-5 h-5" />, label: "Class Schedules", href: "/list/schedules" },
+        { icon: <Clock className="w-5 h-5" />, label: "Manual Attendance Entry", href: "/list/attendance/manual-entry" },
+        { icon: <Clock className="w-5 h-5" />, label: "Attendance Alerts", href: "/list/attendance/alerts" },
       ],
     },
     {
@@ -64,6 +68,8 @@ const menuConfig: Record<Role, MenuSection[]> = {
         { icon: <School className="w-5 h-5" />, label: "Subjects", href: "/list/subjects" },
         { icon: <School className="w-5 h-5" />, label: "Sections", href: "/list/sections" },
         { icon: <School className="w-5 h-5" />, label: "Rooms", href: "/list/rooms" },
+        { icon: <Clock className="w-5 h-5" />, label: "Class Schedules", href: "/list/schedules" },
+        { icon: <Clock className="w-5 h-5" />, label: "Academic Calendar", href: "/list/academic-calendar" },
       ],
     },
     {
@@ -88,6 +94,9 @@ const menuConfig: Record<Role, MenuSection[]> = {
         { icon: <BarChart2 className="w-5 h-5" />, label: "Daily Summary", href: "/analytics/daily" },
         { icon: <BarChart2 className="w-5 h-5" />, label: "Late/Absent Reports", href: "/analytics/late-absent" },
         { icon: <BarChart2 className="w-5 h-5" />, label: "Attendance Trends", href: "/analytics/trends" },
+        { icon: <BarChart2 className="w-5 h-5" />, label: "Top Absentees", href: "/analytics/absentees" },
+        { icon: <BarChart2 className="w-5 h-5" />, label: "Department/Course Analytics", href: "/analytics/department-course" },
+        { icon: <BarChart2 className="w-5 h-5" />, label: "RFID Analytics", href: "/analytics/rfid" },
       ],
     },
     {
@@ -96,6 +105,7 @@ const menuConfig: Record<Role, MenuSection[]> = {
         { icon: <FileBarChart2 className="w-5 h-5" />, label: "Student Attendance Report", href: "/reports/student-attendance" },
         { icon: <FileBarChart2 className="w-5 h-5" />, label: "Instructor Attendance Report", href: "/reports/instructor-attendance" },
         { icon: <FileBarChart2 className="w-5 h-5" />, label: "RFID Log Report", href: "/reports/rfid-logs" },
+        { icon: <FileBarChart2 className="w-5 h-5" />, label: "User Log Report", href: "/reports/user-logs" },
       ],
     },
     {
@@ -104,6 +114,9 @@ const menuConfig: Record<Role, MenuSection[]> = {
         { icon: <Megaphone className="w-5 h-5" />, label: "Announcements", href: "/list/announcements" },
         { icon: <Megaphone className="w-5 h-5" />, label: "Events", href: "/list/events" },
         { icon: <MessageCircle className="w-5 h-5" />, label: "Messages", href: "/list/messages" },
+        { icon: <Mail className="w-5 h-5" />, label: "Email", href: "/list/email" },
+        { icon: <Settings className="w-5 h-5" />, label: "Notifications", href: "/settings/notifications" },
+        { icon: <MessageCircle className="w-5 h-5" />, label: "Communication Logs", href: "/settings/communication-logs" },
       ],
     },
     {
@@ -114,6 +127,11 @@ const menuConfig: Record<Role, MenuSection[]> = {
         { icon: <Settings className="w-5 h-5" />, label: "Audit Logs", href: "/settings/audit-logs" },
         { icon: <Settings className="w-5 h-5" />, label: "System Status", href: "/settings/system-status" },
         { icon: <Settings className="w-5 h-5" />, label: "Backup & Restore", href: "/settings/backup" },
+        { icon: <Settings className="w-5 h-5" />, label: "General", href: "/settings/general" },
+        { icon: <Settings className="w-5 h-5" />, label: "Integrations", href: "/settings/integrations" },
+        { icon: <Settings className="w-5 h-5" />, label: "Security", href: "/settings/security" },
+        { icon: <Settings className="w-5 h-5" />, label: "Theme/Appearance", href: "/settings/theme" },
+
       ],
     },
     {
@@ -309,7 +327,14 @@ const menuConfig: Record<Role, MenuSection[]> = {
 
 export default function Sidebar({ role }: { role: Role }) {
   const pathname = usePathname();
-  const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>(() => {
+    // Initialize sections based on current path
+    const initial: Record<string, boolean> = {};
+    menuConfig[role].forEach((section) => {
+      initial[section.title] = section.items.some((item) => pathname.startsWith(item.href));
+    });
+    return initial;
+  });
 
   const toggleSection = (title: string) => {
     setOpenSections((prev) => ({ ...prev, [title]: !prev[title] }));
@@ -327,11 +352,12 @@ export default function Sidebar({ role }: { role: Role }) {
               type="button"
               onClick={() => toggleSection(section.title)}
               className={cn(
-                "flex items-center w-full text-xs font-semibold uppercase tracking-wider px-3 py-2 mb-1 rounded transition",
+                "flex items-center w-full text-xs font-semibold uppercase tracking-wider px-3 py-2 mb-1 rounded transition-colors duration-200",
                 openSections[section.title]
                   ? "bg-blue-800 text-white"
-                  : "text-blue-200 hover:bg-blue-800 hover:text-white"
+                  : "text-blue-200 hover:bg-blue-800/50 hover:text-white"
               )}
+              aria-expanded={openSections[section.title]}
             >
               {section.title}
               <span className="ml-auto">
@@ -342,17 +368,24 @@ export default function Sidebar({ role }: { role: Role }) {
                 )}
               </span>
             </button>
-            <ul className={cn("space-y-1 pl-2", !openSections[section.title] && "hidden")}>
+            <ul 
+              className={cn(
+                "space-y-1 pl-2 transition-all duration-200",
+                !openSections[section.title] && "hidden"
+              )}
+              role="menu"
+            >
               {section.items.map((item) => (
                 <li key={item.href}>
                   <Link
                     href={item.href}
                     className={cn(
-                      "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition",
+                      "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200",
                       pathname === item.href
-                        ? "text-white font-bold"
-                        : "text-blue-100 hover:bg-blue-800 hover:text-white"
+                        ? "bg-blue-700 text-white font-semibold"
+                        : "text-blue-100 hover:bg-blue-800/50 hover:text-white"
                     )}
+                    role="menuitem"
                   >
                     {item.icon}
                     {item.label}

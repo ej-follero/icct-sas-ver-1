@@ -57,7 +57,7 @@ export async function GET() {
 
     console.log('Formatted departments:', formattedDepartments); // Debug log
 
-    return NextResponse.json(formattedDepartments);
+    return NextResponse.json({ data: formattedDepartments });
   } catch (error) {
     console.error('Error fetching departments:', error);
     return NextResponse.json(
@@ -92,7 +92,7 @@ export async function POST(request: Request) {
       totalInstructors: 0,
     };
 
-    return NextResponse.json(formattedDepartment, { status: 201 });
+    return NextResponse.json({ data: formattedDepartment }, { status: 201 });
   } catch (error) {
     console.error('Error creating department:', error);
     return NextResponse.json(

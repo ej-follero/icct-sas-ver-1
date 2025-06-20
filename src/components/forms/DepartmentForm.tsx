@@ -64,7 +64,7 @@ interface Instructor {
   name: string;
 }
 
-// Enhanced form schema with more validation
+// Update the schema to remove settings
 const departmentFormSchema = z.object({
   name: z.string()
     .min(2, "Department name must be at least 2 characters")
@@ -83,11 +83,6 @@ const departmentFormSchema = z.object({
   })).default([]),
   status: z.enum(["active", "inactive"]).default("active"),
   logo: z.string().optional(),
-  settings: z.object({
-    autoGenerateCode: z.boolean().default(false),
-    allowCourseOverlap: z.boolean().default(false),
-    maxInstructors: z.number().min(1).max(100).optional(),
-  }).default({}),
 });
 
 type DepartmentFormValues = z.infer<typeof departmentFormSchema>;
@@ -105,11 +100,6 @@ interface DepartmentFormModalProps {
     status: "active" | "inactive";
     totalInstructors?: number;
     logo?: string;
-    settings: {
-      autoGenerateCode: boolean;
-      allowCourseOverlap: boolean;
-      maxInstructors: number;
-    };
   };
   instructors: Instructor[];
   onSuccess: () => void;
@@ -124,6 +114,9 @@ export function DepartmentForm({
 }: DepartmentFormModalProps) {
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSavingDraft, setIsSavingDraft] = useState(false);
   const isEdit = !!initialData;
   const [showErrorSummary, setShowErrorSummary] = useState(false);
   const [codeExists, setCodeExists] = useState(false);
@@ -153,13 +146,10 @@ export function DepartmentForm({
       courseOfferings: initialData?.courseOfferings || [],
       status: initialData?.status || "active",
       logo: initialData?.logo || "",
-      settings: {
-        autoGenerateCode: false,
-        allowCourseOverlap: false,
-        maxInstructors: 10,
-      },
     },
   });
+
+  const { formState: { isDirty } } = form;
 
   // Auto-save functionality
   const debouncedFormValues = useDebounce(form.watch(), 1000);
@@ -269,7 +259,6 @@ export function DepartmentForm({
         courseOfferings: initialData.courseOfferings,
         status: initialData.status,
         logo: initialData.logo,
-        settings: initialData.settings,
       });
     } else {
       form.reset({
@@ -280,11 +269,6 @@ export function DepartmentForm({
         courseOfferings: [],
         status: "active",
         logo: "",
-        settings: {
-          autoGenerateCode: false,
-          allowCourseOverlap: false,
-          maxInstructors: 10,
-        },
       });
     }
   }, [initialData, form]);
@@ -456,46 +440,80 @@ export function DepartmentForm({
     });
   };
 
+  // Update the handleDeleteCourse function
+  const handleDeleteCourse = (courseId: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const currentCourses = form.getValues('courseOfferings') || [];
+    const courseToRemove = currentCourses.find(c => c.id === courseId);
+    
+    if (courseToRemove) {
+      form.setValue(
+        'courseOfferings',
+        currentCourses.filter(c => c.id !== courseId)
+      );
+      
+      toast.success("Course removed", {
+        description: `${courseToRemove.name} has been removed from the department.`,
+      });
+    }
+  };
+
+  // Add handleReset function
+  const handleReset = () => {
+    form.reset();
+    toast.info("Form reset", {
+      description: "All fields have been cleared and reset to their default values.",
+    });
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-2xl font-bold text-blue-900">
-            {isEdit ? "Edit Department" : "Create New Department"}
-          </DialogTitle>
+          <div className="flex items-center gap-2">
+            <DialogTitle className="text-2xl font-semibold text-blue-900">
+              {isEdit ? "Edit Department" : "Create New Department"}
+            </DialogTitle>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="text-blue-400 cursor-pointer">
+                    <BadgeInfo className="w-5 h-5" />
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="right" className="bg-blue-900 text-white">
+                  {isEdit
+                    ? "Update the department information below"
+                    : "Fill in the details below to add a new department to the system"}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
         </DialogHeader>
 
-        {/* Progress Bar */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-blue-700">Form Progress</span>
-            <span className="text-blue-700">{Math.round(formProgress)}%</span>
-          </div>
-          <Progress value={formProgress} className="h-2" />
+        {/* Info: All fields required */}
+        <div className="flex items-center gap-2 mb-3 text-gray-500 text-sm">
+          <Info className="h-5 w-5" />
+          <span>All fields marked with <span className="font-bold">*</span> are required</span>
         </div>
 
-        {/* Last Saved Indicator */}
-        {lastSaved && (
-          <div className="flex items-center gap-2 text-sm text-gray-500">
-            <Clock className="h-4 w-4" />
-            <span>Last saved: {lastSaved.toLocaleTimeString()}</span>
-          </div>
-        )}
-
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-          <Tabs value={selectedTab} onValueChange={setSelectedTab}>
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="basic">Basic Information</TabsTrigger>
-              <TabsTrigger value="courses">Courses</TabsTrigger>
-              <TabsTrigger value="settings">Settings</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="basic" className="space-y-4">
+          {/* Basic Information Section */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <h3 className="text-md font-semibold text-blue-900">Basic Information</h3>
+              </div>
+            </div>
+            <div className="h-px bg-blue-100 w-full mb-4"></div>
+            <div className="space-y-4">
               {/* Logo Upload */}
               <div className="space-y-2">
-                <Label>Department Logo</Label>
-                <div className="flex items-center gap-4">
-                  <div className="relative w-24 h-24 rounded-lg border-2 border-dashed border-gray-300 hover:border-blue-500 transition-colors">
+                <Label className="text-sm text-blue-900">Department Logo</Label>
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                  <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-lg border-2 border-dashed border-gray-300 hover:border-blue-500 transition-colors bg-white">
                     {logoPreview ? (
                       <div className="relative w-full h-full">
                         <Image
@@ -508,7 +526,7 @@ export function DepartmentForm({
                       </div>
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">
-                        <ImageIcon className="w-8 h-8 text-gray-400" />
+                        <ImageIcon className="w-6 h-6 sm:w-8 sm:h-8 text-gray-400" />
                       </div>
                     )}
                     <input
@@ -523,36 +541,42 @@ export function DepartmentForm({
                     type="button"
                     variant="outline"
                     onClick={() => fileInputRef.current?.click()}
+                    className="border-blue-200 text-blue-700 hover:bg-blue-50 hover:text-blue-800"
                   >
                     Upload Logo
                   </Button>
                 </div>
               </div>
 
-              {/* Basic Information Fields */}
+              {/* Department Name */}
               <FormField
                 control={form.control}
                 name="name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Department Name</FormLabel>
+                    <FormLabel className="text-sm text-blue-900">
+                      Department Name <span className="text-red-500">*</span>
+                    </FormLabel>
                     <FormControl>
-                      <Input {...field} placeholder="Enter department name" />
+                      <Input {...field} placeholder="Enter department name" className="border-blue-200 focus:border-blue-400 focus:ring-blue-400" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
 
+              {/* Department Code */}
               <FormField
                 control={form.control}
                 name="code"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Department Code</FormLabel>
+                    <FormLabel className="text-sm text-blue-900">
+                      Department Code <span className="text-red-500">*</span>
+                    </FormLabel>
                     <FormControl>
-                      <div className="flex gap-2">
-                        <Input {...field} placeholder="Enter department code" />
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <Input {...field} placeholder="Enter department code" className="border-blue-200 focus:border-blue-400 focus:ring-blue-400" />
                         <TooltipProvider>
                           <Tooltip>
                             <TooltipTrigger asChild>
@@ -560,7 +584,6 @@ export function DepartmentForm({
                                 type="button"
                                 variant="outline"
                                 onClick={() => {
-                                  // Auto-generate code logic
                                   const name = form.getValues('name');
                                   const code = name
                                     .split(' ')
@@ -570,6 +593,7 @@ export function DepartmentForm({
                                     .slice(0, 5);
                                   form.setValue('code', code);
                                 }}
+                                className="border-blue-200 text-blue-700 hover:bg-blue-50 hover:text-blue-800"
                               >
                                 Auto-generate
                               </Button>
@@ -586,18 +610,21 @@ export function DepartmentForm({
                 )}
               />
 
+              {/* Head of Department */}
               <FormField
                 control={form.control}
                 name="headOfDepartment"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Head of Department</FormLabel>
+                    <FormLabel className="text-sm text-blue-900">
+                      Head of Department <span className="text-red-500">*</span>
+                    </FormLabel>
                     <Select
                       onValueChange={field.onChange}
                       defaultValue={field.value}
                     >
                       <FormControl>
-                        <SelectTrigger>
+                        <SelectTrigger className="border-blue-200 focus:border-blue-400 focus:ring-blue-400">
                           <SelectValue placeholder="Select head of department" />
                         </SelectTrigger>
                       </FormControl>
@@ -631,200 +658,195 @@ export function DepartmentForm({
                 )}
               />
 
+              {/* Description */}
               <FormField
                 control={form.control}
                 name="description"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Description</FormLabel>
+                    <FormLabel className="text-sm text-blue-900">Description</FormLabel>
                     <FormControl>
                       <RichTextEditor
                         value={field.value || ""}
                         onChange={field.onChange}
                         placeholder="Enter department description..."
+                        className="border-blue-200"
                       />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-            </TabsContent>
+            </div>
+          </div>
 
-            <TabsContent value="courses" className="space-y-4">
-              <div className="space-y-4">
-                <div className="flex items-center gap-4">
-                  <div className="flex-1">
-                    <Input
-                      placeholder="Search courses..."
-                      value={courseSearch}
-                      onChange={(e) => setCourseSearch(e.target.value)}
-                      className="w-full"
-                    />
-                  </div>
-                  <Select
-                    value={selectedCourseCategory || ""}
-                    onValueChange={setSelectedCourseCategory}
-                  >
-                    <SelectTrigger className="w-[200px]">
-                      <SelectValue placeholder="Filter by category" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Categories</SelectItem>
-                      {/* Add your course categories here */}
-                    </SelectContent>
-                  </Select>
+          {/* Courses Section */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <h3 className="text-md font-semibold text-blue-900">Courses</h3>
+              </div>
+              <Badge variant="outline" className="text-xs font-normal bg-blue-50 text-blue-700 border-blue-200">
+                {form.getValues('courseOfferings')?.length || 0} selected
+              </Badge>
+            </div>
+            <div className="h-px bg-blue-100 w-full mb-4"></div>
+            <div className="space-y-4">
+              {/* Search and Filter Section */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
+                <div className="flex-1 relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <Input
+                    placeholder="Search courses..."
+                    value={courseSearch}
+                    onChange={(e) => setCourseSearch(e.target.value)}
+                    className="pl-9 border-blue-200 focus:border-blue-400 focus:ring-blue-400"
+                  />
                 </div>
+                <Select
+                  value={selectedCourseCategory || ""}
+                  onValueChange={setSelectedCourseCategory}
+                >
+                  <SelectTrigger className="border-blue-200 focus:border-blue-400 focus:ring-blue-400 w-full sm:w-[200px]">
+                    <SelectValue placeholder="Filter by category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Categories</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
 
-                <ScrollArea className="h-[300px] rounded-md border p-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {filteredCourses.map((course) => (
-                      <Card
-                        key={course.id}
-                        className={cn(
-                          "cursor-pointer transition-colors",
-                          form.getValues('courseOfferings')?.some(c => c.id === course.id)
-                            ? "border-blue-500 bg-blue-50"
-                            : "hover:border-blue-300"
-                        )}
-                        onClick={() => {
-                          const currentCourses = form.getValues('courseOfferings') || [];
-                          const isSelected = currentCourses.some(c => c.id === course.id);
-                          if (isSelected) {
-                            form.setValue(
-                              'courseOfferings',
-                              currentCourses.filter(c => c.id !== course.id)
-                            );
-                          } else {
-                            form.setValue('courseOfferings', [...currentCourses, course]);
-                          }
-                        }}
+              {/* Selected Courses Badges */}
+              {form.getValues('courseOfferings')?.length > 0 && (
+                <div className="flex flex-wrap gap-2 p-3 bg-blue-50/50 rounded-lg border border-blue-100">
+                  <div className="w-full flex items-center gap-2 mb-2">
+                    <span className="text-sm font-medium text-blue-900">Selected Courses</span>
+                  </div>
+                  {form.getValues('courseOfferings')?.map((course) => (
+                    <Badge
+                      key={course.id}
+                      variant="secondary"
+                      className="flex items-center gap-1 px-3 py-1.5 bg-white text-blue-700 border border-blue-200 hover:bg-blue-50 transition-colors"
+                    >
+                      <span className="text-sm">{course.name}</span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-4 w-4 p-0 hover:bg-blue-100"
+                        onClick={(e) => handleDeleteCourse(course.id, e)}
                       >
-                        <CardContent className="p-4">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <h4 className="font-medium">{course.name}</h4>
-                              <p className="text-sm text-gray-500">{course.code}</p>
+                        <X className="h-3 w-3 text-blue-600" />
+                      </Button>
+                    </Badge>
+                  ))}
+                </div>
+              )}
+
+              {/* Course List */}
+              <ScrollArea className="h-[300px] rounded-md border border-blue-100">
+                <div className="p-4">
+                  {loading ? (
+                    <div className="flex items-center justify-center h-full">
+                      <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+                    </div>
+                  ) : filteredCourses.length === 0 ? (
+                    <div className="text-center text-gray-500 py-8">
+                      No courses found
+                    </div>
+                  ) : (
+                    <div className="space-y-1">
+                      {filteredCourses.map((course) => {
+                        const isSelected = form.getValues('courseOfferings')?.some(c => c.id === course.id);
+                        return (
+                          <div
+                            key={course.id}
+                            className={cn(
+                              "flex items-center justify-between p-2 rounded-md cursor-pointer transition-colors group",
+                              isSelected
+                                ? "bg-blue-50"
+                                : "hover:bg-gray-50"
+                            )}
+                            onClick={() => {
+                              const currentCourses = form.getValues('courseOfferings') || [];
+                              if (isSelected) {
+                                form.setValue(
+                                  'courseOfferings',
+                                  currentCourses.filter(c => c.id !== course.id)
+                                );
+                              } else {
+                                form.setValue('courseOfferings', [...currentCourses, course]);
+                              }
+                            }}
+                          >
+                            <div className="flex items-center gap-2">
+                              <div className={cn(
+                                "w-2 h-2 rounded-full transition-colors",
+                                isSelected ? "bg-blue-500" : "bg-gray-300 group-hover:bg-blue-300"
+                              )} />
+                              <div>
+                                <h4 className="font-medium text-blue-900 text-sm">{course.name}</h4>
+                                <p className="text-xs text-gray-500">{course.code}</p>
+                              </div>
                             </div>
-                            {form.getValues('courseOfferings')?.some(c => c.id === course.id) && (
-                              <Check className="h-5 w-5 text-blue-500" />
+                            {isSelected ? (
+                              <Check className="h-4 w-4 text-blue-500" />
+                            ) : (
+                              <Plus className="h-4 w-4 text-gray-400 group-hover:text-blue-500" />
                             )}
                           </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                </ScrollArea>
-              </div>
-            </TabsContent>
-
-            <TabsContent value="settings" className="space-y-4">
-              <FormField
-                control={form.control}
-                name="settings.autoGenerateCode"
-                render={({ field }) => (
-                  <FormItem className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <FormLabel>Auto-generate Department Code</FormLabel>
-                      <p className="text-sm text-gray-500">
-                        Automatically generate department code from name
-                      </p>
+                        );
+                      })}
                     </div>
-                    <FormControl>
-                      <Switch
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="settings.allowCourseOverlap"
-                render={({ field }) => (
-                  <FormItem className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <FormLabel>Allow Course Overlap</FormLabel>
-                      <p className="text-sm text-gray-500">
-                        Allow courses to be scheduled at the same time
-                      </p>
-                    </div>
-                    <FormControl>
-                      <Switch
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="settings.maxInstructors"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Maximum Instructors</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="number"
-                        min={1}
-                        max={100}
-                        {...field}
-                        onChange={e => field.onChange(parseInt(e.target.value))}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </TabsContent>
-          </Tabs>
-
-          <DialogFooter className="gap-2">
-            <div className="flex-1 flex items-center gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handleSaveDraft}
-                disabled={!form.formState.isDirty}
-              >
-                <Save className="h-4 w-4 mr-2" />
-                Save Draft
-              </Button>
-              {draftExists && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handleClearDraft}
-                >
-                  Clear Draft
-                </Button>
-              )}
+                  )}
+                </div>
+              </ScrollArea>
             </div>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                form.reset();
-                toast.info("Form reset", {
-                  description: "All fields have been cleared and reset to their default values.",
-                });
-              }}
-              className="border-blue-400 text-blue-600 hover:text-blue-700 hover:border-blue-500"
-            >
-              Reset
-            </Button>
-            <Button
-              type="submit"
-              variant="default"
-              disabled={loading || !form.formState.isDirty}
-              className="bg-blue-600 hover:bg-blue-700"
-            >
-              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {isEdit ? "Update Department" : "Create Department"}
-            </Button>
+          </div>
+
+          {error && (
+            <div className="p-3 text-sm text-red-500 bg-red-50 rounded-lg">
+              {error}
+            </div>
+          )}
+
+          {/* Submit Button */}
+          <DialogFooter className="flex items-center justify-end pt-4">
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                type="button"
+                onClick={handleReset}
+                disabled={isSubmitting || !isDirty}
+                className="w-32 border border-blue-300 text-blue-500"
+              >
+                <RotateCcw className="w-4 h-4 mr-2" />
+                Reset
+              </Button>
+              <Button
+                variant="outline"
+                type="button"
+                onClick={handleSaveDraft}
+                disabled={isSubmitting || isSavingDraft || !isDirty}
+                className="w-32 border border-blue-300 text-blue-500"
+              >
+                <Save className="w-4 h-4 mr-2" />
+                {isSavingDraft ? "Saving..." : "Save Draft"}
+              </Button>
+              <Button
+                type="submit"
+                disabled={isSubmitting || isSavingDraft}
+                className="w-40 bg-blue-600 hover:bg-blue-700 text-white h-10"
+              >
+                {isSubmitting
+                  ? isEdit
+                    ? "Saving..."
+                    : "Saving..."
+                  : isEdit
+                    ? "Update Department"
+                    : "Create Department"}
+              </Button>
+            </div>
           </DialogFooter>
         </form>
       </DialogContent>

@@ -1,128 +1,336 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
-import { Plus, Filter, SortAsc, Eye, Pencil, Trash2, Download, Printer, CheckSquare, Square } from "lucide-react";
+import { 
+  Plus, 
+  Pencil, 
+  Trash2, 
+  Loader2,
+  BadgeInfo,
+  X
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import TableSearch from "@/components/TableSearch";
 import Pagination from "@/components/Pagination";
-import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
+import Fuse, { FuseResult as FuseResultType } from "fuse.js";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { toast } from "react-hot-toast";
+import { useParams, useRouter } from "next/navigation";
+import { courseSchema } from "@/lib/validations/course";
+import { z } from "zod";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox as SharedCheckbox } from '@/components/ui/checkbox';
+import { FilterDialog } from '@/components/FilterDialog';
+import { ExportDialog } from '@/components/ExportDialog';
+import { SortDialog, SortFieldOption } from '@/components/SortDialog';
+import { BulkActionsBar } from '@/components/BulkActionsBar';
+import { PrintLayout } from '@/components/PrintLayout';
+import { TableHeaderSection } from '@/components/TableHeaderSection';
+import { TableRowActions } from '@/components/TableRowActions';
+import { TableCardView } from '@/components/TableCardView';
+import { TableList, TableListColumn } from '@/components/TableList';
+import CourseFormDialog from '@/components/forms/CourseFormDialog';
+import { ViewDialog } from '@/components/ViewDialog';
+import { ConfirmDeleteDialog } from '@/components/ConfirmDeleteDialog';
 
-type Course = {
-  id: string | number;
+type CourseStatus = "ACTIVE" | "INACTIVE" | "ARCHIVED" | "PENDING_REVIEW";
+
+interface Course {
+  id: string;
   name: string;
   code: string;
   department: string;
   units: number;
-  totalInstructors: number;
+  description?: string;
+  status: CourseStatus;
   totalStudents: number;
-  status: "active" | "inactive";
-};
-type SortField = 'name' | 'code' | 'department' | 'units' | 'totalStudents' | 'totalInstructors';
+  totalInstructors: number;
+  createdAt: string;
+  updatedAt: string;
+  courseType: "MANDATORY" | "ELECTIVE";
+  [key: string]: string | number | undefined;
+}
+
+type SortField = 'name' | 'code' | 'department' | 'units' | 'totalStudents' | 'totalInstructors' | 'status';
 type SortOrder = 'asc' | 'desc';
 const ITEMS_PER_PAGE = 10;
 
-const Checkbox = ({ checked, indeterminate, onCheckedChange, ...props }: { checked?: boolean, indeterminate?: boolean, onCheckedChange?: (checked: boolean) => void } & React.ButtonHTMLAttributes<HTMLButtonElement>) => (
-  <button
-    type="button"
-    aria-checked={checked}
-    onClick={e => { e.stopPropagation(); onCheckedChange?.(!checked); }}
-    className={`w-5 h-5 flex items-center justify-center border rounded transition-colors ${checked ? 'bg-blue-600 border-blue-600' : 'bg-white border-gray-300'} ${indeterminate ? 'bg-gray-200' : ''}`}
-    {...props}
-  >
-    {indeterminate ? (
-      <span className="w-3 h-0.5 bg-gray-500 rounded" />
-    ) : checked ? (
-      <CheckSquare className="w-4 h-4 text-white" />
-    ) : (
-      <Square className="w-4 h-4 text-gray-400" />
-    )}
-  </button>
-);
+interface ColumnFilter {
+  field: string;
+  value: string;
+}
+
+type MultiSortField = { field: SortField; order: SortOrder };
+
+type FuseResultMatch = {
+  key: string;
+  indices: readonly [number, number][];
+};
+
+interface FuseResult<T> {
+  item: T;
+  refIndex: number;
+  matches?: Array<{
+    key: string;
+    indices: readonly [number, number][];
+  }>;
+}
+
+const courseSortFieldOptions: SortFieldOption<string>[] = [
+  { value: 'name', label: 'Course Name' },
+  { value: 'code', label: 'Code' },
+  { value: 'department', label: 'Department' },
+  { value: 'units', label: 'Units' },
+  { value: 'totalInstructors', label: 'Instructors' },
+  { value: 'totalStudents', label: 'Students' },
+  { value: 'status', label: 'Status' },
+];
+
+type CourseSortField = 'name' | 'code' | 'department' | 'units' | 'totalInstructors' | 'totalStudents' | 'status';
+type CourseSortOrder = 'asc' | 'desc';
+
+const ColumnFilterDialog: React.FC<{
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  filters: ColumnFilter[];
+  onFiltersChange: (filters: ColumnFilter[]) => void;
+}> = ({ open, onOpenChange, filters, onFiltersChange }) => {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[500px] bg-white/90 border border-blue-100 shadow-lg rounded-xl py-8 px-6">
+        <DialogHeader>
+          <DialogTitle className="text-blue-900 text-xl flex items-center gap-2 mb-6">
+            Column Filters
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="text-blue-400 cursor-pointer">
+                    <BadgeInfo className="w-4 h-4" />
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="right" className="bg-blue-900 text-white">
+                  Filter courses by specific column values.
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          {filters.map((filter, index) => (
+            <div key={index} className="flex items-center gap-2">
+              <Select
+                value={filter.field}
+                onValueChange={(value) => {
+                  const newFilters = [...filters];
+                  newFilters[index] = { ...filter, field: value };
+                  onFiltersChange(newFilters);
+                }}
+              >
+                <SelectTrigger className="w-[200px]">
+                  <SelectValue placeholder="Select column" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="name">Course Name</SelectItem>
+                  <SelectItem value="code">Code</SelectItem>
+                  <SelectItem value="department">Department</SelectItem>
+                </SelectContent>
+              </Select>
+              <Input
+                value={filter.value}
+                onChange={(e) => {
+                  const newFilters = [...filters];
+                  newFilters[index] = { ...filter, value: e.target.value };
+                  onFiltersChange(newFilters);
+                }}
+                placeholder="Filter value..."
+                className="flex-1"
+              />
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => {
+                  const newFilters = filters.filter((_, i) => i !== index);
+                  onFiltersChange(newFilters);
+                }}
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+          ))}
+          <Button
+            variant="outline"
+            onClick={() => {
+              onFiltersChange([...filters, { field: 'name', value: '' }]);
+            }}
+            className="w-full"
+          >
+            Add Filter
+          </Button>
+        </div>
+        <DialogFooter className="gap-4 mt-6">
+          <Button
+            variant="outline"
+            onClick={() => {
+              onFiltersChange([]);
+            }}
+            className="w-32 border border-blue-300 text-blue-500"
+          >
+            Reset
+          </Button>
+          <Button 
+            onClick={() => onOpenChange(false)}
+            className="w-32 bg-blue-600 hover:bg-blue-700 text-white"
+          >
+            Apply Filters
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+// Centralized course columns definition
+const courseColumns = [
+  { key: 'name', label: 'Course Name', accessor: 'name', className: 'text-blue-900' },
+  { key: 'code', label: 'Code', accessor: 'code', className: 'text-blue-900' },
+  { key: 'department', label: 'Department', accessor: 'department', className: 'text-blue-900' },
+  { key: 'units', label: 'Units', accessor: 'units', className: 'text-center text-blue-900' },
+  { key: 'totalInstructors', label: 'Instructors', accessor: 'totalInstructors', className: 'text-center text-blue-900' },
+  { key: 'totalStudents', label: 'Students', accessor: 'totalStudents', className: 'text-center text-blue-900' },
+  { key: 'status', label: 'Status', accessor: 'status', className: 'text-center' },
+];
+
+const exportableColumns: { key: string; label: string }[] = courseColumns.map((col) => ({ key: col.key, label: col.label }));
 
 export default function CourseListPage() {
+  const router = useRouter();
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
-  const [sortField, setSortField] = useState<SortField>('name');
-  const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [addModalOpen, setAddModalOpen] = useState(false);
+  const [viewModalOpen, setViewModalOpen] = useState(false);
+  const [searchInput, setSearchInput] = useState("");
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
+  const [columnFilters, setColumnFilters] = useState<ColumnFilter[]>([]);
+  const [showColumnFilters, setShowColumnFilters] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [modalCourse, setModalCourse] = useState<Course | undefined>();
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [courseToDelete, setCourseToDelete] = useState<Course | null>(null);
-  const [columnStatusFilter, setColumnStatusFilter] = useState("all");
   const [filterDialogOpen, setFilterDialogOpen] = useState(false);
   const [sortDialogOpen, setSortDialogOpen] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<"all" | CourseStatus>("all");
+  const [sortField, setSortField] = useState<CourseSortField>('name');
+  const [sortOrder, setSortOrder] = useState<CourseSortOrder>('asc');
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [exportFormat, setExportFormat] = useState<'pdf' | 'excel' | 'csv' | null>(null);
-  const exportableColumns = [
-    { key: 'name', label: 'Course Name' },
-    { key: 'code', label: 'Code' },
-    { key: 'department', label: 'Department' },
-    { key: 'units', label: 'Units' },
-    { key: 'totalInstructors', label: 'Instructors' },
-    { key: 'totalStudents', label: 'Students' },
-    { key: 'status', label: 'Status' },
-  ];
-  const [exportColumns, setExportColumns] = useState(exportableColumns.map(col => col.key));
-  const [selectedIds, setSelectedIds] = useState<(string | number)[]>([]);
+  const [sortFields, setSortFields] = useState<MultiSortField[]>([
+    { field: 'name', order: 'asc' }
+  ]);
+  const [advancedFilters, setAdvancedFilters] = useState({
+    department: '',
+    minUnits: '',
+    maxUnits: '',
+    minStudents: '',
+    maxStudents: '',
+    minInstructors: '',
+    maxInstructors: ''
+  });
 
-  useEffect(() => {
-    async function fetchCourses() {
-      setLoading(true);
-      setError(null);
-      try {
-        const res = await fetch('/api/courses');
-        if (!res.ok) throw new Error('Failed to fetch courses');
-        const data = await res.json();
-        setCourses(data);
-      } catch (err: any) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchCourses();
-  }, []);
+  // Add loading states for different actions
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [isPrinting, setIsPrinting] = useState(false);
+  const [isFiltering, setIsFiltering] = useState(false);
+  const [isSorting, setIsSorting] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Filtering, sorting, and pagination
-  const filteredCourses = useMemo(() => {
-    let result = [...courses];
-    if (search) {
-      result = result.filter(
-        (course) =>
-          course.name.toLowerCase().includes(search.toLowerCase()) ||
-          course.code.toLowerCase().includes(search.toLowerCase())
-      );
-    }
-    if (columnStatusFilter !== 'all') {
-      result = result.filter((course) => course.status === columnStatusFilter);
-    }
-    result.sort((a, b) => {
-      const aValue = a[sortField as keyof Course];
-      const bValue = b[sortField as keyof Course];
-      const modifier = sortOrder === 'asc' ? 1 : -1;
-      if (typeof aValue === 'string' && typeof bValue === 'string') {
-        return (aValue as string).localeCompare(bValue as string) * modifier;
-      }
-      return ((aValue as number) - (bValue as number)) * modifier;
+  // Add status mapping function
+  const mapStatusToLowerCase = (status: CourseStatus): "active" | "inactive" => {
+    return status === "ACTIVE" ? "active" : "inactive";
+  };
+
+  // Helper Functions
+  const highlightMatch = (text: string, matches: readonly [number, number][] | undefined) => {
+    if (!matches || matches.length === 0) return text;
+    let result = '';
+    let lastIndex = 0;
+    matches.forEach(([start, end], i) => {
+      result += text.slice(lastIndex, start);
+      result += `<mark class='bg-yellow-200 text-yellow-900 rounded px-1'>${text.slice(start, end + 1)}</mark>`;
+      lastIndex = end + 1;
     });
+    result += text.slice(lastIndex);
     return result;
-  }, [courses, search, columnStatusFilter, sortField, sortOrder]);
+  };
+
+  // Add Fuse.js setup with proper types
+  const fuse = useMemo(() => new Fuse<Course>(courses, {
+    keys: ["name", "code", "department"],
+    threshold: 0.4,
+    includeMatches: true,
+  }), [courses]);
+
+  const fuzzyResults = useMemo(() => {
+    if (!searchInput) return courses.map((c: Course, i: number) => ({ item: c, refIndex: i }));
+    return fuse.search(searchInput) as FuseResult<Course>[];
+  }, [searchInput, fuse, courses]);
+
+  // Update filtered courses to include column filters and status filter
+  const filteredCourses = useMemo(() => {
+    let filtered = fuzzyResults.map((r: FuseResultType<Course>) => r.item);
+
+    // Apply status filter
+    if (statusFilter !== "all") {
+      filtered = filtered.filter(course => course.status === statusFilter);
+    }
+
+    // Apply column filters
+    if (columnFilters.length > 0) {
+      filtered = filtered.filter(course => {
+        return columnFilters.every(filter => {
+          const value = course[filter.field as keyof Course]?.toString().toLowerCase() || '';
+          return value.includes(filter.value.toLowerCase());
+        });
+      });
+    }
+
+    // Apply multi-sort
+    if (sortFields.length > 0) {
+      filtered.sort((a, b) => {
+        for (const { field, order } of sortFields) {
+          const aValue = a[field];
+          const bValue = b[field];
+          
+          if (aValue === bValue) continue;
+          
+          const comparison = aValue < bValue ? -1 : 1;
+          return order === 'asc' ? comparison : -comparison;
+        }
+        return 0;
+      });
+    }
+
+    return filtered;
+  }, [fuzzyResults, columnFilters, statusFilter, sortFields]);
+
+  // Add pagination
+  const paginatedCourses = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    const end = start + ITEMS_PER_PAGE;
+    return filteredCourses.slice(start, end);
+  }, [filteredCourses, currentPage]);
 
   const totalPages = Math.ceil(filteredCourses.length / ITEMS_PER_PAGE);
-  const paginatedCourses = filteredCourses.slice(
-    (currentPage - 1) * ITEMS_PER_PAGE,
-    currentPage * ITEMS_PER_PAGE
-  );
 
   const isAllSelected = paginatedCourses.length > 0 && paginatedCourses.every(c => selectedIds.includes(c.id));
   const isIndeterminate = selectedIds.length > 0 && !isAllSelected;
@@ -133,705 +341,637 @@ export default function CourseListPage() {
       setSelectedIds(paginatedCourses.map(c => c.id));
     }
   };
-  const handleSelectRow = (id: string | number) => {
+  const handleSelectRow = (id: string) => {
     setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
   };
 
   // Table columns
-  const columns = [
-    { header: <Checkbox checked={isAllSelected} indeterminate={isIndeterminate} onCheckedChange={handleSelectAll} />, accessor: "select", className: "w-12 text-center" },
-    { header: "Course Name", accessor: "name" },
-    { header: "Code", accessor: "code" },
-    { header: "Department", accessor: "department" },
-    { header: "Units", accessor: "units" },
-    { header: "Instructors", accessor: "totalInstructors" },
-    { header: "Students", accessor: "totalStudents" },
-    { header: "Status", accessor: "status" },
-    { header: "Actions", accessor: "actions" },
+  const columns: TableListColumn<Course>[] = [
+    {
+      header: (
+        <SharedCheckbox 
+          checked={isAllSelected} 
+          indeterminate={isIndeterminate} 
+          onCheckedChange={handleSelectAll}
+          aria-label="Select all courses"
+        />
+      ),
+      accessor: 'select',
+      className: 'w-12 text-center',
+    },
+    ...courseColumns.map(col => {
+      if (col.key === 'name') {
+        return {
+          header: col.label,
+          accessor: col.accessor,
+          className: col.className,
+          render: (item: Course) => {
+            const fuseResult = fuzzyResults.find(r => r.item.id === item.id) as FuseResult<Course> | undefined;
+            const nameMatches = fuseResult?.matches?.find((m: { key: string }) => m.key === "name")?.indices;
+            return (
+              <div 
+                className="text-sm font-medium text-blue-900"
+                dangerouslySetInnerHTML={{ __html: highlightMatch(item.name, nameMatches) }}
+              />
+            );
+          }
+        };
+      }
+      if (col.key === 'code') {
+        return {
+          header: col.label,
+          accessor: col.accessor,
+          className: col.className,
+          render: (item: Course) => {
+            const fuseResult = fuzzyResults.find(r => r.item.id === item.id) as FuseResult<Course> | undefined;
+            const codeMatches = fuseResult?.matches?.find((m: { key: string }) => m.key === "code")?.indices;
+            return (
+              <div 
+                className="text-sm text-blue-900"
+                dangerouslySetInnerHTML={{ __html: highlightMatch(item.code, codeMatches) }}
+              />
+            );
+          }
+        };
+      }
+      if (col.key === 'department') {
+        return {
+          header: col.label,
+          accessor: col.accessor,
+          className: col.className,
+          render: (item: Course) => {
+            const fuseResult = fuzzyResults.find(r => r.item.id === item.id) as FuseResult<Course> | undefined;
+            const departmentMatches = fuseResult?.matches?.find((m: { key: string }) => m.key === "department")?.indices;
+            return (
+              <div 
+                className="text-sm text-blue-900"
+                dangerouslySetInnerHTML={{ __html: highlightMatch(item.department, departmentMatches) }}
+              />
+            );
+          }
+        };
+      }
+      if (col.key === 'status') {
+        return {
+          header: col.label,
+          accessor: col.accessor,
+          className: col.className,
+          render: (item: Course) => (
+            <Badge variant={item.status === "ACTIVE" ? "success" : item.status === "INACTIVE" ? "destructive" : item.status === "ARCHIVED" ? "secondary" : "warning"}>
+              {item.status.toUpperCase()}
+            </Badge>
+          )
+        };
+      }
+      return {
+        header: col.label,
+        accessor: col.accessor,
+        className: col.className
+      };
+    }),
+    {
+      header: "Actions",
+      accessor: "actions",
+      className: "text-center",
+      render: (item: Course) => (
+        <TableRowActions
+          onView={() => {
+            setSelectedCourse(item);
+            setViewModalOpen(true);
+          }}
+          onEdit={() => {
+            setSelectedCourse(item);
+            setEditModalOpen(true);
+          }}
+          onDelete={() => {
+            setSelectedCourse(item);
+            setDeleteModalOpen(true);
+          }}
+          itemName={item.name}
+          disabled={item.status === "ACTIVE" || item.totalStudents > 0 || item.totalInstructors > 0}
+          deleteTooltip={
+            item.status === "ACTIVE" 
+              ? "Cannot delete an active course" 
+              : item.totalStudents > 0 
+                ? "Cannot delete course with enrolled students"
+                : item.totalInstructors > 0 
+                  ? "Cannot delete course with assigned instructors"
+                  : undefined
+          }
+        />
+      )
+    }
   ];
 
-  // Table row renderer
-  const renderRow = (item: Course) => (
-    <TableRow key={item.id}>
-      <TableCell className="text-center align-middle">
-        <Checkbox checked={selectedIds.includes(item.id)} onCheckedChange={() => handleSelectRow(item.id)} aria-label={`Select course ${item.name}`} />
-      </TableCell>
-      <TableCell>{item.name}</TableCell>
-      <TableCell>{item.code}</TableCell>
-      <TableCell>{item.department}</TableCell>
-      <TableCell>{item.units}</TableCell>
-      <TableCell className="text-center">{item.totalInstructors}</TableCell>
-      <TableCell className="text-center">{item.totalStudents}</TableCell>
-      <TableCell>
-        <Badge variant={item.status === "active" ? "success" : "destructive"}>{item.status.charAt(0).toUpperCase() + item.status.slice(1)}</Badge>
-      </TableCell>
-      <TableCell>
-        <div className="hidden 2xl:flex gap-2 justify-center">
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon" aria-label={`View Course ${item.name}`} className="hover:bg-blue-50">
-                  <Eye className="h-4 w-4 text-blue-600" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>View course details</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon" aria-label={`Edit Course ${item.name}`} onClick={() => { setModalCourse(item); setModalOpen(true); }} className="hover:bg-green-50">
-                  <Pencil className="h-4 w-4 text-green-600" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Edit course</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon" aria-label={`Delete Course ${item.name}`} onClick={() => { setCourseToDelete(item); setDeleteDialogOpen(true); }} className="hover:bg-red-50">
-                  <Trash2 className="h-4 w-4 text-red-600" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Delete course</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        </div>
-        <div className="2xl:hidden flex justify-center">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" aria-label="More actions">
-                <span className="sr-only">More</span>
-                <svg className="h-5 w-5 text-blue-700" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1.5"/><circle cx="19.5" cy="12" r="1.5"/><circle cx="4.5" cy="12" r="1.5"/></svg>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => {}}>
-                <Eye className="h-4 w-4 text-blue-600 mr-2" /> View
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => { setModalCourse(item); setModalOpen(true); }}>
-                <Pencil className="h-4 w-4 text-green-600 mr-2" /> Edit
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => { setCourseToDelete(item); setDeleteDialogOpen(true); }}>
-                <Trash2 className="h-4 w-4 text-red-600 mr-2" /> Delete
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </TableCell>
-    </TableRow>
-  );
-
   // Export to CSV handler
-  const handleExport = () => {
-    const csvRows = [
-      [
-        'Course Name',
-        'Code',
-        'Department',
-        'Units',
-        'Instructors',
-        'Students',
-        'Status',
-      ],
-      ...filteredCourses.map((course) => [
-        course.name,
-        course.code,
-        course.department,
-        course.units,
-        course.totalInstructors,
-        course.totalStudents,
-        course.status,
-      ]),
-    ];
-    const csvContent = csvRows.map((row) => row.map(String).map(cell => '"' + cell.replace(/"/g, '""') + '"').join(",")).join("\n");
-    const blob = new Blob([csvContent], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'courses.csv';
-    a.click();
-    URL.revokeObjectURL(url);
+  const handleExport = async () => {
+    if (!exportFormat) return;
+
+    try {
+      const selectedCourses = selectedIds.length > 0 
+        ? courses.filter(course => selectedIds.includes(course.id))
+        : filteredCourses;
+
+      const visibleColumns = courseColumns.filter(col => exportColumns.includes(col.key));
+
+      switch (exportFormat) {
+        case 'pdf':
+          await handleExportPDF(selectedCourses, visibleColumns);
+          break;
+        case 'excel':
+          await handleExportExcel(selectedCourses, visibleColumns);
+          break;
+        case 'csv':
+          handleExportCSV(selectedCourses, visibleColumns);
+          break;
+      }
+
+      toast.success(`Courses exported to ${exportFormat.toUpperCase()} successfully.`);
+      setExportDialogOpen(false);
+    } catch (error) {
+      toast.error("Failed to export courses. Please try again.");
+    }
   };
 
-  // Export as Excel handler
-  const handleExportExcel = () => {
-    const wsData = [
-      [
-        'Course Name',
-        'Code',
-        'Department',
-        'Units',
-        'Instructors',
-        'Students',
-        'Status',
-      ],
-      ...filteredCourses.map((course) => [
-        course.name,
-        course.code,
-        course.department,
-        course.units,
-        course.totalInstructors,
-        course.totalStudents,
-        course.status,
-      ]),
-    ];
-    const ws = XLSX.utils.aoa_to_sheet(wsData);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Courses");
-    XLSX.writeFile(wb, "courses.xlsx");
-  };
-
-  // Export as PDF handler
-  const handleExportPDF = () => {
+  const handleExportPDF = async (courses: Course[], columns: typeof courseColumns) => {
+    const { jsPDF } = await import('jspdf');
+    const { autoTable } = await import('jspdf-autotable');
+    
     const doc = new jsPDF();
-    doc.setFontSize(12);
-    // Only export the table data
-    const headers = [
-      "Course Name",
-      "Code",
-      "Department",
-      "Units",
-      "Instructors",
-      "Students",
-      "Status",
-    ];
-    const rows = filteredCourses.map((course) => [
-      course.name,
-      course.code,
-      course.department,
-      course.units,
-      course.totalInstructors,
-      course.totalStudents,
-      course.status,
-    ]);
-    doc.autoTable({
-      head: [headers],
-      body: rows,
-      styles: { fontSize: 8 },
-      headStyles: { fillColor: [12, 37, 86] },
-      margin: { top: 16 },
+    
+    // Add title
+    doc.setFontSize(16);
+    doc.text('Courses List', 14, 15);
+    
+    // Add generation date
+    doc.setFontSize(10);
+    doc.text(`Generated on ${new Date().toLocaleString()}`, 14, 22);
+    
+    // Prepare table data with proper type handling
+    const tableData = courses.map(course => 
+      columns.map(col => {
+        const value = course[col.key];
+        if (col.key === 'status' && typeof value === 'string') {
+          return value.charAt(0).toUpperCase() + value.slice(1);
+        }
+        return value !== undefined ? String(value) : ''; // Handle undefined values
+      })
+    ) as string[][]; // Type assertion to match autoTable's expected type
+    
+    // Add table
+    autoTable(doc, {
+      head: [columns.map(col => col.label)],
+      body: tableData,
+      startY: 30,
+      styles: {
+        fontSize: 8,
+        cellPadding: 2,
+      },
+      headStyles: {
+        fillColor: [41, 128, 185],
+        textColor: 255,
+        fontSize: 9,
+        fontStyle: 'bold',
+      },
+      alternateRowStyles: {
+        fillColor: [245, 245, 245],
+      },
     });
-    doc.save("courses.pdf");
+    
+    // Save the PDF
+    doc.save('courses-list.pdf');
+  };
+
+  const handleExportExcel = async (courses: Course[], columns: typeof courseColumns) => {
+    const XLSX = await import('xlsx');
+    
+    // Prepare data
+    const data = courses.map(course => {
+      const row: Record<string, any> = {};
+      columns.forEach(col => {
+        const value = course[col.key];
+        if (col.key === 'status' && typeof value === 'string') {
+          row[col.label] = value.charAt(0).toUpperCase() + value.slice(1);
+        } else {
+          row[col.label] = value;
+        }
+      });
+      return row;
+    });
+    
+    // Create worksheet
+    const ws = XLSX.utils.json_to_sheet(data);
+    
+    // Create workbook
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Courses');
+    
+    // Save file
+    XLSX.writeFile(wb, 'courses-list.xlsx');
+  };
+
+  const handleExportCSV = (courses: Course[], columns: typeof courseColumns) => {
+    // Prepare headers
+    const headers = columns.map(col => col.label);
+    
+    // Prepare data rows
+    const rows = courses.map(course => 
+      columns.map(col => {
+        const value = course[col.key];
+        if (col.key === 'status' && typeof value === 'string') {
+          return value.charAt(0).toUpperCase() + value.slice(1);
+        }
+        return String(value); // Convert all values to string for CSV
+      })
+    );
+    
+    // Combine headers and rows
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.join(','))
+    ].join('\n');
+    
+    // Create and trigger download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'courses-list.csv';
+    link.click();
   };
 
   // Print handler
   const handlePrint = () => {
-    window.print();
+    const printColumns = courseColumns.map(col => ({ header: col.label, accessor: col.accessor }));
+
+    const printFunction = PrintLayout({
+      title: 'Courses List',
+      data: filteredCourses,
+      columns: printColumns,
+      totalItems: filteredCourses.length,
+    });
+
+    printFunction();
   };
 
-  if (loading) return <div className="p-6">Loading...</div>;
-  if (error) return <div className="p-6 text-red-600">{error}</div>;
+  // Fetch courses data (used for both initial load and refresh)
+  const fetchCourses = async (refresh: boolean = false) => {
+    try {
+      if (refresh) {
+        setIsRefreshing(true);
+      } else {
+        setLoading(true);
+      }
+      const response = await fetch('/api/courses');
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const data = await response.json();
+      if (Array.isArray(data)) {
+        setCourses(data);
+        setError(null);
+        if (refresh) toast.success('Courses refreshed successfully');
+      } else {
+        throw new Error('Invalid data format received from server');
+      }
+    } catch (err) {
+      console.error('Error fetching courses:', err);
+      setError('Failed to load courses. Please try again later.');
+      if (refresh) toast.error('Failed to refresh courses. Please try again later.');
+      else toast.error('Failed to load courses. Please try again later.');
+    } finally {
+      if (refresh) {
+        setIsRefreshing(false);
+      } else {
+        setLoading(false);
+      }
+    }
+  };
+
+  // Delete course
+  const handleDelete = async (id: string) => {
+    try {
+      const response = await fetch(`/api/courses/${id}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData?.error || "Failed to delete course");
+      }
+
+      toast.success("Course deleted successfully");
+      await fetchCourses(true);
+    } catch (error: any) {
+      toast.error(error.message);
+    }
+  };
+
+  // Bulk delete courses
+  const handleBulkDelete = async () => {
+    try {
+      const response = await fetch("/api/courses/bulk-delete", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: selectedIds }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData?.error || "Failed to delete courses");
+      }
+
+      toast.success("Selected courses deleted successfully");
+      setSelectedIds([]);
+      await fetchCourses(true);
+    } catch (error: any) {
+      toast.error(error.message);
+    }
+  };
+
+  // Initial data fetch
+  useEffect(() => {
+    fetchCourses();
+  }, []);
+
+  const [exportColumns, setExportColumns] = useState<string[]>(exportableColumns.map((col) => col.key));
 
   return (
     <div className="bg-white/80 backdrop-blur-md p-6 rounded-xl shadow-xl border border-blue-100 flex-1 m-4 mt-0">
       {/* TOP */}
-      <div className="print:hidden">
-        {/* Responsive header row for small screens */}
-        <div className="flex flex-col gap-4 mb-6 lg:hidden">
-          <div className="flex items-center justify-between w-full">
-            <div className="flex flex-col gap-1">
-              <h1 className="text-2xl font-bold text-blue-900">All Courses</h1>
-              <p className="text-sm text-blue-700/80">Manage and view all course information</p>
-            </div>
-            {/* Controls: filter, sort, export, print, add */}
-            <div className="flex flex-row gap-1 items-center">
-              <TooltipProvider delayDuration={0}>
-                {/* Filter Button */}
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button variant="ghost" size="icon" className="rounded border-0 hover:bg-blue-50" aria-label="Filter" onClick={() => setFilterDialogOpen(true)}>
-                      <Filter className="h-4 w-4 text-blue-700/70" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" className="bg-blue-900 text-white">Filter</TooltipContent>
-                </Tooltip>
-                {/* Sort Button */}
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button variant="ghost" size="icon" className="rounded border-0 hover:bg-blue-50" aria-label="Sort" onClick={() => setSortDialogOpen(true)}>
-                      <SortAsc className="h-4 w-4 text-blue-700" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" className="bg-blue-900 text-white">Sort</TooltipContent>
-                </Tooltip>
-                {/* Export Button */}
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button variant="ghost" size="icon" className="rounded border-0 hover:bg-blue-50" aria-label="Export" onClick={() => setExportDialogOpen(true)}>
-                      <Download className="h-4 w-4 text-blue-700" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" className="bg-blue-900 text-white">Export</TooltipContent>
-                </Tooltip>
-                {/* Print Button */}
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button variant="ghost" size="icon" aria-label="Print" onClick={handlePrint}>
-                      <Printer className="h-4 w-4 text-blue-700" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" className="bg-blue-900 text-white">Print</TooltipContent>
-                </Tooltip>
-                {/* Add Course Button (icon only) */}
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button variant="default" size="icon" className="bg-blue-700 hover:bg-blue-800 text-white shadow ml-1" aria-label="Add Course" onClick={() => { setModalCourse(undefined); setModalOpen(true); }}>
-                      <Plus className="h-5 w-5" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" className="bg-blue-900 text-white">Add new course</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            </div>
-          </div>
-          {/* Search bar for small screens */}
-          <TableSearch value={search} onChange={setSearch} placeholder="Search courses..." className="h-10 w-full px-3 rounded-full shadow-sm border border-blue-200 focus:border-blue-400 focus:ring-blue-400 mt-2" />
-        </div>
-        {/* Existing layout for large screens and up */}
-        <div className="hidden lg:block relative flex flex-col gap-4 mb-6">
-          <div className="flex flex-col gap-1">
-            <h1 className="text-2xl font-bold text-blue-900">All Courses</h1>
-            <p className="text-sm text-blue-700/80">Manage and view all course information</p>
-          </div>
-          {/* Controls: stacked below label on mobile, absolutely right-aligned on lg+ */}
-          <div className="flex flex-col gap-2 mt-2 w-full lg:absolute lg:right-0 lg:top-0 lg:flex-row lg:items-center lg:justify-end lg:w-auto">
-            <div className="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
-              <TableSearch value={search} onChange={setSearch} placeholder="Search courses..." className="h-10 w-full sm:w-64 px-3 rounded-full shadow-sm border border-blue-200 focus:border-blue-400 focus:ring-blue-400" />
-              <div className="flex flex-row gap-0 rounded-lg shadow-sm overflow-hidden">
-                <TooltipProvider delayDuration={0}>
-                  {/* Filter Button */}
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button variant="ghost" size="icon" className="rounded-none border-0 hover:bg-blue-50 relative" aria-label="Filter" onClick={() => setFilterDialogOpen(true)}>
-                        <Filter className="h-4 w-4 text-blue-700/70" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom" className="bg-blue-900 text-white">Filter</TooltipContent>
-                  </Tooltip>
-                  {/* Sort Button */}
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button variant="ghost" size="icon" className="rounded-none border-0 hover:bg-blue-50" aria-label="Sort" onClick={() => setSortDialogOpen(true)}>
-                        <SortAsc className="h-4 w-4 text-blue-700" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom" className="bg-blue-900 text-white">Sort</TooltipContent>
-                  </Tooltip>
-                  {/* Export Button */}
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button variant="ghost" size="icon" className="rounded-none border-0 hover:bg-blue-50" aria-label="Export" onClick={() => setExportDialogOpen(true)}>
-                        <Download className="h-4 w-4 text-blue-700" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom" className="bg-blue-900 text-white">Export</TooltipContent>
-                  </Tooltip>
-                  {/* Print Button */}
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button variant="ghost" size="icon" aria-label="Print" onClick={handlePrint}>
-                        <Printer className="h-4 w-4 text-blue-700" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom" className="bg-blue-900 text-white">Print</TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
+      <TableHeaderSection
+        title="All Courses"
+        description="Manage and view all course information"
+        searchValue={searchInput}
+        onSearchChange={setSearchInput}
+        onRefresh={() => fetchCourses(true)}
+        isRefreshing={isRefreshing}
+        onFilterClick={() => setFilterDialogOpen(true)}
+        onSortClick={() => setSortDialogOpen(true)}
+        onExportClick={() => setExportDialogOpen(true)}
+        onPrintClick={handlePrint}
+        onAddClick={() => setAddModalOpen(true)}
+        activeFilterCount={
+          columnFilters.filter(f => f.value).length +
+          Object.values(advancedFilters).filter(Boolean).length
+        }
+        searchPlaceholder="Search courses..."
+        addButtonLabel="Add Course"
+      />
+
+      {/* Print Header and Table - Only visible when printing */}
+      <div className="print-content">
+        {/* Table layout for xl+ only */}
+        <div className="hidden xl:block">
+          <div className="overflow-x-auto rounded-xl border border-blue-100 bg-white/70 shadow-md relative">
+            {/* Loader overlay when refreshing */}
+            {isRefreshing && (
+              <div className="absolute inset-0 bg-white/70 flex items-center justify-center z-20">
+                <Loader2 className="h-12 w-12 text-blue-600 animate-spin" />
               </div>
-            </div>
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button variant="default" className="bg-blue-700 hover:bg-blue-800 text-white shadow flex items-center gap-2 px-3 py-1 text-sm font-semibold w-full lg:w-auto" aria-label="Add Course" onClick={() => { setModalCourse(undefined); setModalOpen(true); }}>
-                    <Plus className="h-2 w-2" />
-                    Add Course
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" className="bg-blue-900 text-white">Add new course</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </div>
-        </div>
-      </div>
-      {/* LIST */}
-      {/* Table layout for xl+ only */}
-      <div className="hidden xl:block overflow-x-auto rounded-xl border border-blue-100 bg-white/70 shadow-md">
-        <Table>
-          <TableHeader className="bg-blue-50">
-            <TableRow>
-              {columns.map((col, i) => (
-                <TableHead
-                  key={i}
-                  className={`text-blue-900 font-semibold text-sm border-b border-blue-100${col.accessor === "actions" ? " !p-2 text-center" : ""}`}
-                >
-                  {col.header}
-                </TableHead>
-              ))}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {paginatedCourses.length > 0 ? paginatedCourses.map(renderRow) : (
-              <TableRow>
-                <TableCell colSpan={columns.length} className="text-center py-8 text-blue-400">
-                  No courses found.
-                </TableCell>
-              </TableRow>
             )}
-          </TableBody>
-        </Table>
+            <TableList
+              columns={columns}
+              data={paginatedCourses}
+              loading={loading}
+              selectedIds={selectedIds}
+              onSelectRow={handleSelectRow}
+              onSelectAll={handleSelectAll}
+              isAllSelected={isAllSelected}
+              isIndeterminate={isIndeterminate}
+              getItemId={(item) => item.id}
+            />
+          </div>
+        </div>
+        {/* Card layout for small screens */}
+        <div className="block xl:hidden">
+          <TableCardView
+            items={paginatedCourses}
+            selectedIds={selectedIds}
+            onSelect={handleSelectRow}
+            onView={(item) => {
+              setSelectedCourse(item);
+              setEditModalOpen(true);
+            }}
+            onEdit={(item) => {
+              setSelectedCourse(item);
+              setEditModalOpen(true);
+            }}
+            onDelete={(item) => {
+              setSelectedCourse(item);
+              setDeleteModalOpen(true);
+            }}
+            getItemId={(item) => item.id}
+            getItemName={(item) => item.name}
+            getItemCode={(item) => item.code}
+            getItemStatus={(item) => mapStatusToLowerCase(item.status)}
+            getItemDescription={(item) => item.description}
+            getItemDetails={(item) => [
+              { label: 'Department', value: item.department },
+              { label: 'Units', value: item.units },
+              { label: 'Instructors', value: item.totalInstructors },
+              { label: 'Students', value: item.totalStudents },
+            ]}
+            disabled={(item) => item.status === "ACTIVE" || item.totalStudents > 0 || item.totalInstructors > 0}
+            deleteTooltip={(item) => 
+              item.status === "ACTIVE" 
+                ? "Cannot delete an active course" 
+                : item.totalStudents > 0 
+                  ? "Cannot delete course with enrolled students"
+                  : item.totalInstructors > 0 
+                    ? "Cannot delete course with assigned instructors"
+                    : undefined
+            }
+            isLoading={loading}
+          />
+        </div>
       </div>
-      {/* Card layout for small screens */}
-      <div className="block xl:hidden w-full space-y-4">
-        {paginatedCourses.length === 0 ? (
-          <div className="text-center text-gray-500 py-8">No courses found.</div>
-        ) : (
-          paginatedCourses.map((item) => (
-            <div
-              key={item.id}
-              className="relative bg-white border border-blue-200 rounded-2xl shadow-lg p-4 flex flex-col gap-3 transition-shadow duration-150 active:shadow-xl focus-within:ring-2 focus-within:ring-blue-400"
-              tabIndex={0}
-              role="button"
-              aria-label={`View details for course ${item.name}`}
-            >
-              {/* Status */}
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-mono text-blue-500 bg-blue-50 rounded px-2 py-0.5">{item.code}</span>
-                <Badge variant={item.status === "active" ? "success" : "destructive"} className="text-xs px-2 py-1 rounded-full">
-                  {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
-                </Badge>
-              </div>
-              {/* Course Name */}
-              <div className="text-lg font-bold text-blue-900">{item.name}</div>
-              {/* Info Section */}
-              <div className="flex flex-wrap gap-3 text-sm text-blue-800">
-                <div className="flex items-center gap-1">
-                  <span className="font-semibold">Department:</span>
-                  <span>{item.department}</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <span className="font-semibold">Units:</span>
-                  <span>{item.units}</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <span className="font-semibold">Instructors:</span>
-                  <span>{item.totalInstructors}</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <span className="font-semibold">Students:</span>
-                  <span>{item.totalStudents}</span>
-                </div>
-              </div>
-              {/* Actions */}
-              <div className="flex justify-end gap-2 mt-2">
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button variant="outline" size="icon" aria-label={`View Course ${item.name}`} className="hover:bg-blue-50">
-                        <Eye className="h-4 w-4 text-blue-600" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>View course details</TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button variant="outline" size="icon" aria-label={`Edit Course ${item.name}`} onClick={() => { setModalCourse(item); setModalOpen(true); }} className="hover:bg-green-50">
-                        <Pencil className="h-4 w-4 text-green-600" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Edit course</TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button variant="outline" size="icon" aria-label={`Delete Course ${item.name}`} onClick={() => { setCourseToDelete(item); setDeleteDialogOpen(true); }} className="hover:bg-red-50">
-                        <Trash2 className="h-4 w-4 text-red-600" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Delete course</TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              </div>
-            </div>
-          ))
-        )}
-      </div>
+
+      {/* Bulk Actions Bar */}
+      {selectedIds.length > 0 && (
+        <BulkActionsBar
+          selectedCount={selectedIds.length}
+          entityLabel="course"
+          actions={[
+            {
+              key: 'delete',
+              label: 'Delete Selected',
+              icon: isDeleting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Trash2 className="w-4 h-4 mr-2" />,
+              onClick: handleBulkDelete,
+              loading: isDeleting,
+              disabled: isDeleting,
+              tooltip: 'Delete selected courses',
+              variant: 'destructive',
+            },
+          ]}
+          onClear={() => setSelectedIds([])}
+          className="mt-4 mb-2"
+        />
+      )}
+
       {/* PAGINATION */}
-      <div className="mt-6 flex justify-center">
+      <div className="mt-6">
         <Pagination
           currentPage={currentPage}
           totalPages={totalPages}
           onPageChange={setCurrentPage}
         />
       </div>
-      {/* DELETE CONFIRMATION DIALOG */}
-      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <DialogContent className="backdrop-blur-md bg-white/90 border border-blue-100 rounded-xl">
-          <DialogHeader>
-            <DialogTitle className="text-blue-900">Delete Course</DialogTitle>
-          </DialogHeader>
-          <div className="text-blue-900">Are you sure you want to delete the course "{courseToDelete?.name}"? This action cannot be undone.</div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => { setDeleteDialogOpen(false); setCourseToDelete(null); }}>Cancel</Button>
-            <Button variant="destructive" onClick={() => { if (courseToDelete) { setCourses(courses.filter(c => c.id !== courseToDelete.id)); setDeleteDialogOpen(false); setCourseToDelete(null); } }}>Delete</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      {/* MODAL FOR CREATE/EDIT (structure only) */}
-      <Dialog open={modalOpen} onOpenChange={setModalOpen}>
-        <DialogContent className="backdrop-blur-md bg-white/90 border border-blue-100 rounded-xl">
-          <DialogHeader>
-            <DialogTitle className="text-blue-900">{modalCourse ? "Edit Course" : "Add New Course"}</DialogTitle>
-          </DialogHeader>
-          {/* Add form fields here */}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setModalOpen(false)}>Cancel</Button>
-            <Button>{modalCourse ? "Update" : "Add"}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      {/* FILTER DIALOG */}
-      <Dialog open={filterDialogOpen} onOpenChange={setFilterDialogOpen}>
-        <DialogContent className="sm:max-w-[500px] bg-white/90 border border-blue-100 shadow-lg rounded-xl py-8 px-6">
-          <DialogHeader>
-            <DialogTitle className="text-blue-900 text-xl flex items-center gap-2 mb-6">
-              Filter Courses
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-8">
-            {/* Status Section */}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <h3 className="text-md font-semibold text-blue-900">Status</h3>
-                </div>
-                <Badge variant="outline" className="text-xs font-normal bg-blue-50 text-blue-700 border-blue-200">
-                  {columnStatusFilter === 'all' ? 'All' : columnStatusFilter.charAt(0).toUpperCase() + columnStatusFilter.slice(1)}
-                </Badge>
-              </div>
-              <div className="h-px bg-blue-100 w-full mb-8"></div>
-              <div className="grid grid-cols-3 gap-2 mt-6">
-                <Button
-                  variant={columnStatusFilter === 'all' ? "default" : "outline"}
-                  size="sm"
-                  className={`w-full ${columnStatusFilter === 'all' ? 'bg-blue-600 hover:bg-blue-700' : 'hover:bg-blue-50'}`}
-                  onClick={() => setColumnStatusFilter('all')}
-                >
-                  All
-                </Button>
-                <Button
-                  variant={columnStatusFilter === 'active' ? "default" : "outline"}
-                  size="sm"
-                  className={`w-full ${columnStatusFilter === 'active' ? 'bg-blue-600 hover:bg-blue-700' : 'hover:bg-blue-50'}`}
-                  onClick={() => setColumnStatusFilter('active')}
-                >
-                  Active
-                </Button>
-                <Button
-                  variant={columnStatusFilter === 'inactive' ? "default" : "outline"}
-                  size="sm"
-                  className={`w-full ${columnStatusFilter === 'inactive' ? 'bg-blue-600 hover:bg-blue-700' : 'hover:bg-blue-50'}`}
-                  onClick={() => setColumnStatusFilter('inactive')}
-                >
-                  Inactive
-                </Button>
-              </div>
-            </div>
-          </div>
-          <DialogFooter className="gap-4 mt-10">
-            <Button
-              variant="outline"
-              onClick={() => setColumnStatusFilter('all')}
-              className="w-32 border border-blue-300 text-blue-500"
-            >
-              Reset
-            </Button>
-            <Button 
-              onClick={() => setFilterDialogOpen(false)}
-              className="w-32 bg-blue-600 hover:bg-blue-700 text-white">
-              Apply Filters
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      {/* SORT DIALOG */}
-      <Dialog open={sortDialogOpen} onOpenChange={setSortDialogOpen}>
-        <DialogContent className="sm:max-w-[500px] bg-white/90 border border-blue-100 shadow-lg rounded-xl py-8 px-6">
-          <DialogHeader>
-            <DialogTitle className="text-blue-900 text-xl flex items-center gap-2 mb-6">
-              Sort Courses
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-8">
-            {/* Sort By Section */}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <h3 className="text-md font-semibold text-blue-900">Sort By</h3>
-                </div>
-              </div>
-              <div className="h-px bg-blue-100 w-full mb-8"></div>
-              <div className="grid grid-cols-2 gap-4 mt-6">
-                {['name','code','department','units','totalInstructors','totalStudents','status'].map(field => (
-                  <Button
-                    key={field}
-                    variant={sortField === field ? "default" : "outline"}
-                    size="sm"
-                    className={`w-full ${sortField === field ? 'bg-blue-600 hover:bg-blue-700' : 'hover:bg-blue-50'}`}
-                    onClick={() => setSortField(field as SortField)}
-                  >
-                    {exportableColumns.find(c => c.key === field)?.label || field}
-                  </Button>
-                ))}
-              </div>
-            </div>
-            {/* Sort Order Section */}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <h3 className="text-md font-semibold text-blue-900">Sort Order</h3>
-                </div>
-              </div>
-              <div className="h-px bg-blue-100 w-full mb-8"></div>
-              <div className="grid grid-cols-2 gap-4 mt-6">
-                <Button
-                  variant={sortOrder === 'asc' ? "default" : "outline"}
-                  size="sm"
-                  className={`w-full ${sortOrder === 'asc' ? 'bg-blue-600 hover:bg-blue-700' : 'hover:bg-blue-50'}`}
-                  onClick={() => setSortOrder('asc')}
-                >
-                  Ascending
-                </Button>
-                <Button
-                  variant={sortOrder === 'desc' ? "default" : "outline"}
-                  size="sm"
-                  className={`w-full ${sortOrder === 'desc' ? 'bg-blue-600 hover:bg-blue-700' : 'hover:bg-blue-50'}`}
-                  onClick={() => setSortOrder('desc')}
-                >
-                  Descending
-                </Button>
-              </div>
-            </div>
-          </div>
-          <DialogFooter className="gap-4 mt-10">
-            <Button
-              variant="outline"
-              onClick={() => { setSortField('name'); setSortOrder('asc'); }}
-              className="w-32 border border-blue-300 text-blue-500"
-            >
-              Reset
-            </Button>
-            <Button 
-              onClick={() => setSortDialogOpen(false)}
-              className="w-32 bg-blue-600 hover:bg-blue-700 text-white"
-            >
-              Apply Sort
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      {/* EXPORT DIALOG */}
-      <Dialog open={exportDialogOpen} onOpenChange={setExportDialogOpen}>
-        <DialogContent className="sm:max-w-[500px] bg-white/90 border border-blue-100 shadow-lg rounded-xl py-8 px-6">
-          <DialogHeader>
-            <DialogTitle className="text-blue-900 text-xl flex items-center gap-2 mb-6">
-              Export Courses
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-8">
-            {/* Export Format Section */}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <h3 className="text-md font-semibold text-blue-900">Export Format</h3>
-                </div>
-              </div>
-              <div className="h-px bg-blue-100 w-full mb-8"></div>
-              <div className="grid grid-cols-3 gap-4 mt-6">
-                <Button
-                  variant={exportFormat === 'pdf' ? "default" : "outline"}
-                  size="sm"
-                  className={`w-full flex flex-col items-center gap-1 py-3 ${exportFormat === 'pdf' ? 'bg-blue-600 hover:bg-blue-700' : 'hover:bg-blue-50'}`}
-                  onClick={() => setExportFormat('pdf')}
-                >
-                  PDF
-                </Button>
-                <Button
-                  variant={exportFormat === 'excel' ? "default" : "outline"}
-                  size="sm"
-                  className={`w-full flex flex-col items-center gap-1 py-3 ${exportFormat === 'excel' ? 'bg-blue-600 hover:bg-blue-700' : 'hover:bg-blue-50'}`}
-                  onClick={() => setExportFormat('excel')}
-                >
-                  Excel
-                </Button>
-                <Button
-                  variant={exportFormat === 'csv' ? "default" : "outline"}
-                  size="sm"
-                  className={`w-full flex flex-col items-center gap-1 py-3 ${exportFormat === 'csv' ? 'bg-blue-600 hover:bg-blue-700' : 'hover:bg-blue-50'}`}
-                  onClick={() => setExportFormat('csv')}
-                >
-                  CSV
-                </Button>
-              </div>
-            </div>
-            {/* Export Options Section */}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <h3 className="text-md font-semibold text-blue-900">Export Options</h3>
-                </div>
-              </div>
-              <div className="h-px bg-blue-100 w-full mb-8"></div>
-              <div className="space-y-6">
-                {exportableColumns.map((column) => (
-                  <div key={column.key} className="flex items-center space-x-2">
-                    <input
-                      type="checkbox"
-                      checked={exportColumns.includes(column.key)}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setExportColumns([...exportColumns, column.key]);
-                        } else {
-                          setExportColumns(exportColumns.filter((c) => c !== column.key));
-                        }
-                      }}
-                      className="border-blue-200"
-                    />
-                    <label className="text-sm text-blue-900 cursor-pointer">
-                      {column.label}
-                    </label>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-          <DialogFooter className="gap-4 mt-10">
-            <Button
-              variant="outline"
-              onClick={() => {
-                setExportFormat(null);
-                setExportColumns(exportableColumns.map(col => col.key));
-              }}
-              className="w-32 border border-blue-300 text-blue-500"
-            >
-              Reset
-            </Button>
-            <Button 
-              onClick={() => {
-                // Implement export logic here, similar to handleExport/handleExportExcel/handleExportPDF
-                setExportDialogOpen(false);
-              }}
-              className="w-32 bg-blue-600 hover:bg-blue-700 text-white"
-              disabled={!exportFormat}
-            >
-              Export
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+
+      {/* Add Course Dialog */}
+      <CourseFormDialog
+        open={addModalOpen}
+        onOpenChange={setAddModalOpen}
+        type="create"
+        onSuccess={() => {
+          setAddModalOpen(false);
+          fetchCourses();
+        }}
+      />
+
+      {/* Keep existing dialogs */}
+      <ConfirmDeleteDialog
+        open={deleteModalOpen}
+        onOpenChange={(open) => {
+          setDeleteModalOpen(open);
+          if (!open) setSelectedCourse(null);
+        }}
+        itemName={selectedCourse?.name}
+        onDelete={() => { if (selectedCourse) handleDelete(selectedCourse.id); }}
+        onCancel={() => { setDeleteModalOpen(false); setSelectedCourse(null); }}
+        canDelete={true}
+        deleteError={undefined}
+        description={selectedCourse ? `Are you sure you want to delete the course "${selectedCourse.name}"? This action cannot be undone.` : undefined}
+      />
+
+      <CourseFormDialog
+        open={editModalOpen}
+        onOpenChange={setEditModalOpen}
+        type="update"
+        data={selectedCourse || undefined}
+        id={selectedCourse?.id}
+        onSuccess={() => {
+          setEditModalOpen(false);
+          fetchCourses();
+        }}
+      />
+
+      <FilterDialog<"all" | CourseStatus>
+        open={filterDialogOpen}
+        onOpenChange={setFilterDialogOpen}
+        statusFilter={statusFilter}
+        setStatusFilter={setStatusFilter}
+        statusOptions={[
+          { value: 'all', label: 'All' },
+          { value: 'ACTIVE', label: 'Active' },
+          { value: 'INACTIVE', label: 'Inactive' },
+          { value: 'ARCHIVED', label: 'Archived' },
+          { value: 'PENDING_REVIEW', label: 'Pending Review' },
+        ]}
+        advancedFilters={advancedFilters}
+        setAdvancedFilters={filters => setAdvancedFilters({
+          department: filters.department || '',
+          minUnits: filters.minUnits || '',
+          maxUnits: filters.maxUnits || '',
+          minStudents: filters.minStudents || '',
+          maxStudents: filters.maxStudents || '',
+          minInstructors: filters.minInstructors || '',
+          maxInstructors: filters.maxInstructors || '',
+        })}
+        fields={[
+          { key: 'department', label: 'Department', type: 'text', badgeType: 'active' },
+          { key: 'minUnits', label: 'Units', type: 'number', badgeType: 'range', minKey: 'minUnits', maxKey: 'maxUnits' },
+          { key: 'minStudents', label: 'Students', type: 'number', badgeType: 'range', minKey: 'minStudents', maxKey: 'maxStudents' },
+          { key: 'minInstructors', label: 'Instructors', type: 'number', badgeType: 'range', minKey: 'minInstructors', maxKey: 'maxInstructors' },
+        ]}
+        onReset={() => {
+          setStatusFilter('all');
+          setAdvancedFilters({
+            department: '',
+            minUnits: '',
+            maxUnits: '',
+            minStudents: '',
+            maxStudents: '',
+            minInstructors: '',
+            maxInstructors: ''
+          });
+        }}
+        onApply={() => setFilterDialogOpen(false)}
+        activeAdvancedCount={Object.values(advancedFilters).filter(Boolean).length}
+        title="Filter Courses"
+        tooltip="Filter courses by multiple criteria. Use advanced filters for more specific conditions."
+      />
+
+      <SortDialog
+        open={sortDialogOpen}
+        onOpenChange={setSortDialogOpen}
+        sortField={sortField}
+        setSortField={field => setSortField(field as CourseSortField)}
+        sortOrder={sortOrder}
+        setSortOrder={setSortOrder}
+        sortFieldOptions={courseSortFieldOptions}
+        onApply={() => {
+          setSortFields([{ field: sortField as SortField, order: sortOrder }]);
+        }}
+        onReset={() => {
+          setSortField('name');
+          setSortOrder('asc');
+          setSortFields([{ field: 'name' as SortField, order: 'asc' }]);
+        }}
+        title="Sort Courses"
+        tooltip="Sort courses by different fields. Choose the field and order to organize your list."
+      />
+
+      <ExportDialog
+        open={exportDialogOpen}
+        onOpenChange={setExportDialogOpen}
+        exportableColumns={exportableColumns}
+        exportColumns={exportColumns}
+        setExportColumns={setExportColumns}
+        exportFormat={exportFormat}
+        setExportFormat={setExportFormat}
+        onExport={handleExport}
+        title="Export Courses"
+        tooltip="Export course data in various formats. Choose your preferred export options."
+      />
+
+      <ColumnFilterDialog
+        open={showColumnFilters}
+        onOpenChange={setShowColumnFilters}
+        filters={columnFilters}
+        onFiltersChange={setColumnFilters}
+      />
+
+      {/* View Course Dialog */}
+      <ViewDialog
+        open={viewModalOpen}
+        onOpenChange={setViewModalOpen}
+        title={selectedCourse?.name || ''}
+        subtitle={selectedCourse?.code}
+        status={selectedCourse ? {
+          value: selectedCourse.status,
+          variant: selectedCourse.status === "ACTIVE" ? "success" : 
+                  selectedCourse.status === "INACTIVE" ? "destructive" : 
+                  selectedCourse.status === "ARCHIVED" ? "secondary" : "warning"
+        } : undefined}
+        sections={[
+          {
+            fields: [
+              { label: 'Department', value: selectedCourse?.department || '' },
+              { label: 'Units', value: selectedCourse?.units || 0, type: 'number' },
+              { label: 'Course Type', value: selectedCourse?.courseType || '' }
+            ]
+          },
+          {
+            fields: [
+              { label: 'Total Students', value: selectedCourse?.totalStudents || 0, type: 'number' },
+              { label: 'Total Instructors', value: selectedCourse?.totalInstructors || 0, type: 'number' },
+              { label: 'Last Updated', value: selectedCourse?.updatedAt || '', type: 'date' }
+            ]
+          }
+        ]}
+        description={selectedCourse?.description}
+        tooltipText="View detailed course information"
+      />
     </div>
   );
 } 
