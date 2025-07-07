@@ -18,7 +18,7 @@ import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Plus, Search, Filter, SortAsc, FileDown, Printer, Eye, Pencil, Trash2, School, CheckSquare, Square, ChevronUp, ChevronDown, Loader2, Inbox, RefreshCw } from "lucide-react";
 import TableSearch from "@/components/TableSearch";
-import Pagination from "@/components/Pagination";
+import { Pagination } from "@/components/Pagination";
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { FilterDialog } from '@/components/FilterDialog';
 import { ExportDialog } from '@/components/ExportDialog';
@@ -33,6 +33,7 @@ import { PrintLayout } from '@/components/PrintLayout';
 import SectionFormDialog from '@/components/forms/SectionFormDialog';
 import { ViewDialog } from '@/components/ViewDialog';
 import { ConfirmDeleteDialog } from '@/components/ConfirmDeleteDialog';
+import AttendanceHeader from '../../../../components/AttendanceHeader';
 
 // Define the section schema
 const sectionSchema = z.object({
@@ -566,8 +567,26 @@ export default function SectionsPage() {
   // Update activeFilterCount to count all non-default filters
   const activeFilterCount = Object.entries(filters).filter(([key, value]) => value !== 'all').length;
 
+  // For TableHeaderSection
+  const exportableColumns = [
+    { accessor: 'sectionName', label: 'Section Name' },
+    { accessor: 'sectionType', label: 'Type' },
+    { accessor: 'sectionCapacity', label: 'Capacity' },
+    { accessor: 'yearLevel', label: 'Year Level' },
+    { accessor: 'course', label: 'Course' },
+    { accessor: 'totalStudents', label: 'Students' },
+    { accessor: 'totalSubjects', label: 'Subjects' },
+    { accessor: 'sectionStatus', label: 'Status' },
+  ];
+  const [visibleColumns, setVisibleColumns] = useState(exportableColumns.map(col => col.accessor));
+
   return (
     <>
+      <AttendanceHeader
+        title="Sections"
+        subtitle="Manage class sections and assignments"
+        currentSection="Sections"
+      />
       {/* Normal UI */}
       <div className="bg-white/80 backdrop-blur-md p-6 rounded-xl shadow-xl border border-blue-100 flex-1 m-4 mt-0">
         {/* TOP */}
@@ -576,16 +595,10 @@ export default function SectionsPage() {
           description="Manage and view all section information"
           searchValue={search}
           onSearchChange={setSearch}
-          onRefresh={refreshSections}
-          isRefreshing={loading}
-          onFilterClick={() => setFilterDialogOpen(true)}
-          onSortClick={() => setSortDialogOpen(true)}
-          onExportClick={() => setExportDialogOpen(true)}
-          onPrintClick={handlePrint}
-          onAddClick={() => setAddDialogOpen(true)}
-          activeFilterCount={activeFilterCount}
+          columnOptions={exportableColumns}
+          visibleColumns={visibleColumns}
+          setVisibleColumns={setVisibleColumns}
           searchPlaceholder="Search sections..."
-          addButtonLabel="Add Section"
         />
 
         {/* Print Header and Table - Only visible when printing */}
@@ -667,6 +680,8 @@ export default function SectionsPage() {
           <Pagination
             currentPage={currentPage}
             totalPages={totalPages}
+            totalItems={filteredSections.length}
+            itemsPerPage={ITEMS_PER_PAGE}
             onPageChange={setCurrentPage}
           />
         </div>

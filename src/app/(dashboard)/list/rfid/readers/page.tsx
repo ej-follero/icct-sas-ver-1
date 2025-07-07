@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
-import { Eye, Pencil, Trash2, Loader2 } from "lucide-react";
+import { Eye, Pencil, Trash2, RefreshCw, Info, Plus, CreditCard, Wifi, WifiOff, AlertTriangle } from "lucide-react";
 import * as XLSX from "xlsx";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -17,12 +17,15 @@ import { ExportDialog } from "@/components/ExportDialog";
 import { PrintLayout } from "@/components/PrintLayout";
 import { TableList, TableListColumn } from "@/components/TableList";
 import { Checkbox } from "@/components/ui/checkbox";
-import Pagination from "@/components/Pagination";
+import { Pagination } from "@/components/Pagination";
 import { ViewDialog } from "@/components/ViewDialog";
 import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
 import RFIDReaderFormDialog from "@/components/forms/RFIDReaderFormDialog";
+import { Skeleton } from "@/components/ui/skeleton";
+import AttendanceHeader from "@/components/AttendanceHeader";
+import { CompactPagination } from "@/components/Pagination";
 
 const readerSchema = z.object({
   id: z.number(),
@@ -94,6 +97,7 @@ export default function RFIDReadersPage() {
   const [sortDialogOpen, setSortDialogOpen] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [filters, setFilters] = useState({ status: "all", room: "" });
+  const [lastUpdated, setLastUpdated] = useState(new Date());
   const exportableColumns = [
     { key: 'deviceId', label: 'Device ID' },
     { key: 'deviceName', label: 'Device Name' },
@@ -130,6 +134,7 @@ export default function RFIDReadersPage() {
       const { data, total } = await response.json();
       setReaders(data);
       // Note: We might need to set total pages here if the API provides it
+      setLastUpdated(new Date());
     } catch (error) {
       console.error('Error fetching readers:', error);
       toast.error('Failed to fetch RFID readers.');
@@ -201,6 +206,7 @@ export default function RFIDReadersPage() {
           <Checkbox
             checked={selectedIds.length > 0 && selectedIds.length === paginatedReaders.length}
             onCheckedChange={handleSelectAll}
+            aria-label="Select all readers"
           />
         </div>
       ),
@@ -219,17 +225,27 @@ export default function RFIDReadersPage() {
       className: "text-center",
       render: (item) => (
         <div className="flex gap-2 justify-center">
-          <Button variant="ghost" size="icon" onClick={() => { setSelectedReader(item); setViewDialogOpen(true); }}>
-            <Eye className="h-4 w-4 text-blue-600" />
-          </Button>
-          <Button variant="ghost" size="icon" onClick={() => { setFormType('update'); setSelectedReaderForForm(item); setFormDialogOpen(true); }}>
-            <Pencil className="h-4 w-4 text-green-600" />
-          </Button>
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" aria-label="View details" onClick={() => { setSelectedReader(item); setViewDialogOpen(true); }}>
+                  <Eye className="h-4 w-4 text-blue-600" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>View</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" aria-label="Edit reader" onClick={() => { setFormType('update'); setSelectedReaderForForm(item); setFormDialogOpen(true); }}>
+                  <Pencil className="h-4 w-4 text-green-600" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Edit</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
                 <span>
-                  <Button variant="ghost" size="icon" onClick={() => { setReaderToDelete(item); setDeleteDialogOpen(true); }} disabled={!!item.hasRelatedEntities}>
+                  <Button variant="ghost" size="icon" aria-label="Delete reader" onClick={() => { setReaderToDelete(item); setDeleteDialogOpen(true); }} disabled={!!item.hasRelatedEntities}>
                     <Trash2 className="h-4 w-4 text-red-600" />
                   </Button>
                 </span>
@@ -300,194 +316,294 @@ export default function RFIDReadersPage() {
     },
   ];
 
-  // TODO: Add other handlers (delete, export, etc.)
+  // Analytics summary
+  const summary = useMemo(() => {
+    const total = filteredReaders.length;
+    const online = filteredReaders.filter(r => r.status === "ACTIVE").length;
+    const offline = filteredReaders.filter(r => r.status === "INACTIVE").length;
+    const maintenance = filteredReaders.filter(r => r.status === "MAINTENANCE").length;
+    return { total, online, offline, maintenance };
+  }, [filteredReaders]);
 
   return (
-    <div className="flex flex-col h-full">
-      <TableHeaderSection
-        title="RFID Readers"
-        description="Manage all RFID reader devices in the system."
-        searchValue={searchTerm}
-        onSearchChange={setSearchTerm}
-        onRefresh={handleRefresh}
-        isRefreshing={isRefreshing}
-        onAddClick={() => { setFormType('create'); setSelectedReaderForForm(undefined); setFormDialogOpen(true); }}
-        onFilterClick={() => setFilterDialogOpen(true)}
-        onSortClick={() => setSortDialogOpen(true)}
-        onExportClick={() => setExportDialogOpen(true)}
-        onPrintClick={() => toast.info("Print not implemented yet.")}
-        columnOptions={exportableColumns.map(col => ({ accessor: col.key, label: col.label }))}
-        visibleColumns={visibleColumns}
-        setVisibleColumns={setVisibleColumns}
-      />
-      
-      {selectedIds.length > 0 && (
-        <BulkActionsBar
-          selectedCount={selectedIds.length}
-          actions={bulkActions}
-          onClear={() => setSelectedIds([])}
-          entityLabel="reader"
+    <TooltipProvider>
+      <div className="container mx-auto p-6 space-y-6">
+        {/* Header */}
+        <AttendanceHeader
+          title="RFID Readers"
+          subtitle="Manage all RFID reader devices in the system."
+          currentSection="RFID"
         />
-      )}
 
-      <div className="hidden xl:block flex-grow overflow-auto">
-        <TableList
-          columns={columns}
-          data={paginatedReaders}
-          loading={loading}
-          selectedIds={selectedIds}
-          onSelectRow={handleSelectRow}
-          onSelectAll={handleSelectAll}
-          isAllSelected={selectedIds.length === paginatedReaders.length && paginatedReaders.length > 0}
-          isIndeterminate={selectedIds.length > 0 && selectedIds.length < paginatedReaders.length}
-          getItemId={(row: RFIDReader) => row.id.toString()}
-        />
-      </div>
+        {/* Sticky Top Bar */}
+        <div className="sticky top-0 z-20 bg-white/90 backdrop-blur border-b border-blue-100 pb-2 mb-2">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 pt-2">
+            <div className="flex items-center gap-3 text-sm text-muted-foreground" aria-live="polite">
+              <span>Last updated: {lastUpdated.toLocaleTimeString()}</span>
+              <Button onClick={handleRefresh} variant="outline" size="sm" aria-label="Refresh readers" disabled={loading} className="gap-2">
+                <RefreshCw className={loading ? "animate-spin" : ""} />
+                Refresh
+              </Button>
+            </div>
+            <Button onClick={() => { setFormType('create'); setFormDialogOpen(true); setSelectedReaderForForm(undefined); }} size="sm" className="gap-2" aria-label="Add new reader">
+              <Plus className="h-4 w-4" />
+              Add Reader
+            </Button>
+          </div>
+        </div>
 
-      <div className="block xl:hidden">
-        <TableCardView
-          items={paginatedReaders}
-          selectedIds={selectedIds}
-          onSelect={handleSelectRow}
-          onView={(item) => {
-            setSelectedReader(item);
-            setViewDialogOpen(true);
-          }}
-          onEdit={(item) => {
-            setFormType('update');
-            setSelectedReaderForForm(item);
-            setFormDialogOpen(true);
-          }}
-          onDelete={(item) => {
-            setReaderToDelete(item);
-            setDeleteDialogOpen(true);
-          }}
-          getItemId={(item) => item.id.toString()}
-          getItemName={(item) => item.deviceName}
-          getItemCode={(item) => item.deviceId}
-          getItemStatus={(item) => item.status === 'ACTIVE' ? 'active' : 'inactive'}
-          getItemDetails={(item) => [
-            { label: 'IP Address', value: item.ipAddress },
-            { label: 'Room ID', value: item.roomId || 'N/A' },
-            { label: 'Last Seen', value: isClient ? new Date(item.lastSeen).toLocaleString() : '...' },
-          ]}
-          isLoading={loading}
-          deleteTooltip={(item) => item.hasRelatedEntities ? "Cannot delete reader with assigned entities." : "Delete reader"}
-        />
-      </div>
+        {/* Analytics Summary Bar */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+          <div className="flex items-center gap-2 bg-blue-50 rounded-lg p-4">
+            <CreditCard className="h-6 w-6 text-blue-500" aria-label="Total Readers" />
+            <span className="font-semibold text-blue-900">{summary.total}</span>
+            <span className="text-sm text-blue-700">Total</span>
+          </div>
+          <div className="flex items-center gap-2 bg-green-50 rounded-lg p-4">
+            <Wifi className="h-6 w-6 text-green-500" aria-label="Online Readers" />
+            <span className="font-semibold text-green-900">{summary.online}</span>
+            <span className="text-sm text-green-700">Online</span>
+          </div>
+          <div className="flex items-center gap-2 bg-gray-50 rounded-lg p-4">
+            <WifiOff className="h-6 w-6 text-gray-500" aria-label="Offline Readers" />
+            <span className="font-semibold text-gray-900">{summary.offline}</span>
+            <span className="text-sm text-gray-700">Offline</span>
+          </div>
+          <div className="flex items-center gap-2 bg-yellow-50 rounded-lg p-4">
+            <AlertTriangle className="h-6 w-6 text-yellow-500" aria-label="Maintenance Readers" />
+            <span className="font-semibold text-yellow-900">{summary.maintenance}</span>
+            <span className="text-sm text-yellow-700">Maintenance</span>
+          </div>
+        </div>
 
-      <Pagination
-        currentPage={currentPage}
-        totalPages={totalPages}
-        onPageChange={setCurrentPage}
-      />
+        {/* Table/List Section with divider */}
+        <div className="bg-white rounded-xl shadow border border-border overflow-hidden">
+          {/* Desktop Table */}
+          <div className="hidden xl:block">
+            {loading ? (
+              <div className="p-8">
+                <Skeleton className="h-8 w-full mb-4" />
+                <Skeleton className="h-8 w-full mb-4" />
+                <Skeleton className="h-8 w-full mb-4" />
+                <Skeleton className="h-8 w-full mb-4" />
+              </div>
+            ) : paginatedReaders.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16">
+                <CreditCard className="h-12 w-12 text-blue-200 mb-4" />
+                <div className="font-semibold text-lg text-blue-700 mb-2">No RFID Readers Found</div>
+                <div className="text-sm text-muted-foreground mb-4">Get started by adding your first reader.</div>
+                <Button onClick={() => { setFormType('create'); setFormDialogOpen(true); setSelectedReaderForForm(undefined); }} size="sm" className="gap-2" aria-label="Add new reader">
+                  <Plus className="h-4 w-4" />
+                  Add Reader
+                </Button>
+              </div>
+            ) : (
+              <TableList
+                columns={columns}
+                data={paginatedReaders.filter(r => r && r.id !== undefined)}
+                loading={loading}
+                selectedIds={selectedIds}
+                onSelectRow={handleSelectRow}
+                onSelectAll={handleSelectAll}
+                isAllSelected={selectedIds.length === paginatedReaders.length && paginatedReaders.length > 0}
+                isIndeterminate={selectedIds.length > 0 && selectedIds.length < paginatedReaders.length}
+                getItemId={(row: RFIDReader) => (row && row.id !== undefined ? row.id.toString() : "")}
+                className="transition-all duration-150 [&_tr:hover]:bg-blue-50 [&_tr.selected]:bg-blue-100"
+              />
+            )}
+          </div>
+          {/* Mobile Card View */}
+          <div className="block xl:hidden">
+            {loading ? (
+              <div className="p-8">
+                <Skeleton className="h-8 w-full mb-4" />
+                <Skeleton className="h-8 w-full mb-4" />
+                <Skeleton className="h-8 w-full mb-4" />
+                <Skeleton className="h-8 w-full mb-4" />
+              </div>
+            ) : paginatedReaders.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16">
+                <CreditCard className="h-12 w-12 text-blue-200 mb-4" />
+                <div className="font-semibold text-lg text-blue-700 mb-2">No RFID Readers Found</div>
+                <div className="text-sm text-muted-foreground mb-4">Get started by adding your first reader.</div>
+                <Button onClick={() => { setFormType('create'); setFormDialogOpen(true); setSelectedReaderForForm(undefined); }} size="sm" className="gap-2" aria-label="Add new reader">
+                  <Plus className="h-4 w-4" />
+                  Add Reader
+                </Button>
+              </div>
+            ) : (
+              <TableCardView
+                items={paginatedReaders.filter(r => r && r.id !== undefined)}
+                selectedIds={selectedIds}
+                onSelect={handleSelectRow}
+                onView={(item) => {
+                  setSelectedReader(item);
+                  setViewDialogOpen(true);
+                }}
+                onEdit={(item) => {
+                  setFormType('update');
+                  setSelectedReaderForForm(item);
+                  setFormDialogOpen(true);
+                }}
+                onDelete={(item) => {
+                  setReaderToDelete(item);
+                  setDeleteDialogOpen(true);
+                }}
+                getItemId={(item: RFIDReader) => (item && item.id !== undefined ? item.id.toString() : "")}
+                getItemName={(item) => item.deviceName}
+                getItemCode={(item) => item.deviceId}
+                getItemStatus={(item) => item.status === 'ACTIVE' ? 'active' : 'inactive'}
+                getItemDetails={(item) => [
+                  { label: 'IP Address', value: item.ipAddress },
+                  { label: 'Room ID', value: item.roomId || 'N/A' },
+                  { label: 'Last Seen', value: isClient ? new Date(item.lastSeen).toLocaleString() : '...' },
+                ]}
+                isLoading={loading}
+                deleteTooltip={(item) => item.hasRelatedEntities ? "Cannot delete reader with assigned entities." : "Delete reader"}
+              />
+            )}
+            {/* Compact Pagination for mobile */}
+            <CompactPagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onPageChange={setCurrentPage}
+            />
+          </div>
+        </div>
 
-      {selectedReader && (
-        <ViewDialog
-          open={viewDialogOpen}
-          onOpenChange={setViewDialogOpen}
-          title="Reader Details"
-          subtitle={`Details for ${selectedReader.deviceName}`}
-          sections={[
-            {
-              title: "Device Information",
-              columns: 2,
-              fields: [
-                { label: "Device ID", value: selectedReader.deviceId },
-                { label: "Device Name", value: selectedReader.deviceName },
-                { label: "IP Address", value: selectedReader.ipAddress },
-                { label: "Status", value: selectedReader.status, type: 'badge', badgeVariant: selectedReader.status === 'ACTIVE' ? 'success' : selectedReader.status === 'INACTIVE' ? 'secondary' : 'destructive' },
-                { label: "Assigned Room ID", value: selectedReader.roomId ?? "N/A" },
-                { label: "Last Seen", value: isClient ? new Date(selectedReader.lastSeen).toLocaleString() : '...', type: 'date' },
-              ]
+        {/* Bulk Actions Bar */}
+        {selectedIds.length > 0 && (
+          <BulkActionsBar
+            selectedCount={selectedIds.length}
+            actions={bulkActions}
+            onClear={() => setSelectedIds([])}
+            entityLabel="reader"
+          />
+        )}
+
+        {/* Pagination for desktop */}
+        <div className="hidden xl:block">
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={filteredReaders.length}
+            itemsPerPage={itemsPerPage}
+            onPageChange={setCurrentPage}
+          />
+        </div>
+
+        {/* View Dialog */}
+        {selectedReader && (
+          <ViewDialog
+            open={viewDialogOpen}
+            onOpenChange={setViewDialogOpen}
+            title="Reader Details"
+            subtitle={`Details for ${selectedReader.deviceName}`}
+            sections={[
+              {
+                title: "Device Information",
+                columns: 2,
+                fields: [
+                  { label: "Device ID", value: selectedReader.deviceId },
+                  { label: "Device Name", value: selectedReader.deviceName },
+                  { label: "IP Address", value: selectedReader.ipAddress },
+                  { label: "Status", value: selectedReader.status, type: 'badge', badgeVariant: selectedReader.status === 'ACTIVE' ? 'success' : selectedReader.status === 'INACTIVE' ? 'secondary' : 'destructive' },
+                  { label: "Assigned Room ID", value: selectedReader.roomId ?? "N/A" },
+                  { label: "Last Seen", value: isClient ? new Date(selectedReader.lastSeen).toLocaleString() : '...', type: 'date' },
+                ]
+              }
+            ]}
+          />
+        )}
+
+        {/* Delete Dialog */}
+        {readerToDelete && (
+          <ConfirmDeleteDialog
+            open={deleteDialogOpen}
+            onOpenChange={setDeleteDialogOpen}
+            onDelete={() => {
+              toast.info("Delete functionality not yet implemented.");
+              setDeleteDialogOpen(false);
+            }}
+            itemName={readerToDelete.deviceName}
+          />
+        )}
+
+        {/* Add/Edit Dialog */}
+        <RFIDReaderFormDialog
+          open={formDialogOpen}
+          onOpenChange={setFormDialogOpen}
+          type={formType}
+          data={selectedReaderForForm}
+          id={selectedReaderForForm?.id}
+          onSuccess={(newReader) => {
+            if (formType === 'create') {
+              setReaders(prev => [...prev, newReader as RFIDReader]);
+            } else {
+              setReaders(prev => prev.map(r => r.id === (newReader as RFIDReader).id ? (newReader as RFIDReader) : r));
             }
-          ]}
-        />
-      )}
-
-      {readerToDelete && (
-        <ConfirmDeleteDialog
-          open={deleteDialogOpen}
-          onOpenChange={setDeleteDialogOpen}
-          onDelete={() => {
-            console.log("Deleting reader:", readerToDelete.id);
-            toast.info("Delete functionality not yet implemented.");
-            setDeleteDialogOpen(false);
+            fetchReaders(); // to get the latest data
           }}
-          itemName={readerToDelete.deviceName}
         />
-      )}
 
-      <RFIDReaderFormDialog
-        open={formDialogOpen}
-        onOpenChange={setFormDialogOpen}
-        type={formType}
-        data={selectedReaderForForm}
-        id={selectedReaderForForm?.id}
-        onSuccess={(newReader) => {
-          if (formType === 'create') {
-            setReaders(prev => [...prev, newReader as RFIDReader]);
-          } else {
-            setReaders(prev => prev.map(r => r.id === (newReader as RFIDReader).id ? (newReader as RFIDReader) : r));
-          }
-          fetchReaders(); // to get the latest data
-        }}
-      />
+        {/* Filter Dialog */}
+        <FilterDialog
+          open={filterDialogOpen}
+          onOpenChange={setFilterDialogOpen}
+          statusFilter={filters.status}
+          setStatusFilter={(value) => setFilters(prev => ({ ...prev, status: value }))}
+          statusOptions={[
+            { value: 'all', label: 'All Statuses' },
+            { value: 'ACTIVE', label: 'Active' },
+            { value: 'INACTIVE', label: 'Inactive' },
+            { value: 'MAINTENANCE', label: 'Maintenance' },
+          ]}
+          advancedFilters={{ room: filters.room }}
+          setAdvancedFilters={(advFilters) => setFilters(prev => ({ ...prev, ...advFilters }))}
+          fields={[
+            { key: 'room', label: 'Room ID', type: 'text', badgeType: 'active' },
+          ]}
+          onApply={() => setFilterDialogOpen(false)}
+          onReset={() => setFilters({ status: "all", room: "" })}
+          title="Filter Readers"
+        />
 
-      <FilterDialog
-        open={filterDialogOpen}
-        onOpenChange={setFilterDialogOpen}
-        statusFilter={filters.status}
-        setStatusFilter={(value) => setFilters(prev => ({ ...prev, status: value }))}
-        statusOptions={[
-          { value: 'all', label: 'All Statuses' },
-          { value: 'ACTIVE', label: 'Active' },
-          { value: 'INACTIVE', label: 'Inactive' },
-          { value: 'MAINTENANCE', label: 'Maintenance' },
-        ]}
-        advancedFilters={{ room: filters.room }}
-        setAdvancedFilters={(advFilters) => setFilters(prev => ({ ...prev, ...advFilters }))}
-        fields={[
-          { key: 'room', label: 'Room ID', type: 'text', badgeType: 'active' },
-        ]}
-        onApply={() => setFilterDialogOpen(false)}
-        onReset={() => setFilters({ status: "all", room: "" })}
-        title="Filter Readers"
-      />
+        {/* Sort Dialog */}
+        <SortDialog
+          open={sortDialogOpen}
+          onOpenChange={setSortDialogOpen}
+          sortField={sortField}
+          setSortField={setSortField as any}
+          sortOrder={sortOrder}
+          setSortOrder={setSortOrder}
+          sortFieldOptions={[
+            { value: 'deviceId', label: 'Device ID' },
+            { value: 'deviceName', label: 'Device Name' },
+            { value: 'status', label: 'Status' },
+            { value: 'lastSeen', label: 'Last Seen' },
+          ]}
+          onApply={() => setSortDialogOpen(false)}
+          onReset={() => {
+            setSortField('deviceId');
+            setSortOrder('asc');
+          }}
+          title="Sort Readers"
+        />
 
-      <SortDialog
-        open={sortDialogOpen}
-        onOpenChange={setSortDialogOpen}
-        sortField={sortField}
-        setSortField={setSortField as any}
-        sortOrder={sortOrder}
-        setSortOrder={setSortOrder}
-        sortFieldOptions={[
-          { value: 'deviceId', label: 'Device ID' },
-          { value: 'deviceName', label: 'Device Name' },
-          { value: 'status', label: 'Status' },
-          { value: 'lastSeen', label: 'Last Seen' },
-        ]}
-        onApply={() => setSortDialogOpen(false)}
-        onReset={() => {
-          setSortField('deviceId');
-          setSortOrder('asc');
-        }}
-        title="Sort Readers"
-      />
-
-      <ExportDialog
-        open={exportDialogOpen}
-        onOpenChange={setExportDialogOpen}
-        exportableColumns={exportableColumns}
-        exportColumns={exportColumns}
-        setExportColumns={setExportColumns}
-        exportFormat={exportFormat}
-        setExportFormat={setExportFormat}
-        onExport={handleExport}
-        title="Export RFID Readers"
-        tooltip="Export the current list of readers."
-      />
-    </div>
+        {/* Export Dialog */}
+        <ExportDialog
+          open={exportDialogOpen}
+          onOpenChange={setExportDialogOpen}
+          exportableColumns={exportableColumns}
+          exportColumns={exportColumns}
+          setExportColumns={setExportColumns}
+          exportFormat={exportFormat}
+          setExportFormat={setExportFormat}
+          onExport={handleExport}
+          title="Export RFID Readers"
+          tooltip="Export the current list of readers."
+        />
+      </div>
+    </TooltipProvider>
   );
 } 

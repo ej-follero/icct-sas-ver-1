@@ -3,9 +3,6 @@
 @tailwind utilities;
 
 @layer base {
- /* body {
-    background-color: #899BBD;
-  } */
   :root {
     --background: 0 0% 100%;
     --foreground: 0 0% 3.9%;
@@ -13,14 +10,14 @@
     --card-foreground: 0 0% 3.9%;
     --popover: 0 0% 100%;
     --popover-foreground: 0 0% 3.9%;
-    --primary: 0 0% 9%;
+    --primary: 224 70% 56%; /* Changed to ICCT blue (#3b82f6) */
     --primary-foreground: 0 0% 98%;
     --secondary: 0 0% 96.1%;
     --secondary-foreground: 0 0% 9%;
     --muted: 0 0% 96.1%;
     --muted-foreground: 0 0% 45.1%;
-    --accent: 0 0% 96.1%;
-    --accent-foreground: 0 0% 9%;
+    --accent: 224 70% 56%; /* Changed to ICCT blue for hover states */
+    --accent-foreground: 0 0% 98%; /* White text on blue background */
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
     --border: 0 0% 89.8%;
@@ -31,7 +28,6 @@
     --chart-3: 197 37% 24%;
     --chart-4: 43 74% 66%;
     --chart-5: 27 87% 67%;
-    --radius: 0.5rem;
     /* ICCT-SAS Palette */
     --icctSAS-blue: 224 70% 56%; /* #2D6CDF */
     --icctSAS-blue-dark: 222 70% 35%; /* #1B4A9F */
@@ -42,6 +38,12 @@
     --icctSAS-green: 158 100% 36%; /* #00B87C */
     --icctSAS-red: 0 100% 62%; /* #FF4B4B */
     --icctSAS-yellow: 50 100% 50%; /* #FFD600 */
+    
+    /* Custom Dropdown Menu Colors - Override default popover/accent colors */
+    /* --popover: var(--icctSAS-blue-light); /* Use ICCT blue light for dropdown background */
+    /* --popover-foreground: var(--icctSAS-gray-dark); /* Dark text on light background */
+    /* --accent: var(--icctSAS-blue); /* Use ICCT blue for hover states */
+    /* --accent-foreground: 0 0% 98%; /* White text on blue background */
   }
   .dark {
     --background: 0 0% 3.9%;
@@ -78,6 +80,24 @@
     --icctSAS-green: 158 100% 36%;
     --icctSAS-red: 0 100% 62%;
     --icctSAS-yellow: 50 100% 50%;
+  }
+  * {
+    @apply border-border;
+  }
+  input,
+  select,
+  textarea,
+  button {
+    @apply rounded-xl;
+  }
+  body {
+    @apply bg-light text-primary font-sans;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    @apply text-primary font-bold;
+  }
+  a {
+    @apply text-secondary hover:text-primary transition-colors;
   }
 }
 
@@ -162,71 +182,69 @@
 }
 
 @layer utilities {
-  .bg-primary {
-    background-color: theme('colors.sasBlue');
-  }
-
-  .bg-primary-light {
-    background-color: theme('colors.sasSkyLight');
-  }
-
-  .bg-primary-dark {
-    background-color: theme('colors.sasBlue');
-  }
-
-  .text-primary {
-    color: theme('colors.sasBlue');
-  }
-
-  .text-primary-light {
-    color: theme('colors.sasSkyLight');
-  }
-
-  .text-primary-dark {
-    color: theme('colors.sasBlue');
-  }
-
-  .hover\:bg-primary:hover {
-    background-color: theme('colors.sasBlue');
-  }
-
-  .hover\:bg-primary-light:hover {
-    background-color: theme('colors.sasSkyLight');
-  }
-
-  .hover\:bg-primary-dark:hover {
-    background-color: theme('colors.sasBlue');
-  }
+  /* Remove the custom color utility classes for .text-primary, .bg-primary, etc. */
 }
 
-@layer base {
-  * {
-    @apply border-border;
-  }
-  body {
-    @apply bg-background text-foreground;
-  }
-}
-
-/*
-@media print {
-  body * {
-    visibility: hidden;
-  }
-  #print-table-area, #print-table-area * {
-    visibility: visible;
-  }
-  #print-table-area {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100vw;
-  }
-  .print-hide { display: none !important; }
-  .print-only { display: block !important; }
-}
-}
-*/
 @media screen {
   .print-only { display: none !important; }
+}
+
+/* Logout Page Animations */
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes blob {
+  0% {
+    transform: translate(0px, 0px) scale(1);
+  }
+  33% {
+    transform: translate(30px, -50px) scale(1.1);
+  }
+  66% {
+    transform: translate(-20px, 20px) scale(0.9);
+  }
+  100% {
+    transform: translate(0px, 0px) scale(1);
+  }
+}
+
+.animate-slide-up {
+  animation: slide-up 0.6s ease-out;
+}
+
+.animate-fade-in {
+  animation: fade-in 0.5s ease-out;
+}
+
+.animate-bounce-slow {
+  animation: bounce 2s infinite;
+}
+
+.animate-blob {
+  animation: blob 7s infinite;
+}
+
+.animation-delay-2000 {
+  animation-delay: 2s;
+}
+
+.animation-delay-4000 {
+  animation-delay: 4s;
 }

@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { useParams } from "next/navigation";
 import { toast } from "react-hot-toast";
 import { Loader2, AlertCircle } from "lucide-react";
+import { DepartmentDialog, DepartmentDialogMode } from '@/components/DepartmentDialog';
 
 const TABS = [
   { label: "Overview", icon: Info },
@@ -18,9 +19,7 @@ const TABS = [
 
 export default function DepartmentDetailPage() {
   const [tab, setTab] = useState(0);
-  const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [viewDialogOpen, setViewDialogOpen] = useState(false);
+  const [dialogMode, setDialogMode] = useState<DepartmentDialogMode | null>(null);
   const [department, setDepartment] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const params = useParams();
@@ -76,13 +75,13 @@ export default function DepartmentDetailPage() {
           <p className="text-sm text-gray-600 mt-1">{department.description}</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="ghost" size="icon" onClick={() => setViewDialogOpen(true)} aria-label="View Department">
+          <Button variant="ghost" size="icon" onClick={() => setDialogMode('view')} aria-label="View Department">
             <Eye className="h-5 w-5 text-blue-600" />
           </Button>
-          <Button variant="outline" size="icon" onClick={() => setEditDialogOpen(true)} aria-label="Edit Department">
+          <Button variant="outline" size="icon" onClick={() => setDialogMode('edit')} aria-label="Edit Department">
             <Pencil className="h-5 w-5" />
           </Button>
-          <Button variant="destructive" size="icon" onClick={() => setDeleteDialogOpen(true)} aria-label="Delete Department">
+          <Button variant="destructive" size="icon" onClick={() => setDialogMode('delete')} aria-label="Delete Department">
             <Trash2 className="h-5 w-5" />
           </Button>
         </div>
@@ -198,59 +197,21 @@ export default function DepartmentDetailPage() {
         </div>
       </div>
 
-      {/* Edit Dialog */}
-      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Edit Department</DialogTitle>
-          </DialogHeader>
-          {/* Add edit form here */}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditDialogOpen(false)}>Cancel</Button>
-            <Button>Save</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Delete Dialog */}
-      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete Department</DialogTitle>
-          </DialogHeader>
-          <div>Are you sure you want to delete the department "{department.name}"? This action cannot be undone.</div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
-            <Button variant="destructive" onClick={() => setDeleteDialogOpen(false)}>Delete</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* View Department Dialog */}
-      <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
-        <DialogContent className="max-w-[500px]">
-          <DialogHeader>
-            <DialogTitle>Department Details</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div><span className="font-semibold">Name:</span> {department.name}</div>
-            <div><span className="font-semibold">Code:</span> {department.code}</div>
-            <div><span className="font-semibold">Head of Department:</span> {department.headOfDepartment || 'Not Assigned'}</div>
-            <div><span className="font-semibold">Description:</span> {department.description || 'No description available.'}</div>
-            <div><span className="font-semibold">Status:</span> <Badge variant={department.status === "active" ? "success" : "destructive"}>{department.status}</Badge></div>
-            <div className="grid grid-cols-2 gap-2 mt-2">
-              <div><span className="font-semibold">Total Students:</span> {department.totalStudents || 0}</div>
-              <div><span className="font-semibold">Total Courses:</span> {department.courseOfferings?.length || 0}</div>
-              <div><span className="font-semibold">Total Instructors:</span> {department.totalInstructors || 0}</div>
-            </div>
-          </div>
-          <DialogFooter>
-            <DialogClose asChild>
-              <Button variant="outline">Close</Button>
-            </DialogClose>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Department Dialog (view, edit, delete) */}
+      <DepartmentDialog
+        open={!!dialogMode}
+        onOpenChange={(open) => setDialogMode(open ? dialogMode : null)}
+        mode={dialogMode as DepartmentDialogMode}
+        department={department}
+        onSubmit={(data) => {
+          // TODO: handle update logic here
+          setDialogMode(null);
+        }}
+        onDelete={() => {
+          // TODO: handle delete logic here
+          setDialogMode(null);
+        }}
+      />
     </div>
   );
 } 

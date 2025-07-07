@@ -14,7 +14,7 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import TableSearch from "@/components/TableSearch";
-import Pagination from "@/components/Pagination";
+import { Pagination } from "@/components/Pagination";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import * as XLSX from "xlsx";
@@ -41,6 +41,7 @@ import { TableList, TableListColumn } from '@/components/TableList';
 import CourseFormDialog from '@/components/forms/CourseFormDialog';
 import { ViewDialog } from '@/components/ViewDialog';
 import { ConfirmDeleteDialog } from '@/components/ConfirmDeleteDialog';
+import AttendanceHeader from '../../../../components/AttendanceHeader';
 
 type CourseStatus = "ACTIVE" | "INACTIVE" | "ARCHIVED" | "PENDING_REVIEW";
 
@@ -209,7 +210,10 @@ const courseColumns = [
   { key: 'status', label: 'Status', accessor: 'status', className: 'text-center' },
 ];
 
-const exportableColumns: { key: string; label: string }[] = courseColumns.map((col) => ({ key: col.key, label: col.label }));
+// Use accessor/label for TableHeaderSection compatibility
+const exportableColumns: { accessor: string; label: string }[] = courseColumns.map((col) => ({ accessor: col.key, label: col.label }));
+// For export dialogs, use the old { key, label } version
+const exportableColumnsForExport: { key: string; label: string }[] = courseColumns.map((col) => ({ key: col.key, label: col.label }));
 
 export default function CourseListPage() {
   const router = useRouter();
@@ -693,29 +697,25 @@ export default function CourseListPage() {
     fetchCourses();
   }, []);
 
-  const [exportColumns, setExportColumns] = useState<string[]>(exportableColumns.map((col) => col.key));
+  const [exportColumns, setExportColumns] = useState<string[]>(exportableColumns.map(col => col.accessor));
 
   return (
     <div className="bg-white/80 backdrop-blur-md p-6 rounded-xl shadow-xl border border-blue-100 flex-1 m-4 mt-0">
+      <AttendanceHeader
+        title="Courses"
+        subtitle="Manage academic courses and their information"
+        currentSection="Courses"
+      />
       {/* TOP */}
       <TableHeaderSection
         title="All Courses"
         description="Manage and view all course information"
         searchValue={searchInput}
         onSearchChange={setSearchInput}
-        onRefresh={() => fetchCourses(true)}
-        isRefreshing={isRefreshing}
-        onFilterClick={() => setFilterDialogOpen(true)}
-        onSortClick={() => setSortDialogOpen(true)}
-        onExportClick={() => setExportDialogOpen(true)}
-        onPrintClick={handlePrint}
-        onAddClick={() => setAddModalOpen(true)}
-        activeFilterCount={
-          columnFilters.filter(f => f.value).length +
-          Object.values(advancedFilters).filter(Boolean).length
-        }
+        columnOptions={exportableColumns}
+        visibleColumns={exportColumns}
+        setVisibleColumns={setExportColumns}
         searchPlaceholder="Search courses..."
-        addButtonLabel="Add Course"
       />
 
       {/* Print Header and Table - Only visible when printing */}
@@ -813,6 +813,8 @@ export default function CourseListPage() {
         <Pagination
           currentPage={currentPage}
           totalPages={totalPages}
+          totalItems={filteredCourses.length}
+          itemsPerPage={ITEMS_PER_PAGE}
           onPageChange={setCurrentPage}
         />
       </div>
@@ -924,7 +926,7 @@ export default function CourseListPage() {
       <ExportDialog
         open={exportDialogOpen}
         onOpenChange={setExportDialogOpen}
-        exportableColumns={exportableColumns}
+        exportableColumns={exportableColumnsForExport}
         exportColumns={exportColumns}
         setExportColumns={setExportColumns}
         exportFormat={exportFormat}

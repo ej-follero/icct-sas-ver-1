@@ -38,28 +38,34 @@ export const ConfirmDeleteDialog: React.FC<ConfirmDeleteDialogProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md animate-fade-in">
+      <DialogContent className="max-w-md animate-fade-in rounded-xl">
         <DialogHeader>
-          <div className="flex items-center gap-2 mb-2">
+          <div className="flex items-center gap-2 mb-4">
             <AlertTriangle className="w-6 h-6 text-red-500" aria-hidden="true" />
-            <DialogTitle className="text-red-600">Delete {itemName ? itemName : "Item"}</DialogTitle>
+            <DialogTitle className="text-red-600 text-lg font-semibold">Delete {itemName ? itemName : "Item"}</DialogTitle>
           </div>
-          <DialogDescription asChild>
-            <div
-              className={
-                deleteError
-                  ? "text-red-500 font-medium whitespace-pre-line text-sm mb-2"
-                  : "text-gray-700 text-sm mb-2"
-              }
-              role={deleteError ? "alert" : undefined}
-            >
-              {deleteError
-                ? deleteError
-                : description || `Are you sure you want to delete${itemName ? ` the ${itemName}` : " this item"}? This action cannot be undone.`}
-            </div>
-          </DialogDescription>
+          <div
+            className={
+              deleteError
+                ? "text-red-500 font-medium whitespace-pre-line text-base mb-2 text-justify"
+                : "text-blue-900 font-medium whitespace-pre-line text-base mb-2"
+            }
+            role={deleteError ? "alert" : undefined}
+          >
+            {deleteError
+              ? deleteError
+              : description || (
+                  <>
+                    Are you sure you want to delete
+                    {itemName ? (
+                      <> the <span className="font-bold">{itemName}</span></>
+                    ) : " this item"}
+                    ? This action cannot be undone.
+                  </>
+                )}
+          </div>
         </DialogHeader>
-        <DialogFooter className="mt-2 flex gap-2">
+        <DialogFooter className="mt-4 flex gap-3">
           <Button
             ref={cancelRef}
             variant="outline"
@@ -69,7 +75,7 @@ export const ConfirmDeleteDialog: React.FC<ConfirmDeleteDialogProps> = ({
             }}
             disabled={loading}
             aria-label="Cancel deletion"
-            className="w-32 border border-blue-300 text-blue-500 focus-visible:ring-2 focus-visible:ring-blue-200 focus-visible:ring-offset-2 hover:bg-blue-50"
+            className="w-32 rounded-xl border border-blue-300 text-blue-600 focus-visible:ring-2 focus-visible:ring-blue-200 focus-visible:ring-offset-2 hover:bg-blue-50 font-medium"
           >
             Cancel
           </Button>
@@ -78,7 +84,7 @@ export const ConfirmDeleteDialog: React.FC<ConfirmDeleteDialogProps> = ({
             onClick={onDelete}
             disabled={!canDelete || loading}
             aria-label={dangerText}
-            className="w-32 h-10"
+            className="w-32 h-10 rounded-xl font-medium"
           >
             {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
             {dangerText}

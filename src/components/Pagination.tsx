@@ -1,128 +1,118 @@
-"use client";
+"use client"
 
-import { ChevronLeft, ChevronRight } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import * as React from "react"
+import { Button } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
 
-interface PaginationProps {
-  currentPage: number;
-  totalPages: number;
-  onPageChange: (page: number) => void;
+export interface PaginationProps {
+  currentPage: number
+  totalPages: number
+  totalItems: number
+  itemsPerPage: number
+  onPageChange: (page: number) => void
+  className?: string
+  disabled?: boolean
 }
 
-const Pagination = ({ currentPage, totalPages, onPageChange }: PaginationProps) => {
-  const getPageNumbers = (maxVisiblePages = 5) => {
-    const pages: (number | string)[] = [];
+export function Pagination({
+  currentPage,
+  totalPages,
+  totalItems,
+  itemsPerPage,
+  onPageChange,
+  className,
+  disabled = false,
+}: PaginationProps) {
+  if (totalItems === 0) {
+    return null;
+  }
+  
+  const startItem = (currentPage - 1) * itemsPerPage + 1
+  const endItem = Math.min(currentPage * itemsPerPage, totalItems)
 
-    if (totalPages <= maxVisiblePages) {
-      for (let i = 1; i <= totalPages; i++) pages.push(i);
-    } else {
-      pages.push(1);
-
-      let start = Math.max(2, currentPage - 1);
-      let end = Math.min(totalPages - 1, currentPage + 1);
-
-      if (currentPage <= 2) end = 4;
-      if (currentPage >= totalPages - 1) start = totalPages - 3;
-
-      if (start > 2) pages.push("...");
-
-      for (let i = start; i <= end; i++) pages.push(i);
-
-      if (end < totalPages - 1) pages.push("...");
-
-      pages.push(totalPages);
+  const handlePageClick = (page: number) => {
+    if (page >= 1 && page <= totalPages && page !== currentPage && !disabled) {
+      onPageChange(page)
     }
-
-    return pages;
-  };
-
-  const pages = getPageNumbers();
+  }
 
   return (
-    <div className="flex items-center justify-between px-4 py-3 bg-white border-t border-gray-200 sm:px-6">
-      {/* Mobile Navigation */}
-      <div className="flex justify-between flex-1 sm:hidden">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => onPageChange(currentPage - 1)}
-          disabled={currentPage === 1}
-          aria-label="Previous page"
-        >
-          Previous
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => onPageChange(currentPage + 1)}
-          disabled={currentPage === totalPages}
-          aria-label="Next page"
-        >
-          Next
-        </Button>
+    <div className={cn("flex items-center justify-between", className)}>
+      <div className="text-sm text-muted-foreground">
+        Showing {startItem} to {endItem} of {totalItems} results
+      </div>
+      {totalPages > 1 && (
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handlePageClick(currentPage - 1)}
+            disabled={currentPage === 1 || disabled}
+          >
+            Previous
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handlePageClick(currentPage + 1)}
+            disabled={currentPage === totalPages || disabled}
+          >
+            Next
+          </Button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Compact version for smaller screens or when space is limited
+export function CompactPagination({
+  currentPage,
+  totalPages,
+  onPageChange,
+  className,
+  disabled = false,
+}: Omit<PaginationProps, "totalItems" | "itemsPerPage">) {
+  const handlePageChange = (page: number) => {
+    if (page >= 1 && page <= totalPages && page !== currentPage && !disabled) {
+      onPageChange(page)
+    }
+  }
+
+  if (totalPages <= 1) {
+    return null
+  }
+
+  return (
+    <div className={cn("flex items-center justify-between gap-4", className)}>
+      {/* Summary */}
+      <div className="text-sm text-muted-foreground">
+        Page {currentPage} of {totalPages}
       </div>
 
-      {/* Desktop Navigation */}
-      <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
-        <p className="text-sm text-gray-700">
-          Showing page <span className="font-medium">{currentPage}</span> of{" "}
-          <span className="font-medium">{totalPages}</span>
-        </p>
-        <nav
-          className="inline-flex -space-x-px rounded-md shadow-sm isolate"
-          aria-label="Pagination"
-        >
+      {/* Controls */}
+      <div className="flex items-center gap-2">
+        {/* Navigation */}
+        <div className="flex items-center gap-1">
           <Button
             variant="outline"
-            size="icon"
-            onClick={() => onPageChange(currentPage - 1)}
-            disabled={currentPage === 1}
-            aria-label="Previous page"
-            className="rounded-l-md"
+            size="sm"
+            onClick={() => handlePageChange(currentPage - 1)}
+            disabled={currentPage === 1 || disabled}
           >
-            <ChevronLeft className="w-5 h-5" />
+            Prev
           </Button>
-
-          {pages.map((page, idx) =>
-            page === "..." ? (
-              <span
-                key={`ellipsis-${idx}`}
-                className="relative inline-flex items-center px-4 py-2 text-sm font-semibold text-gray-700 border border-gray-300 bg-white"
-              >
-                &hellip;
-              </span>
-            ) : (
-              <Button
-                key={page}
-                variant={page === currentPage ? "default" : "outline"}
-                size="icon"
-                onClick={() => onPageChange(page as number)}
-                aria-current={page === currentPage ? "page" : undefined}
-                className={`relative inline-flex items-center px-4 py-2 text-sm font-semibold ${
-                  page === currentPage
-                    ? "z-10 bg-lamaSky text-white focus:z-20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lamaSky"
-                    : "text-gray-900 ring-1 ring-inset ring-gray-300 hover:bg-blue-50 hover:text-blue-700 focus:z-20 focus:outline-offset-0"
-                }`}
-              >
-                {page}
-              </Button>
-            )
-          )}
 
           <Button
             variant="outline"
-            size="icon"
-            onClick={() => onPageChange(currentPage + 1)}
-            disabled={currentPage === totalPages}
-            aria-label="Next page"
-            className="rounded-r-md"
+            size="sm"
+            onClick={() => handlePageChange(currentPage + 1)}
+            disabled={currentPage === totalPages || disabled}
           >
-            <ChevronRight className="w-5 h-5" />
+            Next
           </Button>
-        </nav>
+        </div>
       </div>
     </div>
-  );
-};
-
-export default Pagination;
+  )
+}

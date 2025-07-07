@@ -5,6 +5,7 @@ import { Eye, Pencil, Trash2, CheckCircle, Inbox } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
 import React from "react";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface TableCardViewProps<T> {
   items: T[];
@@ -54,16 +55,21 @@ export function TableCardView<T>({
             className="animate-pulse bg-gradient-to-br from-blue-50 to-white border border-blue-100 rounded-xl shadow p-3 flex flex-col gap-2"
           >
             <div className="flex items-center justify-between mb-1">
-              <div className="w-5 h-5 bg-blue-100 rounded-full" />
-              <div className="w-16 h-5 bg-blue-100 rounded" />
+              <Skeleton className="w-5 h-5 rounded-full" />
+              <Skeleton className="w-16 h-5 rounded" />
             </div>
-            <div className="h-6 w-2/3 bg-blue-100 rounded mb-1" />
-            <div className="h-5 w-1/3 bg-blue-100 rounded" />
+            <Skeleton className="h-6 w-2/3 rounded mb-1" />
+            <Skeleton className="h-5 w-1/3 rounded" />
             <div className="grid grid-cols-2 gap-2 mt-2">
-              <div className="h-4 w-full bg-blue-100 rounded" />
-              <div className="h-4 w-full bg-blue-100 rounded" />
-              <div className="h-4 w-full bg-blue-100 rounded" />
-              <div className="h-4 w-full bg-blue-100 rounded" />
+              <Skeleton className="h-4 w-full rounded" />
+              <Skeleton className="h-4 w-full rounded" />
+              <Skeleton className="h-4 w-full rounded" />
+              <Skeleton className="h-4 w-full rounded" />
+            </div>
+            <div className="flex justify-end items-center gap-2 mt-2 pt-2 border-t border-blue-100">
+              <Skeleton className="h-8 w-8 rounded-full" />
+              <Skeleton className="h-8 w-8 rounded-full" />
+              <Skeleton className="h-8 w-8 rounded-full" />
             </div>
           </div>
         ))}
@@ -97,7 +103,7 @@ export function TableCardView<T>({
           return (
             <div
               key={id}
-              className={`relative bg-gradient-to-br from-white to-blue-50 border border-blue-200 rounded-xl shadow p-4 flex flex-col gap-3 transition-all duration-200 focus-within:ring-2 focus-within:ring-blue-400 hover:shadow-lg active:scale-[0.98] ${
+              className={`relative bg-white border border-border rounded-md shadow p-4 mb-4 flex flex-col gap-4 transition-all duration-200 focus-within:ring-2 focus-within:ring-blue-400 hover:shadow-lg active:scale-[0.98] ${
                 isSelected ? "ring-2 ring-blue-500 shadow-blue-100" : ""
               }`}
               tabIndex={0}
@@ -167,7 +173,7 @@ export function TableCardView<T>({
                           e.stopPropagation();
                           onView(item);
                         }}
-                        className="h-8 w-8 p-0 hover:bg-blue-50"
+                        className="w-10 h-10 rounded-md mx-1 bg-white border border-border text-blue-700 hover:bg-blue-50 active:bg-blue-100 transition-colors duration-150 flex items-center justify-center"
                       >
                         <Eye className="h-4 w-4 text-blue-600" />
                       </Button>
@@ -184,7 +190,7 @@ export function TableCardView<T>({
                           e.stopPropagation();
                           onEdit(item);
                         }}
-                        className="h-8 w-8 p-0 hover:bg-green-50"
+                        className="w-10 h-10 rounded-md mx-1 bg-white border border-border text-green-700 hover:bg-green-50 active:bg-green-100 transition-colors duration-150 flex items-center justify-center"
                       >
                         <Pencil className="h-4 w-4 text-green-600" />
                       </Button>
@@ -201,8 +207,7 @@ export function TableCardView<T>({
                           e.stopPropagation();
                           onDelete(item);
                         }}
-                        disabled={isDisabled}
-                        className="h-8 w-8 p-0 hover:bg-red-50"
+                        className="w-10 h-10 rounded-md mx-1 bg-white border border-border text-red-700 hover:bg-red-50 active:bg-red-100 transition-colors duration-150 flex items-center justify-center"
                       >
                         <Trash2 className="h-4 w-4 text-red-600" />
                       </Button>

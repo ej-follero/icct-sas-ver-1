@@ -46,6 +46,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
+import AttendanceHeader from '../../../../components/AttendanceHeader';
 
 // Types
 interface AcademicEvent {
@@ -380,6 +381,12 @@ export default function AcademicCalendarPage() {
 
   return (
     <div className="flex flex-col min-h-screen p-6 bg-gray-50">
+      <AttendanceHeader
+        title="Academic Calendar"
+        subtitle="Manage academic events, deadlines, and important dates"
+        currentSection="Academic Calendar"
+      />
+
       {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
         <div className="flex items-center gap-3">

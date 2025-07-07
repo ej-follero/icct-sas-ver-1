@@ -28,7 +28,7 @@ import { ExportDialog } from "@/components/ExportDialog";
 import { SortDialog } from "@/components/SortDialog";
 import { PrintLayout } from "@/components/PrintLayout";
 import { TableRowActions } from "@/components/TableRowActions";
-import Pagination from "@/components/Pagination";
+import { Pagination } from "@/components/Pagination";
 import Fuse from "fuse.js";
 import SubjectForm from "@/components/forms/SubjectForm";
 import { ViewDialog } from "@/components/ViewDialog";
@@ -37,6 +37,7 @@ import SubjectFormDialog from '@/components/forms/SubjectFormDialog';
 import { useDebounce } from '@/hooks/use-debounce';
 import { subjectsApi } from '@/services/api/subjects';
 import { Subject } from '@/types/subject';
+import AttendanceHeader from '../../../../components/AttendanceHeader';
 
 type SortField = 'name' | 'code' | 'type' | 'units' | 'semester' | 'year_level' | 'department';
 type SortOrder = 'asc' | 'desc';
@@ -364,7 +365,7 @@ export default function SubjectsPage() {
       return;
     }
 
-    const selectedColumns = exportableColumns.filter(col => exportColumns.includes(col.key));
+    const selectedColumns = exportableColumnsForExport.filter(col => exportColumns.includes(col.key));
     const headers = selectedColumns.map(col => col.label);
     const rows = (subjects || []).map((subject) =>
       selectedColumns.map((col) => {
@@ -396,7 +397,12 @@ export default function SubjectsPage() {
     { key: 'department', label: 'Department', accessor: 'department', className: 'text-center align-middle text-blue-900' },
   ];
 
-  const exportableColumns: { key: string; label: string }[] = subjectColumns.map((col) => ({ key: col.key, label: col.label }));
+  // For TableHeaderSection
+  const exportableColumns: { accessor: string; label: string }[] = subjectColumns.map((col) => ({ accessor: col.key, label: col.label }));
+  // For ExportDialog and export
+  const exportableColumnsForExport: { key: string; label: string }[] = subjectColumns.map((col) => ({ key: col.key, label: col.label }));
+
+  const [exportColumns, setExportColumns] = useState(exportableColumnsForExport.map(col => col.key));
 
   const columns: TableListColumn<Subject>[] = [
     {
@@ -457,7 +463,6 @@ export default function SubjectsPage() {
     },
   ];
 
-  const [exportColumns, setExportColumns] = useState(exportableColumns.map(col => col.key));
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
 
   const checkSubjectDeletable = async (subject: Subject) => {
@@ -489,6 +494,12 @@ export default function SubjectsPage() {
 
   return (
     <div className="bg-white/80 backdrop-blur-md p-6 rounded-xl shadow-xl border border-blue-100 flex-1 m-4 mt-0" aria-busy={loading}>
+      <AttendanceHeader
+        title="Subjects"
+        subtitle="Manage academic subjects and curriculum"
+        currentSection="Subjects"
+      />
+
       {/* Error State */}
       {error && (
         <div className="p-4 text-red-600 bg-red-50 rounded mb-4" role="alert">
@@ -509,15 +520,10 @@ export default function SubjectsPage() {
         description="Manage and view all subject information"
         searchValue={searchTerm}
         onSearchChange={setSearchTerm}
-        onRefresh={refreshSubjects}
-        isRefreshing={isRefreshing}
-        onFilterClick={() => setFilterDialogOpen(true)}
-        onSortClick={() => setSortDialogOpen(true)}
-        onExportClick={() => setExportDialogOpen(true)}
-        onPrintClick={handlePrint}
-        onAddClick={() => { setModalSubject(undefined); setModalOpen(true); }}
+        columnOptions={exportableColumns}
+        visibleColumns={exportColumns}
+        setVisibleColumns={setExportColumns}
         searchPlaceholder="Search subjects..."
-        addButtonLabel="Add Subject"
       />
 
       {/* Table layout for xl+ only */}
@@ -606,6 +612,8 @@ export default function SubjectsPage() {
         <Pagination
           currentPage={safeCurrentPage}
           totalPages={totalPages}
+          totalItems={safeTotalSubjects}
+          itemsPerPage={safeItemsPerPage}
           onPageChange={setCurrentPage}
         />
       </div>
@@ -649,7 +657,7 @@ export default function SubjectsPage() {
       <ExportDialog
         open={exportDialogOpen}
         onOpenChange={setExportDialogOpen}
-        exportableColumns={exportableColumns}
+        exportableColumns={exportableColumnsForExport}
         exportColumns={exportColumns}
         setExportColumns={setExportColumns}
         exportFormat={exportFormat}

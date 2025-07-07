@@ -112,7 +112,7 @@ const LoginPage = () => {
             </p>
           </div>
 
-          <div className="bg-white rounded-2xl shadow-lg p-8 mt-6">
+          <div className="bg-white rounded-md shadow-lg p-8 mt-6">
             <form onSubmit={handleSubmit} className="space-y-6" noValidate>
               {/* Email Input */}
               <div>
@@ -161,7 +161,7 @@ const LoginPage = () => {
                   <button
                     type="button"
                     onClick={() => setShowPassword((prev) => !prev)}
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1 rounded"
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1 rounded-md"
                     aria-label="Toggle password visibility"
                   >
                     {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
@@ -175,7 +175,7 @@ const LoginPage = () => {
                   <input
                     id="remember"
                     type="checkbox"
-                    className="form-checkbox h-4 w-4 text-blue-600 rounded"
+                    className="form-checkbox h-4 w-4 text-blue-600 rounded-md"
                   />
                   <span className="text-sm text-gray-700 select-none">Remember me</span>
                 </Label>

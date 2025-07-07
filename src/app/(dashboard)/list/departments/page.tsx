@@ -1,15 +1,12 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { TableRow, TableCell, TableHeader, TableHead } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import TableSearch from "@/components/TableSearch";
-import Pagination from "@/components/Pagination";
+import { Pagination } from "@/components/Pagination";
 import { DepartmentForm } from "@/components/forms/DepartmentForm";
-import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuCheckboxItem } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuCheckboxItem, DropdownMenuLabel } from "@/components/ui/dropdown-menu";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -17,8 +14,7 @@ import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import Fuse from "fuse.js";
 import React from "react";
-import { Plus, Filter, SortAsc, Eye, Pencil, Trash2, CheckSquare, Square, Download, Printer, Loader2, ArrowUp, ArrowDown, BadgeInfo, Hash, SortDesc, FileText, FileSpreadsheet, HelpCircle, Settings2, ArrowUpDown, MoreHorizontal, RefreshCw, ChevronRight, ListTodo } from "lucide-react";
-import { Label } from "@/components/ui/label";
+import { Plus, Eye, Pencil, Trash2, Download, Printer, Loader2, ArrowUpDown, MoreHorizontal, RefreshCw, Upload, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { ViewDialog } from '@/components/ViewDialog';
 import { Checkbox as SharedCheckbox } from '@/components/ui/checkbox';
@@ -27,13 +23,16 @@ import { ExportDialog } from '@/components/ExportDialog';
 import { SortDialog, SortFieldOption } from '@/components/SortDialog';
 import { BulkActionsBar } from '@/components/BulkActionsBar';
 import { PrintLayout } from '@/components/PrintLayout';
-import { TableHeaderSection } from '@/components/TableHeaderSection';
 import { TableCardView } from '@/components/TableCardView';
 import { TableRowActions } from '@/components/TableRowActions';
 import { TableList, TableListColumn } from '@/components/TableList';
 import { ConfirmDeleteDialog } from '@/components/ConfirmDeleteDialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { TableExpandedRow } from '@/components/TableExpandedRow';
+import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
+import AttendanceHeader from '../../../../components/AttendanceHeader';
+import { Skeleton } from "@/components/ui/skeleton";
+import { useDebounce } from '@/hooks/use-debounce';
 
 
 interface Course {
@@ -242,6 +241,31 @@ const getErrorMessage = (error: unknown, operation: string): string => {
   return `An unexpected error occurred while trying to ${operation}. Please try again later.`;
 };
 
+// Define FilterField type to match FilterDialog
+type FilterField = {
+  key: string;
+  label: string;
+  type: 'text' | 'number' | 'select';
+  badgeType?: 'active' | 'range';
+  minKey?: string;
+  maxKey?: string;
+  options?: { value: string; label: string }[];
+};
+
+// Add helper to get active filter chips
+const getActiveFilterChips = (filters: FilterState) => {
+  const chips = [];
+  if (filters.status && filters.status !== 'all') chips.push({ key: 'status', label: `Status: ${filters.status.charAt(0).toUpperCase() + filters.status.slice(1)}` });
+  if (filters.head) chips.push({ key: 'head', label: `Head: ${filters.head}` });
+  if (filters.minCourses) chips.push({ key: 'minCourses', label: `Min Courses: ${filters.minCourses}` });
+  if (filters.maxCourses) chips.push({ key: 'maxCourses', label: `Max Courses: ${filters.maxCourses}` });
+  if (filters.minInstructors) chips.push({ key: 'minInstructors', label: `Min Instructors: ${filters.minInstructors}` });
+  if (filters.maxInstructors) chips.push({ key: 'maxInstructors', label: `Max Instructors: ${filters.maxInstructors}` });
+  if (filters.name) chips.push({ key: 'name', label: `Name: ${filters.name}` });
+  if (filters.code) chips.push({ key: 'code', label: `Code: ${filters.code}` });
+  return chips;
+};
+
 export default function DepartmentListPage() {
   // State declarations with proper types
   const [pageState, setPageState] = useState<PageState>({
@@ -296,9 +320,6 @@ export default function DepartmentListPage() {
   const [search, setSearch] = useState<string>("");
   const [instructors, setInstructors] = useState<any[]>([]);
   const router = useRouter();
-  const [showPrint, setShowPrint] = useState<boolean>(false);
-  const [isPrinting, setIsPrinting] = useState<boolean>(false);
-  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const [visibleColumns, setVisibleColumns] = useState<string[]>(DEPARTMENT_COLUMNS.map(c => c.accessor));
   const [expandedRowIds, setExpandedRowIds] = useState<string[]>([]);
@@ -310,10 +331,12 @@ export default function DepartmentListPage() {
     includeMatches: true,
   }), [departments]);
 
+  const debouncedSearch = useDebounce(search, 300);
+
   const fuzzyResults = React.useMemo(() => {
-    if (!search) return departments.map((d, i) => ({ item: d, refIndex: i }));
-    return fuse.search(search);
-  }, [search, fuse]);
+    if (!debouncedSearch) return departments.map((d, i) => ({ item: d, refIndex: i }));
+    return fuse.search(debouncedSearch);
+  }, [debouncedSearch, fuse]);
 
   const filteredDepartments = useMemo(() => {
     let result = fuzzyResults.map(r => r.item);
@@ -341,9 +364,6 @@ export default function DepartmentListPage() {
     }
     if (filters.code) {
       result = result.filter(dept => dept.code.toLowerCase().includes(filters.code.toLowerCase()));
-    }
-    if (filters.head) {
-      result = result.filter(dept => dept.headOfDepartment?.toLowerCase().includes(filters.head.toLowerCase()));
     }
     // Multi-column sort
     result.sort((a, b) => {
@@ -404,7 +424,7 @@ export default function DepartmentListPage() {
           headers={["Course Name", "Code", "Status", "Students"]}
           rows={item.courseOfferings}
           renderRow={course => (
-            <TableRow key={course.id}>
+            <TableRow key={course.id} className="hover:bg-blue-50 transition-colors duration-150 cursor-pointer">
               <TableCell>{course.name}</TableCell>
               <TableCell>{course.code}</TableCell>
               <TableCell>
@@ -441,135 +461,11 @@ export default function DepartmentListPage() {
           itemName={item.name}
           disabled={item.status === "active" || item.courseOfferings?.length > 0 || item.totalInstructors > 0}
           deleteTooltip={getDeleteTooltip(item)}
+          viewAriaLabel="View Department"
         />
       )
     },
   ];
-
-  // Table row renderer
-  const renderRow = (item: Department) => {
-    // Find the fuzzy result for this item (if any)
-    const fuseResult = fuzzyResults.find(r => r.item.id === item.id);
-    const nameMatches = (fuseResult && (fuseResult as any).matches)
-      ? (fuseResult as any).matches.find((m: any) => m.key === "name")?.indices
-      : undefined;
-    const codeMatches = (fuseResult && (fuseResult as any).matches)
-      ? (fuseResult as any).matches.find((m: any) => m.key === "code")?.indices
-      : undefined;
-
-    return (
-      <TableRow
-        key={item.id}
-        className={
-          `${selectedIds.includes(item.id) ? "bg-blue-50" : ""} hover:bg-blue-100 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-400`
-        }
-        tabIndex={0}
-        role="row"
-        aria-label={`View details for department ${item.name}`}
-        onClick={() => router.push(`/dashboard/list/departments/${item.id}`)}
-        onKeyDown={e => {
-          if (e.key === "Enter" || e.key === " ") {
-            router.push(`/dashboard/list/departments/${item.id}`);
-          }
-        }}
-      >
-        {columns.map((col, colIdx) => {
-          if (col.accessor === "select") {
-            return (
-              <TableCell key={colIdx} className="w-12 text-center align-middle">
-                <div className="flex justify-center items-center">
-                  <SharedCheckbox checked={selectedIds.includes(item.id)} onCheckedChange={() => handleSelectRow(item.id)} aria-label={`Select department ${item.name}`} />
-                </div>
-              </TableCell>
-            );
-          }
-          if (col.accessor === "name") {
-            return (
-              <TableCell key={colIdx} className="text-left align-middle">
-                <span
-                  dangerouslySetInnerHTML={{
-                    __html: highlightMatch(item.name, (fuzzyResults.find(r => r.item.id === item.id) as any)?.matches),
-                  }}
-                />
-              </TableCell>
-            );
-          }
-          if (col.accessor === "code") {
-            return (
-              <TableCell key={colIdx} className="text-center align-middle">
-                <span
-                  dangerouslySetInnerHTML={{
-                    __html: highlightMatch(item.code, (fuzzyResults.find(r => r.item.id === item.id) as any)?.matches),
-                  }}
-                />
-              </TableCell>
-            );
-          }
-          if (col.accessor === "headOfDepartment") {
-            return (
-              <TableCell key={colIdx} className="text-center align-middle">
-                {item.headOfDepartment}
-              </TableCell>
-            );
-          }
-          if (col.accessor === "description") {
-            return (
-              <TableCell key={colIdx} className="text-center align-middle">
-                {item.description}
-              </TableCell>
-            );
-          }
-          if (col.accessor === "totalCourses") {
-            return (
-              <TableCell key={colIdx} className="text-center align-middle">
-                {item.courseOfferings?.length || 0}
-              </TableCell>
-            );
-          }
-          if (col.accessor === "totalInstructors") {
-            return (
-              <TableCell key={colIdx} className="text-center align-middle">
-                {item.totalInstructors}
-              </TableCell>
-            );
-          }
-          if (col.accessor === "status") {
-            return (
-              <TableCell key={colIdx} className="text-center align-middle">
-                <Badge variant={item.status === "active" ? "success" : "destructive"}>
-                  {item.status.toUpperCase()}
-                </Badge>
-              </TableCell>
-            );
-          }
-          if (col.accessor === "actions") {
-            return (
-              <TableCell key={colIdx} className="text-center align-middle">
-                <TableRowActions
-                  onView={() => {
-                    setViewDepartment(item);
-                    setDialogState(prev => ({ ...prev, viewDialogOpen: true }));
-                  }}
-                  onEdit={() => {
-                    setModalDepartment(item);
-                    setDialogState(prev => ({ ...prev, modalOpen: true }));
-                  }}
-                  onDelete={() => {
-                    handleDelete(item);
-                  }}
-                  itemName={item.name}
-                  disabled={item.status === "active" || item.courseOfferings?.length > 0 || item.totalInstructors > 0}
-                  deleteTooltip={getDeleteTooltip(item)}
-                />
-              </TableCell>
-            );
-          }
-          // Default fallback
-          return <TableCell key={colIdx} />;
-        })}
-      </TableRow>
-    );
-  };
 
   // Update exportableColumns to use the shared configuration
   const exportableColumns = DEPARTMENT_COLUMNS.map(col => ({
@@ -585,6 +481,9 @@ export default function DepartmentListPage() {
 
   // Add export columns state
   const [exportColumns, setExportColumns] = useState<string[]>(exportableColumns.map(col => col.key));
+
+  // Add state for removing chip
+  const [removingChip, setRemovingChip] = useState<string | null>(null);
 
   // Export handlers
   const handleExport = async () => {
@@ -778,44 +677,6 @@ export default function DepartmentListPage() {
     setPageState(prev => ({ ...prev, loading: false }));
   };
 
-  // Export selected to CSV handler
-  const handleExportSelected = () => {
-    if (selectedIds.length === 0) return;
-    const selectedDepartments = departments.filter(d => selectedIds.includes(d.id));
-    const csvRows = [
-      [
-        'Department Name',
-        'Code',
-        'Head of Department',
-        'Description',
-        'Total Courses',
-        'Total Instructors',
-        'Status',
-      ],
-      ...selectedDepartments.map((dept) => [
-        dept.name,
-        dept.code,
-        dept.headOfDepartment,
-        dept.description || '',
-        dept.courseOfferings?.length || 0,
-        dept.totalInstructors || 0,
-        dept.status,
-      ]),
-    ];
-    const csvContent = csvRows.map((row) => row.map(String).map(cell => '"' + cell.replace(/"/g, '""') + '"').join(",")).join("\n");
-    const blob = new Blob([csvContent], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'selected-departments.csv';
-    a.click();
-    URL.revokeObjectURL(url);
-    toast.success(`${selectedIds.length} department(s) exported to CSV.`);
-  };
-
-  // Count active advanced filters
-  const activeAdvancedFilterCount = Object.values(filters).filter(Boolean).length;
-
   // Add handleSort function
   const handleSort = (field: string) => {
     setSortState(prev => {
@@ -880,23 +741,6 @@ export default function DepartmentListPage() {
   useEffect(() => {
     setCurrentPage(1);
   }, [search, sortState.fields, filters]);
-
-  useEffect(() => {
-    if (showPrint) {
-      const timer = setTimeout(() => {
-        window.print();
-        setPageState((prev: PageState) => ({ ...prev, isPrinting: false }));
-      }, 500);
-      return () => clearTimeout(timer);
-    }
-  }, [showPrint]);
-
-  useEffect(() => {
-    const mediaQueryList = window.matchMedia('print');
-    const handlePrint = (e: MediaQueryListEvent) => setIsPrinting(e.matches);
-    mediaQueryList.addEventListener('change', handlePrint);
-    return () => mediaQueryList.removeEventListener('change', handlePrint);
-  }, []);
 
   // Add refresh function with proper error handling, retry logic, and validation
   const refreshDepartments = async () => {
@@ -1075,169 +919,380 @@ export default function DepartmentListPage() {
     setDialogState(prev => ({ ...prev, modalOpen: true }));
   };
 
-  // Update TableRowActions to use new handleDelete
-  const renderRowActions = (department: Department) => (
-    <div className="flex items-center gap-2">
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={() => handleView(department)}
-        title="View Details"
-      >
-        <Eye className="h-4 w-4" />
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={() => handleEdit(department)}
-        title="Edit Department"
-      >
-        <Pencil className="h-4 w-4" />
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={() => handleDelete(department)}
-        title="Delete Department"
-      >
-        <Trash2 className="h-4 w-4" />
-      </Button>
-    </div>
-  );
+  // Minimal filterFields definition for FilterDialog
+  const filterFields: FilterField[] = [
+    { key: 'name', label: 'Department Name', type: 'text', badgeType: 'active' },
+    { key: 'code', label: 'Department Code', type: 'text', badgeType: 'active' },
+    { key: 'head', label: 'Head of Department', type: 'text', badgeType: 'active' },
+    { key: 'minCourses', label: 'Total Courses', type: 'number', badgeType: 'range', minKey: 'minCourses', maxKey: 'maxCourses' },
+    { key: 'minInstructors', label: 'Total Instructors', type: 'number', badgeType: 'range', minKey: 'minInstructors', maxKey: 'maxInstructors' },
+  ];
 
   return (
-    <div className="space-y-4">
-      {/* Normal UI */}
-      <div className="bg-white/80 backdrop-blur-md p-6 rounded-xl shadow-xl border border-blue-100 flex-1 m-4 mt-0">
-        {/* TOP */}
-        <TableHeaderSection
-          title="All Departments"
-          description="Manage and view all department information"
-          searchValue={search}
-          onSearchChange={setSearch}
-          onRefresh={refreshDepartments}
-          isRefreshing={pageState.isRefreshing}
-          onFilterClick={() => setFilterDialogOpen(true)}
-          onSortClick={() => setSortDialogOpen(true)}
-          onExportClick={() => setExportDialogOpen(true)}
-          onPrintClick={handlePrint}
-          onAddClick={() => { setModalDepartment(undefined); setDialogState(prev => ({ ...prev, modalOpen: true })); }}
-          activeFilterCount={Object.values({
-            name: filters.name,
-            code: filters.code,
-            head: filters.head,
-            minCourses: filters.minCourses,
-            maxCourses: filters.maxCourses,
-            minInstructors: filters.minInstructors,
-            maxInstructors: filters.maxInstructors,
-          }).filter(Boolean).length}
-          searchPlaceholder="Search departments..."
-          addButtonLabel="Add Department"
-          columnOptions={DEPARTMENT_COLUMNS.map(col => ({ accessor: col.accessor, label: typeof col.header === 'string' ? col.header : col.accessor }))}
-          visibleColumns={visibleColumns}
-          setVisibleColumns={setVisibleColumns}
-        />
-        {/* Print Header and Table - Only visible when printing */}
-        <div className="print-content">
-          {/* Table layout for xl+ only */}
-          <div className="hidden xl:block">
-            <div className="overflow-x-auto rounded-xl border border-blue-100 bg-white/70 shadow-md relative">
-              {/* Loader overlay when refreshing */}
-              {pageState.isRefreshing && (
-                <div className="absolute inset-0 bg-white/70 flex items-center justify-center z-20">
-                  <Loader2 className="h-12 w-12 text-blue-600 animate-spin" />
-                </div>
-              )}
-              <TableList
-                columns={columns}
-                data={paginatedDepartments}
-                loading={pageState.loading}
-                selectedIds={selectedIds}
-                onSelectRow={handleSelectRow}
-                onSelectAll={handleSelectAll}
-                isAllSelected={isAllSelected}
-                isIndeterminate={isIndeterminate}
-                getItemId={(item) => item.id}
-                expandedRowIds={expandedRowIds}
-                onToggleExpand={(itemId) => {
-                  setExpandedRowIds(current => 
-                    current.includes(itemId) 
-                      ? current.filter(id => id !== itemId)
-                      : [...current, itemId]
-                  );
-                }}
-                editingCell={editingCell}
-                onCellClick={(item, columnAccessor) => {
-                  if (['name', 'code', 'headOfDepartment'].includes(columnAccessor)) {
-                    setEditingCell({ rowId: item.id, columnAccessor });
-                  }
-                }}
-                onCellChange={async (rowId, columnAccessor, value) => {
-                  setEditingCell(null);
-                  const originalDepartments = [...departments];
-                  const updatedDepartments = departments.map(d =>
-                    d.id === rowId ? { ...d, [columnAccessor]: value } : d
-                  );
-                  setDepartments(updatedDepartments);
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6">
+      <AttendanceHeader
+        title="Departments"
+        subtitle="Manage academic departments and their details"
+        currentSection="Departments"
+      />
+      {/* Page Header */}
+      <div className="mb-8">
+        <div className="flex justify-between items-start">
+          <div>
+            <h1 className="text-3xl font-bold text-blue-900 mb-2">Departments</h1>
+            <p className="text-blue-700/80">Manage and view all department information</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <Button 
+              onClick={() => { setModalDepartment(undefined); setDialogState(prev => ({ ...prev, modalOpen: true })); }}
+              className="bg-blue-600 hover:bg-blue-700 text-white shadow-lg hover:shadow-xl transition-all duration-200"
+              aria-label="Add Department"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Add Department
+            </Button>
+            <DropdownMenu>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="icon" className="h-10 w-10 border-blue-200 hover:bg-blue-50">
+                        <MoreHorizontal className="h-4 w-4" />
+                        <span className="sr-only">More options</span>
+                      </Button>
+                    </DropdownMenuTrigger>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>More options</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              <DropdownMenuContent align="end" className="w-56 ">
+                <DropdownMenuLabel className="font-semibold px-2 py-1.5 text-blue-900">Page Actions</DropdownMenuLabel>
+                <DropdownMenuSeparator/>
+                <DropdownMenuItem className="text-blue-900 focus:bg-blue-50 focus:text-blue-900 py-2" onClick={() => toast.info('Import functionality is not yet available.')}>
+                  <Upload className="h-4 w-4 mr-2" strokeWidth={3} />
+                  <span>Import Departments</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem className="text-blue-900 focus:bg-blue-50 focus:text-blue-900 py-2" onClick={() => setExportDialogOpen(true)}>
+                  <Download className="h-4 w-4 mr-2" strokeWidth={3} />
+                  <span>Export Departments</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem className="text-blue-900 focus:bg-blue-50 focus:text-blue-900 py-2" onClick={handlePrint}>
+                  <Printer className="h-4 w-4 mr-2" strokeWidth={3} />
+                  <span>Print Page</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+      </div>
 
-                  try {
-                    const response = await fetch(`/api/departments/${rowId}`, {
-                      method: 'PATCH',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ [columnAccessor]: value }),
-                    });
-                    if (!response.ok) {
-                      throw new Error('Failed to update department');
-                    }
-                    toast.success('Department updated successfully');
-                  } catch (error) {
-                    setDepartments(originalDepartments);
-                    toast.error(getErrorMessage(error, 'update department'));
-                  }
-                }}
-                sortState={sortState}
-                onSort={handleSort}
-              />
+      {/* Sticky Filter/Search Bar */}
+      <div className="sticky top-0 z-20 bg-white/90 backdrop-blur border-b border-border shadow-sm rounded-md mb-6">
+        <div className="flex flex-col md:flex-row gap-6 md:gap-8 items-start p-6">
+          {/* Search Section */}
+          <div className="w-full md:w-1/3">
+            <h3 className="text-lg font-semibold text-blue-900 mb-4">Search</h3>
+            <label htmlFor="search-departments" className="sr-only">Search Departments</label>
+            <Input
+              id="search-departments"
+              type="text"
+              placeholder="Search by name or code..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="h-11 px-4 rounded-md border border-border focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all duration-200 w-full"
+              aria-label="Search Departments"
+            />
+          </div>
+          <div className="hidden md:block border-l border-blue-200 self-stretch"></div>
+          {/* Filter Section */}
+          <div className="w-full md:w-2/3">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-blue-900">Filter by</h3>
+              {Object.values(filters).some(v => v !== '' && v !== 'all') && (
+                <Button
+                  variant="ghost"
+                  onClick={handleFilterReset}
+                  className="text-blue-600 hover:bg-blue-50 text-sm h-auto py-1 px-2"
+                  aria-label="Clear filters"
+                >
+                  Clear filters
+                </Button>
+              )}
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {/* Status */}
+              <div className="sm:col-span-1">
+                <label className="block text-sm font-medium text-blue-900 mb-2">Status</label>
+                <Select value={filters.status} onValueChange={value => setFilters(prev => ({ ...prev, status: value }))}>
+                  <SelectTrigger className="h-11 rounded-md border border-border focus:border-primary focus:ring-2 focus:ring-primary/20 text-primary" aria-label="Status Filter">
+                    <SelectValue placeholder="All statuses" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem className="text-blue-900 focus:bg-blue-50 focus:text-blue-900 py-2" value="all" aria-label="All statuses">All statuses</SelectItem>
+                    <SelectItem className="text-blue-900 focus:bg-blue-50 focus:text-blue-900 py-2" value="active" aria-label="Active statuses">Active</SelectItem>
+                    <SelectItem className="text-blue-900 focus:bg-blue-50 focus:text-blue-900 py-2" value="inactive" aria-label="Inactive statuses">Inactive</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {/* Head of Department */}
+              <div className="sm:col-span-1">
+                <label className="block text-sm font-medium text-blue-900 mb-2">Head of Department</label>
+                <Input
+                  type="text"
+                  placeholder="Filter by head..."
+                  value={filters.head}
+                  onChange={e => setFilters(prev => ({ ...prev, head: e.target.value }))}
+                  className="h-11 px-4 rounded-md border border-border focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all duration-200 w-full"
+                />
+              </div>
+              {/* Advanced Filters Button */}
+              <div className="sm:col-span-1 flex items-end">
+                <Button
+                  onClick={() => setFilterDialogOpen(true)}
+                  className="w-full h-11 border border-border text-primary bg-light hover:bg-primary hover:text-white transition-colors duration-200 rounded-md"
+                  aria-label="Advanced Filters"
+                >
+                  Advanced Filters
+                </Button>
+              </div>
             </div>
           </div>
-          {/* Card layout for small screens */}
-          <div className="block xl:hidden">
-            <TableCardView
-              items={paginatedDepartments}
-              selectedIds={selectedIds}
-              onSelect={handleSelectRow}
-              onView={(item) => {
-                setViewDepartment(item);
-                setDialogState(prev => ({ ...prev, viewDialogOpen: true }));
-              }}
-              onEdit={(item) => {
-                setModalDepartment(item);
-                setDialogState(prev => ({ ...prev, modalOpen: true }));
-              }}
-              onDelete={(item) => {
-                handleDelete(item);
-              }}
-              getItemId={(item) => item.id}
-              getItemName={(item) => item.name}
-              getItemCode={(item) => item.code}
-              getItemStatus={(item) => item.status}
-              getItemDescription={(item) => item.description}
-              getItemDetails={(item) => [
-                { label: 'Head', value: item.headOfDepartment || 'Not Assigned' },
-                { label: 'Courses', value: item.courseOfferings?.length || 0 },
-                { label: 'Instructors', value: item.totalInstructors || 0 },
-              ]}
-              disabled={(item) => item.status === "active" || item.courseOfferings?.length > 0 || item.totalInstructors > 0}
-              deleteTooltip={(item) => item.status === "active" ? "Cannot delete an active department" : 
-                item.courseOfferings?.length > 0 ? "Cannot delete department with courses" :
-                item.totalInstructors > 0 ? "Cannot delete department with instructors" : undefined}
-              isLoading={pageState.loading}
-            />
+        </div>
+        {/* Filter Chips */}
+        {getActiveFilterChips(filters).length > 0 && (
+          <div className="flex flex-wrap gap-2 px-6 pb-4">
+            {getActiveFilterChips(filters).map(chip => (
+              <span
+                key={chip.key}
+                className={`inline-flex items-center bg-blue-100 text-blue-900 rounded-full px-3 py-1 text-xs font-medium transition-all duration-200 ${removingChip === chip.key ? 'opacity-0 translate-y-2' : ''}`}
+                style={{ transitionProperty: 'opacity, transform' }}
+              >
+                {chip.label}
+                <button
+                  className="ml-2 text-blue-700 hover:text-blue-900 focus:outline-none"
+                  onClick={() => {
+                    setRemovingChip(chip.key);
+                    setTimeout(() => {
+                      setFilters((prev: FilterState) => ({ ...prev, [chip.key]: '' }));
+                      setRemovingChip(null);
+                    }, 200);
+                  }}
+                  aria-label={`Remove filter ${chip.label}`}
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            ))}
+            <Button variant="ghost" size="sm" className="text-blue-600 hover:bg-blue-50 text-xs px-2 py-1 ml-2" onClick={handleFilterReset} aria-label="Clear All Filters">
+              Clear All
+            </Button>
+          </div>
+        )}
+      </div>
+
+      {/* Main Content Area */}
+      <div className="bg-white rounded-2xl border border-blue-200 shadow-lg overflow-hidden">
+        {/* Table Header */}
+        <div className="px-6 py-6 border-b border-blue-100">
+          <div className="flex justify-between items-center">
+            <div className="flex items-center gap-4">
+              <h2 className="text-xl font-semibold text-blue-900">Department List</h2>
+              {filteredDepartments.length > 0 && (
+                <span className="text-sm text-blue-600 bg-blue-100 px-3 py-1 rounded-full">
+                  {filteredDepartments.length} department{filteredDepartments.length !== 1 ? 's' : ''}
+                </span>
+              )}
+            </div>
+            
+            <div className="flex items-center gap-4">
+              {/* Column Visibility */}
+              <div className="flex items-center gap-4">
+                <span className="text-sm text-gray-600 font-medium">Columns:</span>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" className="border-blue-200 text-blue-900 h-9 px-3 font-normal">
+                      <span className="font-semibold mr-1">{visibleColumns.length}</span>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-48">
+                    {DEPARTMENT_COLUMNS.map((column) => (
+                      <DropdownMenuCheckboxItem
+                        key={column.accessor}
+                        checked={visibleColumns.includes(column.accessor)}
+                        onCheckedChange={(checked) => {
+                          setVisibleColumns((prev) =>
+                            checked
+                              ? [...prev, column.accessor]
+                              : prev.filter((id) => id !== column.accessor)
+                          );
+                        }}
+                        className="text-blue-900 focus:bg-blue-50 focus:text-blue-900 py-2"
+                      >
+                        {typeof column.header === 'string' ? column.header : column.accessor}
+                      </DropdownMenuCheckboxItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+
+              {/* Rows per page */}
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-600 font-medium">Show:</span>
+                <Select value={String(itemsPerPage)} onValueChange={(value) => {
+                    setItemsPerPage(Number(value));
+                    setCurrentPage(1);
+                }}>
+                  <SelectTrigger className="w-20 h-9 border-blue-200 text-blue-900">
+                    <SelectValue placeholder={String(itemsPerPage)} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[10, 20, 30, 40, 50].map(size => (
+                      <SelectItem key={size} value={String(size)} className="text-blue-900 focus:bg-blue-50 focus:text-blue-900 py-2">{size}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button variant="outline" size="icon" className="h-9 w-9 border-blue-200" onClick={refreshDepartments} disabled={pageState.isRefreshing}>
+                      <span className="sr-only">Refresh data</span>
+                      {pageState.isRefreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Refresh data</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+
+            </div>
           </div>
         </div>
 
-        {/* Bulk Actions Bar*/}
-        {selectedIds.length > 0 && (
+        {/* Table Content */}
+        <div className="relative">
+          {/* Loading Skeleton */}
+          {(pageState.loading || pageState.isRefreshing) ? (
+            <div className="p-8">
+              <Skeleton className="h-8 w-full mb-4" />
+              <Skeleton className="h-8 w-full mb-4" />
+              <Skeleton className="h-8 w-full mb-4" />
+              <Skeleton className="h-8 w-full mb-4" />
+              <Skeleton className="h-8 w-full mb-4" />
+            </div>
+          ) : (
+            <>
+              {/* Table layout for xl+ only */}
+              <div className="hidden xl:block">
+                <TableList
+                  columns={columns}
+                  data={paginatedDepartments}
+                  loading={pageState.loading}
+                  selectedIds={selectedIds}
+                  onSelectRow={handleSelectRow}
+                  onSelectAll={handleSelectAll}
+                  isAllSelected={isAllSelected}
+                  isIndeterminate={isIndeterminate}
+                  getItemId={(item) => item.id}
+                  expandedRowIds={expandedRowIds}
+                  onToggleExpand={(itemId) => {
+                    setExpandedRowIds(current => 
+                      current.includes(itemId) 
+                        ? current.filter(id => id !== itemId)
+                        : [...current, itemId]
+                    );
+                  }}
+                  editingCell={editingCell}
+                  onCellClick={(item, columnAccessor) => {
+                    if (['name', 'code', 'headOfDepartment'].includes(columnAccessor)) {
+                      setEditingCell({ rowId: item.id, columnAccessor });
+                    }
+                  }}
+                  onCellChange={async (rowId, columnAccessor, value) => {
+                    setEditingCell(null);
+                    const originalDepartments = [...departments];
+                    const updatedDepartments = departments.map(d =>
+                      d.id === rowId ? { ...d, [columnAccessor]: value } : d
+                    );
+                    setDepartments(updatedDepartments);
+
+                    try {
+                      const response = await fetch(`/api/departments/${rowId}`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ [columnAccessor]: value }),
+                      });
+                      if (!response.ok) {
+                        throw new Error('Failed to update department');
+                      }
+                      toast.success('Department updated successfully');
+                    } catch (error) {
+                      setDepartments(originalDepartments);
+                      toast.error(getErrorMessage(error, 'update department'));
+                    }
+                  }}
+                  sortState={sortState}
+                  onSort={handleSort}
+                />
+              </div>
+              {/* Card layout for small screens */}
+              <div className="block xl:hidden p-4">
+                <TableCardView
+                  items={paginatedDepartments}
+                  selectedIds={selectedIds}
+                  onSelect={handleSelectRow}
+                  onView={(item) => {
+                    setViewDepartment(item);
+                    setDialogState(prev => ({ ...prev, viewDialogOpen: true }));
+                  }}
+                  onEdit={(item) => {
+                    setModalDepartment(item);
+                    setDialogState(prev => ({ ...prev, modalOpen: true }));
+                  }}
+                  onDelete={(item) => {
+                    handleDelete(item);
+                  }}
+                  getItemId={(item) => item.id}
+                  getItemName={(item) => item.name}
+                  getItemCode={(item) => item.code}
+                  getItemStatus={(item) => item.status}
+                  getItemDescription={(item) => item.description}
+                  getItemDetails={(item) => [
+                    { label: 'Head', value: item.headOfDepartment || 'Not Assigned' },
+                    { label: 'Courses', value: item.courseOfferings?.length || 0 },
+                    { label: 'Instructors', value: item.totalInstructors || 0 },
+                  ]}
+                  disabled={(item) => item.status === "active" || item.courseOfferings?.length > 0 || item.totalInstructors > 0}
+                  deleteTooltip={(item) => item.status === "active" ? "Cannot delete an active department" : 
+                    item.courseOfferings?.length > 0 ? "Cannot delete department with courses" :
+                    item.totalInstructors > 0 ? "Cannot delete department with instructors" : undefined}
+                  isLoading={pageState.loading}
+                />
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Pagination */}
+        <div className="px-6 py-4 border-t border-blue-100">
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={filteredDepartments.length}
+            itemsPerPage={itemsPerPage}
+            onPageChange={setCurrentPage}
+            disabled={pageState.loading}
+          />
+        </div>
+      </div>
+
+      {/* Bulk Actions Bar */}
+      {selectedIds.length > 0 && (
+        <div className="mt-4">
           <BulkActionsBar
             selectedCount={selectedIds.length}
             entityLabel="department"
@@ -1254,108 +1309,67 @@ export default function DepartmentListPage() {
               },
             ]}
             onClear={() => setSelectedIds([])}
-            className="mt-4 mb-2"
           />
-        )}
-
-        {/* PAGINATION */}
-        <div className="flex items-center justify-between mt-6">
-        <div>
-          <Pagination
-            currentPage={currentPage}
-            totalPages={totalPages}
-            onPageChange={setCurrentPage}
-          />
-          </div>
-          <div className="flex items-center gap-2">
-    <span className="text-sm text-gray-600">Rows per page:</span>
-    <Select value={String(itemsPerPage)} onValueChange={(value) => {
-        setItemsPerPage(Number(value));
-        setCurrentPage(1);
-    }}>
-      <SelectTrigger className="w-24">
-        <SelectValue placeholder={itemsPerPage} />
-      </SelectTrigger>
-      <SelectContent>
-        {[10, 20, 30, 40, 50].map(size => (
-          <SelectItem key={size} value={String(size)}>{size}</SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  </div>
         </div>
+      )}
 
-        {/* Filter Dialog */}
-        <FilterDialog
-          open={dialogState.filterDialogOpen}
-          onOpenChange={(open) => setFilterDialogOpen(open)}
-          statusFilter={filters.status}
-          setStatusFilter={(status) => setFilters((prev: FilterState) => ({ ...prev, status }))}
-          statusOptions={[
-            { value: 'all', label: 'All' },
-            { value: 'active', label: 'Active' },
-            { value: 'inactive', label: 'Inactive' },
-          ]}
-          advancedFilters={{
-            name: filters.name,
-            code: filters.code,
-            head: filters.head,
-            minCourses: filters.minCourses,
-            maxCourses: filters.maxCourses,
-            minInstructors: filters.minInstructors,
-            maxInstructors: filters.maxInstructors,
-          }}
-          setAdvancedFilters={handleFilterChange}
-          fields={[
-            { key: 'name', label: 'Department Name', type: 'text', badgeType: 'active' },
-            { key: 'code', label: 'Department Code', type: 'text', badgeType: 'active' },
-            { key: 'head', label: 'Head of Department', type: 'text', badgeType: 'active' },
-            { key: 'minCourses', label: 'Total Courses', type: 'number', badgeType: 'range', minKey: 'minCourses', maxKey: 'maxCourses' },
-            { key: 'minInstructors', label: 'Total Instructors', type: 'number', badgeType: 'range', minKey: 'minInstructors', maxKey: 'maxInstructors' },
-          ]}
-          onReset={handleFilterReset}
-          onApply={() => setFilterDialogOpen(false)}
-          activeAdvancedCount={Object.values({
-            name: filters.name,
-            code: filters.code,
-            head: filters.head,
-            minCourses: filters.minCourses,
-            maxCourses: filters.maxCourses,
-            minInstructors: filters.minInstructors,
-            maxInstructors: filters.maxInstructors,
-          }).filter(Boolean).length}
-          title="Filter Departments"
-          tooltip="Filter departments by multiple criteria. Use advanced filters for more specific conditions."
-        />
-        {/* DELETE CONFIRMATION DIALOG */}
-        <ConfirmDeleteDialog
-          open={dialogState.deleteDialogOpen}
-          onOpenChange={(open) => {
-            if (!open) {
-              setDialogState(prev => ({ 
-                ...prev, 
-                deleteDialogOpen: false,
-                departmentToDelete: null 
-              }));
-            }
-          }}
-          itemName={dialogState.departmentToDelete?.name ?? ''}
-          onDelete={confirmDelete}
-          onCancel={() => {
+      {/* Dialogs */}
+      <FilterDialog
+        open={dialogState.filterDialogOpen}
+        onOpenChange={(open) => setFilterDialogOpen(open)}
+        statusFilter={filters.status}
+        setStatusFilter={(status) => setFilters((prev: FilterState) => ({ ...prev, status }))}
+        statusOptions={[
+          { value: 'all', label: 'All' },
+          { value: 'active', label: 'Active' },
+          { value: 'inactive', label: 'Inactive' },
+        ]}
+        advancedFilters={filters as unknown as Record<string, string>}
+        setAdvancedFilters={handleFilterChange as (filters: Record<string, string>) => void}
+        fields={filterFields}
+        onReset={handleFilterReset}
+        onApply={() => setFilterDialogOpen(false)}
+        activeAdvancedCount={Object.values({
+          name: filters.name,
+          code: filters.code,
+          head: filters.head,
+          minCourses: filters.minCourses,
+          maxCourses: filters.maxCourses,
+          minInstructors: filters.minInstructors,
+          maxInstructors: filters.maxInstructors,
+        }).filter(Boolean).length}
+        title="Filter Departments"
+        tooltip="Filter departments by multiple criteria. Use advanced filters for more specific conditions."
+      />
+
+      <ConfirmDeleteDialog
+        open={dialogState.deleteDialogOpen}
+        onOpenChange={(open) => {
+          if (!open) {
             setDialogState(prev => ({ 
               ...prev, 
               deleteDialogOpen: false,
               departmentToDelete: null 
             }));
-          }}
-          canDelete={true}
-          deleteError={pageState.error}
-          loading={pageState.isDeleting}
-          description={dialogState.departmentToDelete ? 
-            `Are you sure you want to delete the department "${dialogState.departmentToDelete.name}"? This action cannot be undone.` :
-            'Are you sure you want to delete this department? This action cannot be undone.'}
-        />
-        {/* MODAL FOR CREATE/EDIT */}
+          }
+        }}
+        itemName={dialogState.departmentToDelete?.name ?? ''}
+        onDelete={confirmDelete}
+        onCancel={() => {
+          setDialogState(prev => ({ 
+            ...prev, 
+            deleteDialogOpen: false,
+            departmentToDelete: null 
+          }));
+        }}
+        canDelete={true}
+        deleteError={pageState.error}
+        loading={pageState.isDeleting}
+        description={dialogState.departmentToDelete ? 
+          `Are you sure you want to delete the department \"${dialogState.departmentToDelete.name}\"? This action cannot be undone.` :
+          'Are you sure you want to delete this department? This action cannot be undone.'}
+      />
+
       <DepartmentForm
         open={dialogState.modalOpen}
         onOpenChange={(open) => setModalOpen(open)}
@@ -1363,20 +1377,10 @@ export default function DepartmentListPage() {
         instructors={instructors}
         onSuccess={async () => {
           setModalOpen(false);
-          // Refresh department list after create/edit
-          setLoading(true);
-          try {
-            const res = await fetch('/api/departments');
-            if (!res.ok) throw new Error('Failed to fetch departments');
-            const data = await res.json();
-            setDepartments(data);
-          } catch {
-            setDepartments([]);
-          }
-          setLoading(false);
+          await refreshDepartments();
         }}
       />
-      {/* Export Dialog */}
+
       <ExportDialog
         open={dialogState.exportDialogOpen}
         onOpenChange={(open) => setExportDialogOpen(open)}
@@ -1389,7 +1393,7 @@ export default function DepartmentListPage() {
         title="Export Departments"
         tooltip="Export department data in various formats. Choose your preferred export options."
       />
-      {/* Sort Dialog */}
+
       <SortDialog
         open={dialogState.sortDialogOpen}
         onOpenChange={(open) => setSortDialogOpen(open)}
@@ -1402,14 +1406,14 @@ export default function DepartmentListPage() {
           setSortFields([{ field: sortState.field, order: sortState.order }]);
         }}
         onReset={() => {
-                setSortField('name');
-                setSortOrder('asc');
-                setSortFields([{ field: 'name', order: 'asc' }]);
-              }}
+          setSortField('name');
+          setSortOrder('asc');
+          setSortFields([{ field: 'name', order: 'asc' }]);
+        }}
         title="Sort Departments"
         tooltip="Sort departments by different fields. Choose the field and order to organize your list."
       />
-      {/* View Dialog */}
+
       <ViewDialog
         open={dialogState.viewDialogOpen}
         onOpenChange={(open) => {
@@ -1435,7 +1439,9 @@ export default function DepartmentListPage() {
         description={viewDepartment?.description}
         tooltipText="View detailed department information"
       />
-      </div>
+
+      {/* Toast Notification Region */}
+      <div role="region" aria-live="polite" className="sr-only" id="departments-toast-region"></div>
     </div>
   );
 }

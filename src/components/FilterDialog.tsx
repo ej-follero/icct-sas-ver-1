@@ -1,226 +1,213 @@
-import React from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Badge } from '@/components/ui/badge';
+'use client';
+
+import { useState, useEffect } from 'react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
-import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
-import { BadgeInfo } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Badge } from '@/components/ui/badge';
+import { Filter, X, Check } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
+import { Separator } from '@/components/ui/separator';
 
-interface StatusOption<T extends string = string> {
-  value: T;
+interface FilterOption {
+  value: string;
   label: string;
+  count: number;
 }
 
-interface FilterField {
+interface FilterSection {
   key: string;
-  label: string;
-  type: 'text' | 'number' | 'select';
-  badgeType?: 'active' | 'range';
-  minKey?: string;
-  maxKey?: string;
-  options?: { value: string; label: string }[];
+  title: string;
+  options: FilterOption[];
 }
 
-interface FilterDialogProps<T extends string = string> {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  statusFilter: T;
-  setStatusFilter: (status: T) => void;
-  statusOptions: StatusOption<T>[];
-  advancedFilters: Record<string, string>;
-  setAdvancedFilters: (filters: Record<string, string>) => void;
-  fields: FilterField[];
-  onReset: () => void;
-  onApply: () => void;
-  activeAdvancedCount?: number;
-  title?: string;
-  tooltip?: string;
+interface FilterDialogProps {
+  filters: Record<string, string[]>;
+  filterSections: FilterSection[];
+  onApplyFilters: (filters: Record<string, string[]>) => void;
+  onClearFilters: () => void;
+  trigger?: React.ReactNode;
 }
 
-export const FilterDialog = <T extends string = string>({
-  open,
-  onOpenChange,
-  statusFilter,
-  setStatusFilter,
-  statusOptions,
-  advancedFilters,
-  setAdvancedFilters,
-  fields,
-  onReset,
-  onApply,
-  activeAdvancedCount,
-  title = 'Filter',
-  tooltip = 'Filter by multiple criteria. Use advanced filters for more specific conditions.'
-}: FilterDialogProps<T>) => {
+export function FilterDialog({
+  filters,
+  filterSections,
+  onApplyFilters,
+  onClearFilters,
+  trigger
+}: FilterDialogProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [localFilters, setLocalFilters] = useState<Record<string, string[]>>(filters);
+
+  useEffect(() => {
+    setLocalFilters(filters);
+  }, [filters]);
+
+  const handleOptionToggle = (sectionKey: string, value: string) => {
+    setLocalFilters(prev => {
+      const currentValues = prev[sectionKey] || [];
+      const newValues = currentValues.includes(value)
+        ? currentValues.filter(v => v !== value)
+        : [...currentValues, value];
+      
+      return {
+        ...prev,
+        [sectionKey]: newValues
+      };
+    });
+  };
+
+  const handleSectionToggle = (sectionKey: string, checked: boolean) => {
+    if (checked) {
+      // Select all options in the section
+      const allValues = filterSections
+        .find(section => section.key === sectionKey)
+        ?.options.map(option => option.value) || [];
+      
+      setLocalFilters(prev => ({
+        ...prev,
+        [sectionKey]: allValues
+      }));
+    } else {
+      // Clear all options in the section
+      setLocalFilters(prev => ({
+        ...prev,
+        [sectionKey]: []
+      }));
+    }
+  };
+
+  const handleApply = () => {
+    onApplyFilters(localFilters);
+    setIsOpen(false);
+  };
+
+  const handleClear = () => {
+    setLocalFilters({});
+    onClearFilters();
+    setIsOpen(false);
+  };
+
+  const handleCancel = () => {
+    setLocalFilters(filters);
+    setIsOpen(false);
+  };
+
+  const getTotalActiveFilters = () => {
+    return Object.values(localFilters).reduce((total, values) => total + values.length, 0);
+  };
+
+  const isSectionPartiallySelected = (sectionKey: string) => {
+    const section = filterSections.find(s => s.key === sectionKey);
+    if (!section) return false;
+    
+    const selectedCount = localFilters[sectionKey]?.length || 0;
+    return selectedCount > 0 && selectedCount < section.options.length;
+  };
+
+  const isSectionFullySelected = (sectionKey: string) => {
+    const section = filterSections.find(s => s.key === sectionKey);
+    if (!section) return false;
+    
+    const selectedCount = localFilters[sectionKey]?.length || 0;
+    return selectedCount === section.options.length;
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[95vw] sm:w-[500px] max-h-[90vh] overflow-y-auto bg-white/90 border border-blue-100 shadow-lg rounded-xl py-6 sm:py-8 px-4 sm:px-6">
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      <DialogTrigger asChild>
+        {trigger || (
+          <Button variant="outline" className="border-blue-200 text-blue-700 hover:bg-blue-50">
+            <Filter className="w-4 h-4 mr-2" />
+            Filters
+            {getTotalActiveFilters() > 0 && (
+              <Badge variant="secondary" className="ml-2 h-5 w-5 p-0 text-xs">
+                {getTotalActiveFilters()}
+              </Badge>
+            )}
+          </Button>
+        )}
+      </DialogTrigger>
+      <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden">
         <DialogHeader>
-          <DialogTitle className="text-blue-900 text-lg sm:text-xl flex items-center gap-2 mb-4 sm:mb-6">
-            {title}
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span className="text-blue-400 cursor-pointer">
-                    <BadgeInfo className="w-4 h-4" />
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent side="right" className="bg-blue-900 text-white">
-                  {tooltip}
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+          <DialogTitle className="flex items-center gap-2">
+            <Filter className="w-5 h-5" />
+            Filter Instructors
+            {getTotalActiveFilters() > 0 && (
+              <Badge variant="secondary" className="ml-2">
+                {getTotalActiveFilters()} active
+              </Badge>
+            )}
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-6 sm:space-y-8">
-          {/* Status Section */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <h3 className="text-sm sm:text-md font-semibold text-blue-900">Status</h3>
-              </div>
-              <Badge variant="outline" className="text-xs font-normal bg-blue-50 text-blue-700 border-blue-200">
-                {statusOptions.find(opt => opt.value === statusFilter)?.label || statusFilter}
-              </Badge>
-            </div>
-            <div className="h-px bg-blue-100 w-full mb-4 sm:mb-8"></div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-4 mt-4 sm:mt-6">
-              {statusOptions.map(opt => (
-                <Button
-                  key={opt.value}
-                  variant={statusFilter === opt.value ? 'default' : 'outline'}
-                  size="sm"
-                  className={`px-3 py-2 text-sm sm:text-base whitespace-nowrap transition-all duration-150 ${
-                    statusFilter === opt.value 
-                      ? 'bg-blue-600 hover:bg-blue-700' 
-                      : 'hover:bg-blue-50 border-blue-200 text-blue-700'
-                  }`}
-                  style={{ minWidth: 0, width: 'auto' }}
-                  onClick={() => setStatusFilter(opt.value)}
-                >
-                  {opt.label}
-                </Button>
+        <div className="flex flex-col h-full">
+          <ScrollArea className="flex-1 pr-4">
+            <div className="space-y-6">
+              {filterSections.map((section) => (
+                <div key={section.key} className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        checked={isSectionFullySelected(section.key)}
+                        ref={(ref) => {
+                          if (ref) {
+                            ref.indeterminate = isSectionPartiallySelected(section.key);
+                          }
+                        }}
+                        onCheckedChange={(checked) => 
+                          handleSectionToggle(section.key, checked as boolean)
+                        }
+                      />
+                      <h3 className="font-medium text-gray-900">{section.title}</h3>
+                    </div>
+                    {localFilters[section.key]?.length > 0 && (
+                      <Badge variant="outline" className="text-xs">
+                        {localFilters[section.key].length} selected
+                      </Badge>
+                    )}
+                  </div>
+                  
+                  <div className="ml-6 space-y-2">
+                    {section.options.map((option) => (
+                      <div key={option.value} className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Checkbox
+                            checked={localFilters[section.key]?.includes(option.value) || false}
+                            onCheckedChange={() => handleOptionToggle(section.key, option.value)}
+                          />
+                          <span className="text-sm text-gray-700">{option.label}</span>
+                        </div>
+                        <Badge variant="outline" className="text-xs">
+                          {option.count}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                  
+                  <Separator />
+                </div>
               ))}
             </div>
-          </div>
+          </ScrollArea>
 
-          {/* Advanced Filters Section */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <h3 className="text-sm sm:text-md font-semibold text-blue-900">Advanced Filters</h3>
-              </div>
-              {activeAdvancedCount !== undefined && activeAdvancedCount > 0 && (
-                <Badge variant="outline" className="text-xs font-normal bg-blue-50 text-blue-700 border-blue-200">
-                  {activeAdvancedCount} active
-                </Badge>
-              )}
-            </div>
-            <div className="h-px bg-blue-100 w-full mb-4 sm:mb-8"></div>
-            <div className="space-y-4 sm:space-y-6">
-              {fields.map(field => {
-                if (field.type === 'number' && field.minKey && field.maxKey) {
-                  return (
-                    <div key={field.key} className="space-y-2">
-                      <Label className="text-sm text-blue-900 flex items-center gap-2">
-                        {field.label}
-                        {(advancedFilters[field.minKey] || advancedFilters[field.maxKey]) && (
-                          <Badge variant="outline" className="text-xs font-normal bg-blue-50 text-blue-700 border-blue-200">Range</Badge>
-                        )}
-                      </Label>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div className="relative">
-                          <Input
-                            type="number"
-                            placeholder={`Min ${field.label.toLowerCase()}`}
-                            value={advancedFilters[field.minKey] || ''}
-                            onChange={e => setAdvancedFilters({ ...advancedFilters, [field.minKey!]: e.target.value })}
-                            className="border-blue-200 focus:border-blue-400 focus:ring-blue-400 pr-8 text-sm sm:text-base h-9 sm:h-10"
-                          />
-                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs sm:text-sm">min</span>
-                        </div>
-                        <div className="relative">
-                          <Input
-                            type="number"
-                            placeholder={`Max ${field.label.toLowerCase()}`}
-                            value={advancedFilters[field.maxKey] || ''}
-                            onChange={e => setAdvancedFilters({ ...advancedFilters, [field.maxKey!]: e.target.value })}
-                            className="border-blue-200 focus:border-blue-400 focus:ring-blue-400 pr-8 text-sm sm:text-base h-9 sm:h-10"
-                          />
-                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs sm:text-sm">max</span>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                }
-                if ((field.type === 'select' || (field.type === 'text' && field.options)) && field.options) {
-                  return (
-                    <div key={field.key} className="space-y-2">
-                      <Label className="text-sm text-blue-900 flex items-center gap-2">
-                        {field.label}
-                      </Label>
-                      <Select
-                        value={advancedFilters[field.key] || 'all'}
-                        onValueChange={v => setAdvancedFilters({ ...advancedFilters, [field.key]: v })}
-                      >
-                        <SelectTrigger className="w-full border-blue-200 focus:border-blue-400 focus:ring-blue-400 text-sm sm:text-base h-9 sm:h-10">
-                          <SelectValue placeholder={`Select ${field.label.toLowerCase()}`} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {field.options.map(opt => (
-                            <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  );
-                }
-                return (
-                  <div key={field.key} className="space-y-2">
-                    <Label htmlFor={`${field.key}-filter`} className="text-sm text-blue-900 flex items-center gap-2">
-                      {field.label}
-                      {field.badgeType === 'active' && advancedFilters[field.key] && (
-                        <Badge variant="outline" className="text-xs font-normal bg-blue-50 text-blue-700 border-blue-200">Active</Badge>
-                      )}
-                    </Label>
-                    <Input
-                      id={`${field.key}-filter`}
-                      type={field.type}
-                      placeholder={`Filter by ${field.label.toLowerCase()}...`}
-                      value={advancedFilters[field.key] || ''}
-                      onChange={e => setAdvancedFilters({ ...advancedFilters, [field.key]: e.target.value })}
-                      className="border-blue-200 focus:border-blue-400 focus:ring-blue-400 text-sm sm:text-base h-9 sm:h-10"
-                    />
-                  </div>
-                );
-              })}
+          <div className="flex items-center justify-between pt-4 border-t">
+            <Button variant="outline" onClick={handleClear}>
+              <X className="w-4 h-4 mr-2" />
+              Clear All
+            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={handleCancel}>
+                Cancel
+              </Button>
+              <Button onClick={handleApply}>
+                <Check className="w-4 h-4 mr-2" />
+                Apply Filters
+              </Button>
             </div>
           </div>
         </div>
-
-        <DialogFooter className="gap-2 sm:gap-4 mt-6 sm:mt-10">
-          <Button
-            variant="outline"
-            onClick={onReset}
-            className="flex-1 sm:flex-none sm:w-32 border border-blue-300 text-blue-500 text-sm sm:text-base h-9 sm:h-10"
-          >
-            Reset
-          </Button>
-          <Button
-            onClick={() => {
-              onApply();
-              onOpenChange(false);
-            }}
-            className="flex-1 sm:flex-none sm:w-32 bg-blue-600 hover:bg-blue-700 text-white text-sm sm:text-base h-9 sm:h-10"
-          >
-            Apply Filters
-          </Button>
-        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
-}; 
+} 

@@ -12,25 +12,76 @@ const config: Config = {
   	extend: {
   		backgroundImage: {
   			'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
-  			'gradient-conic': 'conic-gradient(from 180deg at 50% 50%, var(--tw-gradient-stops))'
+  			'gradient-conic': 'conic-gradient(from 180deg at 50% 50%, var(--tw-gradient-stops))',
+  			'icct-primary': 'linear-gradient(to right, #1e40af, #3b82f6)',
+  			'icct-success': 'linear-gradient(to right, #10b981, #059669)',
+  			'icct-rfid': 'linear-gradient(to right, #8b5cf6, #7c3aed)',
+  			'icct-primary-subtle': 'linear-gradient(to bottom right, #1e40af10, #3b82f620)',
+  			'icct-success-subtle': 'linear-gradient(to bottom right, #10b98110, #05966920)',
+  			'icct-rfid-subtle': 'linear-gradient(to bottom right, #8b5cf610, #7c3aed20)',
   		},
   		colors: {
-  			sasRed: '#C50006',
-  			sasRedLight: '#DD5A5A',
-  			sasPink: '#F4C3F3',
-  			sasBlue: '#190089',
-  			sasSkyLight: '#3F9CDE',
-  			sasGreen: '#00D804',
-  			sasLightGreen: '#81E484',
-  			sasLightBlue: '#CFE4FF',
-  			sasPurple: '#6D68FF',
-  			sasLightGray: '#C8C8C6',
+  			// === Global Semantic Color Tokens ===
+  			primary: {
+  				DEFAULT: '#1e40af', // text-blue-900
+  				foreground: '#ffffff',
+  			},
+  			secondary: {
+  				DEFAULT: '#3b82f6',
+  				foreground: '#ffffff',
+  			},
+  			accent: {
+  				DEFAULT: '#6D68FF',
+  				foreground: '#ffffff',
+  			},
+  			light: '#eff6ff', // bg-blue-50
+  			dark: '#1e293b',
+  			success: '#10b981',
+  			warning: '#f59e0b',
+  			error: '#ef4444',
+  			border: '#e2e8f0',
+  			muted: {
+  				DEFAULT: '#64748b',
+  				foreground: '#f8fafc',
+  			},
+  			white: '#ffffff',
+  			// For button/foreground use (use these in your component logic, not as Tailwind classes):
+  			primaryObj: {
+  				DEFAULT: '#1e40af',
+  				foreground: '#ffffff',
+  			},
+  			secondaryObj: {
+  				DEFAULT: '#3b82f6',
+  				foreground: '#ffffff',
+  			},
+  			accentObj: {
+  				DEFAULT: '#6D68FF',
+  				foreground: '#ffffff',
+  			},
+  			mute: {
+  				DEFAULT: '#64748b',
+  				foreground: '#f8fafc',
+  			},
+  			// === Legacy ICCT Colors (for reference, prefer semantic above) ===
   			icct: {
   				primary: '#190089',
   				secondary: '#3F9CDE',
   				accent: '#6D68FF',
   				light: '#CFE4FF',
-  				dark: '#0A0044'
+  				dark: '#0A0044',
+  				'primary-blue': '#1e40af',
+  				'secondary-blue': '#3b82f6',
+  				'dark-slate': '#1e293b',
+  				'success-green': '#10b981',
+  				'warning-amber': '#f59e0b',
+  				'error-red': '#ef4444',
+  				'rfid-purple': '#8b5cf6',
+  				'light-bg': '#f8fafc',
+  				'border-gray': '#e2e8f0',
+  				'secondary-text': '#64748b',
+  				'pure-white': '#ffffff',
+  				'success-dark': '#059669',
+  				'rfid-dark': '#7c3aed',
   			},
   			background: 'hsl(var(--background))',
   			foreground: 'hsl(var(--foreground))',
@@ -42,29 +93,12 @@ const config: Config = {
   				DEFAULT: 'hsl(var(--popover))',
   				foreground: 'hsl(var(--popover-foreground))'
   			},
-  			primary: {
-  				DEFAULT: 'hsl(var(--primary))',
-  				foreground: 'hsl(var(--primary-foreground))'
-  			},
-  			secondary: {
-  				DEFAULT: 'hsl(var(--secondary))',
-  				foreground: 'hsl(var(--secondary-foreground))'
-  			},
-  			muted: {
-  				DEFAULT: 'hsl(var(--muted))',
-  				foreground: 'hsl(var(--muted-foreground))'
-  			},
-  			accent: {
-  				DEFAULT: 'hsl(var(--accent))',
-  				foreground: 'hsl(var(--accent-foreground))'
-  			},
   			destructive: {
-  				DEFAULT: 'hsl(var(--destructive))',
-  				foreground: 'hsl(var(--destructive-foreground))'
+  				DEFAULT: '#ef4444',
+  				foreground: '#ffffff',
   			},
-  			border: 'hsl(var(--border))',
-  			input: 'hsl(var(--input))',
-  			ring: 'hsl(var(--ring))',
+  			input: '#e2e8f0',
+  			ring: '#3b82f6',
   			chart: {
   				'1': 'hsl(var(--chart-1))',
   				'2': 'hsl(var(--chart-2))',
@@ -77,7 +111,21 @@ const config: Config = {
   			lg: 'var(--radius)',
   			md: 'calc(var(--radius) - 2px)',
   			sm: 'calc(var(--radius) - 4px)'
-  		}
+  		},
+  		keyframes: {
+  			"accordion-down": {
+  				from: { height: "0" },
+  				to: { height: "var(--radix-accordion-content-height)" },
+  			},
+  			"accordion-up": {
+  				from: { height: "var(--radix-accordion-content-height)" },
+  				to: { height: "0" },
+  			},
+  		},
+  		animation: {
+  			"accordion-down": "accordion-down 0.2s ease-out",
+  			"accordion-up": "accordion-up 0.2s ease-out",
+  		},
   	}
   },
   plugins: [require("tailwindcss-animate")],

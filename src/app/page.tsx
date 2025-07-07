@@ -28,7 +28,7 @@ export default function Home() {
             <Link href="#testimonials" className="hover:text-blue-900 transition">Testimonials</Link>
             <Link href="#contact" className="hover:text-blue-900 transition">Contact</Link>
           </nav>
-          <Button asChild className="ml-4 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-full shadow">
+          <Button asChild className="ml-4 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-md shadow">
             <Link href="/login">Sign In</Link>
           </Button>
         </div>
@@ -43,7 +43,7 @@ export default function Home() {
           <p className="max-w-xl text-lg md:text-2xl text-[color:var(--icctSAS-gray-dark)] mb-10">
             Secure, unified access for students, teachers, and schools. Accelerate learning with seamless digital identity and smart attendance.
           </p>
-          <Button className="bg-[color:var(--icctSAS-blue)] hover:bg-[color:var(--icctSAS-blue-dark)] text-white font-semibold px-10 py-4 text-xl rounded-lg shadow-xl transition-transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-[color:var(--icctSAS-blue-light)]">
+          <Button className="bg-[color:var(--icctSAS-blue)] hover:bg-[color:var(--icctSAS-blue-dark)] text-white font-semibold px-10 py-4 text-xl rounded-md shadow-xl transition-transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-[color:var(--icctSAS-blue-light)]">
             Get Started
           </Button>
         </div>
@@ -132,10 +132,10 @@ export default function Home() {
         <div className="max-w-2xl mx-auto rounded-2xl shadow-lg bg-white p-8 border border-[color:var(--icctSAS-blue-light)]">
           <h2 className="text-2xl md:text-3xl font-bold text-[color:var(--icctSAS-blue)] mb-6 text-center">Contact Us</h2>
           <form className="flex flex-col gap-4">
-            <input type="text" placeholder="Your Name" className="border border-[color:var(--icctSAS-gray)] rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[color:var(--icctSAS-blue)]" />
-            <input type="email" placeholder="Your Email" className="border border-[color:var(--icctSAS-gray)] rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[color:var(--icctSAS-blue)]" />
-            <textarea placeholder="Your Message" rows={4} className="border border-[color:var(--icctSAS-gray)] rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[color:var(--icctSAS-blue)]" />
-            <Button className="bg-[color:var(--icctSAS-blue)] hover:bg-[color:var(--icctSAS-blue-dark)] text-white px-6 py-2 rounded-full mt-2">Send Message</Button>
+            <input type="text" placeholder="Your Name" className="border border-[color:var(--icctSAS-gray)] rounded-md px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[color:var(--icctSAS-blue)]" />
+            <input type="email" placeholder="Your Email" className="border border-[color:var(--icctSAS-gray)] rounded-md px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[color:var(--icctSAS-blue)]" />
+            <textarea placeholder="Your Message" rows={4} className="border border-[color:var(--icctSAS-gray)] rounded-md px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[color:var(--icctSAS-blue)]" />
+            <Button className="bg-[color:var(--icctSAS-blue)] hover:bg-[color:var(--icctSAS-blue-dark)] text-white px-6 py-2 rounded-md mt-2">Send Message</Button>
           </form>
         </div>
       </section>

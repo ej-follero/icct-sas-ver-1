@@ -17,11 +17,12 @@ import { ExportDialog } from "@/components/ExportDialog";
 import { PrintLayout } from "@/components/PrintLayout";
 import { TableList, TableListColumn } from "@/components/TableList";
 import { Checkbox } from "@/components/ui/checkbox";
-import Pagination from "@/components/Pagination";
+import { Pagination } from "@/components/Pagination";
 import RoomFormDialog from "@/components/forms/RoomFormDialog";
 import { ViewDialog } from "@/components/ViewDialog";
 import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
+import AttendanceHeader from '../../../../components/AttendanceHeader';
 
 // Define the room schema
 const roomSchema = z.object({
@@ -101,6 +102,14 @@ export default function RoomsPage() {
 
   // Export state
   const exportableColumns = [
+    { accessor: 'roomNo', label: 'Room Number' },
+    { accessor: 'roomType', label: 'Type' },
+    { accessor: 'roomCapacity', label: 'Capacity' },
+    { accessor: 'roomBuildingLoc', label: 'Building' },
+    { accessor: 'roomFloorLoc', label: 'Floor' },
+    { accessor: 'readerId', label: 'RFID Reader' },
+  ];
+  const exportableColumnsForExport = [
     { key: 'roomNo', label: 'Room Number' },
     { key: 'roomType', label: 'Type' },
     { key: 'roomCapacity', label: 'Capacity' },
@@ -108,7 +117,7 @@ export default function RoomsPage() {
     { key: 'roomFloorLoc', label: 'Floor' },
     { key: 'readerId', label: 'RFID Reader' },
   ];
-  const [exportColumns, setExportColumns] = useState<string[]>(exportableColumns.map(col => col.key));
+  const [exportColumns, setExportColumns] = useState<string[]>(exportableColumns.map(col => col.accessor));
   const [exportFormat, setExportFormat] = useState<'pdf' | 'excel' | 'csv' | null>(null);
 
   // Memoized filtered and sorted rooms
@@ -212,7 +221,7 @@ export default function RoomsPage() {
       toast.error("Please select an export format");
       return;
     }
-    const selectedColumns = exportableColumns.filter(col => exportColumns.includes(col.key));
+    const selectedColumns = exportableColumnsForExport.filter(col => exportColumns.includes(col.key));
     const headers = selectedColumns.map(col => col.label);
     const rows = filteredRooms.map(room => selectedColumns.map(col => String(room[col.key as keyof Room] ?? '')));
     try {
@@ -275,7 +284,7 @@ export default function RoomsPage() {
   };
 
   // Print handler using PrintLayout
-  const printColumns = exportableColumns.map(col => ({ header: col.label, accessor: col.key }));
+  const printColumns = exportableColumnsForExport.map(col => ({ header: col.label, accessor: col.key }));
   const handlePrint = () => {
     const printData = filteredRooms.map(room => ({ ...room }));
     const printFunction = PrintLayout({
@@ -398,26 +407,21 @@ export default function RoomsPage() {
 
   return (
     <div className="bg-white/80 backdrop-blur-md p-6 rounded-xl shadow-xl border border-blue-100 flex-1 m-4 mt-0">
+      <AttendanceHeader
+        title="Rooms"
+        subtitle="Manage classroom and facility assignments"
+        currentSection="Rooms"
+      />
       {/* Header */}
       <TableHeaderSection
         title="All Rooms"
         description="Manage and view all room information"
         searchValue={searchTerm}
         onSearchChange={setSearchTerm}
-        onRefresh={refreshRooms}
-        isRefreshing={isRefreshing}
-        onFilterClick={() => setFilterDialogOpen(true)}
-        onSortClick={() => setSortDialogOpen(true)}
-        onExportClick={() => setExportDialogOpen(true)}
-        onPrintClick={handlePrint}
-        onAddClick={() => {
-          setRoomFormType('create');
-          setRoomFormData(undefined);
-          setRoomFormDialogOpen(true);
-        }}
-        activeFilterCount={Object.values(filters).filter(f => f !== "all").length}
+        columnOptions={exportableColumns}
+        visibleColumns={exportColumns}
+        setVisibleColumns={setExportColumns}
         searchPlaceholder="Search rooms..."
-        addButtonLabel="Add Room"
       />
 
       {/* Table layout for xl+ only */}
@@ -509,6 +513,8 @@ export default function RoomsPage() {
         <Pagination
           currentPage={currentPage}
           totalPages={totalPages}
+          totalItems={filteredRooms.length}
+          itemsPerPage={itemsPerPage}
           onPageChange={setCurrentPage}
         />
       </div>
@@ -570,7 +576,7 @@ export default function RoomsPage() {
       <ExportDialog
         open={exportDialogOpen}
         onOpenChange={setExportDialogOpen}
-        exportableColumns={exportableColumns}
+        exportableColumns={exportableColumnsForExport}
         exportColumns={exportColumns}
         setExportColumns={setExportColumns}
         exportFormat={exportFormat}

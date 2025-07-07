@@ -3,6 +3,7 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2, ChevronDown, ChevronRight, ChevronUp } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export interface TableListColumn<T> {
   header: React.ReactNode;
@@ -55,7 +56,7 @@ export function TableList<T>({
   onSort,
 }: TableListProps<T>) {
   return (
-    <div className={`overflow-x-auto rounded-xl border border-blue-100 bg-white/70 shadow-md relative ${className}`}>
+    <div className={`overflow-x-auto border border-blue-100 bg-white/70 shadow-md relative ${className}`}>
       <Table>
         <TableHeader>
           <TableRow>
@@ -89,11 +90,16 @@ export function TableList<T>({
         </TableHeader>
         <TableBody>
           {loading ? (
-            <TableRow>
-              <TableCell colSpan={columns.length} className="py-12 text-center">
-                <Loader2 className="h-8 w-8 text-blue-600 animate-spin mx-auto" />
-              </TableCell>
-            </TableRow>
+            // Skeleton loader for table rows
+            Array.from({ length: 5 }).map((_, idx) => (
+              <TableRow key={`skeleton-row-${idx}`}>
+                {columns.map((col, colIdx) => (
+                  <TableCell key={`skeleton-cell-${idx}-${colIdx}`}>
+                    <Skeleton className="h-5 w-full" />
+                  </TableCell>
+                ))}
+              </TableRow>
+            ))
           ) : data.length > 0 ? (
             data.map((item, rowIndex) => {
               const itemId = getItemId(item);

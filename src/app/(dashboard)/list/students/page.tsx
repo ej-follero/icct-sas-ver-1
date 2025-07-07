@@ -542,7 +542,7 @@ export default function StudentsPage() {
 
           {/* Bulk Actions */}
           {selectedStudents.length > 0 && (
-            <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-md">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-blue-900">
                   {selectedStudents.length} student(s) selected
@@ -570,7 +570,7 @@ export default function StudentsPage() {
           )}
 
           {/* Enhanced Table */}
-          <div className="overflow-x-auto rounded-lg border bg-white shadow">
+          <div className="overflow-x-auto rounded-md border bg-white shadow">
             <Table>
               <TableHeader>
                 <TableRow className="bg-blue-100/60">
@@ -615,7 +615,7 @@ export default function StudentsPage() {
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold text-lg">
+                        <div className="w-10 h-10 rounded-md bg-blue-600 text-white flex items-center justify-center font-bold text-lg">
                           {`${item.firstName.charAt(0)}${item.lastName.charAt(0)}`}
                         </div>
                         <div>
@@ -957,8 +957,8 @@ export default function StudentsPage() {
           </DialogHeader>
           {selectedStudent && (
             <div className="space-y-6 py-2">
-              <div className="bg-muted rounded-lg p-4 flex items-center gap-4">
-                <div className="w-16 h-16 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold text-2xl">
+              <div className="bg-muted rounded-md p-4 flex items-center gap-4">
+                <div className="w-16 h-16 rounded-md bg-blue-600 text-white flex items-center justify-center font-bold text-2xl">
                   {`${selectedStudent.firstName.charAt(0)}${selectedStudent.lastName.charAt(0)}`}
                 </div>
                 <div>
@@ -971,7 +971,7 @@ export default function StudentsPage() {
                 </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-muted rounded-lg p-4">
+                <div className="bg-muted rounded-md p-4">
                   <div className="font-semibold mb-1 flex items-center gap-2"><Mail className="h-4 w-4 text-blue-600" />Contact Information</div>
                   <div className="flex flex-col gap-1 mt-2">
                     <div className="flex items-center gap-2"><Mail className="h-4 w-4 text-muted-foreground" />{selectedStudent.email}</div>
@@ -979,14 +979,14 @@ export default function StudentsPage() {
                     <div className="flex items-center gap-2"><MapPin className="h-4 w-4 text-muted-foreground" />{selectedStudent.address}</div>
                   </div>
                 </div>
-                <div className="bg-muted rounded-lg p-4">
+                <div className="bg-muted rounded-md p-4">
                   <div className="font-semibold mb-1 flex items-center gap-2"><GraduationCap className="h-4 w-4 text-blue-600" />Academic Information</div>
                   <div className="flex flex-col gap-1 mt-2">
                     <div className="flex items-center gap-2"><School className="h-4 w-4 text-muted-foreground" />{selectedStudent.yearLevel.replace('_', ' ')}</div>
                     <div className="flex items-center gap-2"><User className="h-4 w-4 text-muted-foreground" />{selectedStudent.section_name || 'No Section'}</div>
                   </div>
                 </div>
-                <div className="md:col-span-2 bg-muted rounded-lg p-4">
+                <div className="md:col-span-2 bg-muted rounded-md p-4">
                   <div className="font-semibold mb-1 flex items-center gap-2"><Badge variant="info">RFID</Badge>RFID Information</div>
                   <div className="flex items-center gap-2 mt-2">
                     <Badge variant="info">{selectedStudent.rfidTag}</Badge>
