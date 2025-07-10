@@ -349,12 +349,32 @@ const hourlyTrends = Array.from({ length: 24 }).map((_, i) => ({
 
 // recentActivity array removed - it was not used in the rendered JSX
 
-const departmentBreakdown = [
-  { name: 'Computer Science', present: 42, total: 50, rate: 84 },
-  { name: 'Information Technology', present: 38, total: 45, rate: 84.4 },
-  { name: 'Engineering', present: 35, total: 40, rate: 87.5 },
-  { name: 'Business', present: 28, total: 35, rate: 80 }
-];
+// Dynamic department breakdown - will be calculated from actual data
+const getDepartmentBreakdown = (students: StudentAttendance[]) => {
+  const deptStats = students.reduce((acc, student) => {
+    const dept = student.department;
+    if (!acc[dept]) {
+      acc[dept] = { present: 0, total: 0, students: [] };
+    }
+    acc[dept].total += 1;
+    acc[dept].students.push(student);
+    
+    // Calculate present based on attendance rate
+    const presentCount = Math.round((student.attendanceRate / 100) * student.totalDays);
+    acc[dept].present += presentCount;
+    
+    return acc;
+  }, {} as Record<string, { present: number; total: number; students: StudentAttendance[] }>);
+
+  return Object.entries(deptStats).map(([name, stats]) => ({
+    name,
+    present: stats.present,
+    total: stats.total,
+    rate: Math.round((stats.present / stats.total) * 100),
+    studentCount: stats.students.length,
+    avgAttendanceRate: Math.round(stats.students.reduce((sum, s) => sum + s.attendanceRate, 0) / stats.students.length)
+  })).sort((a, b) => b.rate - a.rate); // Sort by attendance rate descending
+};
 
 const attendanceTrendsData = Array.from({ length: 14 }).map((_, i) => ({
   date: `${i + 1 < 10 ? '0' : ''}${i + 1} Jun`,
@@ -738,22 +758,30 @@ const CompactFilterBar = ({
       <div className="flex-1"></div>
 
       {/* More Filters - Compact */}
-      <button
-        onClick={onAdvancedFilter}
-        className={`flex items-center gap-1 px-2 py-1.5 rounded-md text-xs font-medium transition-all ${
-          totalActiveFilters > 3
-            ? 'bg-orange-600 text-white'
-            : 'bg-white text-gray-600 hover:bg-gray-100'
-        }`}
-        title="More filter options"
-      >
-        <Settings className="w-3.5 h-3.5" />
-        {totalActiveFilters > 3 && (
-          <span className="bg-white/20 text-xs px-1 py-0.5 rounded-full min-w-[16px] h-4 flex items-center justify-center">
-            +{totalActiveFilters - 3}
-          </span>
-        )}
-      </button>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              onClick={onAdvancedFilter}
+              className={`flex items-center gap-1 px-2 py-1.5 rounded-md text-xs font-medium transition-all ${
+                totalActiveFilters > 3
+                  ? 'bg-orange-600 text-white'
+                  : 'bg-white text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              <MoreHorizontal className="w-3.5 h-3.5" />
+              {totalActiveFilters > 3 && (
+                <span className="bg-white/20 text-xs px-1 py-0.5 rounded-full min-w-[16px] h-4 flex items-center justify-center">
+                  +{totalActiveFilters - 3}
+                </span>
+              )}
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>View More</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
     </div>
   );
 };
@@ -4356,11 +4384,27 @@ export default function StudentAttendancePage() {
 
   // Add state for advanced filter row visibility
   const [showAdvancedFiltersRow, setShowAdvancedFiltersRow] = useState<boolean>(false);
+  
+  // Department breakdown state
+  const [departmentBreakdown, setDepartmentBreakdown] = useState<any[]>([]);
+  const [departmentBreakdownLoading, setDepartmentBreakdownLoading] = useState(true);
+  const [departmentViewMode, setDepartmentViewMode] = useState<'all' | 'top' | 'bottom'>('all');
+  const [departmentSearch, setDepartmentSearch] = useState('');
+  const [departmentSort, setDepartmentSort] = useState<{ field: 'name' | 'rate' | 'studentCount', direction: 'asc' | 'desc' }>({ field: 'rate', direction: 'desc' });
 
   // Calculate totalSessions and notificationsSent using studentsData
   const totalSessions = studentsData.reduce((sum, s) => sum + (s.totalDays || 0), 0);
   // TODO: Calculate notificationsSent when notification data is available
   const notificationsSent = 0;
+
+  // Calculate department breakdown from actual student data
+  useEffect(() => {
+    if (studentsData.length > 0) {
+      const breakdown = getDepartmentBreakdown(studentsData);
+      setDepartmentBreakdown(breakdown);
+      setDepartmentBreakdownLoading(false);
+    }
+  }, [studentsData]);
 
   // Add this new component after InsightsSection or near StudentDetailModal
   const StudentAttendanceDetailTable = ({ records }: { records: RecentAttendanceRecord[] }) => {
@@ -4723,36 +4767,44 @@ export default function StudentAttendancePage() {
 
 
               {/* Simplified Department Breakdown with Dialog */}
-              <div className="bg-white px-6 pt-6 pb-6 shadow-sm flex-1 flex flex-col">
+              <div className="bg-white px-6 pt-4 pb-6 shadow-sm flex-1 flex flex-col">
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-2">
-                      <BarChart3 className="w-5 h-5 text-blue-600" />
                       <h4 className="font-bold text-blue-900">Attendance Overview</h4>
                       <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" title="Live data"></div>
                     </div>
                     
                                       {/* View Details Dialog Trigger */}
                   <Dialog open={isAnalyticsDialogOpen} onOpenChange={setIsAnalyticsDialogOpen}>
-                      <DialogTrigger asChild>
-                        <button className="text-xs text-blue-600 hover:text-blue-800 font-medium bg-blue-50 hover:bg-blue-100 px-3 py-2 rounded-xl transition-all duration-200 flex items-center gap-1 hover:shadow-sm border border-blue-200">
-                          <BarChart3 className="w-3 h-3" />
-                          View Details
-                        </button>
-                      </DialogTrigger>
-                      
+                    <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <DialogTrigger asChild>
+                          <button className="text-xs text-blue-600 hover:text-blue-800 font-medium px-3 py-2 transition-all duration-200 flex items-center gap-1">
+                            <MoreHorizontal className="w-6 h-4" />
+                          </button>
+                        </DialogTrigger>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" align="center" className="bg-blue-900 text-white rounded-xl">
+                        View More
+                      </TooltipContent>
+                    </Tooltip>
+                    </TooltipProvider>
                       {/* Full Analytics Dialog */}
-                      <DialogContent className="max-w-6xl max-h-[90vh] p-0 overflow-hidden">
-                        <DialogHeader className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-6 border-b">
-                          <DialogTitle className="flex items-center gap-3 text-xl font-bold">
-                            <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center">
-                              <BarChart3 className="w-5 h-5 text-white" />
+                      <DialogContent className="max-w-6xl max-h-[90vh] p-0 overflow-hidden rounded-xl">
+                        <DialogHeader className="bg-gradient-to-r from-[#1e40af] to-[#3b82f6] p-6 border-b">
+                          <div className="flex items-center gap-4">
+                            <div className="w-10 h-10 flex items-center justify-center rounded-xl">
+                              <BarChart3 className="w-6 h-6 text-blue-200" />
                             </div>
-                            Interactive Attendance Analytics
+                            <div className="flex flex-col flex-1">
+                              <DialogTitle asChild>
+                                <h2 className="text-xl font-bold text-blue-100 mb-1">Interactive Attendance Analytics</h2>
+                              </DialogTitle>
+                              <p className="text-blue-200 text-sm">Comprehensive analytics with real-time insights, trends, and drill-down capabilities</p>
+                            </div>
                             <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse ml-auto" title="Live data"></div>
-                          </DialogTitle>
-                          <p className="text-blue-100 text-sm mt-2">
-                            Comprehensive analytics with real-time insights, trends, and drill-down capabilities
-                          </p>
+                          </div>
                         </DialogHeader>
                         
                         <div className="p-6 overflow-auto max-h-[calc(90vh-140px)]">
@@ -4871,32 +4923,32 @@ export default function StudentAttendancePage() {
                           {/* Tab Interface */}
                           <Tabs value={activeAnalyticsTab} onValueChange={setActiveAnalyticsTab} className="flex-1 flex flex-col">
                             <TabsList className="grid w-full grid-cols-7 mb-6 bg-gray-100 p-1 rounded-xl">
-                              <TabsTrigger value="department" className="text-sm font-medium data-[state=active]:bg-white data-[state=active]:text-blue-700 data-[state=active]:shadow-sm transition-all">
-                                <Building className="w-4 h-4 mr-2" />
+                              <TabsTrigger value="department" className="text-sm font-medium text-blue-400 data-[state=active]:text-blue-700 data-[state=active]:bg-white data-[state=active]:shadow-sm transition-all">
+                                <Building className="w-4 h-4 mr-2 text-blue-400 data-[state=active]:text-blue-700" />
                                 Department
                               </TabsTrigger>
-                              <TabsTrigger value="year" className="text-sm font-medium data-[state=active]:bg-white data-[state=active]:text-blue-700 data-[state=active]:shadow-sm transition-all">
-                                <GraduationCap className="w-4 h-4 mr-2" />
+                              <TabsTrigger value="year" className="text-sm font-medium text-blue-400 data-[state=active]:text-blue-700 data-[state=active]:bg-white data-[state=active]:shadow-sm transition-all">
+                                <GraduationCap className="w-4 h-4 mr-2 text-blue-400 data-[state=active]:text-blue-700" />
                                 Year Level
                               </TabsTrigger>
-                              <TabsTrigger value="course" className="text-sm font-medium data-[state=active]:bg-white data-[state=active]:text-blue-700 data-[state=active]:shadow-sm transition-all">
-                                <BookOpen className="w-4 h-4 mr-2" />
+                              <TabsTrigger value="course" className="text-sm font-medium text-blue-400 data-[state=active]:text-blue-700 data-[state=active]:bg-white data-[state=active]:shadow-sm transition-all">
+                                <BookOpen className="w-4 h-4 mr-2 text-blue-400 data-[state=active]:text-blue-700" />
                                 Course
                               </TabsTrigger>
-                              <TabsTrigger value="section" className="text-sm font-medium data-[state=active]:bg-white data-[state=active]:text-blue-700 data-[state=active]:shadow-sm transition-all">
-                                <Users className="w-4 h-4 mr-2" />
+                              <TabsTrigger value="section" className="text-sm font-medium text-blue-400 data-[state=active]:text-blue-700 data-[state=active]:bg-white data-[state=active]:shadow-sm transition-all">
+                                <Users className="w-4 h-4 mr-2 text-blue-400 data-[state=active]:text-blue-700" />
                                 Section
                               </TabsTrigger>
-                              <TabsTrigger value="subject" className="text-sm font-medium data-[state=active]:bg-white data-[state=active]:text-blue-700 data-[state=active]:shadow-sm transition-all">
-                                <Target className="w-4 h-4 mr-2" />
+                              <TabsTrigger value="subject" className="text-sm font-medium text-blue-400 data-[state=active]:text-blue-700 data-[state=active]:bg-white data-[state=active]:shadow-sm transition-all">
+                                <Target className="w-4 h-4 mr-2 text-blue-400 data-[state=active]:text-blue-700" />
                                 Subject
                               </TabsTrigger>
-                              <TabsTrigger value="trends" className="text-sm font-medium data-[state=active]:bg-white data-[state=active]:text-blue-700 data-[state=active]:shadow-sm transition-all">
-                                <TrendingUp className="w-4 h-4 mr-2" />
+                              <TabsTrigger value="trends" className="text-sm font-medium text-blue-400 data-[state=active]:text-blue-700 data-[state=active]:bg-white data-[state=active]:shadow-sm transition-all">
+                                <TrendingUp className="w-4 h-4 mr-2 text-blue-400 data-[state=active]:text-blue-700" />
                                 Trends
                               </TabsTrigger>
-                              <TabsTrigger value="comparison" className="text-sm font-medium data-[state=active]:bg-white data-[state=active]:text-blue-700 data-[state=active]:shadow-sm transition-all">
-                                <BarChart3 className="w-4 h-4 mr-2" />
+                              <TabsTrigger value="comparison" className="text-sm font-medium text-blue-400 data-[state=active]:text-blue-700 data-[state=active]:bg-white data-[state=active]:shadow-sm transition-all">
+                                <BarChart3 className="w-4 h-4 mr-2 text-blue-400 data-[state=active]:text-blue-700" />
                                 Comparison
                               </TabsTrigger>
                             </TabsList>
@@ -4904,7 +4956,74 @@ export default function StudentAttendancePage() {
                             {/* Universal Content Renderer */}
                             {['department', 'year', 'course', 'section', 'subject'].map(tabValue => (
                               <TabsContent key={tabValue} value={tabValue} className="flex-1 space-y-3 data-[state=active]:animate-fade-in">
-                                {getFilteredAnalyticsData().length === 0 ? (
+                                {tabValue === 'department' && dashboardLoading ? (
+                                  <div className="text-center py-12 text-gray-500">
+                                    <Info className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+                                    <h3 className="text-lg font-semibold text-gray-700 mb-2">Loading departments...</h3>
+                                    <p className="text-sm">Fetching department attendance data</p>
+                                  </div>
+                                ) : tabValue === 'department' && dashboardData && dashboardData.departments && dashboardData.departments.length > 0 ? (
+                                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                    {dashboardData.departments.map((item, index) => (
+                                      <div 
+                                        key={item.name}
+                                        className={`p-4 rounded-xl transition-all duration-200 cursor-pointer group hover:shadow-lg border-l-4 ${
+                                          item.rate < thresholdAlert 
+                                            ? 'border-red-400 bg-red-50 hover:bg-red-100' 
+                                            : item.rate >= 90 
+                                            ? 'border-green-400 bg-green-50 hover:bg-green-100' 
+                                            : 'border-blue-400 bg-blue-50 hover:bg-blue-100'
+                                        }`}
+                                      >
+                                        <div className="flex items-center justify-between mb-3">
+                                          <div className="flex items-center gap-3">
+                                            <h4 className="text-base font-semibold text-gray-900 group-hover:text-blue-700 transition-colors">
+                                              {item.name}
+                                            </h4>
+                                            {item.rate < thresholdAlert && (
+                                              <div className="flex items-center gap-1 bg-red-100 text-red-700 px-2 py-1 rounded-full text-xs font-medium">
+                                                <AlertTriangle className="w-3 h-3" />
+                                                Alert
+                                              </div>
+                                            )}
+                                          </div>
+                                          <div className="flex items-center gap-3">
+                                            {/* No trend for API data by default */}
+                                            <span className={`text-xl font-bold ${
+                                              item.rate >= 90 ? 'text-green-600' :
+                                              item.rate >= 80 ? 'text-yellow-600' : 'text-red-600'
+                                            }`}>
+                                              {item.rate}%
+                                            </span>
+                                          </div>
+                                        </div>
+                                        <div className="flex items-center gap-4 mb-3">
+                                          <div className="flex-1 bg-gray-200 rounded-full h-3 relative overflow-hidden">
+                                            <div 
+                                              className={`h-3 rounded-full transition-all duration-700 ease-out relative ${
+                                                item.rate >= 85 ? 'bg-gradient-to-r from-green-400 to-green-500' :
+                                                item.rate >= 80 ? 'bg-gradient-to-r from-yellow-400 to-yellow-500' : 
+                                                'bg-gradient-to-r from-red-400 to-red-500'
+                                              }`}
+                                              style={{ width: `${item.rate}%` }}
+                                            >
+                                              <div className="absolute inset-0 bg-white/20 rounded-full animate-pulse"></div>
+                                            </div>
+                                          </div>
+                                          <span className="text-sm text-gray-600 font-medium min-w-[60px]">
+                                            {item.present}/{item.total}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : tabValue === 'department' ? (
+                                  <div className="text-center py-12 text-gray-500">
+                                    <Info className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+                                    <h3 className="text-lg font-semibold text-gray-700 mb-2">No departments found</h3>
+                                    <p className="text-sm">No departments match your current search criteria</p>
+                                  </div>
+                                ) : getFilteredAnalyticsData().length === 0 ? (
                                   <div className="text-center py-12 text-gray-500">
                                     <Info className="w-12 h-12 mx-auto mb-4 text-gray-400" />
                                     <h3 className="text-lg font-semibold text-gray-700 mb-2">No {tabValue}s found</h3>
@@ -4953,7 +5072,6 @@ export default function StudentAttendancePage() {
                                             </span>
                                           </div>
                                         </div>
-                                        
                                         <div className="flex items-center gap-4 mb-3">
                                           <div className="flex-1 bg-gray-200 rounded-full h-3 relative overflow-hidden">
                                             <div 
@@ -4971,7 +5089,6 @@ export default function StudentAttendancePage() {
                                             {item.present}/{item.total}
                                           </span>
                                         </div>
-                                        
                                         {showTrends && (
                                           <div className="h-8 w-full">
                                             <MiniTrendChart 
@@ -5265,41 +5382,147 @@ export default function StudentAttendancePage() {
                     </Dialog>
                   </div>
 
-                  {/* Simplified Department Overview */}
-                  <div className="space-y-3 flex-1 flex flex-col justify-center">
-                    {departmentBreakdown.map((dept, index) => (
-                      <div key={dept.name} className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-xl transition-colors group">
-                        <div className="flex-1">
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-sm font-medium text-gray-900 group-hover:text-blue-700 transition-colors">{dept.name}</span>
-                            <span className={`text-sm font-bold ${
-                              dept.rate >= 85 ? 'text-green-600' :
-                              dept.rate >= 80 ? 'text-yellow-600' : 'text-red-600'
-                            }`}>
-                              {dept.rate}%
-                            </span>
+                  {/* Enhanced Department Overview */}
+                  <div className="space-y-3 flex-1 flex flex-col justify-center min-w-0">
+                    {/* Department Controls */}
+                    <div className="space-y-2 mb-3">
+                      {/* Search, Filter, and Sort Row */}
+                      <div className="flex flex-row gap-x-2">
+  {/* Search */}
+  <div className="flex flex-col flex-1 min-w-0">
+    <label className="text-xs font-semibold text-blue-900 mb-1">Search</label>
+    <input
+      type="text"
+      placeholder="Search departments..."
+      value={departmentSearch}
+      onChange={(e) => setDepartmentSearch(e.target.value)}
+      className="w-full px-2 py-3 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:outline-none text-blue-700"
+    />
+  </div>
+  {/* Filter */}
+  <div className="flex flex-col w-40 min-w-[120px]">
+    <label className="text-xs font-semibold text-blue-900 mb-1">Filter</label>
+    <SelectDropdown
+      value={departmentViewMode}
+      onValueChange={(value) => setDepartmentViewMode(value as 'all' | 'top' | 'bottom')}
+      options={[
+        { value: "all", label: "All Departments" },
+        { value: "top", label: "Top Performers" },
+        { value: "bottom", label: "Needs Attention" },
+      ]}
+      placeholder="Filter departments"
+    />
+  </div>
+      {/* Sort */}
+    <div className="flex flex-col w-56 min-w-[160px]">
+      <label className="text-xs font-semibold text-blue-900 mb-1">Sort</label>
+    <SelectDropdown
+      value={`${departmentSort.field}-${departmentSort.direction}`}
+      onValueChange={value => {
+        const [field, direction] = value.split("-");
+        setDepartmentSort({ field: field as any, direction: direction as "asc" | "desc" });
+      }}
+      options={[
+        { value: "name-asc", label: "Name (A → Z)" },
+        { value: "name-desc", label: "Name (Z → A)" },
+        { value: "rate-desc", label: "Attendance Rate (High → Low)" },
+        { value: "rate-asc", label: "Attendance Rate (Low → High)" },
+        { value: "studentCount-desc", label: "Student Count (High → Low)" },
+        { value: "studentCount-asc", label: "Student Count (Low → High)" },
+      ]}
+      placeholder="Sort"
+    />
+  </div>
+</div>
+                    </div>
+
+                    {/* Department List */}
+                    {departmentBreakdownLoading ? (
+                      <div className="space-y-2">
+                        {[...Array(6)].map((_, i) => (
+                          <div key={i} className="animate-pulse">
+                            <div className="h-16 bg-gray-200 rounded-xl border border-gray-500"></div>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <div className="flex-1 bg-gray-200 rounded-full h-2">
-                              <div 
-                                className={`h-2 rounded-full transition-all duration-500 ${
-                                  dept.rate >= 85 ? 'bg-green-500' :
-                                  dept.rate >= 80 ? 'bg-yellow-500' : 'bg-red-500'
-                                }`}
-                                style={{ width: `${dept.rate}%` }}
-                              ></div>
-                            </div>
-                            <span className="text-xs text-gray-500 font-medium">{dept.present}/{dept.total}</span>
-                          </div>
-                        </div>
+                        ))}
                       </div>
-                    ))}
+                    ) : (
+                      
+                      <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                        {[...departmentBreakdown]
+  .sort((a, b) => {
+    const { field, direction } = departmentSort;
+    let cmp = 0;
+    if (field === 'name') cmp = a.name.localeCompare(b.name);
+    else cmp = a[field] - b[field];
+    return direction === 'asc' ? cmp : -cmp;
+  })
+  .filter(dept => 
+    departmentSearch === '' || 
+    dept.name.toLowerCase().includes(departmentSearch.toLowerCase())
+  )
+  .filter(dept => {
+    if (departmentViewMode === 'top') return dept.rate >= 85;
+    if (departmentViewMode === 'bottom') return dept.rate < 80;
+    return true;
+  })
+  .map((dept, index) => (
+    <div key={dept.name} className="p-3 hover:bg-gray-50 rounded-xl transition-colors group cursor-pointer border border-gray-300">
+      {/* Header Row */}
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-sm font-medium text-blue-900 group-hover:text-blue-700 transition-colors truncate">
+              {dept.name}
+            </span>
+            <span className="text-xs text-blue-500 bg-blue-100 px-2 py-0.5 rounded-full flex-shrink-0">
+              {dept.studentCount}
+            </span>
+          </div>
+        </div>
+        <span className={`text-sm font-bold flex-shrink-0 ml-2 ${
+          dept.rate >= 85 ? 'text-green-600' :
+          dept.rate >= 80 ? 'text-yellow-600' : 'text-red-600'
+        }`}>
+          {dept.rate}%
+        </span>
+      </div>
+      
+      {/* Progress Bar Row */}
+      <div className="flex items-center gap-2 w-full">
+        <div className="flex-1 bg-gray-200 rounded-full h-1.5 overflow-hidden">
+          <div 
+            className={`h-1.5 rounded-full transition-all duration-500 ${
+              dept.rate >= 85 ? 'bg-green-500' :
+              dept.rate >= 80 ? 'bg-yellow-500' : 'bg-red-500'
+            }`}
+            style={{ width: `${Math.min(dept.rate, 100)}%` }}
+          ></div>
+        </div>
+        <span className="ml-2 text-xs text-gray-500 font-medium whitespace-nowrap">
+          {dept.present}/{dept.total}
+        </span>
+      </div>
+    </div>
+  ))}
+                      </div>
+                    )}
                   </div>
 
-                  {/* Quick Summary Footer */}
+                  {/* Enhanced Summary Footer */}
                   <div className="mt-4 pt-3 border-t border-gray-200">
                     <div className="text-xs text-gray-500 text-center">
-                      <span>4 departments tracked</span> • <span className="text-green-600 font-medium">2 performing well</span> • <span className="text-orange-600 font-medium">1 needs attention</span>
+                      <div className="flex items-center justify-center gap-3 flex-wrap">
+                        <span className="font-medium">{departmentBreakdown.length} departments</span>
+                        <span className="text-green-600 font-medium">
+                          {departmentBreakdown.filter(d => d.rate >= 85).length} performing well
+                        </span>
+                        <span className="text-yellow-600 font-medium">
+                          {departmentBreakdown.filter(d => d.rate >= 80 && d.rate < 85).length} needs attention
+                        </span>
+                        <span className="text-red-600 font-medium">
+                          {departmentBreakdown.filter(d => d.rate < 80).length} at risk
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -5319,7 +5542,7 @@ export default function StudentAttendancePage() {
                         </div>
                         <div>
                           <h3 className="text-lg font-bold text-white mb-1">Quick Actions</h3>
-                          <p className="text-green-100 text-sm">Essential tools and shortcuts</p>
+                          <p className="text-blue-100 text-sm">Essential tools and shortcuts</p>
                       </div>
                       </div>
                       
