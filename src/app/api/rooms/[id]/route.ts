@@ -1,46 +1,34 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { prisma } from '@/lib/prisma';
 
-// Define the room schema
 const roomSchema = z.object({
   roomId: z.number(),
   roomNo: z.string().min(1, "Room number is required"),
-  roomType: z.enum(["CLASSROOM", "LABORATORY", "OFFICE", "CONFERENCE"]),
+  roomType: z.enum(["LECTURE", "LABORATORY", "OFFICE", "CONFERENCE", "OTHER"]),
   roomCapacity: z.number().min(1, "Room capacity must be at least 1"),
-  roomBuildingLoc: z.string().min(1, "Building location is required"),
-  roomFloorLoc: z.string().min(1, "Floor location is required"),
+  roomBuildingLoc: z.enum(["BuildingA", "BuildingB", "BuildingC", "BuildingD", "BuildingE"]),
+  roomFloorLoc: z.enum(["F1", "F2", "F3", "F4", "F5", "F6"]),
   readerId: z.string().min(1, "RFID reader ID is required"),
+  status: z.enum(["AVAILABLE", "OCCUPIED", "MAINTENANCE", "RESERVED", "INACTIVE"]),
+  isActive: z.boolean(),
 });
 
-// Initial rooms data (same as in route.ts)
-const initialRooms = [
-  {
-    roomId: 1,
-    roomNo: "101",
-    roomType: "CLASSROOM",
-    roomCapacity: 40,
-    roomBuildingLoc: "Main Building",
-    roomFloorLoc: "1st Floor",
-    readerId: "RFID001",
-  },
-  {
-    roomId: 2,
-    roomNo: "202",
-    roomType: "LABORATORY",
-    roomCapacity: 30,
-    roomBuildingLoc: "Science Wing",
-    roomFloorLoc: "2nd Floor",
-    readerId: "RFID002",
-  },
-];
-
 // GET handler
-export async function GET(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
+export async function GET(request: Request, { params }: { params: { id: string } }) {
   try {
-    const room = initialRooms.find(r => r.roomId === parseInt(params.id));
+    const room = await prisma.room.findUnique({
+      where: { roomId: Number(params.id) },
+      include: {
+        SubjectSchedule: {
+          include: {
+            subject: { select: { subjectName: true } },
+            instructor: { select: { firstName: true, lastName: true } },
+            section: { select: { sectionName: true } },
+          }
+        }
+      }
+    });
     if (!room) {
       return NextResponse.json({ error: "Room not found" }, { status: 404 });
     }
@@ -50,25 +38,22 @@ export async function GET(
   }
 }
 
-// PUT handler
-export async function PUT(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
+// PUT handler (update room)
+export async function PUT(request: Request, { params }: { params: { id: string } }) {
   try {
     const body = await request.json();
-    const validatedData = roomSchema.parse(body);
-    
-    const roomIndex = initialRooms.findIndex(r => r.roomId === parseInt(params.id));
-    if (roomIndex === -1) {
-      return NextResponse.json({ error: "Room not found" }, { status: 404 });
-    }
-    
-    const updatedRoom = {
-      ...validatedData,
-      roomId: parseInt(params.id),
+    const validatedData = roomSchema.parse({ ...body, roomId: Number(params.id) });
+    const { roomId, roomType, roomBuildingLoc, roomFloorLoc, ...rest } = validatedData;
+    const updateData = {
+      ...rest,
+      roomType: roomType as any, // Prisma enum
+      roomBuildingLoc: roomBuildingLoc as any, // Prisma enum
+      roomFloorLoc: roomFloorLoc as any, // Prisma enum
     };
-    
+    const updatedRoom = await prisma.room.update({
+      where: { roomId: Number(params.id) },
+      data: updateData,
+    });
     return NextResponse.json(updatedRoom);
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -79,17 +64,12 @@ export async function PUT(
 }
 
 // DELETE handler
-export async function DELETE(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
+export async function DELETE(request: Request, { params }: { params: { id: string } }) {
   try {
-    const roomIndex = initialRooms.findIndex(r => r.roomId === parseInt(params.id));
-    if (roomIndex === -1) {
-      return NextResponse.json({ error: "Room not found" }, { status: 404 });
-    }
-    
-    return NextResponse.json({ message: "Room deleted successfully" });
+    await prisma.room.delete({
+      where: { roomId: Number(params.id) },
+    });
+    return NextResponse.json({ success: true });
   } catch (error) {
     return NextResponse.json({ error: "Failed to delete room" }, { status: 500 });
   }

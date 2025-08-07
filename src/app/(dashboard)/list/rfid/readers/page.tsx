@@ -8,24 +8,24 @@ import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { z } from "zod";
 import { toast } from "sonner";
-import { TableHeaderSection } from "@/components/TableHeaderSection";
-import { TableCardView } from "@/components/TableCardView";
-import { BulkActionsBar } from "@/components/BulkActionsBar";
+import { TableHeaderSection } from "@/components/reusable/Table/TableHeaderSection";
+import { TableCardView } from "@/components/reusable/Table/TableCardView";
+import BulkActionsBar from "@/components/reusable/BulkActionsBar";
 import { FilterDialog } from "@/components/FilterDialog";
-import { SortDialog } from "@/components/SortDialog";
-import { ExportDialog } from "@/components/ExportDialog";
+import { SortDialog } from "@/components/reusable/Dialogs/SortDialog";
+import { ExportDialog } from "@/components/reusable/Dialogs/ExportDialog";
 import { PrintLayout } from "@/components/PrintLayout";
-import { TableList, TableListColumn } from "@/components/TableList";
+import { TableList, TableListColumn } from "@/components/reusable/Table/TableList";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Pagination } from "@/components/Pagination";
-import { ViewDialog } from "@/components/ViewDialog";
+import { ViewDialog } from "@/components/reusable/Dialogs/ViewDialog";
 import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
 import RFIDReaderFormDialog from "@/components/forms/RFIDReaderFormDialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import AttendanceHeader from "@/components/AttendanceHeader";
 import { CompactPagination } from "@/components/Pagination";
+import PageHeader from '@/components/PageHeader/PageHeader';
 
 const readerSchema = z.object({
   id: z.number(),
@@ -96,7 +96,8 @@ export default function RFIDReadersPage() {
   const [filterDialogOpen, setFilterDialogOpen] = useState(false);
   const [sortDialogOpen, setSortDialogOpen] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
-  const [filters, setFilters] = useState({ status: "all", room: "" });
+  // Update filters state to be arrays
+  const [filters, setFilters] = useState<{ status: string[]; room: string[] }>({ status: [], room: [] });
   const [lastUpdated, setLastUpdated] = useState(new Date());
   const exportableColumns = [
     { key: 'deviceId', label: 'Device ID' },
@@ -124,8 +125,8 @@ export default function RFIDReadersPage() {
         search: searchTerm,
         sortBy: sortField,
         sortDir: sortOrder,
-        status: filters.status,
-        room: filters.room,
+        status: filters.status.join(','),
+        room: filters.room.join(','),
       });
       const response = await fetch(`/api/rfid/readers?${params.toString()}`);
       if (!response.ok) {
@@ -161,12 +162,24 @@ export default function RFIDReadersPage() {
     }
   };
 
+  // Update filteredReaders to use new filters
   const filteredReaders = useMemo(() => {
-    return readers.filter(reader => 
-      reader.deviceId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      reader.deviceName.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  }, [readers, searchTerm]);
+    return readers.filter(reader => {
+      // Status filter
+      if (filters.status.length > 0 && !filters.status.includes(reader.status)) return false;
+      // Room filter
+      if (filters.room.length > 0 && (!reader.roomId || !filters.room.includes(String(reader.roomId)))) return false;
+      // Search
+      if (
+        searchTerm &&
+        !reader.deviceId.toLowerCase().includes(searchTerm.toLowerCase()) &&
+        !reader.deviceName.toLowerCase().includes(searchTerm.toLowerCase())
+      ) {
+        return false;
+      }
+      return true;
+    });
+  }, [readers, filters, searchTerm]);
 
   const sortedReaders = useMemo(() => {
     return [...filteredReaders].sort((a, b) => {
@@ -325,14 +338,40 @@ export default function RFIDReadersPage() {
     return { total, online, offline, maintenance };
   }, [filteredReaders]);
 
+  // Build filterSections for FilterDialog
+  const filterSections = [
+    {
+      key: "status",
+      title: "Status",
+      options: [
+        { value: "ACTIVE", label: "Active", count: readers.filter(r => r.status === "ACTIVE").length },
+        { value: "INACTIVE", label: "Inactive", count: readers.filter(r => r.status === "INACTIVE").length },
+        { value: "MAINTENANCE", label: "Maintenance", count: readers.filter(r => r.status === "MAINTENANCE").length },
+      ],
+    },
+    {
+      key: "room",
+      title: "Room ID",
+      options: Array.from(new Set(readers.map(r => r.roomId).filter(Boolean))).map(roomId => ({
+        value: String(roomId),
+        label: `Room ${roomId}`,
+        count: readers.filter(r => String(r.roomId) === String(roomId)).length,
+      })),
+    },
+  ];
+
   return (
     <TooltipProvider>
       <div className="container mx-auto p-6 space-y-6">
         {/* Header */}
-        <AttendanceHeader
+        <PageHeader
           title="RFID Readers"
           subtitle="Manage all RFID reader devices in the system."
-          currentSection="RFID"
+          breadcrumbs={[
+            { label: 'Home', href: '/' },
+            { label: 'RFID Management', href: '/rfid' },
+            { label: 'Readers' }
+          ]}
         />
 
         {/* Sticky Top Bar */}
@@ -548,24 +587,10 @@ export default function RFIDReadersPage() {
 
         {/* Filter Dialog */}
         <FilterDialog
-          open={filterDialogOpen}
-          onOpenChange={setFilterDialogOpen}
-          statusFilter={filters.status}
-          setStatusFilter={(value) => setFilters(prev => ({ ...prev, status: value }))}
-          statusOptions={[
-            { value: 'all', label: 'All Statuses' },
-            { value: 'ACTIVE', label: 'Active' },
-            { value: 'INACTIVE', label: 'Inactive' },
-            { value: 'MAINTENANCE', label: 'Maintenance' },
-          ]}
-          advancedFilters={{ room: filters.room }}
-          setAdvancedFilters={(advFilters) => setFilters(prev => ({ ...prev, ...advFilters }))}
-          fields={[
-            { key: 'room', label: 'Room ID', type: 'text', badgeType: 'active' },
-          ]}
-          onApply={() => setFilterDialogOpen(false)}
-          onReset={() => setFilters({ status: "all", room: "" })}
-          title="Filter Readers"
+          filters={filters}
+          filterSections={filterSections}
+          onApplyFilters={(newFilters) => setFilters({ status: newFilters.status ?? [], room: newFilters.room ?? [] })}
+          onClearFilters={() => setFilters({ status: [], room: [] })}
         />
 
         {/* Sort Dialog */}

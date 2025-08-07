@@ -9,7 +9,9 @@ import { Badge } from "@/components/ui/badge";
 import { useParams } from "next/navigation";
 import { toast } from "react-hot-toast";
 import { Loader2, AlertCircle } from "lucide-react";
-import { DepartmentDialog, DepartmentDialogMode } from '@/components/DepartmentDialog';
+import { DepartmentForm } from '@/components/forms/DepartmentForm';
+import { ViewDialog } from '@/components/reusable/Dialogs/ViewDialog';
+import { ConfirmDeleteDialog } from '@/components/ConfirmDeleteDialog';
 
 const TABS = [
   { label: "Overview", icon: Info },
@@ -19,7 +21,9 @@ const TABS = [
 
 export default function DepartmentDetailPage() {
   const [tab, setTab] = useState(0);
-  const [dialogMode, setDialogMode] = useState<DepartmentDialogMode | null>(null);
+  const [viewDialogOpen, setViewDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [department, setDepartment] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const params = useParams();
@@ -75,13 +79,13 @@ export default function DepartmentDetailPage() {
           <p className="text-sm text-gray-600 mt-1">{department.description}</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="ghost" size="icon" onClick={() => setDialogMode('view')} aria-label="View Department">
+          <Button variant="ghost" size="icon" onClick={() => setViewDialogOpen(true)} aria-label="View Department">
             <Eye className="h-5 w-5 text-blue-600" />
           </Button>
-          <Button variant="outline" size="icon" onClick={() => setDialogMode('edit')} aria-label="Edit Department">
+          <Button variant="outline" size="icon" onClick={() => setEditDialogOpen(true)} aria-label="Edit Department">
             <Pencil className="h-5 w-5" />
           </Button>
-          <Button variant="destructive" size="icon" onClick={() => setDialogMode('delete')} aria-label="Delete Department">
+          <Button variant="destructive" size="icon" onClick={() => setDeleteDialogOpen(true)} aria-label="Delete Department">
             <Trash2 className="h-5 w-5" />
           </Button>
         </div>
@@ -197,20 +201,86 @@ export default function DepartmentDetailPage() {
         </div>
       </div>
 
-      {/* Department Dialog (view, edit, delete) */}
-      <DepartmentDialog
-        open={!!dialogMode}
-        onOpenChange={(open) => setDialogMode(open ? dialogMode : null)}
-        mode={dialogMode as DepartmentDialogMode}
-        department={department}
-        onSubmit={(data) => {
-          // TODO: handle update logic here
-          setDialogMode(null);
+      {/* Enhanced Dialogs */}
+      <ViewDialog
+        open={viewDialogOpen}
+        onOpenChange={setViewDialogOpen}
+        title={department?.name || ''}
+        subtitle={department?.code}
+        status={department ? {
+          value: department.status,
+          variant: department.status === "active" ? "success" : "destructive"
+        } : undefined}
+        sections={[
+          {
+            title: "Department Information",
+            fields: [
+              { label: 'Total Courses', value: department?.courseOfferings?.length || 0, type: 'number' },
+              { label: 'Total Instructors', value: department?.totalInstructors || 0, type: 'number' },
+              { label: 'Total Students', value: department?.totalStudents || 0, type: 'number' }
+            ]
+          },
+          {
+            title: "Course Offerings",
+            fields: department?.courseOfferings?.map(course => ({
+              label: course.name,
+              value: course.status,
+              type: 'course-with-status' as const,
+              badgeVariant: course.status === 'active' ? 'success' : 'destructive'
+            })) || []
+          }
+        ]}
+        departmentHead={department?.headOfDepartment ? {
+          name: department.headOfDepartment,
+          position: "Department Head",
+          department: department.name
+        } : undefined}
+        description={department?.description}
+        tooltipText="View detailed department information"
+      />
+
+      <DepartmentForm
+        open={editDialogOpen}
+        onOpenChange={setEditDialogOpen}
+        initialData={department}
+        instructors={[]} // TODO: Fetch instructors
+        onSuccess={async () => {
+          setEditDialogOpen(false);
+          // Refresh department data
+          const response = await fetch(`/api/departments/${params.id}`);
+          if (response.ok) {
+            const data = await response.json();
+            setDepartment(data);
+          }
+          toast.success('Department updated successfully');
         }}
-        onDelete={() => {
-          // TODO: handle delete logic here
-          setDialogMode(null);
+      />
+
+      <ConfirmDeleteDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        itemName={department?.name || ''}
+        onDelete={async () => {
+          try {
+            const response = await fetch(`/api/departments/${params.id}`, {
+              method: 'DELETE',
+            });
+            if (response.ok) {
+              toast.success('Department deleted successfully');
+              // Redirect to departments list
+              window.location.href = '/list/departments';
+            } else {
+              throw new Error('Failed to delete department');
+            }
+          } catch (error) {
+            toast.error('Failed to delete department');
+          }
+          setDeleteDialogOpen(false);
         }}
+        onCancel={() => setDeleteDialogOpen(false)}
+        canDelete={true}
+        loading={false}
+        description={`Are you sure you want to delete the department "${department?.name}"? This action cannot be undone.`}
       />
     </div>
   );

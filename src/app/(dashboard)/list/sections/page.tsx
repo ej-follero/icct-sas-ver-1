@@ -17,23 +17,24 @@ import { Dialog, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogD
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Plus, Search, Filter, SortAsc, FileDown, Printer, Eye, Pencil, Trash2, School, CheckSquare, Square, ChevronUp, ChevronDown, Loader2, Inbox, RefreshCw } from "lucide-react";
-import TableSearch from "@/components/TableSearch";
+import TableSearch from "@/components/reusable/Search/TableSearch";
 import { Pagination } from "@/components/Pagination";
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { FilterDialog } from '@/components/FilterDialog';
-import { ExportDialog } from '@/components/ExportDialog';
-import { SortDialog } from '@/components/SortDialog';
+import { ExportDialog } from '@/components/reusable/Dialogs/ExportDialog';
+import { SortDialog } from '@/components/reusable/Dialogs/SortDialog';
 import { BulkActionsBar } from '@/components/BulkActionsBar';
-import { TableHeaderSection } from '@/components/TableHeaderSection';
-import { TableCardView } from '@/components/TableCardView';
-import { TableList, TableListColumn } from '@/components/TableList';
-import { TableRowActions } from '@/components/TableRowActions';
+import { TableHeaderSection } from '@/components/reusable/Table/TableHeaderSection';
+import { TableCardView } from '@/components/reusable/Table/TableCardView';
+import { TableList, TableListColumn } from '@/components/reusable/Table/TableList';
+import { TableRowActions } from '@/components/reusable/Table/TableRowActions';
 import { Checkbox as SharedCheckbox } from '@/components/ui/checkbox';
 import { PrintLayout } from '@/components/PrintLayout';
 import SectionFormDialog from '@/components/forms/SectionFormDialog';
-import { ViewDialog } from '@/components/ViewDialog';
+import { ViewDialog } from '@/components/reusable/Dialogs/ViewDialog';
 import { ConfirmDeleteDialog } from '@/components/ConfirmDeleteDialog';
 import AttendanceHeader from '../../../../components/AttendanceHeader';
+import PageHeader from '@/components/PageHeader/PageHeader';
 
 // Define the section schema
 const sectionSchema = z.object({
@@ -582,10 +583,14 @@ export default function SectionsPage() {
 
   return (
     <>
-      <AttendanceHeader
+      <PageHeader
         title="Sections"
         subtitle="Manage class sections and assignments"
-        currentSection="Sections"
+        breadcrumbs={[
+          { label: 'Home', href: '/' },
+          { label: 'Academic Management', href: '/academic-management' },
+          { label: 'Sections' }
+        ]}
       />
       {/* Normal UI */}
       <div className="bg-white/80 backdrop-blur-md p-6 rounded-xl shadow-xl border border-blue-100 flex-1 m-4 mt-0">

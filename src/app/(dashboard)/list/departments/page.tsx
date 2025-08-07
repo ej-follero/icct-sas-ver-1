@@ -2,37 +2,42 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
-import { TableRow, TableCell, TableHeader, TableHead } from "@/components/ui/table";
+import { TableRow, TableCell } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Pagination } from "@/components/Pagination";
+import { TablePagination } from "@/components/reusable/Table/TablePagination";
 import { DepartmentForm } from "@/components/forms/DepartmentForm";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuCheckboxItem, DropdownMenuLabel } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuLabel } from "@/components/ui/dropdown-menu";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { toast } from "sonner";
-import { useRouter } from "next/navigation";
 import Fuse from "fuse.js";
 import React from "react";
-import { Plus, Eye, Pencil, Trash2, Download, Printer, Loader2, ArrowUpDown, MoreHorizontal, RefreshCw, Upload, X } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { ViewDialog } from '@/components/ViewDialog';
-import { Checkbox as SharedCheckbox } from '@/components/ui/checkbox';
-import { FilterDialog } from '@/components/FilterDialog';
-import { ExportDialog } from '@/components/ExportDialog';
-import { SortDialog, SortFieldOption } from '@/components/SortDialog';
-import { BulkActionsBar } from '@/components/BulkActionsBar';
+import { Settings, Plus, Trash2, Printer, Loader2, MoreHorizontal, Upload, List, Columns3, ChevronDown, ChevronUp, UserCheck, UserX, Users, UserPlus, RefreshCw, Download, Search, Bell, Building2, RotateCcw, Eye, Pencil, Calendar, MapPin } from "lucide-react";
+import { ImportDialog } from "@/components/reusable/Dialogs/ImportDialog";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ExportDialog } from '@/components/reusable/Dialogs/ExportDialog';
+import { SortDialog, SortFieldOption } from '@/components/reusable/Dialogs/SortDialog';
+import BulkActionsBar from '@/components/reusable/BulkActionsBar';
 import { PrintLayout } from '@/components/PrintLayout';
-import { TableCardView } from '@/components/TableCardView';
-import { TableRowActions } from '@/components/TableRowActions';
-import { TableList, TableListColumn } from '@/components/TableList';
+import { TableCardView } from '@/components/reusable/Table/TableCardView';
+import { TableRowActions } from '@/components/reusable/Table/TableRowActions';
+import { TableList, TableListColumn } from '@/components/reusable/Table/TableList';
 import { ConfirmDeleteDialog } from '@/components/ConfirmDeleteDialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { TableExpandedRow } from '@/components/TableExpandedRow';
+import { TableExpandedRow } from '@/components/reusable/Table/TableExpandedRow';
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
-import AttendanceHeader from '../../../../components/AttendanceHeader';
-import { Skeleton } from "@/components/ui/skeleton";
+import PageHeader from '@/components/PageHeader/PageHeader';
 import { useDebounce } from '@/hooks/use-debounce';
+import { Card, CardHeader } from "@/components/ui/card";
+import SummaryCard from '@/components/SummaryCard';
+import { EmptyState } from '@/components/reusable';
+import { BulkActionsDialog } from '@/components/reusable/Dialogs/BulkActionsDialog';
+import { ViewDialog } from '@/components/reusable/Dialogs/ViewDialog';
+import { QuickActionsPanel, getDepartmentsQuickActions } from '@/components/reusable/QuickActionsPanel';
+import { SummaryCardSkeleton, PageSkeleton } from '@/components/reusable/Skeleton';
+import { VisibleColumnsDialog, ColumnOption } from '@/components/reusable/Dialogs/VisibleColumnsDialog';
+
 
 
 interface Course {
@@ -44,11 +49,22 @@ interface Course {
   totalStudents: number;
   totalSections: number;
 }
+
 interface Department {
   id: string;
   name: string;
   code: string;
   headOfDepartment: string;
+  headOfDepartmentDetails?: {
+    firstName: string;
+    lastName: string;
+    middleName?: string;
+    fullName: string;
+    email?: string;
+    phoneNumber?: string;
+    officeLocation?: string;
+    officeHours?: string;
+  };
   description?: string;
   courseOfferings: Course[];
   status: "active" | "inactive";
@@ -60,18 +76,10 @@ interface Department {
     maxInstructors: number;
   };
 }
+
 type SortFieldKey = 'name' | 'code' | 'totalInstructors' | 'totalCourses' | 'status' | 'head';
 type SortOrder = 'asc' | 'desc';
-const ITEMS_PER_PAGE = 10;
-
 type MultiSortField = { field: SortFieldKey; order: SortOrder };
-const sortFieldOptions: { value: SortFieldKey; label: string }[] = [
-  { value: 'name', label: 'Name' },
-  { value: 'code', label: 'Code' },
-  { value: 'totalInstructors', label: 'Total Instructors' },
-  { value: 'totalCourses', label: 'Total Courses' },
-  { value: 'status', label: 'Status' },
-];
 
 const departmentSortFieldOptions: SortFieldOption<string>[] = [
   { value: 'name', label: 'Department Name' },
@@ -82,40 +90,83 @@ const departmentSortFieldOptions: SortFieldOption<string>[] = [
   { value: 'status', label: 'Status' },
 ];
 
-// Helper for highlighting
-function highlightMatch(text: string, matches: readonly [number, number][] | undefined) {
-  if (!matches || matches.length === 0) return text;
-  let result = '';
-  let lastIndex = 0;
-  matches.forEach(([start, end], i) => {
-    result += text.slice(lastIndex, start);
-    result += `<mark class='bg-yellow-200 text-yellow-900 rounded px-1'>${text.slice(start, end + 1)}</mark>`;
-    lastIndex = end + 1;
-  });
-  result += text.slice(lastIndex);
-  return result;
-}
+
 
 // Define column configuration once
 const DEPARTMENT_COLUMNS: TableListColumn<Department>[] = [
-  { header: "Department Name", accessor: "name", className: "text-blue-900 align-middle", sortable: true },
-  { header: "Code", accessor: "code", className: "text-blue-900 align-middle", sortable: true },
-  { header: "Head of Department", accessor: "headOfDepartment", className: "text-blue-900 text-center align-middle", sortable: true },
-  { header: "Description", accessor: "description", className: "text-blue-900 text-center align-middle" },
+  { 
+    header: "Logo", 
+    accessor: "logo", 
+    className: "text-center align-middle w-12 min-w-[48px]", 
+    render: (item: Department) => (
+      item.logo ? (
+        <div className="w-8 h-8 mx-auto rounded-full overflow-hidden border-2 border-blue-200">
+          <img
+            src={item.logo}
+            alt={`${item.name} logo`}
+            className="object-cover w-full h-full"
+          />
+        </div>
+      ) : (
+        <div className="w-8 h-8 mx-auto rounded-full bg-gray-100 border-2 border-gray-200 flex items-center justify-center">
+          <Building2 className="w-4 h-4 text-gray-400" />
+        </div>
+      )
+    )
+  },
+    { 
+      header: "Department Name", 
+      accessor: "name", 
+      className: "text-blue-900 align-middle cursor-pointer hover:bg-blue-100 transition-colors min-w-[120px] max-w-[200px] truncate", 
+      sortable: true 
+    },
+    { 
+      header: "Code", 
+      accessor: "code", 
+      className: "text-blue-900 align-middle cursor-pointer hover:bg-blue-100 transition-colors min-w-[80px] max-w-[100px] truncate", 
+      sortable: true 
+    },
+  { 
+    header: "Head of Department", 
+    accessor: "headOfDepartment", 
+      className: "text-blue-900 text-center align-middle cursor-pointer hover:bg-blue-100 transition-colors min-w-[120px] max-w-[180px] truncate", 
+    render: (item: Department) => (
+      <div className="text-center">
+        <div className="font-medium text-blue-900">
+          {item.headOfDepartmentDetails ? (
+            <div className="font-semibold truncate">
+              {item.headOfDepartmentDetails.firstName} {item.headOfDepartmentDetails.middleName ? item.headOfDepartmentDetails.middleName + ' ' : ''}{item.headOfDepartmentDetails.lastName}
+            </div>
+          ) : (
+            <span className={`${item.headOfDepartment === 'Not Assigned' ? 'text-gray-500 italic' : 'text-blue-900'} truncate`}>
+              {item.headOfDepartment}
+            </span>
+          )}
+        </div>
+      </div>
+    ),
+    sortable: true 
+  },
+  { header: "Description", accessor: "description", className: "text-blue-900 text-center align-middle min-w-[100px] max-w-[150px] truncate" },
   { 
     header: "Total Courses", 
     accessor: "totalCourses", 
-    className: "text-blue-900 text-center align-middle", 
+      className: "text-blue-900 text-center align-middle cursor-pointer hover:bg-blue-100 transition-colors min-w-[80px] max-w-[100px]", 
     render: (item: Department) => item.courseOfferings?.length || 0,
     sortable: true
   },
-  { header: "Total Instructors", accessor: "totalInstructors", className: "text-blue-900 text-center align-middle", sortable: true },
+    { 
+      header: "Total Instructors", 
+      accessor: "totalInstructors", 
+      className: "text-blue-900 text-center align-middle cursor-pointer hover:bg-blue-100 transition-colors min-w-[80px] max-w-[100px]", 
+      sortable: true 
+    },
   { 
     header: "Status", 
     accessor: "status", 
-    className: "text-center align-middle", 
+      className: "text-center align-middle cursor-pointer hover:bg-blue-100 transition-colors min-w-[80px] max-w-[100px]", 
     render: (item: Department) => (
-      <Badge variant={item.status === "active" ? "success" : "destructive"} className="text-xs px-3 py-1 rounded-full">
+      <Badge variant={item.status === "active" ? "success" : "destructive"} className="text-xs px-2 py-1 rounded-full">
         {item.status.toUpperCase()}
       </Badge>
     ),
@@ -123,41 +174,77 @@ const DEPARTMENT_COLUMNS: TableListColumn<Department>[] = [
   },
 ];
 
-// Add API response types
+  // Define column options for the dialog
+  const COLUMN_OPTIONS: ColumnOption[] = [
+    {
+      accessor: "logo",
+      header: "Logo",
+      description: "Department logo or default icon",
+      category: "Visual"
+    },
+    {
+      accessor: "name",
+      header: "Department Name",
+      description: "Full name of the department",
+      category: "Basic Info",
+      required: true
+    },
+    {
+      accessor: "code",
+      header: "Code",
+      description: "Department code/abbreviation",
+      category: "Basic Info",
+      required: true
+    },
+    {
+      accessor: "headOfDepartment",
+      header: "Head of Department",
+      description: "Department head or leader",
+      category: "Management"
+    },
+    {
+      accessor: "description",
+      header: "Description",
+      description: "Department description and details",
+      category: "Basic Info"
+    },
+    {
+      accessor: "totalCourses",
+      header: "Total Courses",
+      description: "Number of courses offered by the department",
+      category: "Statistics"
+    },
+    {
+      accessor: "totalInstructors",
+      header: "Total Instructors",
+      description: "Number of instructors in the department",
+      category: "Statistics"
+    },
+    {
+      accessor: "status",
+      header: "Status",
+      description: "Active or inactive status",
+      category: "Status"
+    }
+  ];
+
+// API response types
 interface ApiResponse<T> {
   data?: T;
   error?: string;
 }
 
-interface DepartmentResponse extends Department {
-  courseOfferings: Course[];
-  totalInstructors: number;
-}
-
-// Add interfaces for better type safety
+// State interfaces
 interface PageState {
   loading: boolean;
   isRefreshing: boolean;
   isDeleting: boolean;
   isExporting: boolean;
-  isPrinting: boolean;
-  isFiltering: boolean;
   error: string | null;
   operationInProgress: {
-    type: 'fetch' | 'refresh' | 'delete' | 'export' | 'print' | null;
+    type: 'fetch' | 'refresh' | 'delete' | 'export' | null;
     retryCount: number;
   };
-}
-
-interface FilterState {
-  name: string;
-  code: string;
-  head: string;
-  minCourses: string;
-  maxCourses: string;
-  minInstructors: string;
-  maxInstructors: string;
-  status: string;
 }
 
 interface SortState {
@@ -169,7 +256,6 @@ interface SortState {
 interface DialogState {
   modalOpen: boolean;
   deleteDialogOpen: boolean;
-  filterDialogOpen: boolean;
   sortDialogOpen: boolean;
   exportDialogOpen: boolean;
   viewDialogOpen: boolean;
@@ -184,8 +270,8 @@ interface EditableCell {
   columnAccessor: string;
 }
 
-// Add validation utilities
-const validateDepartment = (dept: any): dept is DepartmentResponse => {
+// Validation utilities
+const validateDepartment = (dept: any): dept is Department => {
   return (
     typeof dept === 'object' &&
     dept !== null &&
@@ -199,13 +285,13 @@ const validateDepartment = (dept: any): dept is DepartmentResponse => {
   );
 };
 
-const validateDepartments = (data: any[]): data is DepartmentResponse[] => {
+const validateDepartments = (data: any[]): data is Department[] => {
   return Array.isArray(data) && data.every(validateDepartment);
 };
 
-// Add retry utility
+// Retry utility
 const MAX_RETRIES = 3;
-const RETRY_DELAY = 1000; // 1 second
+const RETRY_DELAY = 1000;
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -217,14 +303,14 @@ const retryOperation = async <T,>(
     return await operation();
   } catch (error) {
     if (retryCount < MAX_RETRIES) {
-      await delay(RETRY_DELAY * (retryCount + 1)); // Exponential backoff
+      await delay(RETRY_DELAY * (retryCount + 1));
       return retryOperation(operation, retryCount + 1);
     }
     throw error;
   }
 };
 
-// Add user-friendly error messages
+// Error message utility
 const getErrorMessage = (error: unknown, operation: string): string => {
   if (error instanceof Error) {
     if (error.message.includes('Failed to fetch')) {
@@ -241,30 +327,9 @@ const getErrorMessage = (error: unknown, operation: string): string => {
   return `An unexpected error occurred while trying to ${operation}. Please try again later.`;
 };
 
-// Define FilterField type to match FilterDialog
-type FilterField = {
-  key: string;
-  label: string;
-  type: 'text' | 'number' | 'select';
-  badgeType?: 'active' | 'range';
-  minKey?: string;
-  maxKey?: string;
-  options?: { value: string; label: string }[];
-};
 
-// Add helper to get active filter chips
-const getActiveFilterChips = (filters: FilterState) => {
-  const chips = [];
-  if (filters.status && filters.status !== 'all') chips.push({ key: 'status', label: `Status: ${filters.status.charAt(0).toUpperCase() + filters.status.slice(1)}` });
-  if (filters.head) chips.push({ key: 'head', label: `Head: ${filters.head}` });
-  if (filters.minCourses) chips.push({ key: 'minCourses', label: `Min Courses: ${filters.minCourses}` });
-  if (filters.maxCourses) chips.push({ key: 'maxCourses', label: `Max Courses: ${filters.maxCourses}` });
-  if (filters.minInstructors) chips.push({ key: 'minInstructors', label: `Min Instructors: ${filters.minInstructors}` });
-  if (filters.maxInstructors) chips.push({ key: 'maxInstructors', label: `Max Instructors: ${filters.maxInstructors}` });
-  if (filters.name) chips.push({ key: 'name', label: `Name: ${filters.name}` });
-  if (filters.code) chips.push({ key: 'code', label: `Code: ${filters.code}` });
-  return chips;
-};
+
+
 
 export default function DepartmentListPage() {
   // State declarations with proper types
@@ -273,8 +338,6 @@ export default function DepartmentListPage() {
     isRefreshing: false,
     isDeleting: false,
     isExporting: false,
-    isPrinting: false,
-    isFiltering: false,
     error: null,
     operationInProgress: {
       type: null,
@@ -283,17 +346,6 @@ export default function DepartmentListPage() {
   });
 
   const [departments, setDepartments] = useState<Department[]>([]);
-  const [filters, setFilters] = useState<FilterState>({
-    name: '',
-    code: '',
-    head: '',
-    minCourses: '',
-    maxCourses: '',
-    minInstructors: '',
-    maxInstructors: '',
-    status: 'all'
-  });
-
   const [sortState, setSortState] = useState<SortState>({
     field: 'name',
     order: 'asc',
@@ -303,7 +355,6 @@ export default function DepartmentListPage() {
   const [dialogState, setDialogState] = useState<DialogState>({
     modalOpen: false,
     deleteDialogOpen: false,
-    filterDialogOpen: false,
     sortDialogOpen: false,
     exportDialogOpen: false,
     viewDialogOpen: false,
@@ -319,11 +370,16 @@ export default function DepartmentListPage() {
   const [viewDepartment, setViewDepartment] = useState<Department | undefined>();
   const [search, setSearch] = useState<string>("");
   const [instructors, setInstructors] = useState<any[]>([]);
-  const router = useRouter();
+
+
 
   const [visibleColumns, setVisibleColumns] = useState<string[]>(DEPARTMENT_COLUMNS.map(c => c.accessor));
   const [expandedRowIds, setExpandedRowIds] = useState<string[]>([]);
   const [editingCell, setEditingCell] = useState<EditableCell | null>(null);
+  
+  // Quick filter states
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [headFilter, setHeadFilter] = useState('all');
 
   const fuse = React.useMemo(() => new Fuse(departments, {
     keys: ["name", "code"],
@@ -340,31 +396,30 @@ export default function DepartmentListPage() {
 
   const filteredDepartments = useMemo(() => {
     let result = fuzzyResults.map(r => r.item);
-    if (filters.status !== 'all') {
-      result = result.filter((dept) => dept.status === filters.status);
-    }
-    // Advanced filters
-    if (filters.head) {
-      result = result.filter(dept => dept.headOfDepartment?.toLowerCase().includes(filters.head.toLowerCase()));
-    }
-    if (filters.minCourses) {
-      result = result.filter(dept => (dept.courseOfferings?.length || 0) >= Number(filters.minCourses));
-    }
-    if (filters.maxCourses) {
-      result = result.filter(dept => (dept.courseOfferings?.length || 0) <= Number(filters.maxCourses));
-    }
-    if (filters.minInstructors) {
-      result = result.filter(dept => (dept.totalInstructors || 0) >= Number(filters.minInstructors));
-    }
-    if (filters.maxInstructors) {
-      result = result.filter(dept => (dept.totalInstructors || 0) <= Number(filters.maxInstructors));
-    }
-    if (filters.name) {
-      result = result.filter(dept => dept.name.toLowerCase().includes(filters.name.toLowerCase()));
-    }
-    if (filters.code) {
-      result = result.filter(dept => dept.code.toLowerCase().includes(filters.code.toLowerCase()));
-    }
+    
+    // Apply quick filters
+    result = result.filter(dept => {
+      // Status filter
+      if (statusFilter !== 'all' && dept.status !== statusFilter) return false;
+      
+      // Head filter
+      if (headFilter !== 'all') {
+        const hasHead = dept.headOfDepartment && 
+                       dept.headOfDepartment.trim() !== '' && 
+                       dept.headOfDepartment.trim() !== 'Not Assigned';
+        
+        // Debug logging for head filter
+        if (headFilter === 'unassigned') {
+          console.log(`Head Filter Debug - Dept: ${dept.name}, headOfDepartment: "${dept.headOfDepartment}", hasHead: ${hasHead}`);
+        }
+        
+        if (headFilter === 'assigned' && !hasHead) return false;
+        if (headFilter === 'unassigned' && hasHead) return false;
+      }
+      
+      return true;
+    });
+    
     // Multi-column sort
     result.sort((a, b) => {
       for (const { field, order } of sortState.fields) {
@@ -389,13 +444,15 @@ export default function DepartmentListPage() {
       return 0;
     });
     return result;
-  }, [fuzzyResults, filters, sortState.fields]);
+  }, [fuzzyResults, sortState.fields, statusFilter, headFilter]);
 
   const totalPages = Math.ceil(filteredDepartments.length / itemsPerPage);
   const paginatedDepartments = filteredDepartments.slice(
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
   );
+
+
 
   // Checkbox logic
   const isAllSelected = paginatedDepartments.length > 0 && paginatedDepartments.every(d => selectedIds.includes(d.id));
@@ -442,7 +499,7 @@ export default function DepartmentListPage() {
     {
       header: (
         <div className="flex justify-center items-center">
-          <SharedCheckbox checked={isAllSelected} indeterminate={isIndeterminate} onCheckedChange={handleSelectAll} />
+          <Checkbox checked={isAllSelected} indeterminate={isIndeterminate} onCheckedChange={handleSelectAll} />
         </div>
       ),
       accessor: 'select',
@@ -454,15 +511,81 @@ export default function DepartmentListPage() {
       accessor: "actions", 
       className: "text-center align-middle", 
       render: (item: Department) => (
-        <TableRowActions
-          onView={() => { setViewDepartment(item); setDialogState(prev => ({ ...prev, viewDialogOpen: true })); }}
-          onEdit={() => { setModalDepartment(item); setDialogState(prev => ({ ...prev, modalOpen: true })); }}
-          onDelete={() => { handleDelete(item); }}
-          itemName={item.name}
-          disabled={item.status === "active" || item.courseOfferings?.length > 0 || item.totalInstructors > 0}
-          deleteTooltip={getDeleteTooltip(item)}
-          viewAriaLabel="View Department"
-        />
+        <div className="flex gap-2 justify-center">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label="View Department"
+                  className="hover:bg-blue-50"
+                  onClick={() => handleView(item)}
+                >
+                  <Eye className="h-4 w-4 text-blue-600" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top" align="center" className="bg-blue-900 text-white">
+                View details
+              </TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Edit Department"
+                  className="hover:bg-green-50"
+                  onClick={() => handleEdit(item)}
+                >
+                  <Pencil className="h-4 w-4 text-green-600" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top" align="center" className="bg-blue-900 text-white">
+                {getEditTooltip(item) || "Edit"}
+              </TooltipContent>
+            </Tooltip>
+            {item.status === "inactive" ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Reactivate Department"
+                    className="hover:bg-green-50"
+                    onClick={() => handleReactivate(item)}
+                    disabled={pageState.isDeleting}
+                  >
+                    <RotateCcw className="h-4 w-4 text-green-600" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top" align="center" className="bg-blue-900 text-white">
+                  Reactivate department
+                </TooltipContent>
+              </Tooltip>
+            ) : (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-block">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label="Deactivate Department"
+                      className="hover:bg-red-50"
+                      onClick={() => handleDelete(item)}
+                      disabled={pageState.isDeleting}
+                    >
+                      <Trash2 className="h-4 w-4 text-red-600" />
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="top" align="center" className="bg-blue-900 text-white">
+                  {getDeleteTooltip(item) || "Deactivate"}
+                </TooltipContent>
+              </Tooltip>
+            )}
+          </TooltipProvider>
+        </div>
       )
     },
   ];
@@ -477,13 +600,216 @@ export default function DepartmentListPage() {
   const printColumns = DEPARTMENT_COLUMNS.map(col => ({
     header: typeof col.header === 'string' ? col.header : col.accessor,
     accessor: col.accessor
-  }));
+  })).filter(col => col.accessor !== 'logo'); // Exclude logo from print as it's not text
 
   // Add export columns state
   const [exportColumns, setExportColumns] = useState<string[]>(exportableColumns.map(col => col.key));
 
-  // Add state for removing chip
-  const [removingChip, setRemovingChip] = useState<string | null>(null);
+  // Additional state variables
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [sortDialogOpen, setSortDialogOpen] = useState(false);
+  const [sortField, setSortField] = useState<SortFieldKey>('name');
+  const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
+  const [sortFields, setSortFields] = useState<MultiSortField[]>([{ field: 'name', order: 'asc' }]);
+  const [bulkActionsDialogOpen, setBulkActionsDialogOpen] = useState(false);
+  const [selectedDepartmentsForBulkAction, setSelectedDepartmentsForBulkAction] = useState<Department[]>([]);
+  const [pdfOrientation, setPdfOrientation] = useState<'portrait' | 'landscape'>('portrait');
+  const [includeLogos, setIncludeLogos] = useState<boolean>(false);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [visibleColumnsDialogOpen, setVisibleColumnsDialogOpen] = useState(false);
+  const [lastActionTime, setLastActionTime] = useState<string>("2 minutes ago");
+  // Add state for bulk deactivate dialog
+  const [bulkDeactivateDialogOpen, setBulkDeactivateDialogOpen] = useState(false);
+  const [bulkReactivateDialogOpen, setBulkReactivateDialogOpen] = useState(false);
+
+  // Helper function to make an image rounded
+  const makeImageRounded = async (imageData: string): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const img = new window.Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          reject(new Error('Could not get canvas context'));
+          return;
+        }
+        
+        const size = Math.min(img.width, img.height);
+        canvas.width = size;
+        canvas.height = size;
+        
+        // Create circular clipping path
+        ctx.beginPath();
+        ctx.arc(size / 2, size / 2, size / 2, 0, 2 * Math.PI);
+        ctx.closePath();
+        ctx.clip();
+        
+        // Calculate position to center the image
+        const x = (size - img.width) / 2;
+        const y = (size - img.height) / 2;
+        
+        // Draw the image
+        ctx.drawImage(img, x, y);
+        
+        // Convert to base64
+        const roundedImageData = canvas.toDataURL('image/png', 0.8);
+        resolve(roundedImageData);
+      };
+      
+      img.onerror = () => {
+        reject(new Error('Failed to load image for rounding'));
+      };
+      
+      img.src = imageData;
+    });
+  };
+
+  // Helper function to create a default avatar
+  const createDefaultAvatar = (): string => {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      canvas.width = 100;
+      canvas.height = 100;
+      
+      // Create circular clipping path
+      ctx.beginPath();
+      ctx.arc(50, 50, 50, 0, 2 * Math.PI);
+      ctx.closePath();
+      ctx.clip();
+      
+      // Draw a simple building icon with rounded background
+      ctx.fillStyle = '#e5e7eb'; // Light gray background
+      ctx.fillRect(0, 0, 100, 100);
+      
+      ctx.fillStyle = '#6b7280'; // Gray building
+      ctx.fillRect(20, 40, 60, 50);
+      
+      // Windows
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(30, 50, 10, 10);
+      ctx.fillRect(60, 50, 10, 10);
+      ctx.fillRect(30, 70, 10, 10);
+      ctx.fillRect(60, 70, 10, 10);
+      
+      // Door
+      ctx.fillStyle = '#4b5563';
+      ctx.fillRect(45, 70, 10, 20);
+      
+      // Convert to base64
+      return canvas.toDataURL('image/png', 0.8);
+    } else {
+      throw new Error('Failed to create canvas context');
+    }
+  };
+
+  // Helper function to convert image to base64 with better CORS handling
+  const convertImageToBase64 = (imageUrl: string): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      // Handle relative URLs by making them absolute
+      const fullUrl = imageUrl.startsWith('http') ? imageUrl : `${window.location.origin}${imageUrl}`;
+      console.log('🖼️ Converting image URL:', fullUrl);
+      
+      const img = new window.Image();
+      
+      // Try with CORS first
+      img.crossOrigin = 'anonymous';
+      
+      img.onload = () => {
+        try {
+          console.log('✅ Image loaded successfully, dimensions:', img.width, 'x', img.height);
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            reject(new Error('Could not get canvas context'));
+            return;
+          }
+          
+          // Set canvas size to image size (max 100x100 for PDF)
+          const maxSize = 100;
+          let { width, height } = img;
+          
+          if (width > height) {
+            if (width > maxSize) {
+              height = (height * maxSize) / width;
+              width = maxSize;
+            }
+          } else {
+            if (height > maxSize) {
+              width = (width * maxSize) / height;
+              height = maxSize;
+            }
+          }
+          
+          canvas.width = width;
+          canvas.height = height;
+          
+          // Draw image to canvas
+          ctx.drawImage(img, 0, 0, width, height);
+          
+          // Convert to base64 - try PNG first, fallback to JPEG
+          let dataURL;
+          try {
+            dataURL = canvas.toDataURL('image/png', 0.8);
+          } catch (pngError) {
+            console.log('PNG conversion failed, trying JPEG...');
+            dataURL = canvas.toDataURL('image/jpeg', 0.8);
+          }
+          
+          console.log('✅ Successfully converted to base64, length:', dataURL.length);
+          console.log('📊 Base64 data starts with:', dataURL.substring(0, 50));
+          console.log('🖼️ Image format:', dataURL.startsWith('data:image/jpeg') ? 'JPEG' : 'PNG');
+          resolve(dataURL);
+        } catch (error) {
+          console.error('❌ Error converting image to base64:', error);
+          reject(error);
+        }
+      };
+      
+      img.onerror = (error) => {
+        console.error('❌ Error loading image with CORS:', error);
+        console.error('🔄 Trying without CORS...');
+        
+        // Fallback: try without CORS
+        const imgNoCors = new window.Image();
+        imgNoCors.onload = () => {
+          try {
+            console.log('✅ Image loaded without CORS, dimensions:', imgNoCors.width, 'x', imgNoCors.height);
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            if (!ctx) {
+              reject(new Error('Could not get canvas context'));
+              return;
+            }
+            
+            canvas.width = imgNoCors.width;
+            canvas.height = imgNoCors.height;
+            
+            // Draw image to canvas
+            ctx.drawImage(imgNoCors, 0, 0);
+            
+            // Convert to base64
+            const dataURL = canvas.toDataURL('image/png', 0.8);
+            console.log('✅ Successfully converted to base64 (no CORS), length:', dataURL.length);
+            resolve(dataURL);
+          } catch (error) {
+            console.error('❌ Error converting image to base64 (no CORS):', error);
+            reject(error);
+          }
+        };
+        
+        imgNoCors.onerror = () => {
+          console.error('❌ Failed to load image even without CORS:', fullUrl);
+          reject(new Error('Failed to load image - CORS issue or invalid URL'));
+        };
+        
+        imgNoCors.src = fullUrl;
+      };
+      
+      img.src = fullUrl;
+    });
+  };
 
   // Export handlers
   const handleExport = async () => {
@@ -500,19 +826,31 @@ export default function DepartmentListPage() {
         operationInProgress: { type: 'export', retryCount: 0 }
       }));
 
-      const selectedColumns = exportableColumns.filter(col => exportColumns.includes(col.key));
-      const headers = selectedColumns.map(col => col.label);
+      // Filter out logo column from exportable columns if not including logos
+      const columnsToExport = includeLogos 
+        ? exportableColumns.filter(col => exportColumns.includes(col.key) && col.key !== 'logo')
+        : exportableColumns.filter(col => exportColumns.includes(col.key));
+      
+      const headers = columnsToExport.map(col => col.label);
       const rows = filteredDepartments.map((dept) =>
-        selectedColumns.map((col) => {
+        columnsToExport.map((col) => {
           if (col.key === 'totalCourses') return String(dept.courseOfferings?.length || 0);
           if (col.key === 'totalInstructors') return String(dept.totalInstructors || 0);
+          if (col.key === 'logo') return dept.logo ? 'Yes' : 'No';
           return String(dept[col.key as keyof Department] || '');
         })
       );
 
       switch (exportFormat) {
         case 'pdf':
-          const doc = new jsPDF();
+          console.log('Starting PDF export with logos:', includeLogos);
+          console.log('Total departments to export:', filteredDepartments.length);
+          const doc = new jsPDF({
+            orientation: pdfOrientation,
+            unit: 'mm',
+            format: 'a4'
+          });
+          
           // Add title
           doc.setFontSize(16);
           doc.setFont('helvetica', 'bold');
@@ -533,17 +871,108 @@ export default function DepartmentListPage() {
           // Reset text color for table
           doc.setTextColor(0, 0, 0);
 
+          // Prepare table data with logos if enabled
+          let tableHeaders = headers;
+          let tableRows = rows;
+          let logoDataMap = new Map<number, string>(); // Store logo data by row index
+          
+          if (includeLogos) {
+            console.log('Processing logos for PDF export...');
+            
+            // Check if headers already contain a Logo column and remove it
+            const headersWithoutLogo = headers.filter(header => header !== 'Logo');
+            tableHeaders = ['Logo', ...headersWithoutLogo];
+            
+            // Explicitly fetch and convert all logos to base64 first
+            console.log('Fetching and converting logos to base64...');
+            const logoPromises = filteredDepartments.map(async (dept, index) => {
+              let logoData = '';
+              
+              console.log(`🔍 Department ${dept.name}: logo field =`, dept.logo);
+              console.log(`🔍 Department ${dept.name}: logo type =`, typeof dept.logo);
+              
+              if (dept.logo) {
+                console.log(`Processing logo for ${dept.name}:`, dept.logo);
+                try {
+                  logoData = await convertImageToBase64(dept.logo);
+                  console.log(`✅ Successfully converted logo for ${dept.name}, data length:`, logoData.length);
+                  console.log(`Logo data starts with data:image:`, logoData.startsWith('data:image'));
+                  
+                  if (!logoData.startsWith('data:image')) {
+                    console.error(`❌ Invalid image data for ${dept.name}:`, logoData.substring(0, 100));
+                    throw new Error('Invalid image data');
+                  }
+                  
+                  // Make the logo rounded
+                  logoData = await makeImageRounded(logoData);
+                  console.log(`✅ Made logo rounded for ${dept.name}`);
+                } catch (error) {
+                  console.warn(`❌ Failed to convert logo for department ${dept.name}:`, error);
+                  // Don't re-throw, create default avatar instead
+                  console.log(`🔄 Creating default avatar for ${dept.name} due to logo conversion failure`);
+                  logoData = createDefaultAvatar();
+                }
+              } else {
+                console.log(`No logo for ${dept.name}, creating default avatar`);
+                logoData = createDefaultAvatar();
+                console.log(`✅ Created default avatar for ${dept.name}`);
+              }
+              
+              return { index, logoData, deptName: dept.name };
+            });
+            
+            // Wait for all logo conversions to complete
+            const logoResults = await Promise.all(logoPromises);
+            
+            console.log(`📊 Logo conversion results:`, logoResults.length);
+            
+            // Store logo data in map
+            logoResults.forEach(({ index, logoData, deptName }) => {
+              logoDataMap.set(index, logoData);
+              console.log(`✅ Stored logo data for ${deptName} at index ${index}, data length: ${logoData.length}`);
+              console.log(`📋 Logo data preview:`, logoData.substring(0, 100) + '...');
+            });
+            
+            console.log(`✅ Logo processing completed. Total logos: ${logoDataMap.size}`);
+            console.log('Logo data map keys:', Array.from(logoDataMap.keys()));
+            
+            // Create table rows with placeholders (logos will be added via didDrawCell)
+            tableRows = filteredDepartments.map((dept, index) => {
+              const rowData = rows[index];
+              const rowDataWithoutLogo = rowData.filter((_, colIndex) => headers[colIndex] !== 'Logo');
+              const newRow = ['LOGO_PLACEHOLDER', ...rowDataWithoutLogo];
+              console.log(`📋 Row ${index} for ${dept.name}:`, newRow);
+              console.log(`📋 Row ${index} logoDataMap has key:`, logoDataMap.has(index));
+              return newRow;
+            });
+          }
+
           // Add some spacing
           doc.setFontSize(12);
-          autoTable(doc, {
-            head: [headers] as string[][],
-            body: rows as string[][],
+          
+          console.log('Table headers:', tableHeaders);
+          console.log('Table rows:', tableRows);
+          console.log('Logo data map size:', logoDataMap.size);
+          console.log('Logo data map keys:', Array.from(logoDataMap.keys()));
+          
+          // Debug: Log each entry in logoDataMap
+          logoDataMap.forEach((logoData, index) => {
+            console.log(`🔍 LogoDataMap[${index}]: length=${logoData.length}, startsWith=data:image: ${logoData.startsWith('data:image')}`);
+          });
+
+
+
+          // Create table with didDrawCell callback for logo images
+          const tableResult = autoTable(doc, {
+            head: [tableHeaders] as string[][],
+            body: tableRows as any[][],
             startY: 35,
             styles: { 
               fontSize: 8,
               cellPadding: 3,
               overflow: 'linebreak',
               cellWidth: 'wrap',
+              minCellHeight: 18, // Ensure cells are tall enough for 10mm rounded images
             },
             headStyles: { 
               fillColor: [12, 37, 86],
@@ -551,7 +980,16 @@ export default function DepartmentListPage() {
               halign: 'center',
               fontStyle: 'bold',
             },
-            columnStyles: {
+            columnStyles: includeLogos ? {
+              0: { cellWidth: 20, halign: 'center', valign: 'middle' }, // Logo column - wider and centered
+              1: { cellWidth: 'auto' }, // Department Name
+              2: { cellWidth: 'auto' }, // Code
+              3: { cellWidth: 'auto' }, // Head of Department
+              4: { cellWidth: 'auto' }, // Description
+              5: { cellWidth: 'auto', halign: 'center' }, // Total Courses
+              6: { cellWidth: 'auto', halign: 'center' }, // Total Instructors
+              7: { cellWidth: 'auto', halign: 'center' }, // Status
+            } : {
               0: { cellWidth: 'auto' }, // Department Name
               1: { cellWidth: 'auto' }, // Code
               2: { cellWidth: 'auto' }, // Head of Department
@@ -562,7 +1000,82 @@ export default function DepartmentListPage() {
             },
             margin: { top: 16, right: 10, bottom: 10, left: 10 },
             theme: 'grid',
+            didParseCell: includeLogos ? (data) => {
+              console.log(`🎨 didParseCell called: column=${data.column.index}, row=${data.row.index}, section=${data.cell.section}, text="${data.cell.text[0]}"`);
+              // Handle logo images in the first column (logo column) - but NOT the header row
+              if (data.column.index === 0 && data.cell.section === 'body') {
+                const cellText = data.cell.text[0];
+                console.log(`🎨 didParseCell: Logo column cell detected: "${cellText}" at row ${data.row.index}`);
+                
+                if (cellText === 'LOGO_PLACEHOLDER') {
+                  // FIXED: Use data.row.index directly (no need to subtract 1)
+                  const logoData = logoDataMap.get(data.row.index);
+                  
+                  console.log(`🔍 Looking for logo data at index ${data.row.index}, found:`, !!logoData);
+                  console.log(`🔍 Total logoDataMap size:`, logoDataMap.size);
+                  console.log(`🔍 Available keys:`, Array.from(logoDataMap.keys()));
+                  
+                  // Always clear the placeholder text, regardless of whether we have logo data
+                  // The didDrawCell will handle adding the image or fallback text
+                  data.cell.text = [''];
+                  console.log(`✅ Cleared cell text for row ${data.row.index}`);
+                } else {
+                  console.log(`⚠️ Cell text is not 'LOGO_PLACEHOLDER': "${cellText}"`);
+                }
+              } else if (data.column.index === 0 && data.cell.section === 'head') {
+                console.log(`📋 Header row detected, keeping text: "${data.cell.text[0]}"`);
+              }
+            } : undefined,
+            didDrawCell: includeLogos ? (data) => {
+              console.log(`🎨 didDrawCell called: column=${data.column.index}, row=${data.row.index}, section=${data.cell.section}, text="${data.cell.text[0]}"`);
+              // Handle logo images in the first column (logo column) - but NOT the header row
+              if (data.column.index === 0 && data.cell.section === 'body') {
+                const cellText = data.cell.text[0];
+                console.log(`🎨 didDrawCell: Logo column cell detected: "${cellText}" at row ${data.row.index}`);
+                
+                // Process all body cells in the logo column (including first row)
+                if (cellText === '' || cellText === 'LOGO_PLACEHOLDER') {
+                  // FIXED: Use data.row.index directly (no need to subtract 1)
+                  const logoData = logoDataMap.get(data.row.index);
+                  
+                  console.log(`🔍 Looking for logo data at index ${data.row.index}, found:`, !!logoData);
+                  
+                  if (logoData) {
+                    try {
+                      // Detect image format from data URL
+                      const imageFormat = logoData.startsWith('data:image/jpeg') ? 'JPEG' : 'PNG';
+                      
+                      // Calculate image dimensions and position
+                      const imgWidth = 10; // 10mm width for rounded images
+                      const imgHeight = 10; // 10mm height for rounded images
+                      const x = data.cell.x + (data.cell.width - imgWidth) / 2; // Center horizontally
+                      const y = data.cell.y + (data.cell.height - imgHeight) / 2; // Center vertically
+                      
+                      console.log(`📐 Cell position: x=${data.cell.x}, y=${data.cell.y}, width=${data.cell.width}, height=${data.cell.height}`);
+                      console.log(`📐 Image position: x=${x}, y=${y}, size=${imgWidth}x${imgHeight}`);
+                      console.log(`📊 Logo data length:`, logoData.length);
+                      console.log(`🖼️ Image format:`, imageFormat);
+                      console.log(`🖼️ Logo data preview:`, logoData.substring(0, 100) + '...');
+                      
+                      // Add the image to the PDF with correct format
+                      doc.addImage(logoData, imageFormat, x, y, imgWidth, imgHeight);
+                      console.log(`✅ Successfully added logo for row ${data.row.index}`);
+                    } catch (error) {
+                      console.error(`❌ Error adding logo for row ${data.row.index}:`, error);
+                      console.error(`❌ Error details:`, error instanceof Error ? error.message : String(error));
+                      // Don't set text back, leave it empty
+                    }
+                  } else {
+                    console.log(`🏢 No logo data found for row ${data.row.index}`);
+                    // Don't set text back, leave it empty
+                  }
+                }
+              } else if (data.column.index === 0 && data.cell.section === 'head') {
+                console.log(`📋 Header row detected, keeping text: "${data.cell.text[0]}"`);
+              }
+            } : undefined,
           });
+          
           doc.save("departments.pdf");
           break;
 
@@ -626,6 +1139,7 @@ export default function DepartmentListPage() {
       }
 
       toast.success(`Successfully exported departments to ${exportFormat.toUpperCase()}`);
+      setLastActionTime("Just now");
     } catch (error) {
       const errorMessage = getErrorMessage(error, 'export departments');
       setPageState(prev => ({ 
@@ -650,6 +1164,7 @@ export default function DepartmentListPage() {
       ...d,
       totalCourses: d.courseOfferings?.length?.toString() || '0',
       totalInstructors: d.totalInstructors?.toString() || '0',
+      logo: d.logo ? 'Yes' : 'No',
     }));
     const printFunction = PrintLayout({
       title: 'Department List',
@@ -658,39 +1173,71 @@ export default function DepartmentListPage() {
       totalItems: filteredDepartments.length,
     });
     printFunction();
+    setLastActionTime("Just now");
   };
 
-  // Bulk delete handler
+  // Bulk deactivate handler
   const handleBulkDelete = async () => {
     if (selectedIds.length === 0) return;
-    if (!window.confirm(`Are you sure you want to delete ${selectedIds.length} selected department(s)? This action cannot be undone.`)) return;
+    setBulkDeactivateDialogOpen(true);
+  };
+
+  // Actual deactivation logic
+  const confirmBulkDeactivate = async () => {
     setPageState(prev => ({ ...prev, loading: true }));
     try {
-      // Simulate API call
-      await new Promise(res => setTimeout(res, 1000));
-      setDepartments(prev => prev.filter(d => !selectedIds.includes(d.id)));
+      // Update all selected departments to inactive status
+      const updatePromises = selectedIds.map(async (id) => {
+        const response = await fetch(`/api/departments/${id}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            status: 'inactive'
+          }),
+        });
+        if (!response.ok) {
+          throw new Error(`Failed to deactivate department ${id}`);
+        }
+        return response.json();
+      });
+
+      await Promise.all(updatePromises);
+      setDepartments(prev => prev.map(d =>
+        selectedIds.includes(d.id)
+          ? { ...d, status: 'inactive' as const }
+          : d
+      ));
       setSelectedIds([]);
-      toast.success(`${selectedIds.length} department(s) deleted successfully.`);
+      toast.success(`${selectedIds.length} department(s) deactivated successfully.`);
     } catch (err) {
-      toast.error("Failed to delete departments.");
+      toast.error("Failed to deactivate departments.");
     }
     setPageState(prev => ({ ...prev, loading: false }));
+    setBulkDeactivateDialogOpen(false);
   };
 
   // Add handleSort function
   const handleSort = (field: string) => {
+    console.log('Sorting by field:', field);
     setSortState(prev => {
-      if (prev.field === field) {
-        return { ...prev, order: prev.order === 'asc' ? 'desc' : 'asc' };
-      }
-      return { ...prev, field: field as SortFieldKey, order: 'asc' };
+      const isSameField = prev.field === field;
+      const newOrder = isSameField && prev.order === 'asc' ? 'desc' : 'asc';
+      
+      return {
+        field: field as SortFieldKey,
+        order: newOrder,
+        fields: [{ field: field as SortFieldKey, order: newOrder }]
+      };
     });
   };
 
-  // Fetch departments from API with proper error handling, retry logic, and validation
+  // Fetch departments and instructors from API with proper error handling, retry logic, and validation
   useEffect(() => {
-    const fetchDepartments = async () => {
+    const fetchData = async () => {
       try {
+        console.log('Starting data fetch...');
         setPageState(prev => ({ 
           ...prev, 
           loading: true, 
@@ -698,32 +1245,89 @@ export default function DepartmentListPage() {
           operationInProgress: { type: 'fetch', retryCount: 0 }
         }));
 
-        const response = await retryOperation(async () => {
-          const res = await fetch('/api/departments');
-          if (!res.ok) {
-            throw new Error(`Failed to fetch departments: ${res.statusText}`);
-          }
-          return res;
-        });
-
-        const data: ApiResponse<DepartmentResponse[]> = await response.json();
-        
-        if (data.error) {
-          throw new Error(data.error);
+        // Test database connectivity first
+        try {
+          const testResponse = await fetch('/api/test-db');
+          const testData = await testResponse.json();
+          console.log('Database test result:', testData);
+        } catch (testError) {
+          console.error('Database test failed:', testError);
         }
 
-        if (!data.data || !validateDepartments(data.data)) {
+        // Fetch departments and instructors in parallel
+        const [departmentsResponse, instructorsResponse] = await Promise.all([
+          retryOperation(async () => {
+            const res = await fetch('/api/departments');
+            if (!res.ok) {
+              throw new Error(`Failed to fetch departments: ${res.statusText}`);
+            }
+            return res;
+          }),
+          retryOperation(async () => {
+            const res = await fetch('/api/instructors');
+            if (!res.ok) {
+              throw new Error(`Failed to fetch instructors: ${res.statusText}`);
+            }
+            return res;
+          })
+        ]);
+
+        const [departmentsData, instructorsData] = await Promise.all([
+          departmentsResponse.json(),
+          instructorsResponse.json()
+        ]);
+        
+        console.log('Instructors data received:', instructorsData);
+        console.log('Sample instructor raw data:', instructorsData[0]);
+        
+        if (departmentsData.error) {
+          throw new Error(departmentsData.error);
+        }
+
+        if (!departmentsData.data || !validateDepartments(departmentsData.data)) {
           throw new Error('Invalid department data received from server');
         }
 
-        setDepartments(data.data);
+        // Transform instructors data to match the expected format
+        const transformedInstructors = (Array.isArray(instructorsData) ? instructorsData : []).map((instructor: any) => {
+          // The API now returns the correct format, but let's ensure compatibility
+          if (instructor.name) {
+            // Already in correct format
+            return {
+              id: instructor.id,
+              name: instructor.name
+            };
+          } else {
+            // Fallback for old format
+            const fullName = [
+              instructor.firstName,
+              instructor.middleName,
+              instructor.lastName
+            ].filter(Boolean).join(' ').trim();
+            
+            return {
+              id: instructor.instructorId?.toString() || instructor.id,
+              name: fullName
+            };
+          }
+        });
+
+        console.log('Departments data received:', departmentsData);
+        console.log('Departments array length:', departmentsData.data?.length);
+        console.log('Sample department:', departmentsData.data?.[0]);
+        
+        setDepartments(departmentsData.data);
+        setInstructors(transformedInstructors);
+        console.log('Transformed instructors:', transformedInstructors);
+        console.log('Setting instructors state with length:', transformedInstructors.length);
+
         setPageState(prev => ({ 
           ...prev, 
           loading: false,
           operationInProgress: { type: null, retryCount: 0 }
         }));
       } catch (error) {
-        const errorMessage = getErrorMessage(error, 'load departments');
+        const errorMessage = getErrorMessage(error, 'load data');
         setPageState(prev => ({ 
           ...prev, 
           error: errorMessage,
@@ -734,49 +1338,140 @@ export default function DepartmentListPage() {
       }
     };
 
-    fetchDepartments();
+    fetchData();
   }, []);
 
   // Reset pagination on filter/search change
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, sortState.fields, filters]);
+  }, [search, sortState.fields]);
+
+  // Debug summary cards data
+  useEffect(() => {
+    if (!pageState.loading && departments.length > 0) {
+      console.log('Summary cards data:', {
+        totalDepartments: departments.length,
+        activeDepartments: departments.filter(d => d.status === 'active').length,
+        inactiveDepartments: departments.filter(d => d.status === 'inactive').length,
+        totalInstructors: departments.reduce((sum, d) => sum + (d.totalInstructors || 0), 0)
+      });
+    }
+  }, [departments, pageState.loading]);
+
+  // Keyboard shortcuts for view and edit functionality
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Ctrl/Cmd + V to view selected department (if any)
+      if ((event.ctrlKey || event.metaKey) && event.key === 'v') {
+        event.preventDefault();
+        if (selectedIds.length === 1) {
+          const selectedDepartment = departments.find(d => d.id === selectedIds[0]);
+          if (selectedDepartment) {
+            handleView(selectedDepartment);
+          }
+        }
+      }
+      
+      // Ctrl/Cmd + E to edit selected department (if any)
+      if ((event.ctrlKey || event.metaKey) && event.key === 'e') {
+        event.preventDefault();
+        if (selectedIds.length === 1) {
+          const selectedDepartment = departments.find(d => d.id === selectedIds[0]);
+          if (selectedDepartment) {
+            handleEdit(selectedDepartment);
+          }
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [selectedIds, departments]);
 
   // Add refresh function with proper error handling, retry logic, and validation
   const refreshDepartments = async () => {
     try {
       setPageState(prev => ({ 
         ...prev, 
+        loading: true, // Activate main loading state to show skeleton
         isRefreshing: true, 
         error: null,
         operationInProgress: { type: 'refresh', retryCount: 0 }
       }));
 
-      const response = await retryOperation(async () => {
-        const res = await fetch('/api/departments');
-        if (!res.ok) {
-          throw new Error(`Failed to refresh departments: ${res.statusText}`);
-        }
-        return res;
-      });
+      // Fetch departments and instructors in parallel
+      const [departmentsResponse, instructorsResponse] = await Promise.all([
+        retryOperation(async () => {
+          const res = await fetch('/api/departments');
+          if (!res.ok) {
+            throw new Error(`Failed to refresh departments: ${res.statusText}`);
+          }
+          return res;
+        }),
+        retryOperation(async () => {
+          const res = await fetch('/api/instructors');
+          if (!res.ok) {
+            throw new Error(`Failed to refresh instructors: ${res.statusText}`);
+          }
+          return res;
+        })
+      ]);
 
-      const data: ApiResponse<DepartmentResponse[]> = await response.json();
+      const [departmentsData, instructorsData] = await Promise.all([
+        departmentsResponse.json(),
+        instructorsResponse.json()
+      ]);
       
-      if (data.error) {
-        throw new Error(data.error);
+              console.log('Instructors data received (refresh):', instructorsData);
+        console.log('Sample instructor raw data (refresh):', instructorsData[0]);
+      
+      if (departmentsData.error) {
+        throw new Error(departmentsData.error);
       }
 
-      if (!data.data || !validateDepartments(data.data)) {
+      if (!departmentsData.data || !validateDepartments(departmentsData.data)) {
         throw new Error('Invalid department data received from server');
       }
 
-      setDepartments(data.data);
-      toast.success('Departments refreshed successfully');
+      // Transform instructors data to match the expected format
+      const transformedInstructors = (Array.isArray(instructorsData) ? instructorsData : []).map((instructor: any) => {
+        // The API now returns the correct format, but let's ensure compatibility
+        if (instructor.name) {
+          // Already in correct format
+          return {
+            id: instructor.id,
+            name: instructor.name
+          };
+        } else {
+          // Fallback for old format
+          const fullName = [
+            instructor.firstName,
+            instructor.middleName,
+            instructor.lastName
+          ].filter(Boolean).join(' ').trim();
+          
+          return {
+            id: instructor.instructorId?.toString() || instructor.id,
+            name: fullName
+          };
+        }
+      });
+
+      setDepartments(departmentsData.data);
+      setInstructors(transformedInstructors);
+      console.log('Transformed instructors (refresh):', transformedInstructors);
+      
+      toast.success('Data refreshed successfully', {
+        description: `${departmentsData.data.length} departments loaded`,
+        duration: 3000,
+      });
+      setLastActionTime("Just now");
     } catch (error) {
-      const errorMessage = getErrorMessage(error, 'refresh departments');
+      const errorMessage = getErrorMessage(error, 'refresh data');
       setPageState(prev => ({ 
         ...prev, 
         error: errorMessage,
+        loading: false,
         isRefreshing: false,
         operationInProgress: { type: null, retryCount: 0 }
       }));
@@ -784,6 +1479,7 @@ export default function DepartmentListPage() {
     } finally {
       setPageState(prev => ({ 
         ...prev, 
+        loading: false,
         isRefreshing: false,
         operationInProgress: { type: null, retryCount: 0 }
       }));
@@ -792,52 +1488,17 @@ export default function DepartmentListPage() {
 
   // Helper function for delete tooltip
   const getDeleteTooltip = (item: Department) => {
-    if (item.status === "active") return "Cannot delete an active department";
-    if (item.courseOfferings?.length > 0) return "Cannot delete department with courses";
-    if (item.totalInstructors > 0) return "Cannot delete department with instructors";
+    if (item.status === "inactive") return "Department is already inactive";
     return undefined;
   };
 
-  // Update filter dialog to use consolidated state
-  const handleFilterChange = (newFilters: Partial<FilterState>) => {
-    setFilters((prev: FilterState) => ({ ...prev, ...newFilters }));
+  // Helper function for edit tooltip
+  const getEditTooltip = (item: Department) => {
+    if (item.status === "active") return "Warning: Editing active department may affect ongoing operations";
+    if (item.courseOfferings?.length > 0) return "Warning: Department has courses - changes may affect course assignments";
+    if (item.totalInstructors > 0) return "Warning: Department has instructors - changes may affect instructor assignments";
+    return "Edit department details";
   };
-
-  // Update filter reset
-  const handleFilterReset = () => {
-    setFilters({
-      name: '',
-      code: '',
-      head: '',
-      minCourses: '',
-      maxCourses: '',
-      minInstructors: '',
-      maxInstructors: '',
-      status: 'all'
-    });
-  };
-
-  // State setters with proper types
-  const setLoading = (loading: boolean) => setPageState((prev: PageState) => ({ ...prev, loading }));
-  const setError = (error: string | null) => setPageState((prev: PageState) => ({ ...prev, error }));
-  const setRefreshing = (isRefreshing: boolean) => setPageState((prev: PageState) => ({ ...prev, isRefreshing }));
-  const setDeleting = (isDeleting: boolean) => setPageState((prev: PageState) => ({ ...prev, isDeleting }));
-  const setExporting = (isExporting: boolean) => setPageState((prev: PageState) => ({ ...prev, isExporting }));
-  const setPrinting = (isPrinting: boolean) => setPageState((prev: PageState) => ({ ...prev, isPrinting }));
-  const setFiltering = (isFiltering: boolean) => setPageState((prev: PageState) => ({ ...prev, isFiltering }));
-
-  // Dialog state setters
-  const setModalOpen = (open: boolean) => setDialogState((prev: DialogState) => ({ ...prev, modalOpen: open }));
-  const setDeleteDialogOpen = (open: boolean) => setDialogState((prev: DialogState) => ({ ...prev, deleteDialogOpen: open }));
-  const setFilterDialogOpen = (open: boolean) => setDialogState((prev: DialogState) => ({ ...prev, filterDialogOpen: open }));
-  const setSortDialogOpen = (open: boolean) => setDialogState((prev: DialogState) => ({ ...prev, sortDialogOpen: open }));
-  const setExportDialogOpen = (open: boolean) => setDialogState((prev: DialogState) => ({ ...prev, exportDialogOpen: open }));
-  const setViewDialogOpen = (open: boolean) => setDialogState((prev: DialogState) => ({ ...prev, viewDialogOpen: open }));
-
-  // Sort state setters
-  const setSortField = (field: SortFieldKey) => setSortState((prev: SortState) => ({ ...prev, field }));
-  const setSortOrder = (order: SortOrder) => setSortState((prev: SortState) => ({ ...prev, order }));
-  const setSortFields = (fields: MultiSortField[]) => setSortState((prev: SortState) => ({ ...prev, fields }));
 
   // Update handleDelete to use dialogState
   const handleDelete = (department: Department) => {
@@ -851,11 +1512,74 @@ export default function DepartmentListPage() {
     }));
   };
 
-  // Update confirmDelete to use dialogState
+  // Handle reactivate department
+  const handleReactivate = async (department: Department) => {
+    if (department.status === "active") {
+      toast.info("Department is already active");
+      return;
+    }
+
+    try {
+      setPageState(prev => ({ 
+        ...prev, 
+        isDeleting: true, 
+        error: null,
+        operationInProgress: { type: 'delete', retryCount: 0 }
+      }));
+
+      const response = await retryOperation(async () => {
+        const res = await fetch(`/api/departments/${department.id}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            status: 'active'
+          }),
+        });
+        if (!res.ok) {
+          throw new Error(`Failed to reactivate department: ${res.statusText}`);
+        }
+        return res;
+      });
+
+      const data: ApiResponse<{ success: boolean }> = await response.json();
+      
+      if (data.error) {
+        throw new Error(data.error);
+      }
+
+      // Update the department status in the local state
+      setDepartments(prev => prev.map(d => 
+        d.id === department.id 
+          ? { ...d, status: 'active' as const }
+          : d
+      ));
+      
+      toast.success(`${department.name} has been reactivated successfully`);
+    } catch (error) {
+      const errorMessage = getErrorMessage(error, 'reactivate department');
+      setPageState(prev => ({ 
+        ...prev, 
+        error: errorMessage,
+        isDeleting: false,
+        operationInProgress: { type: null, retryCount: 0 }
+      }));
+      toast.error(errorMessage);
+    } finally {
+      setPageState(prev => ({ 
+        ...prev, 
+        isDeleting: false,
+        operationInProgress: { type: null, retryCount: 0 }
+      }));
+    }
+  };
+
+  // Update confirmDelete to set status to inactive instead of deleting
   const confirmDelete = async () => {
     const departmentToDelete = dialogState.departmentToDelete;
     if (!departmentToDelete) {
-      toast.error('No department selected for deletion');
+      toast.error('No department selected for deactivation');
       return;
     }
 
@@ -869,10 +1593,16 @@ export default function DepartmentListPage() {
 
       const response = await retryOperation(async () => {
         const res = await fetch(`/api/departments/${departmentToDelete.id}`, {
-          method: 'DELETE',
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            status: 'inactive'
+          }),
         });
         if (!res.ok) {
-          throw new Error(`Failed to delete department: ${res.statusText}`);
+          throw new Error(`Failed to deactivate department: ${res.statusText}`);
         }
         return res;
       });
@@ -883,15 +1613,21 @@ export default function DepartmentListPage() {
         throw new Error(data.error);
       }
 
-      setDepartments(prev => prev.filter(d => d.id !== departmentToDelete.id));
-      toast.success('Department deleted successfully');
+      // Update the department status in the local state
+      setDepartments(prev => prev.map(d => 
+        d.id === departmentToDelete.id 
+          ? { ...d, status: 'inactive' as const }
+          : d
+      ));
+      
+      toast.success('Department deactivated successfully');
       setDialogState(prev => ({ 
         ...prev, 
         deleteDialogOpen: false,
         departmentToDelete: null 
       }));
     } catch (error) {
-      const errorMessage = getErrorMessage(error, 'delete department');
+      const errorMessage = getErrorMessage(error, 'deactivate department');
       setPageState(prev => ({ 
         ...prev, 
         error: errorMessage,
@@ -910,337 +1646,511 @@ export default function DepartmentListPage() {
 
   // Add handler functions for view and edit
   const handleView = (department: Department) => {
-    setViewDepartment(department);
-    setDialogState(prev => ({ ...prev, viewDialogOpen: true }));
+    try {
+      // Set the department to view
+      setViewDepartment(department);
+      
+      // Open the view dialog
+      setDialogState(prev => ({ ...prev, viewDialogOpen: true }));
+      
+      // Log the view action for analytics (optional)
+      console.log(`Viewing department: ${department.name} (${department.code})`);
+      
+      // Show a subtle toast notification
+      toast.success(`Viewing ${department.name}`, {
+        description: `Department code: ${department.code}`,
+        duration: 2000,
+      });
+    } catch (error) {
+      console.error('Error opening view dialog:', error);
+      toast.error('Failed to open department view');
+    }
   };
 
   const handleEdit = (department: Department) => {
-    setModalDepartment(department);
-    setDialogState(prev => ({ ...prev, modalOpen: true }));
+    try {
+      console.log('handleEdit called with department:', department);
+
+      
+      // Set the department to edit
+      setModalDepartment(department);
+      console.log('modalDepartment set to:', department);
+      
+      // Open the edit dialog
+      setModalOpen(true);
+      console.log('modalOpen set to true');
+      
+      // Log the edit action for analytics (optional)
+      console.log(`Editing department: ${department.name} (${department.code})`);
+      
+      // Show appropriate notifications based on department state
+      if (department.status === "active") {
+        toast.warning(`Editing Active Department: ${department.name}`, {
+          description: "This department is currently active. Changes may affect ongoing operations.",
+          duration: 4000,
+        });
+      } else if (department.courseOfferings?.length > 0) {
+        toast.warning(`Editing Department with Courses: ${department.name}`, {
+          description: `This department has ${department.courseOfferings.length} course(s). Changes may affect course assignments.`,
+          duration: 4000,
+        });
+      } else if (department.totalInstructors > 0) {
+        toast.warning(`Editing Department with Instructors: ${department.name}`, {
+          description: `This department has ${department.totalInstructors} instructor(s). Changes may affect instructor assignments.`,
+          duration: 4000,
+        });
+      } else {
+        toast.success(`Editing ${department.name}`, {
+          description: `Department code: ${department.code}`,
+          duration: 2000,
+        });
+      }
+    } catch (error) {
+      console.error('Error opening edit dialog:', error);
+      toast.error('Failed to open department editor');
+    }
   };
 
-  // Minimal filterFields definition for FilterDialog
-  const filterFields: FilterField[] = [
-    { key: 'name', label: 'Department Name', type: 'text', badgeType: 'active' },
-    { key: 'code', label: 'Department Code', type: 'text', badgeType: 'active' },
-    { key: 'head', label: 'Head of Department', type: 'text', badgeType: 'active' },
-    { key: 'minCourses', label: 'Total Courses', type: 'number', badgeType: 'range', minKey: 'minCourses', maxKey: 'maxCourses' },
-    { key: 'minInstructors', label: 'Total Instructors', type: 'number', badgeType: 'range', minKey: 'minInstructors', maxKey: 'maxInstructors' },
-  ];
+
+
+  // Helper to get selected departments
+  const selectedDepartments = departments.filter(d => selectedIds.includes(d.id));
+
+  // Handler for quick export
+  const handleExportSelectedDepartments = (selected: Department[]) => {
+    toast.success(`${selected.length} departments exported (stub)`);
+  };
+
+  // Handler for enhanced bulk actions
+  const handleOpenBulkActionsDialog = () => {
+    setSelectedDepartmentsForBulkAction(selectedDepartments);
+    setBulkActionsDialogOpen(true);
+  };
+
+  // Handler for dialog action complete
+  const handleBulkActionComplete = (actionType: string, results: any) => {
+    toast.success(`Bulk action '${actionType}' completed.`);
+    setBulkActionsDialogOpen(false);
+    setSelectedDepartmentsForBulkAction([]);
+  };
+
+  // Handler for dialog cancel
+  const handleBulkActionCancel = () => {
+    setBulkActionsDialogOpen(false);
+    setSelectedDepartmentsForBulkAction([]);
+  };
+
+  // Import functionality
+  const handleImportDepartments = async (data: any[]) => {
+    try {
+      const response = await fetch('/api/departments/bulk', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          records: data,
+          options: {
+            skipDuplicates: true,
+            updateExisting: false,
+          }
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      
+      // Refresh the departments list after successful import
+      await refreshDepartments();
+      
+      return {
+        success: result.results.success,
+        failed: result.results.failed,
+        errors: result.results.errors || []
+      };
+    } catch (error) {
+      console.error('Import error:', error);
+      throw error;
+    }
+  };
+
+  // Column visibility handlers
+  const handleColumnToggle = (columnAccessor: string, checked: boolean) => {
+    if (checked) {
+      setVisibleColumns(prev => [...prev, columnAccessor]);
+    } else {
+      setVisibleColumns(prev => prev.filter(col => col !== columnAccessor));
+    }
+  };
+
+  const handleResetColumns = () => {
+    setVisibleColumns(DEPARTMENT_COLUMNS.map(c => c.accessor));
+    toast.success('Column visibility reset to default');
+  };
+
+  // Debug logging
+  console.log('Page State:', {
+    loading: pageState.loading,
+    error: pageState.error,
+    departmentsCount: departments.length,
+    instructorsCount: instructors.length
+  });
+
+  // Show PageSkeleton when loading
+  if (pageState.loading) {
+    console.log('Showing PageSkeleton - page is loading');
+    return <PageSkeleton />;
+  }
+
+  // Show error state if there's an error
+  if (pageState.error) {
+    console.log('Showing error state:', pageState.error);
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-[#f8fafc] via-[#ffffff] to-[#f8fafc] p-0 overflow-x-hidden">
+        <div className="w-full max-w-full px-4 sm:px-6 lg:px-8 space-y-4 sm:space-y-6">
+          <div className="bg-red-50 border border-red-200 rounded-xl p-6">
+            <h3 className="text-red-800 font-semibold mb-2">Error Loading Data</h3>
+            <p className="text-red-600">{pageState.error}</p>
+            <button 
+              onClick={() => window.location.reload()} 
+              className="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Reactivate selected logic
+  const confirmBulkReactivate = async () => {
+    setPageState(prev => ({ ...prev, loading: true }));
+    try {
+      const inactiveDepartments = selectedDepartments.filter(d => d.status === "inactive");
+      const updatePromises = inactiveDepartments.map(async (dept) => {
+        const response = await fetch(`/api/departments/${dept.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'active' }),
+        });
+        if (!response.ok) throw new Error(`Failed to reactivate department ${dept.id}`);
+        return response.json();
+      });
+      await Promise.all(updatePromises);
+      setDepartments(prev => prev.map(d =>
+        selectedIds.includes(d.id) ? { ...d, status: 'active' as const } : d
+      ));
+      toast.success(`${inactiveDepartments.length} department(s) reactivated successfully.`);
+    } catch (err) {
+      toast.error("Failed to reactivate departments.");
+    }
+    setPageState(prev => ({ ...prev, loading: false }));
+    setBulkReactivateDialogOpen(false);
+  };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6">
-      <AttendanceHeader
-        title="Departments"
-        subtitle="Manage academic departments and their details"
-        currentSection="Departments"
-      />
-      {/* Page Header */}
-      <div className="mb-8">
-        <div className="flex justify-between items-start">
-          <div>
-            <h1 className="text-3xl font-bold text-blue-900 mb-2">Departments</h1>
-            <p className="text-blue-700/80">Manage and view all department information</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <Button 
-              onClick={() => { setModalDepartment(undefined); setDialogState(prev => ({ ...prev, modalOpen: true })); }}
-              className="bg-blue-600 hover:bg-blue-700 text-white shadow-lg hover:shadow-xl transition-all duration-200"
-              aria-label="Add Department"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Add Department
-            </Button>
-            <DropdownMenu>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="outline" size="icon" className="h-10 w-10 border-blue-200 hover:bg-blue-50">
-                        <MoreHorizontal className="h-4 w-4" />
-                        <span className="sr-only">More options</span>
-                      </Button>
-                    </DropdownMenuTrigger>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>More options</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-              <DropdownMenuContent align="end" className="w-56 ">
-                <DropdownMenuLabel className="font-semibold px-2 py-1.5 text-blue-900">Page Actions</DropdownMenuLabel>
-                <DropdownMenuSeparator/>
-                <DropdownMenuItem className="text-blue-900 focus:bg-blue-50 focus:text-blue-900 py-2" onClick={() => toast.info('Import functionality is not yet available.')}>
-                  <Upload className="h-4 w-4 mr-2" strokeWidth={3} />
-                  <span>Import Departments</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem className="text-blue-900 focus:bg-blue-50 focus:text-blue-900 py-2" onClick={() => setExportDialogOpen(true)}>
-                  <Download className="h-4 w-4 mr-2" strokeWidth={3} />
-                  <span>Export Departments</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem className="text-blue-900 focus:bg-blue-50 focus:text-blue-900 py-2" onClick={handlePrint}>
-                  <Printer className="h-4 w-4 mr-2" strokeWidth={3} />
-                  <span>Print Page</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
-      </div>
+    <div className="min-h-screen bg-gradient-to-br from-[#f8fafc] via-[#ffffff] to-[#f8fafc] p-0 overflow-x-hidden">
+        <div className="w-full max-w-full px-4 sm:px-6 lg:px-8 space-y-8 sm:space-y-10">
+        <PageHeader
+          title="Departments"
+          subtitle="Manage academic departments and their details"
+          breadcrumbs={[
+            { label: "Home", href: "/" },
+            { label: "Academic Management", href: "/academic-management" },
+            { label: "Departments" }
+          ]}
+        />
 
-      {/* Sticky Filter/Search Bar */}
-      <div className="sticky top-0 z-20 bg-white/90 backdrop-blur border-b border-border shadow-sm rounded-md mb-6">
-        <div className="flex flex-col md:flex-row gap-6 md:gap-8 items-start p-6">
-          {/* Search Section */}
-          <div className="w-full md:w-1/3">
-            <h3 className="text-lg font-semibold text-blue-900 mb-4">Search</h3>
-            <label htmlFor="search-departments" className="sr-only">Search Departments</label>
-            <Input
-              id="search-departments"
-              type="text"
-              placeholder="Search by name or code..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              className="h-11 px-4 rounded-md border border-border focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all duration-200 w-full"
-              aria-label="Search Departments"
-            />
-          </div>
-          <div className="hidden md:block border-l border-blue-200 self-stretch"></div>
-          {/* Filter Section */}
-          <div className="w-full md:w-2/3">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-blue-900">Filter by</h3>
-              {Object.values(filters).some(v => v !== '' && v !== 'all') && (
-                <Button
-                  variant="ghost"
-                  onClick={handleFilterReset}
-                  className="text-blue-600 hover:bg-blue-50 text-sm h-auto py-1 px-2"
-                  aria-label="Clear filters"
-                >
-                  Clear filters
-                </Button>
-              )}
+        {/* Summary Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+          <SummaryCard
+            icon={<Users className="text-blue-700 w-5 h-5" />}
+            label="Total Departments"
+            value={departments.length}
+            valueClassName="text-blue-900"
+            sublabel="Registered departments"
+            loading={pageState.loading}
+          />
+          <SummaryCard
+            icon={<UserCheck className="text-green-600 w-5 h-5" />}
+            label="Active Departments"
+            value={departments.filter(d => d.status === 'active').length}
+            valueClassName="text-blue-900"
+            sublabel="Currently active"
+            loading={pageState.loading}
+          />
+          <SummaryCard
+            icon={<UserX className="text-yellow-600 w-5 h-5" />}
+            label="Inactive Departments"
+            value={departments.filter(d => d.status === 'inactive').length}
+            valueClassName="text-blue-900"
+            sublabel="Inactive/archived"
+            loading={pageState.loading}
+          />
+          <SummaryCard
+            icon={<UserPlus className="text-purple-600 w-5 h-5" />}
+            label="Total Instructors"
+            value={departments.reduce((sum, d) => sum + (d.totalInstructors || 0), 0)}
+            valueClassName="text-blue-900"
+            sublabel="Teaching this semester"
+            loading={pageState.loading}
+          />
+        </div>
+
+        {/* Quick Actions Panel */}
+        <div className="w-full max-w-full pt-4">
+          <QuickActionsPanel
+            variant="premium"
+            title="Quick Actions"
+            subtitle="Essential tools and shortcuts"
+          icon={
+            <div className="w-6 h-6 text-white">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+              </svg>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              {/* Status */}
-              <div className="sm:col-span-1">
-                <label className="block text-sm font-medium text-blue-900 mb-2">Status</label>
-                <Select value={filters.status} onValueChange={value => setFilters(prev => ({ ...prev, status: value }))}>
-                  <SelectTrigger className="h-11 rounded-md border border-border focus:border-primary focus:ring-2 focus:ring-primary/20 text-primary" aria-label="Status Filter">
-                    <SelectValue placeholder="All statuses" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem className="text-blue-900 focus:bg-blue-50 focus:text-blue-900 py-2" value="all" aria-label="All statuses">All statuses</SelectItem>
-                    <SelectItem className="text-blue-900 focus:bg-blue-50 focus:text-blue-900 py-2" value="active" aria-label="Active statuses">Active</SelectItem>
-                    <SelectItem className="text-blue-900 focus:bg-blue-50 focus:text-blue-900 py-2" value="inactive" aria-label="Inactive statuses">Inactive</SelectItem>
-                  </SelectContent>
-                </Select>
+          }
+          actionCards={[
+            {
+              id: 'add-department',
+              label: 'Add Department',
+              description: 'Create new department',
+              icon: <Plus className="w-5 h-5 text-white" />,
+              onClick: () => { 
+                setModalDepartment(undefined); 
+                setModalOpen(true); 
+              }
+            },
+            {
+              id: 'import-data',
+              label: 'Import Data',
+              description: 'Import departments from file',
+              icon: <Upload className="w-5 h-5 text-white" />,
+              onClick: () => setImportDialogOpen(true)
+            },
+            {
+              id: 'print-page',
+              label: 'Print Page',
+              description: 'Print department list',
+              icon: <Printer className="w-5 h-5 text-white" />,
+              onClick: handlePrint
+            },
+            {
+              id: 'visible-columns',
+              label: 'Visible Columns',
+              description: 'Manage table columns',
+              icon: <Columns3 className="w-5 h-5 text-white" />,
+              onClick: () => setVisibleColumnsDialogOpen(true)
+            },
+            {
+              id: 'refresh-data',
+              label: 'Refresh Data',
+              description: 'Reload department data',
+              icon: pageState.isRefreshing ? (
+                <RefreshCw className="w-5 h-5 text-white animate-spin" />
+              ) : (
+                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              ),
+              onClick: refreshDepartments,
+              disabled: pageState.isRefreshing,
+              loading: pageState.isRefreshing
+            },
+            {
+              id: 'sort-options',
+              label: 'Sort Options',
+              description: 'Configure sorting',
+              icon: <List className="w-5 h-5 text-white" />,
+              onClick: () => setSortDialogOpen(true)
+            }
+          ]}
+          lastActionTime={lastActionTime}
+          onLastActionTimeChange={setLastActionTime}
+          collapsible={true}
+          defaultCollapsed={true}
+                      onCollapseChange={(collapsed) => {
+              console.log('Quick Actions Panel collapsed:', collapsed);
+              // You can add additional logic here, like saving to localStorage
+            }}
+          />
+        </div>
+
+        {/* Main Content Area */}
+        <div className="w-full max-w-full pt-4">
+          <Card className="shadow-lg rounded-xl overflow-hidden p-0 w-full max-w-full">
+          <CardHeader className="p-0">
+            {/* Blue Gradient Header - flush to card edge, no rounded corners */}
+            <div className="bg-gradient-to-r from-[#1e40af] to-[#3b82f6] p-0">
+              <div className="py-4 sm:py-6">
+                <div className="flex items-center gap-3 px-4 sm:px-6">
+                  <div className="w-8 h-8 flex items-center justify-center">
+                    <Search className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-white">Department List</h3>
+                    <p className="text-blue-100 text-sm">Search and filter department information</p>
+                  </div>
+                </div>
               </div>
-              {/* Head of Department */}
-              <div className="sm:col-span-1">
-                <label className="block text-sm font-medium text-blue-900 mb-2">Head of Department</label>
-                <Input
+            </div>
+          </CardHeader>
+          {/* Search and Filter Section */}
+          <div className="border-b border-gray-200 shadow-sm p-3 sm:p-4 lg:p-6">
+            <div className="flex flex-col xl:flex-row gap-2 sm:gap-3 items-start xl:items-center justify-end">
+              {/* Search Bar */}
+              <div className="relative w-full xl:w-auto xl:min-w-[200px] xl:max-w-sm">
+                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                <input
                   type="text"
-                  placeholder="Filter by head..."
-                  value={filters.head}
-                  onChange={e => setFilters(prev => ({ ...prev, head: e.target.value }))}
-                  className="h-11 px-4 rounded-md border border-border focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all duration-200 w-full"
+                  placeholder="Search departments..."
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:outline-none"
                 />
               </div>
-              {/* Advanced Filters Button */}
-              <div className="sm:col-span-1 flex items-end">
-                <Button
-                  onClick={() => setFilterDialogOpen(true)}
-                  className="w-full h-11 border border-border text-primary bg-light hover:bg-primary hover:text-white transition-colors duration-200 rounded-md"
-                  aria-label="Advanced Filters"
-                >
-                  Advanced Filters
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-        {/* Filter Chips */}
-        {getActiveFilterChips(filters).length > 0 && (
-          <div className="flex flex-wrap gap-2 px-6 pb-4">
-            {getActiveFilterChips(filters).map(chip => (
-              <span
-                key={chip.key}
-                className={`inline-flex items-center bg-blue-100 text-blue-900 rounded-full px-3 py-1 text-xs font-medium transition-all duration-200 ${removingChip === chip.key ? 'opacity-0 translate-y-2' : ''}`}
-                style={{ transitionProperty: 'opacity, transform' }}
-              >
-                {chip.label}
-                <button
-                  className="ml-2 text-blue-700 hover:text-blue-900 focus:outline-none"
-                  onClick={() => {
-                    setRemovingChip(chip.key);
-                    setTimeout(() => {
-                      setFilters((prev: FilterState) => ({ ...prev, [chip.key]: '' }));
-                      setRemovingChip(null);
-                    }, 200);
-                  }}
-                  aria-label={`Remove filter ${chip.label}`}
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              </span>
-            ))}
-            <Button variant="ghost" size="sm" className="text-blue-600 hover:bg-blue-50 text-xs px-2 py-1 ml-2" onClick={handleFilterReset} aria-label="Clear All Filters">
-              Clear All
-            </Button>
-          </div>
-        )}
-      </div>
-
-      {/* Main Content Area */}
-      <div className="bg-white rounded-2xl border border-blue-200 shadow-lg overflow-hidden">
-        {/* Table Header */}
-        <div className="px-6 py-6 border-b border-blue-100">
-          <div className="flex justify-between items-center">
-            <div className="flex items-center gap-4">
-              <h2 className="text-xl font-semibold text-blue-900">Department List</h2>
-              {filteredDepartments.length > 0 && (
-                <span className="text-sm text-blue-600 bg-blue-100 px-3 py-1 rounded-full">
-                  {filteredDepartments.length} department{filteredDepartments.length !== 1 ? 's' : ''}
-                </span>
-              )}
-            </div>
-            
-            <div className="flex items-center gap-4">
-              {/* Column Visibility */}
-              <div className="flex items-center gap-4">
-                <span className="text-sm text-gray-600 font-medium">Columns:</span>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" className="border-blue-200 text-blue-900 h-9 px-3 font-normal">
-                      <span className="font-semibold mr-1">{visibleColumns.length}</span>
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-48">
-                    {DEPARTMENT_COLUMNS.map((column) => (
-                      <DropdownMenuCheckboxItem
-                        key={column.accessor}
-                        checked={visibleColumns.includes(column.accessor)}
-                        onCheckedChange={(checked) => {
-                          setVisibleColumns((prev) =>
-                            checked
-                              ? [...prev, column.accessor]
-                              : prev.filter((id) => id !== column.accessor)
-                          );
-                        }}
-                        className="text-blue-900 focus:bg-blue-50 focus:text-blue-900 py-2"
-                      >
-                        {typeof column.header === 'string' ? column.header : column.accessor}
-                      </DropdownMenuCheckboxItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-
-              {/* Rows per page */}
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-600 font-medium">Show:</span>
-                <Select value={String(itemsPerPage)} onValueChange={(value) => {
-                    setItemsPerPage(Number(value));
-                    setCurrentPage(1);
-                }}>
-                  <SelectTrigger className="w-20 h-9 border-blue-200 text-blue-900">
-                    <SelectValue placeholder={String(itemsPerPage)} />
+              
+              {/* Quick Filter Dropdowns */}
+              <div className="flex flex-wrap gap-2 sm:gap-3 w-full xl:w-auto">
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="w-full sm:w-28 lg:w-32 xl:w-28 text-gray-700">
+                    <SelectValue placeholder="Status" />
                   </SelectTrigger>
                   <SelectContent>
-                    {[10, 20, 30, 40, 50].map(size => (
-                      <SelectItem key={size} value={String(size)} className="text-blue-900 focus:bg-blue-50 focus:text-blue-900 py-2">{size}</SelectItem>
-                    ))}
+                    <SelectItem value="all">All Status</SelectItem> 
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="inactive">Inactive</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Select value={headFilter} onValueChange={setHeadFilter}>
+                  <SelectTrigger className="w-full sm:w-28 lg:w-32 xl:w-28 text-gray-700">
+                    <SelectValue placeholder="Head" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Heads</SelectItem>
+                    <SelectItem value="assigned">Assigned</SelectItem>
+                    <SelectItem value="unassigned">Not Assigned</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button variant="outline" size="icon" className="h-9 w-9 border-blue-200" onClick={refreshDepartments} disabled={pageState.isRefreshing}>
-                      <span className="sr-only">Refresh data</span>
-                      {pageState.isRefreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Refresh data</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-
             </div>
           </div>
-        </div>
-
-        {/* Table Content */}
-        <div className="relative">
-          {/* Loading Skeleton */}
-          {(pageState.loading || pageState.isRefreshing) ? (
-            <div className="p-8">
-              <Skeleton className="h-8 w-full mb-4" />
-              <Skeleton className="h-8 w-full mb-4" />
-              <Skeleton className="h-8 w-full mb-4" />
-              <Skeleton className="h-8 w-full mb-4" />
-              <Skeleton className="h-8 w-full mb-4" />
+          {/* Bulk Actions Bar */}
+          {selectedIds.length > 0 && (
+            <div className="mt-2 sm:mt-3 px-2 sm:px-3 lg:px-6 max-w-full">
+              <BulkActionsBar
+                selectedCount={selectedIds.length}
+                entityLabel="department"
+                actions={[
+                  {
+                    key: "bulk-actions",
+                    label: "Bulk Actions",
+                    icon: <Settings className="w-4 h-4 mr-2" />,
+                    onClick: handleOpenBulkActionsDialog,
+                    tooltip: "Open enhanced bulk actions dialog for selected departments",
+                    variant: "default"
+                  },
+                  {
+                    key: "export",
+                    label: "Quick Export",
+                    icon: <Download className="w-4 h-4 mr-2" />,
+                    onClick: () => handleExportSelectedDepartments(selectedDepartments),
+                    tooltip: "Quick export selected departments to CSV"
+                  },
+                  {
+                    key: "delete",
+                    label: "Deactivate Selected",
+                    icon: pageState.loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Trash2 className="w-4 h-4 mr-2" />,
+                    onClick: handleBulkDelete,
+                    loading: pageState.loading,
+                    disabled: pageState.loading,
+                    tooltip: "Deactivate selected departments (can be reactivated later)",
+                    variant: "destructive",
+                    hidden: selectedDepartments.length === 0 || selectedDepartments.every(d => d.status === "inactive")
+                  },
+                  {
+                    key: "reactivate",
+                    label: "Reactivate Selected",
+                    icon: pageState.loading ? <Loader2 className="h-4 h-4 mr-2 animate-spin" /> : <RotateCcw className="w-4 h-4 mr-2" />,
+                    onClick: () => setBulkReactivateDialogOpen(true),
+                    loading: pageState.loading,
+                    disabled: pageState.loading,
+                    tooltip: "Reactivate selected inactive departments",
+                    variant: "default",
+                    hidden: selectedDepartments.length === 0 || selectedDepartments.every(d => d.status === "active")
+                  }
+                ]}
+                onClear={() => setSelectedIds([])}
+              />
             </div>
-          ) : (
-            <>
-              {/* Table layout for xl+ only */}
-              <div className="hidden xl:block">
-                <TableList
-                  columns={columns}
-                  data={paginatedDepartments}
-                  loading={pageState.loading}
-                  selectedIds={selectedIds}
-                  onSelectRow={handleSelectRow}
-                  onSelectAll={handleSelectAll}
-                  isAllSelected={isAllSelected}
-                  isIndeterminate={isIndeterminate}
-                  getItemId={(item) => item.id}
-                  expandedRowIds={expandedRowIds}
-                  onToggleExpand={(itemId) => {
-                    setExpandedRowIds(current => 
-                      current.includes(itemId) 
-                        ? current.filter(id => id !== itemId)
-                        : [...current, itemId]
-                    );
-                  }}
-                  editingCell={editingCell}
-                  onCellClick={(item, columnAccessor) => {
-                    if (['name', 'code', 'headOfDepartment'].includes(columnAccessor)) {
-                      setEditingCell({ rowId: item.id, columnAccessor });
+          )}
+          {/* Table Content */}
+          <div className="relative px-2 sm:px-3 lg:px-6 mt-3 sm:mt-4 lg:mt-6">
+            {/* Table layout for xl+ only */}
+            <div className="hidden xl:block overflow-x-auto max-w-full">
+              <TableList
+                columns={columns}
+                data={paginatedDepartments}
+                loading={pageState.loading}
+                selectedIds={selectedIds}
+                emptyMessage={null}
+                onSelectRow={handleSelectRow}
+                onSelectAll={handleSelectAll}
+                isAllSelected={isAllSelected}
+                isIndeterminate={isIndeterminate}
+                getItemId={(item) => item.id}
+                expandedRowIds={expandedRowIds}
+                onToggleExpand={(itemId) => {
+                  setExpandedRowIds(current =>
+                    current.includes(itemId)
+                      ? current.filter(id => id !== itemId)
+                      : [...current, itemId]
+                  );
+                }}
+                editingCell={editingCell}
+                onCellClick={(item, columnAccessor) => {
+                  if (["name", "code", "headOfDepartment"].includes(columnAccessor)) {
+                    setEditingCell({ rowId: item.id, columnAccessor });
+                  }
+                }}
+                onCellChange={async (rowId, columnAccessor, value) => {
+                  setEditingCell(null);
+                  // Handle cell change logic here
+                }}
+                sortState={{ field: sortState.field, order: sortState.order }}
+                onSort={handleSort}
+                className="border-0 shadow-none max-w-full"
+              />
+            </div>
+            {/* Card layout for small screens */}
+            <div className="block xl:hidden p-2 sm:p-3 lg:p-4 max-w-full">
+              {!pageState.loading && filteredDepartments.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-8 px-4">
+                  <EmptyState
+                    icon={<Users className="w-6 h-6 text-blue-400" />}
+                    title="No departments found"
+                    description="Try adjusting your search criteria or filters to find the departments you're looking for."
+                    action={
+                      <div className="flex flex-col gap-2 w-full">
+                        <Button
+                          variant="outline"
+                          className="border-blue-300 text-blue-700 hover:bg-blue-50 rounded-xl"
+                          onClick={refreshDepartments}
+                        >
+                          <RefreshCw className="w-4 h-4 mr-2" />
+                          Refresh Data
+                        </Button>
+                      </div>
                     }
-                  }}
-                  onCellChange={async (rowId, columnAccessor, value) => {
-                    setEditingCell(null);
-                    const originalDepartments = [...departments];
-                    const updatedDepartments = departments.map(d =>
-                      d.id === rowId ? { ...d, [columnAccessor]: value } : d
-                    );
-                    setDepartments(updatedDepartments);
-
-                    try {
-                      const response = await fetch(`/api/departments/${rowId}`, {
-                        method: 'PATCH',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ [columnAccessor]: value }),
-                      });
-                      if (!response.ok) {
-                        throw new Error('Failed to update department');
-                      }
-                      toast.success('Department updated successfully');
-                    } catch (error) {
-                      setDepartments(originalDepartments);
-                      toast.error(getErrorMessage(error, 'update department'));
-                    }
-                  }}
-                  sortState={sortState}
-                  onSort={handleSort}
-                />
-              </div>
-              {/* Card layout for small screens */}
-              <div className="block xl:hidden p-4">
+                  />
+                </div>
+              ) : (
                 <TableCardView
                   items={paginatedDepartments}
                   selectedIds={selectedIds}
@@ -1249,10 +2159,7 @@ export default function DepartmentListPage() {
                     setViewDepartment(item);
                     setDialogState(prev => ({ ...prev, viewDialogOpen: true }));
                   }}
-                  onEdit={(item) => {
-                    setModalDepartment(item);
-                    setDialogState(prev => ({ ...prev, modalOpen: true }));
-                  }}
+                  onEdit={(item) => handleEdit(item)}
                   onDelete={(item) => {
                     handleDelete(item);
                   }}
@@ -1261,87 +2168,34 @@ export default function DepartmentListPage() {
                   getItemCode={(item) => item.code}
                   getItemStatus={(item) => item.status}
                   getItemDescription={(item) => item.description}
+
                   getItemDetails={(item) => [
                     { label: 'Head', value: item.headOfDepartment || 'Not Assigned' },
                     { label: 'Courses', value: item.courseOfferings?.length || 0 },
                     { label: 'Instructors', value: item.totalInstructors || 0 },
                   ]}
-                  disabled={(item) => item.status === "active" || item.courseOfferings?.length > 0 || item.totalInstructors > 0}
-                  deleteTooltip={(item) => item.status === "active" ? "Cannot delete an active department" : 
-                    item.courseOfferings?.length > 0 ? "Cannot delete department with courses" :
-                    item.totalInstructors > 0 ? "Cannot delete department with instructors" : undefined}
+                  disabled={(item) => false} // Admin can edit all departments
+                  deleteTooltip={(item) => item.status === "inactive" ? "Department is already inactive" : undefined}
                   isLoading={pageState.loading}
                 />
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* Pagination */}
-        <div className="px-6 py-4 border-t border-blue-100">
-          <Pagination
-            currentPage={currentPage}
-            totalPages={totalPages}
+              )}
+            </div>
+          </div>
+          {/* Pagination */}
+          <TablePagination
+            page={currentPage}
+            pageSize={itemsPerPage}
             totalItems={filteredDepartments.length}
-            itemsPerPage={itemsPerPage}
             onPageChange={setCurrentPage}
-            disabled={pageState.loading}
+            onPageSizeChange={setItemsPerPage}
+            pageSizeOptions={[10, 25, 50, 100]}
+            loading={pageState.loading}
           />
+        </Card>
         </div>
       </div>
 
-      {/* Bulk Actions Bar */}
-      {selectedIds.length > 0 && (
-        <div className="mt-4">
-          <BulkActionsBar
-            selectedCount={selectedIds.length}
-            entityLabel="department"
-            actions={[
-              {
-                key: 'delete',
-                label: 'Delete Selected',
-                icon: pageState.loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Trash2 className="w-4 h-4 mr-2" />,
-                onClick: handleBulkDelete,
-                loading: pageState.loading,
-                disabled: pageState.loading,
-                tooltip: 'Delete selected departments',
-                variant: 'destructive',
-              },
-            ]}
-            onClear={() => setSelectedIds([])}
-          />
-        </div>
-      )}
-
       {/* Dialogs */}
-      <FilterDialog
-        open={dialogState.filterDialogOpen}
-        onOpenChange={(open) => setFilterDialogOpen(open)}
-        statusFilter={filters.status}
-        setStatusFilter={(status) => setFilters((prev: FilterState) => ({ ...prev, status }))}
-        statusOptions={[
-          { value: 'all', label: 'All' },
-          { value: 'active', label: 'Active' },
-          { value: 'inactive', label: 'Inactive' },
-        ]}
-        advancedFilters={filters as unknown as Record<string, string>}
-        setAdvancedFilters={handleFilterChange as (filters: Record<string, string>) => void}
-        fields={filterFields}
-        onReset={handleFilterReset}
-        onApply={() => setFilterDialogOpen(false)}
-        activeAdvancedCount={Object.values({
-          name: filters.name,
-          code: filters.code,
-          head: filters.head,
-          minCourses: filters.minCourses,
-          maxCourses: filters.maxCourses,
-          minInstructors: filters.minInstructors,
-          maxInstructors: filters.maxInstructors,
-        }).filter(Boolean).length}
-        title="Filter Departments"
-        tooltip="Filter departments by multiple criteria. Use advanced filters for more specific conditions."
-      />
-
       <ConfirmDeleteDialog
         open={dialogState.deleteDialogOpen}
         onOpenChange={(open) => {
@@ -1366,44 +2220,54 @@ export default function DepartmentListPage() {
         deleteError={pageState.error}
         loading={pageState.isDeleting}
         description={dialogState.departmentToDelete ? 
-          `Are you sure you want to delete the department \"${dialogState.departmentToDelete.name}\"? This action cannot be undone.` :
-          'Are you sure you want to delete this department? This action cannot be undone.'}
+          `Are you sure you want to deactivate the department \"${dialogState.departmentToDelete.name}\"? This action can be reversed by reactivating the department.` :
+          'Are you sure you want to deactivate this department? This action can be reversed by reactivating the department.'}
       />
 
       <DepartmentForm
-        open={dialogState.modalOpen}
-        onOpenChange={(open) => setModalOpen(open)}
+        open={modalOpen}
+        onOpenChange={(open) => {
+          setModalOpen(open);
+          if (!open) {
+            setModalDepartment(undefined); // Reset department data when dialog closes
+          }
+        }}
         initialData={modalDepartment}
         instructors={instructors}
         onSuccess={async () => {
           setModalOpen(false);
+          setModalDepartment(undefined);
           await refreshDepartments();
         }}
       />
 
       <ExportDialog
-        open={dialogState.exportDialogOpen}
+        open={exportDialogOpen}
         onOpenChange={(open) => setExportDialogOpen(open)}
         exportableColumns={exportableColumns}
         exportColumns={exportColumns}
         setExportColumns={setExportColumns}
         exportFormat={exportFormat}
         setExportFormat={setExportFormat}
+        pdfOrientation={pdfOrientation}
+        setPdfOrientation={setPdfOrientation}
+        includeLogos={includeLogos}
+        setIncludeLogos={setIncludeLogos}
         onExport={handleExport}
         title="Export Departments"
         tooltip="Export department data in various formats. Choose your preferred export options."
       />
 
       <SortDialog
-        open={dialogState.sortDialogOpen}
+        open={sortDialogOpen}
         onOpenChange={(open) => setSortDialogOpen(open)}
-        sortField={sortState.field}
+        sortField={sortField}
         setSortField={(field) => setSortField(field as SortFieldKey)}
-        sortOrder={sortState.order}
+        sortOrder={sortOrder}
         setSortOrder={(order) => setSortOrder(order as SortOrder)}
         sortFieldOptions={departmentSortFieldOptions}
         onApply={() => {
-          setSortFields([{ field: sortState.field, order: sortState.order }]);
+          setSortFields([{ field: sortField, order: sortOrder }]);
         }}
         onReset={() => {
           setSortField('name');
@@ -1417,7 +2281,7 @@ export default function DepartmentListPage() {
       <ViewDialog
         open={dialogState.viewDialogOpen}
         onOpenChange={(open) => {
-          setViewDialogOpen(open);
+          setDialogState(prev => ({ ...prev, viewDialogOpen: open }));
           if (!open) setViewDepartment(undefined);
         }}
         title={viewDepartment?.name || ''}
@@ -1426,22 +2290,159 @@ export default function DepartmentListPage() {
           value: viewDepartment.status,
           variant: viewDepartment.status === "active" ? "success" : "destructive"
         } : undefined}
+        logo={viewDepartment?.logo}
         sections={[
           {
             title: "Department Information",
             fields: [
-              { label: 'Head of Department', value: viewDepartment?.headOfDepartment || 'Not Assigned' },
               { label: 'Total Courses', value: viewDepartment?.courseOfferings?.length || 0, type: 'number' },
               { label: 'Total Instructors', value: viewDepartment?.totalInstructors || 0, type: 'number' }
             ]
+          },
+          {
+            title: "Course Offerings",
+            fields: viewDepartment?.courseOfferings?.map(course => ({
+              label: course.name,
+              value: course.status,
+              type: 'course-with-status' as const,
+              badgeVariant: course.status === 'active' ? 'success' : 'destructive'
+            })) || []
           }
         ]}
+        departmentHead={viewDepartment?.headOfDepartmentDetails ? {
+          name: viewDepartment.headOfDepartmentDetails.fullName,
+          position: "Department Head",
+          department: viewDepartment.name,
+          email: viewDepartment.headOfDepartmentDetails.email,
+          phone: viewDepartment.headOfDepartmentDetails.phoneNumber,
+          officeLocation: viewDepartment.headOfDepartmentDetails.officeLocation,
+          officeHours: viewDepartment.headOfDepartmentDetails.officeHours,
+        } : (viewDepartment?.headOfDepartment && viewDepartment.headOfDepartment !== 'Not Assigned' ? {
+          name: viewDepartment.headOfDepartment,
+          position: "Department Head",
+          department: viewDepartment.name
+        } : undefined)}
         description={viewDepartment?.description}
         tooltipText="View detailed department information"
       />
 
+      <BulkActionsDialog
+        open={bulkActionsDialogOpen}
+        onOpenChange={setBulkActionsDialogOpen}
+        selectedItems={selectedDepartmentsForBulkAction}
+        entityType="department"
+        entityLabel="department"
+        availableActions={[
+          {
+            type: 'status-update',
+            title: 'Update Status',
+            description: 'Update status of selected departments',
+            icon: <Settings className="w-4 h-4" />
+          },
+          {
+            type: 'notification',
+            title: 'Send Notification',
+            description: 'Send notifications to selected departments',
+            icon: <Bell className="w-4 h-4" />
+          },
+          {
+            type: 'export',
+            title: 'Export Data',
+            description: 'Export selected departments data',
+            icon: <Download className="w-4 h-4" />
+          }
+        ]}
+        exportColumns={[
+          { id: 'logo', label: 'Logo', default: false },
+          { id: 'name', label: 'Department Name', default: true },
+          { id: 'code', label: 'Department Code', default: true },
+          { id: 'headOfDepartment', label: 'Head of Department', default: true },
+          { id: 'status', label: 'Status', default: true },
+          { id: 'totalCourses', label: 'Total Courses', default: false },
+          { id: 'totalInstructors', label: 'Total Instructors', default: false }
+        ]}
+        notificationTemplates={[
+          {
+            id: 'status-update',
+            name: 'Status Update Notification',
+            subject: 'Department Status Update',
+            message: 'Your department status has been updated to {status}.',
+            availableFor: ['department']
+          }
+        ]}
+        stats={{
+          total: selectedDepartmentsForBulkAction.length,
+          active: selectedDepartmentsForBulkAction.filter(d => d.status === 'active').length,
+          inactive: selectedDepartmentsForBulkAction.filter(d => d.status === 'inactive').length
+        }}
+        onActionComplete={handleBulkActionComplete}
+        onCancel={handleBulkActionCancel}
+        onProcessAction={async (actionType: string, config: any) => {
+          // Stub implementation
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          return { success: true, processed: selectedDepartmentsForBulkAction.length };
+        }}
+        getItemDisplayName={(item: Department) => item.name}
+        getItemStatus={(item: Department) => item.status}
+      />
+
+      {/* Import Dialog */}
+      <ImportDialog
+        open={importDialogOpen}
+        onOpenChange={setImportDialogOpen}
+        onImport={handleImportDepartments}
+        entityName="Departments"
+        templateUrl="/api/departments/template"
+        acceptedFileTypes={[".csv", ".xlsx", ".xls"]}
+        maxFileSize={5}
+      />
+
+      {/* Visible Columns Dialog */}
+      <VisibleColumnsDialog
+        open={visibleColumnsDialogOpen}
+        onOpenChange={setVisibleColumnsDialogOpen}
+        columns={COLUMN_OPTIONS}
+        visibleColumns={visibleColumns}
+        onColumnToggle={handleColumnToggle}
+        onReset={handleResetColumns}
+        title="Manage Department Columns"
+        description="Choose which columns to display in the department table"
+        searchPlaceholder="Search department columns..."
+        enableManualSelection={true}
+        onManualSelectionChange={(state) => {
+          console.log('Manual selection state:', state);
+          // You can add additional logic here, like saving to localStorage
+        }}
+      />
+
       {/* Toast Notification Region */}
-      <div role="region" aria-live="polite" className="sr-only" id="departments-toast-region"></div>
+      <div role="region" aria-live="polite" className="sr-only" id="departments-toast-region" />
+
+      {/* Bulk Deactivate Dialog */}
+      <ConfirmDeleteDialog
+        open={bulkDeactivateDialogOpen}
+        onOpenChange={setBulkDeactivateDialogOpen}
+        itemName={selectedIds.length > 1 ? `${selectedIds.length} departments` : 'department'}
+        onDelete={confirmBulkDeactivate}
+        onCancel={() => setBulkDeactivateDialogOpen(false)}
+        canDelete={true}
+        loading={pageState.loading}
+        description={`Are you sure you want to deactivate ${selectedIds.length} selected department(s)? This action can be reversed by reactivating the departments.`}
+      />
+
+      <ConfirmDeleteDialog
+        open={bulkReactivateDialogOpen}
+        onOpenChange={setBulkReactivateDialogOpen}
+        itemName={selectedDepartments.filter(d => d.status === "inactive").length > 1
+          ? `${selectedDepartments.filter(d => d.status === "inactive").length} departments`
+          : 'department'}
+        onDelete={confirmBulkReactivate}
+        onCancel={() => setBulkReactivateDialogOpen(false)}
+        canDelete={true}
+        loading={pageState.loading}
+        description={`Are you sure you want to reactivate ${selectedDepartments.filter(d => d.status === "inactive").length} selected inactive department(s)?`}
+        confirmLabel="Reactivate"
+      />
     </div>
   );
 }

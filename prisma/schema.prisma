@@ -22,7 +22,9 @@ model User {
   twoFactorEnabled    Boolean        @default(false)
   createdAt           DateTime       @default(now())
   updatedAt           DateTime       @updatedAt
+  sessionVersion      Int            @default(1)
   Announcements       Announcement[]
+  attendanceOverrides Attendance[]   @relation("AttendanceOverride")
   Attendance          Attendance[]
   VerifiedAttendances Attendance[]   @relation("AttendanceVerification")
   DepartmentHead      Department[]   @relation("DepartmentHead")
@@ -34,7 +36,7 @@ model User {
   ReportLogs          ReportLog[]
   Student             Student[]
   SystemLogs          SystemLogs[]
-  attendanceOverrides Attendance[]   @relation("AttendanceOverride")
+  PasswordResetTokens PasswordResetToken[]
 
   @@index([email])
   @@index([role, status])
@@ -66,6 +68,8 @@ model Student {
   updatedAt               DateTime                 @updatedAt
   guardianId              Int
   userId                  Int
+  Attendance              Attendance[]             @relation("StudentToAttendance")
+  attendanceNotifications AttendanceNotification[]
   RFIDTags                RFIDTags?
   CourseOffering          CourseOffering?          @relation(fields: [courseId], references: [courseId])
   Department              Department?              @relation(fields: [departmentId], references: [departmentId])
@@ -73,8 +77,6 @@ model Student {
   User                    User                     @relation(fields: [userId], references: [userId])
   StudentSchedules        StudentSchedule[]
   StudentSection          StudentSection[]
-  Attendance              Attendance[]             @relation("StudentToAttendance")
-  attendanceNotifications AttendanceNotification[]
 
   @@index([studentIdNum])
   @@index([rfidTag])
@@ -133,12 +135,12 @@ model Instructor {
   updatedAt       DateTime          @updatedAt
   rfidTag         String            @unique
   Announcements   Announcement[]    @relation("InstructorToAnnouncements")
+  Attendance      Attendance[]      @relation("InstructorToAttendance")
   Department      Department        @relation(fields: [departmentId], references: [departmentId])
   User            User              @relation(fields: [instructorId], references: [userId])
   RFIDTags        RFIDTags?
   SubjectSchedule SubjectSchedule[]
   Subjects        Subjects[]        @relation("InstructorToSubjects")
-  Attendance      Attendance[]      @relation("InstructorToAttendance")
 
   @@index([departmentId, status])
   @@index([instructorType])
@@ -150,8 +152,8 @@ model Room {
   roomNo          String            @unique
   roomType        RoomType
   roomCapacity    Int
-  roomBuildingLoc String
-  roomFloorLoc    String
+  roomBuildingLoc RoomBuilding      // restore to required
+  roomFloorLoc    RoomFloor         // restore to required
   readerId        String            @unique
   status          RoomStatus        @default(AVAILABLE)
   isActive        Boolean           @default(true)
@@ -184,10 +186,10 @@ model Semester {
   notes             String?
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
+  Attendance        Attendance[]      @relation("SemesterToAttendance")
   CourseOfferings   CourseOffering[]
   Sections          Section[]
   SubjectSchedules  SubjectSchedule[]
-  Attendance        Attendance[]      @relation("SemesterToAttendance")
 
   @@index([year, semesterType])
   @@index([status])
@@ -255,12 +257,12 @@ model CourseOffering {
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
   semesterId   Int
+  major        String?
   Department   Department   @relation(fields: [departmentId], references: [departmentId])
   Semester     Semester     @relation(fields: [semesterId], references: [semesterId])
   Section      Section[]
   Student      Student[]
   Subjects     Subjects[]
-  major        String?
 
   @@index([courseCode])
   @@index([departmentId, courseStatus])
@@ -278,6 +280,7 @@ model Department {
   location              String?
   contactEmail          String?
   contactPhone          String?
+  departmentLogo        String?          // URL or path to department logo image
   createdAt             DateTime         @default(now())
   updatedAt             DateTime         @updatedAt
   CourseOffering        CourseOffering[]
@@ -343,13 +346,13 @@ model SubjectSchedule {
   notes           String?
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
+  Attendance      Attendance[]      @relation("SubjectScheduleToAttendance")
   StudentSchedule StudentSchedule[]
   instructor      Instructor        @relation(fields: [instructorId], references: [instructorId])
   room            Room              @relation(fields: [roomId], references: [roomId])
   section         Section           @relation(fields: [sectionId], references: [sectionId])
   semester        Semester          @relation(fields: [semesterId], references: [semesterId])
   subject         Subjects          @relation(fields: [subjectId], references: [subjectId])
-  Attendance      Attendance[]      @relation("SubjectScheduleToAttendance")
 
   @@index([subjectId, day, startTime])
   @@index([instructorId, day, startTime])
@@ -377,9 +380,6 @@ model StudentSchedule {
 model Attendance {
   attendanceId            Int                      @id @default(autoincrement())
   eventId                 Int?
-  subjectSchedId          Int?
-  studentId               Int?
-  instructorId            Int?
   userId                  Int
   userRole                Role
   status                  AttendanceStatus
@@ -394,21 +394,24 @@ model Attendance {
   verifiedBy              Int?
   verificationTime        DateTime?
   verificationNotes       String?
-  semesterId              Int?
   academicYear            String?
+  instructorId            Int?
+  originalStatus          AttendanceStatus?
+  overrideBy              Int?
+  overrideReason          String?
+  rfidLogId               Int?                     @unique
+  semesterId              Int?
+  studentId               Int?
+  subjectSchedId          Int?
   event                   Event?                   @relation(fields: [eventId], references: [eventId], onDelete: Cascade)
+  instructor              Instructor?              @relation("InstructorToAttendance", fields: [instructorId], references: [instructorId])
+  overrideUser            User?                    @relation("AttendanceOverride", fields: [overrideBy], references: [userId])
+  rfidLog                 RFIDLogs?                @relation(fields: [rfidLogId], references: [logsId])
+  semester                Semester?                @relation("SemesterToAttendance", fields: [semesterId], references: [semesterId])
+  student                 Student?                 @relation("StudentToAttendance", fields: [studentId], references: [studentId])
+  subjectSchedule         SubjectSchedule?         @relation("SubjectScheduleToAttendance", fields: [subjectSchedId], references: [subjectSchedId])
   user                    User                     @relation(fields: [userId], references: [userId])
   verifier                User?                    @relation("AttendanceVerification", fields: [verifiedBy], references: [userId])
-  subjectSchedule         SubjectSchedule?         @relation("SubjectScheduleToAttendance", fields: [subjectSchedId], references: [subjectSchedId])
-  student                 Student?                 @relation("StudentToAttendance", fields: [studentId], references: [studentId])
-  instructor              Instructor?              @relation("InstructorToAttendance", fields: [instructorId], references: [instructorId])
-  semester                Semester?                @relation("SemesterToAttendance", fields: [semesterId], references: [semesterId])
-  rfidLogId               Int?                     @unique
-  rfidLog                 RFIDLogs?                @relation(fields: [rfidLogId], references: [logsId])
-  originalStatus          AttendanceStatus? // NEW: Original status before override
-  overrideReason          String? // NEW: Reason for override
-  overrideBy              Int?
-  overrideUser            User?                    @relation("AttendanceOverride", fields: [overrideBy], references: [userId])
   attendanceNotifications AttendanceNotification[]
 
   @@unique([studentId, subjectSchedId, timestamp])
@@ -466,10 +469,10 @@ model RFIDTags {
   instructorId     Int?                   @unique
   assignedBy       Int?
   assignmentReason String?
+  assignmentLogs   RFIDTagAssignmentLog[]
   assignedByUser   User?                  @relation("TagAssignment", fields: [assignedBy], references: [userId])
   instructor       Instructor?            @relation(fields: [instructorId], references: [instructorId])
   student          Student?               @relation(fields: [studentId], references: [studentId])
-  assignmentLogs   RFIDTagAssignmentLog[]
 
   @@unique([studentId, instructorId], name: "unique_student_or_instructor")
   @@index([status])
@@ -513,10 +516,9 @@ model RFIDLogs {
   deviceInfo   Json?
   ipAddress    String?
   attendanceId Int?
-  rfidLog      Attendance? // Only reference, no fields/references here
-
-  reader RFIDReader @relation(fields: [readerId], references: [readerId])
-  user   User       @relation(fields: [userId], references: [userId])
+  rfidLog      Attendance?
+  reader       RFIDReader  @relation(fields: [readerId], references: [readerId])
+  user         User        @relation(fields: [userId], references: [userId])
 
   @@index([rfidTag, timestamp])
   @@index([userId, userRole])
@@ -605,32 +607,39 @@ model Announcement {
 model RFIDTagAssignmentLog {
   id              Int      @id @default(autoincrement())
   tagId           Int
-  action          String // 'ASSIGN' or 'UNASSIGN'
-  assignedToType  String? // 'STUDENT', 'INSTRUCTOR', or null
+  action          String
+  assignedToType  String?
   assignedToId    Int?
   assignedToName  String?
-  performedBy     Int? // userId of the admin/user who performed the action
+  performedBy     Int?
   performedByName String?
   timestamp       DateTime @default(now())
   notes           String?
-
-  RFIDTag RFIDTags @relation(fields: [tagId], references: [tagId])
+  RFIDTag         RFIDTags @relation(fields: [tagId], references: [tagId])
 }
 
 model AttendanceNotification {
   notificationId Int                @id @default(autoincrement())
   studentId      Int
-  attendanceId   Int? // Optionally link to a specific attendance record
-  type           NotificationType // ABSENCE, TARDINESS, IMPROVEMENT, CONCERN
+  attendanceId   Int?
+  type           NotificationType
   message        String
-  recipient      RecipientType // PARENT, STUDENT, BOTH
-  method         NotificationMethod // EMAIL, SMS, BOTH
-  status         NotificationStatus // PENDING, SENT, FAILED
+  recipient      RecipientType
+  method         NotificationMethod
+  status         NotificationStatus
   sentAt         DateTime?
   createdAt      DateTime           @default(now())
+  attendance     Attendance?        @relation(fields: [attendanceId], references: [attendanceId])
+  student        Student            @relation(fields: [studentId], references: [studentId])
+}
 
-  student    Student     @relation(fields: [studentId], references: [studentId])
-  attendance Attendance? @relation(fields: [attendanceId], references: [attendanceId])
+model PasswordResetToken {
+  id        Int      @id @default(autoincrement())
+  token     String   @unique
+  userId    Int
+  user      User     @relation(fields: [userId], references: [userId])
+  expiresAt DateTime
+  createdAt DateTime @default(now())
 }
 
 enum UserStatus {
@@ -959,4 +968,21 @@ enum NotificationStatus {
   PENDING
   SENT
   FAILED
+}
+
+enum RoomBuilding {
+  BuildingA
+  BuildingB
+  BuildingC
+  BuildingD
+  BuildingE
+}
+
+enum RoomFloor {
+  F1
+  F2
+  F3
+  F4
+  F5
+  F6
 }

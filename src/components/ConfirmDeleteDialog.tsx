@@ -1,6 +1,6 @@
 import { Dialog, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, Loader2 } from "lucide-react";
+import { AlertTriangle, Loader2, CheckCircle } from "lucide-react";
 import React, { useRef, useEffect } from "react";
 
 interface ConfirmDeleteDialogProps {
@@ -14,6 +14,7 @@ interface ConfirmDeleteDialogProps {
   loading?: boolean;
   description?: string;
   dangerText?: string;
+  confirmLabel?: string; // Add this
 }
 
 export const ConfirmDeleteDialog: React.FC<ConfirmDeleteDialogProps> = ({
@@ -26,7 +27,8 @@ export const ConfirmDeleteDialog: React.FC<ConfirmDeleteDialogProps> = ({
   deleteError,
   loading = false,
   description,
-  dangerText = "Delete"
+  dangerText = "Delete",
+  confirmLabel // Add this
 }) => {
   const cancelRef = useRef<HTMLButtonElement>(null);
 
@@ -36,13 +38,24 @@ export const ConfirmDeleteDialog: React.FC<ConfirmDeleteDialogProps> = ({
     }
   }, [open]);
 
+  const isReactivate = confirmLabel && confirmLabel.toLowerCase() === 'reactivate';
+  const buttonLabel = confirmLabel || dangerText || "Delete";
+  const dialogTitle = confirmLabel
+    ? `${buttonLabel} ${itemName ? itemName : "Item"}`
+    : `Delete ${itemName ? itemName : "Item"}`;
+  const icon = isReactivate ? <CheckCircle className="w-6 h-6 text-green-500" aria-hidden="true" /> : <AlertTriangle className="w-6 h-6 text-red-500" aria-hidden="true" />;
+  const titleClass = isReactivate ? "text-green-600 text-lg font-semibold" : "text-red-600 text-lg font-semibold";
+  const buttonClass = isReactivate
+    ? "w-32 h-10 rounded-xl font-medium bg-green-600 hover:bg-green-700 text-white focus-visible:ring-2 focus-visible:ring-green-200 focus-visible:ring-offset-2"
+    : "w-32 h-10 rounded-xl font-medium";
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md animate-fade-in rounded-xl">
         <DialogHeader>
           <div className="flex items-center gap-2 mb-4">
-            <AlertTriangle className="w-6 h-6 text-red-500" aria-hidden="true" />
-            <DialogTitle className="text-red-600 text-lg font-semibold">Delete {itemName ? itemName : "Item"}</DialogTitle>
+            {icon}
+            <DialogTitle className={titleClass}>{dialogTitle}</DialogTitle>
           </div>
           <div
             className={
@@ -80,14 +93,14 @@ export const ConfirmDeleteDialog: React.FC<ConfirmDeleteDialogProps> = ({
             Cancel
           </Button>
           <Button
-            variant="destructive"
+            // variant="destructive"
             onClick={onDelete}
             disabled={!canDelete || loading}
-            aria-label={dangerText}
-            className="w-32 h-10 rounded-xl font-medium"
+            aria-label={buttonLabel}
+            className={buttonClass}
           >
             {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-            {dangerText}
+            {buttonLabel}
           </Button>
         </DialogFooter>
       </DialogContent>

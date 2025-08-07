@@ -20,6 +20,7 @@ import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Plus, Search, Filter, SortAsc, FileDown, Printer, Eye, Pencil, Trash2, User, Mail, Phone, MapPin, School, GraduationCap, Calendar, Users, CreditCard, Activity, TrendingUp, AlertCircle, CheckCircle, Clock, UserCheck, UserX, Home, Building, BookOpen, Shield, QrCode, Database, FileText, BarChart3, PieChart, LineChart } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
+import { QuickActionsPanel, DataOperationsGroup, MoreOptionsGroup } from "@/components/reusable/QuickActionsPanel";
 
 // Define the student schema
 const studentSchema = z.object({
@@ -503,40 +504,76 @@ export default function StudentsPage() {
         </Card>
       </div>
 
+      {/* Quick Actions Panel */}
+      <QuickActionsPanel
+        title="Student Management"
+        subtitle="Manage and view all student information with advanced analytics"
+        icon={<Users className="w-4 h-4 text-blue-600" />}
+        primaryAction={{
+          id: 'add-student',
+          label: 'Add Student',
+          icon: <Plus className="h-4 w-4" />,
+          onClick: () => { setModalStudent(undefined); setModalOpen(true); },
+          className: "bg-blue-600 hover:bg-blue-700 text-white"
+        }}
+        secondaryActions={[
+          DataOperationsGroup({
+            onExport: () => handleExportToExcel(),
+            onPrint: handlePrint
+          }),
+          {
+            id: 'student-actions',
+            label: 'Actions',
+            icon: <Settings className="h-4 w-4" />,
+            variant: 'outline' as const,
+            items: [
+              {
+                id: 'filter',
+                label: 'Filter Students',
+                icon: <Filter className="h-4 w-4 mr-2 text-gray-700" strokeWidth={3} />,
+                onClick: () => setFilterDialogOpen(true)
+              },
+              {
+                id: 'sort',
+                label: 'Sort Options',
+                icon: <SortAsc className="h-4 w-4 mr-2 text-gray-700" strokeWidth={3} />,
+                onClick: () => setSortDialogOpen(true)
+              },
+              {
+                id: 'analytics',
+                label: 'View Analytics',
+                icon: <BarChart3 className="h-4 w-4 mr-2 text-gray-700" strokeWidth={3} />,
+                onClick: () => setShowAnalytics(true)
+              },
+              {
+                id: 'rfid-management',
+                label: 'RFID Management',
+                icon: <QrCode className="h-4 w-4 mr-2 text-gray-700" strokeWidth={3} />,
+                onClick: () => setShowRFIDManagement(true)
+              },
+              {
+                id: 'attendance-summary',
+                label: 'Attendance Summary',
+                icon: <TrendingUp className="h-4 w-4 mr-2 text-gray-700" strokeWidth={3} />,
+                onClick: () => setShowAttendanceSummary(true)
+              }
+            ]
+          }
+        ]}
+      />
+
       <Card>
         <CardContent>
-          {/* Enhanced Header */}
+          {/* Search Bar */}
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
-            <div>
-              <h1 className="text-2xl font-bold mb-1">Student Management</h1>
-              <p className="text-muted-foreground text-sm">Manage and view all student information with advanced analytics</p>
-            </div>
-            <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-              <div className="relative w-full sm:w-56">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-4 w-4" />
-                <Input
-                  className="pl-9"
-                  placeholder="Search students..."
-                  value={searchTerm}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
-                />
-              </div>
-              <Button variant="outline" onClick={() => setFilterDialogOpen(true)} className="flex items-center gap-2">
-                <Filter className="h-4 w-4" />
-                <span className="hidden sm:inline">Filter</span>
-              </Button>
-              <Button variant="outline" onClick={() => setSortDialogOpen(true)} className="flex items-center gap-2">
-                <SortAsc className="h-4 w-4" />
-                <span className="hidden sm:inline">Sort</span>
-              </Button>
-              <Button variant="outline" onClick={() => setShowAnalytics(true)} className="flex items-center gap-2">
-                <BarChart3 className="h-4 w-4" />
-                <span className="hidden sm:inline">Analytics</span>
-              </Button>
-              <Button onClick={() => { setModalStudent(undefined); setModalOpen(true); }} className="flex items-center gap-2">
-                <Plus className="h-4 w-4" />
-                <span className="hidden sm:inline">Add Student</span>
-              </Button>
+            <div className="relative w-full md:w-96">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-4 w-4" />
+              <Input
+                className="pl-9"
+                placeholder="Search students..."
+                value={searchTerm}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
+              />
             </div>
           </div>
 

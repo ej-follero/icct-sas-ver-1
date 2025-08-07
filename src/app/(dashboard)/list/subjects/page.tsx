@@ -19,25 +19,25 @@ import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { Checkbox as SharedCheckbox } from "@/components/ui/checkbox";
-import { TableHeaderSection } from "@/components/TableHeaderSection";
-import { TableList, TableListColumn } from "@/components/TableList";
-import { TableCardView } from "@/components/TableCardView";
-import { BulkActionsBar } from "@/components/BulkActionsBar";
+import { TableHeaderSection } from "@/components/reusable/Table/TableHeaderSection";
+import { TableList, TableListColumn } from "@/components/reusable/Table/TableList";
+import { TableCardView } from "@/components/reusable/Table/TableCardView";
+import BulkActionsBar from "@/components/reusable/BulkActionsBar";
 import { FilterDialog } from "@/components/FilterDialog";
-import { ExportDialog } from "@/components/ExportDialog";
-import { SortDialog } from "@/components/SortDialog";
+import { ExportDialog } from "@/components/reusable/Dialogs/ExportDialog";
+import { SortDialog } from "@/components/reusable/Dialogs/SortDialog";
 import { PrintLayout } from "@/components/PrintLayout";
-import { TableRowActions } from "@/components/TableRowActions";
+import { TableRowActions } from "@/components/reusable/Table/TableRowActions";
 import { Pagination } from "@/components/Pagination";
 import Fuse from "fuse.js";
 import SubjectForm from "@/components/forms/SubjectForm";
-import { ViewDialog } from "@/components/ViewDialog";
+import { ViewDialog } from "@/components/reusable/Dialogs/ViewDialog";
 import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
 import SubjectFormDialog from '@/components/forms/SubjectFormDialog';
 import { useDebounce } from '@/hooks/use-debounce';
 import { subjectsApi } from '@/services/api/subjects';
 import { Subject } from '@/types/subject';
-import AttendanceHeader from '../../../../components/AttendanceHeader';
+import PageHeader from '@/components/PageHeader/PageHeader';
 
 type SortField = 'name' | 'code' | 'type' | 'units' | 'semester' | 'year_level' | 'department';
 type SortOrder = 'asc' | 'desc';
@@ -494,7 +494,7 @@ export default function SubjectsPage() {
 
   return (
     <div className="bg-white/80 backdrop-blur-md p-6 rounded-xl shadow-xl border border-blue-100 flex-1 m-4 mt-0" aria-busy={loading}>
-      <AttendanceHeader
+      <PageHeader
         title="Subjects"
         subtitle="Manage academic subjects and curriculum"
         currentSection="Subjects"
@@ -620,37 +620,56 @@ export default function SubjectsPage() {
 
       {/* Filter Dialog */}
       <FilterDialog
-        open={filterDialogOpen}
-        onOpenChange={setFilterDialogOpen}
-        statusFilter={filters.type}
-        setStatusFilter={(value) => setFilters(prev => ({ ...prev, type: value }))}
-        statusOptions={[
-          { value: 'all', label: 'All' },
-          { value: 'lecture', label: 'Lecture' },
-          { value: 'laboratory', label: 'Laboratory' },
-          { value: 'both', label: 'Both' },
+        filters={{ type: [filters.type], semester: [filters.semester], year_level: [filters.year_level], department: [filters.department] }}
+        filterSections={[
+          {
+            key: 'type',
+            title: 'Type',
+            options: [
+              { value: 'all', label: 'All', count: 0 },
+              { value: 'lecture', label: 'Lecture', count: 0 },
+              { value: 'laboratory', label: 'Laboratory', count: 0 },
+              { value: 'both', label: 'Both', count: 0 },
+            ],
+          },
+          {
+            key: 'semester',
+            title: 'Semester',
+            options: [
+              { value: 'all', label: 'All', count: 0 },
+              { value: '1', label: '1st', count: 0 },
+              { value: '2', label: '2nd', count: 0 },
+            ],
+          },
+          {
+            key: 'year_level',
+            title: 'Year Level',
+            options: [
+              { value: 'all', label: 'All', count: 0 },
+              { value: '1', label: '1st', count: 0 },
+              { value: '2', label: '2nd', count: 0 },
+              { value: '3', label: '3rd', count: 0 },
+              { value: '4', label: '4th', count: 0 },
+            ],
+          },
+          {
+            key: 'department',
+            title: 'Department',
+            options: [
+              { value: 'all', label: 'All', count: 0 },
+              // Add department options dynamically if needed
+            ],
+          },
         ]}
-        advancedFilters={{
-          semester: filters.semester,
-          year_level: filters.year_level,
-          department: filters.department,
+        onApplyFilters={(newFilters) => {
+          setFilters({
+            type: newFilters.type?.[0] || 'all',
+            semester: newFilters.semester?.[0] || 'all',
+            year_level: newFilters.year_level?.[0] || 'all',
+            department: newFilters.department?.[0] || 'all',
+          });
         }}
-        setAdvancedFilters={(filters) => setFilters(prev => ({ ...prev, ...filters }))}
-        fields={[
-          { key: 'semester', label: 'Semester', type: 'text', badgeType: 'active' },
-          { key: 'year_level', label: 'Year Level', type: 'text', badgeType: 'active' },
-          { key: 'department', label: 'Department', type: 'text', badgeType: 'active' },
-        ]}
-        onReset={() => setFilters({
-          type: 'all',
-          semester: 'all',
-          year_level: 'all',
-          department: 'all',
-        })}
-        onApply={() => setFilterDialogOpen(false)}
-        activeAdvancedCount={Object.values(filters).filter(f => f !== "all").length}
-        title="Filter Subjects"
-        tooltip="Filter subjects by multiple criteria. Use advanced filters for more specific conditions."
+        onClearFilters={() => setFilters({ type: 'all', semester: 'all', year_level: 'all', department: 'all' })}
       />
 
       {/* Export Dialog */}

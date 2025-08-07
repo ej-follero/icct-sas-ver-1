@@ -23,10 +23,10 @@ export const UtilityButtons: React.FC = () => {
         size="icon" 
         aria-label="Toggle theme" 
         onClick={handleThemeClick}
-        title={resolvedTheme === "light" ? "Switch to dark mode" : "Switch to light mode"}
+        className="hover:bg-white rounded-xl"
       >
         {resolvedTheme === "light" ? (
-          <Moon className="w-5 h-5 text-gray-700" />
+          <Moon className="w-5 h-5 text-blue-700" />
         ) : (
           <Sun className="w-5 h-5 text-yellow-500" />
         )}
@@ -37,9 +37,9 @@ export const UtilityButtons: React.FC = () => {
         size="icon" 
         aria-label="Help/Support" 
         onClick={handleHelpClick}
-        title="Help & Support"
+        className="hover:bg-white rounded-xl"
       >
-        <HelpCircle className="w-5 h-5 text-gray-700" />
+        <HelpCircle className="w-5 h-5 text-blue-700" />
       </Button>
     </>
   );

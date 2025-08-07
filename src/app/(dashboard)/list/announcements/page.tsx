@@ -3,7 +3,7 @@
 import { useState, useCallback } from "react";
 import { Pagination } from "@/components/Pagination";
 import Table from "@/components/Table";
-import TableSearch from "@/components/TableSearch";
+import TableSearch from "@/components/reusable/Search/TableSearch";
 import { announcementsData, role } from "@/lib/data";
 import { EmptyState, PageHeader } from "@/components/reusable";
 import { Announcement, AnnouncementStatus } from "@/types/announcement";

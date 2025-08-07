@@ -8,21 +8,53 @@ const prisma = new PrismaClient();
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { email, password } = body;
+    const { email, studentId, employeeId, password, rememberMe } = body;
+    let user = null;
 
-    // Find user by email
-    const user = await prisma.user.findUnique({
-      where: { email },
-      include: {
-        Student: true,
-        Instructor: true,
-        Guardian: true,
-      },
-    });
+    if (email) {
+      user = await prisma.user.findUnique({
+        where: { email },
+        include: {
+          Student: true,
+          Instructor: true,
+          Guardian: true,
+        },
+      });
+    } else if (studentId) {
+      const student = await prisma.student.findUnique({
+        where: { studentIdNum: studentId },
+        include: { User: true },
+      });
+      if (student) {
+        user = await prisma.user.findUnique({
+          where: { userId: student.userId },
+          include: {
+            Student: true,
+            Instructor: true,
+            Guardian: true,
+          },
+        });
+      }
+    } else if (employeeId) {
+      const instructor = await prisma.instructor.findUnique({
+        where: { instructorId: Number(employeeId) },
+        include: { User: true },
+      });
+      if (instructor) {
+        user = await prisma.user.findUnique({
+          where: { userId: instructor.instructorId },
+          include: {
+            Student: true,
+            Instructor: true,
+            Guardian: true,
+          },
+        });
+      }
+    }
 
     if (!user) {
       return NextResponse.json(
-        { error: 'Invalid email or password' },
+        { error: 'Invalid credentials' },
         { status: 401 }
       );
     }
@@ -31,7 +63,7 @@ export async function POST(request: Request) {
     const isValidPassword = await bcrypt.compare(password, user.passwordHash);
     if (!isValidPassword) {
       return NextResponse.json(
-        { error: 'Invalid email or password' },
+        { error: 'Invalid credentials' },
         { status: 401 }
       );
     }
@@ -82,7 +114,7 @@ export async function POST(request: Request) {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
-      maxAge: 60 * 60 * 24, // 24 hours
+      maxAge: rememberMe ? 60 * 60 * 24 * 30 : 60 * 60 * 24, // 30 days or 1 day
       path: '/',
     });
 

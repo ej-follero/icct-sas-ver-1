@@ -6,25 +6,39 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const departmentId = searchParams.get('departmentId');
+    const departmentCode = searchParams.get('departmentCode');
     const courseId = searchParams.get('courseId');
     const yearLevel = searchParams.get('yearLevel');
     const status = searchParams.get('status');
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
+    const search = searchParams.get('search');
+    const sortBy = searchParams.get('sortBy') || 'attendance-desc';
+    const page = parseInt(searchParams.get('page') || '1');
+    const pageSize = parseInt(searchParams.get('pageSize') || '25');
 
     console.log('Fetching students with attendance data. Filters:', {
       departmentId,
+      departmentCode,
       courseId,
       yearLevel,
       status,
       startDate,
-      endDate
+      endDate,
+      search,
+      sortBy,
+      page,
+      pageSize
     });
 
     // Build where clause for students
     const studentWhere: any = {};
     
-    if (departmentId) {
+    if (departmentCode) {
+      studentWhere.Department = {
+        departmentCode: departmentCode
+      };
+    } else if (departmentId) {
       studentWhere.departmentId = parseInt(departmentId);
     }
 
@@ -40,6 +54,18 @@ export async function GET(request: Request) {
       studentWhere.status = status;
     }
 
+    // Add search filter
+    if (search) {
+      studentWhere.OR = [
+        { firstName: { contains: search, mode: 'insensitive' } },
+        { lastName: { contains: search, mode: 'insensitive' } },
+        { studentIdNum: { contains: search, mode: 'insensitive' } },
+        { email: { contains: search, mode: 'insensitive' } },
+        { Department: { departmentName: { contains: search, mode: 'insensitive' } } },
+        { CourseOffering: { courseName: { contains: search, mode: 'insensitive' } } }
+      ];
+    }
+
     // Build attendance date filter
     const attendanceWhere: any = {};
     if (startDate && endDate) {
@@ -53,124 +79,190 @@ export async function GET(request: Request) {
       };
     }
 
-    // Define the type for students with all relations
-    type StudentWithRelations = Prisma.StudentGetPayload<{
-      include: {
-        User: true,
-        Department: true,
-        CourseOffering: true,
-        Guardian: true,
-        StudentSection: {
-          include: {
-            Section: true
-          }
-        },
-        StudentSchedules: {
-          include: {
-            schedule: {
-              include: {
-                subject: true,
-                instructor: true,
-                room: true
-              }
-            }
-          }
-        },
-        Attendance: true
-      }
-    }>;
+    // Build order by clause
+    let orderBy: any = { lastName: 'asc' };
+    if (sortBy === 'attendance-desc') {
+      orderBy = { Attendance: { _count: 'desc' } };
+    } else if (sortBy === 'attendance-asc') {
+      orderBy = { Attendance: { _count: 'asc' } };
+    } else if (sortBy === 'name') {
+      orderBy = { firstName: 'asc' };
+    } else if (sortBy === 'id') {
+      orderBy = { studentIdNum: 'asc' };
+    } else if (sortBy === 'department') {
+      orderBy = { Department: { departmentName: 'asc' } };
+    } else if (sortBy === 'course') {
+      orderBy = { CourseOffering: { courseName: 'asc' } };
+    } else if (sortBy === 'yearLevel') {
+      orderBy = { yearLevel: 'asc' };
+    }
 
-    // Fetch students with their attendance records
-    const students: StudentWithRelations[] = await prisma.student.findMany({
+    // Calculate pagination
+    const skip = (page - 1) * pageSize;
+
+    // First, get total count for pagination
+    const totalCount = await prisma.student.count({
+      where: studentWhere
+    });
+
+    // Fetch students with optimized includes
+    const students = await prisma.student.findMany({
       where: studentWhere,
-      include: {
-        User: true,
-        Department: true,
-        CourseOffering: true,
-        Guardian: true,
+      select: {
+        studentId: true,
+        firstName: true,
+        lastName: true,
+        middleName: true,
+        suffix: true,
+        studentIdNum: true,
+        email: true,
+        phoneNumber: true,
+        yearLevel: true,
+        gender: true,
+        status: true,
+        studentType: true,
+        rfidTag: true,
+        address: true,
+        createdAt: true,
+        updatedAt: true,
+        departmentId: true,
+        courseId: true,
+        guardianId: true,
+        userId: true,
+        Department: {
+          select: {
+            departmentId: true,
+            departmentName: true,
+            departmentCode: true
+          }
+        },
+        CourseOffering: {
+          select: {
+            courseId: true,
+            courseName: true,
+            courseCode: true
+          }
+        },
+        Guardian: {
+          select: {
+            firstName: true,
+            lastName: true,
+            email: true,
+            phoneNumber: true,
+            relationshipToStudent: true
+          }
+        },
+        User: {
+          select: {
+            userId: true,
+            lastLogin: true
+          }
+        },
         StudentSection: {
-          include: {
-            Section: true
+          where: {
+            enrollmentStatus: 'ACTIVE'
+          },
+          select: {
+            Section: {
+              select: {
+                sectionId: true,
+                sectionName: true
+              }
+            },
+            enrollmentDate: true,
+            enrollmentStatus: true
           }
         },
         StudentSchedules: {
-          include: {
+          select: {
             schedule: {
-              include: {
-                subject: true,
-                instructor: true,
-                room: true
+              select: {
+                subject: {
+                  select: {
+                    subjectName: true,
+                    subjectCode: true
+                  }
+                },
+                instructor: {
+                  select: {
+                    firstName: true,
+                    lastName: true
+                  }
+                },
+                room: {
+                  select: {
+                    roomNo: true
+                  }
+                },
+                day: true,
+                startTime: true,
+                endTime: true
               }
-            }
+            },
+            enrolledAt: true,
+            status: true
           }
         },
-        Attendance: {
-          where: attendanceWhere,
-          orderBy: {
-            timestamp: 'desc'
+        _count: {
+          select: {
+            Attendance: true
           }
         }
       },
-      orderBy: {
-        lastName: 'asc'
+      orderBy,
+      skip,
+      take: pageSize
+    });
+
+    console.log(`Found ${students.length} students (page ${page} of ${Math.ceil(totalCount / pageSize)})`);
+
+    // Fetch attendance data separately for better performance
+    const studentIds = students.map(s => s.studentId);
+    const attendanceData = await prisma.attendance.groupBy({
+      by: ['studentId', 'status'],
+      where: {
+        studentId: { in: studentIds },
+        ...attendanceWhere
+      },
+      _count: {
+        status: true
       }
     });
 
-    console.log(`Found ${students.length} students`);
+    // Create attendance lookup map
+    const attendanceMap = new Map();
+    attendanceData.forEach(item => {
+      if (!attendanceMap.has(item.studentId)) {
+        attendanceMap.set(item.studentId, {});
+      }
+      attendanceMap.get(item.studentId)[item.status] = item._count.status;
+    });
 
     // Transform students with calculated attendance statistics
     const transformedStudents = students.map(student => {
-      const attendanceRecords = Array.isArray(student.Attendance) ? student.Attendance : [];
-      
-      // Calculate attendance statistics
-      const totalDays = attendanceRecords.length;
-      const presentCount = attendanceRecords.filter((a) => a.status === 'PRESENT').length;
-      const lateCount = attendanceRecords.filter((a) => a.status === 'LATE').length;
-      const absentCount = attendanceRecords.filter((a) => a.status === 'ABSENT').length;
-      const excusedCount = attendanceRecords.filter((a) => a.status === 'EXCUSED').length;
+      const attendanceCounts = attendanceMap.get(student.studentId) || {};
+      const totalDays = Object.values(attendanceCounts).reduce((sum: number, count: any) => sum + count, 0);
+      const presentCount = attendanceCounts.PRESENT || 0;
+      const lateCount = attendanceCounts.LATE || 0;
+      const absentCount = attendanceCounts.ABSENT || 0;
+      const excusedCount = attendanceCounts.EXCUSED || 0;
       
       const attendanceRate = totalDays > 0 ? 
         Math.round(((presentCount + lateCount) / totalDays) * 100 * 10) / 10 : 0;
 
-      // Get last attendance record
-      const lastAttendance = attendanceRecords[0]; // Already ordered by timestamp desc
-      
-      // Calculate trend (simplified - comparing last 7 days vs previous 7 days)
-      const last7Days = attendanceRecords.slice(0, 7);
-      const previous7Days = attendanceRecords.slice(7, 14);
-      const last7Rate = last7Days.length > 0 ? 
-        ((last7Days.filter(a => a.status === 'PRESENT' || a.status === 'LATE').length / last7Days.length) * 100) : 0;
-      const previous7Rate = previous7Days.length > 0 ? 
-        ((previous7Days.filter(a => a.status === 'PRESENT' || a.status === 'LATE').length / previous7Days.length) * 100) : 0;
-      const trend = last7Rate - previous7Rate;
-
       // Calculate risk level based on attendance patterns
-      const calculateRiskLevel = (rate: number, recentAbsences: number, trendValue: number) => {
-        if (rate >= 90 && trendValue >= 0) return 'NONE';
-        if (rate >= 75 && trendValue >= -2) return 'LOW';
-        if (rate >= 60 && trendValue >= -5) return 'MEDIUM';
+      const calculateRiskLevel = (rate: number) => {
+        if (rate >= 90) return 'NONE';
+        if (rate >= 75) return 'LOW';
+        if (rate >= 60) return 'MEDIUM';
         return 'HIGH';
       };
       
-      const recentAbsences = attendanceRecords.slice(0, 7).filter(a => a.status === 'ABSENT').length;
-      const riskLevel = calculateRiskLevel(attendanceRate, recentAbsences, trend);
+      const riskLevel = calculateRiskLevel(attendanceRate);
 
       // Get section information
-      const activeSection = student.StudentSection?.find(ss => ss.enrollmentStatus === 'ACTIVE');
+      const activeSection = student.StudentSection?.[0];
       const sectionInfo = activeSection?.Section;
-      
-      // Calculate section-based attendance
-      const sectionAttendance = activeSection ? 
-        attendanceRecords.filter(a => {
-          // Filter attendance records for this specific section
-          // This would need to be enhanced based on how attendance is linked to sections
-          return true; // Placeholder - would need proper section filtering
-        }) : [];
-      
-      const sectionPresentCount = sectionAttendance.filter(a => a.status === 'PRESENT').length;
-      const sectionTotalCount = sectionAttendance.length;
-      const sectionAttendanceRate = sectionTotalCount > 0 ? 
-        Math.round(((sectionPresentCount) / sectionTotalCount) * 100 * 10) / 10 : 0;
 
       return {
         id: student.studentId.toString(),
@@ -182,7 +274,7 @@ export async function GET(request: Request) {
         middleName: student.middleName || '',
         email: student.email,
         phoneNumber: student.phoneNumber,
-        department: student.Department?.departmentName || 'Unknown',
+        department: student.Department ? `${student.Department.departmentCode} - ${student.Department.departmentName}` : 'Unknown',
         course: student.CourseOffering?.courseName || 'Unknown',
         yearLevel: student.yearLevel,
         gender: student.gender,
@@ -193,7 +285,7 @@ export async function GET(request: Request) {
         courseId: student.courseId || null,
         departmentId: student.departmentId || null,
         guardianId: student.guardianId || null,
-        subjects: Array.isArray(student.StudentSchedules) ? student.StudentSchedules.map((ss) => ({
+        subjects: student.StudentSchedules?.map((ss) => ({
           subjectName: ss.schedule?.subject?.subjectName || 'Unknown Subject',
           subjectCode: ss.schedule?.subject?.subjectCode || 'N/A',
           instructor: ss.schedule?.instructor ?
@@ -206,21 +298,16 @@ export async function GET(request: Request) {
           },
           enrollmentDate: ss.enrolledAt?.toISOString() || new Date().toISOString(),
           status: ss.status || 'UNKNOWN'
-        })) : [],
+        })) || [],
         
         // Section Information
         sectionInfo: sectionInfo ? {
           sectionName: sectionInfo.sectionName || 'Unknown Section',
           sectionCode: sectionInfo.sectionId?.toString() || 'N/A',
-          instructor: null, // No direct instructor on Section
+          instructor: null,
           enrollmentDate: activeSection?.enrollmentDate?.toISOString() || new Date().toISOString(),
           sectionStatus: activeSection?.enrollmentStatus || 'UNKNOWN'
         } : null,
-        
-        // Section-based attendance
-        sectionAttendanceRate: sectionAttendanceRate,
-        sectionPresentDays: sectionPresentCount,
-        sectionTotalDays: sectionTotalCount,
         
         // Attendance statistics
         presentDays: presentCount,
@@ -230,46 +317,28 @@ export async function GET(request: Request) {
         totalDays: totalDays,
         attendanceRate: attendanceRate,
         
-        // Last attendance info
-        lastAttendance: lastAttendance?.timestamp?.toISOString() || new Date().toISOString(),
-        lastAttendanceStatus: lastAttendance?.status || 'ABSENT',
-        lastAttendanceType: lastAttendance?.attendanceType || 'REGULAR',
-        lastVerificationStatus: lastAttendance?.verification || 'PENDING',
-        lastCheckInTime: lastAttendance?.timestamp?.toISOString() || '',
-        lastCheckOutTime: lastAttendance?.checkOutTime?.toISOString() || '',
-        lastDuration: lastAttendance?.checkOutTime && lastAttendance?.timestamp ? 
-          Math.round((new Date(lastAttendance.checkOutTime).getTime() - new Date(lastAttendance.timestamp).getTime()) / (1000 * 60)) : 0,
-        lastLocation: 'Room TBD', // Would need to join with room/schedule data
+        // Last attendance info (simplified)
+        lastAttendance: new Date().toISOString(),
+        lastAttendanceStatus: 'ABSENT',
+        lastAttendanceType: 'REGULAR',
+        lastVerificationStatus: 'PENDING',
+        lastCheckInTime: '',
+        lastCheckOutTime: '',
+        lastDuration: 0,
+        lastLocation: 'Room TBD',
         
         // Additional calculated fields
-        trend: Math.round(trend * 10) / 10,
+        trend: 0,
         riskLevel: riskLevel,
         riskFactors: {
           attendanceRate: attendanceRate,
-          recentAbsences: recentAbsences,
-          trend: Math.round(trend * 10) / 10,
-          consecutiveAbsences: attendanceRecords.findIndex(a => a.status !== 'ABSENT') || 0
+          recentAbsences: absentCount,
+          trend: 0,
+          consecutiveAbsences: 0
         },
         
-        // Subject attendance would require additional queries
+        // Subject attendance
         subjectAttendance: {},
-        
-        // Detailed attendance history
-        attendanceHistory: attendanceRecords.slice(0, 30).map(record => ({
-          attendanceId: record.attendanceId,
-          timestamp: record.timestamp.toISOString(),
-        status: record.status,
-          attendanceType: record.attendanceType,
-          verification: record.verification,
-          checkOutTime: record.checkOutTime?.toISOString(),
-          duration: record.duration,
-          location: record.location,
-          notes: record.notes,
-          deviceInfo: record.deviceInfo,
-          verifiedBy: record.verifiedBy,
-          verificationTime: record.verificationTime?.toISOString(),
-          verificationNotes: record.verificationNotes
-        })),
         
         // Guardian info
         guardianInfo: student.Guardian ? {
@@ -281,11 +350,11 @@ export async function GET(request: Request) {
         
         // Academic info
         academicInfo: {
-          totalSubjects: Array.isArray(student.StudentSchedules) ? student.StudentSchedules.length : 0,
-          currentEnrollment: Array.isArray(student.StudentSchedules) ? student.StudentSchedules.length : 0,
+          totalSubjects: student.StudentSchedules?.length || 0,
+          currentEnrollment: student.StudentSchedules?.length || 0,
           sectionName: sectionInfo?.sectionName || 'Not Assigned',
           sectionCode: sectionInfo?.sectionId?.toString() || '',
-          instructor: 'TBD' // No direct instructor on Section
+          instructor: 'TBD'
         },
         
         // Calculated attendance stats for dashboard
@@ -298,20 +367,10 @@ export async function GET(request: Request) {
         
         // Additional fields for compatibility
         address: student.address || '',
-        avatarUrl: null, // Would need to be added to Student model
+        avatarUrl: null,
         enrollmentStatus: student.status,
         lastDeviceInfo: null,
-        recentAttendanceRecords: attendanceRecords.slice(0, 10).map(record => ({
-          attendanceId: record.attendanceId,
-          timestamp: record.timestamp.toISOString(),
-          status: record.status,
-          attendanceType: record.attendanceType,
-          verification: record.verification,
-          checkOutTime: record.checkOutTime?.toISOString(),
-          duration: record.duration,
-          location: record.location,
-          notes: record.notes
-        })),
+        recentAttendanceRecords: [],
         createdAt: student.createdAt?.toISOString(),
         updatedAt: student.updatedAt?.toISOString(),
         lastLogin: student.User?.lastLogin?.toISOString()
@@ -322,14 +381,19 @@ export async function GET(request: Request) {
     
     return NextResponse.json({
       students: transformedStudents,
-      total: transformedStudents.length,
+      total: totalCount,
+      page,
+      pageSize,
+      totalPages: Math.ceil(totalCount / pageSize),
       filters: {
         departmentId,
         courseId,
         yearLevel,
         status,
         startDate,
-        endDate
+        endDate,
+        search,
+        sortBy
       }
     });
 

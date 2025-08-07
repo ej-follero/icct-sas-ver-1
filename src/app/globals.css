@@ -248,3 +248,87 @@
 .animation-delay-4000 {
   animation-delay: 4s;
 }
+/* Hide browser's built-in password reveal button (for Chrome, Edge, Opera) */
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear,
+input[type="password"]::-webkit-credentials-auto-fill-button,
+input[type="password"]::-webkit-input-decoration,
+input[type="password"]::-webkit-input-clear-button,
+input[type="password"]::-webkit-input-password-reveal-button {
+  display: none !important;
+}
+
+/* Modern react-big-calendar week header styles */
+.rbc-header {
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-align: center;
+  border: none;
+  padding: 0.5rem 0 0.2rem 0;
+  letter-spacing: 0.05em;
+  position: relative;
+}
+
+.rbc-header span {
+  display: block;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #64748b;
+}
+
+.rbc-header.rbc-today {
+  color: #2563eb;
+  background: #f0f7ff;
+  border-radius: 0.5rem 0.5rem 0 0;
+}
+
+.rbc-header.rbc-today span {
+  color: #2563eb;
+}
+
+.rbc-header .rbc-button-link {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: inherit;
+  background: none;
+  border: none;
+  outline: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+.rbc-header .rbc-button-link:focus {
+  outline: 2px solid #2563eb;
+}
+
+/* Make the day number larger and bold */
+.rbc-header .rbc-button-link strong {
+  font-size: 1.2rem;
+  font-weight: 700;
+  display: block;
+  margin-top: 0.1rem;
+}
+
+/* Remove default border from header row */
+.rbc-time-header.rbc-time-header {
+  border-bottom: none;
+}
+
+/* Hide the default react-big-calendar week header row */
+.rbc-header-row {
+  display: none !important;
+}
+/* Hide the all-day row in react-big-calendar week view */
+.rbc-allday-cell, .rbc-allday-events {
+  display: none !important;
+}
+.rbc-row.rbc-allday-row {
+  display: none !important;
+}
+
+/* Make the time gutter (time labels) text gray */
+.rbc-time-gutter, .rbc-time-gutter .rbc-timeslot-group, .rbc-time-gutter .rbc-label {
+  color: #64748b !important; /* Tailwind's slate-500 */
+}

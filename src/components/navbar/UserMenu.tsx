@@ -56,8 +56,7 @@ export const UserMenu: React.FC<UserMenuProps> = ({
     <Popover open={open} onOpenChange={onOpenChange}>
       <PopoverTrigger asChild>
         <div 
-          className="hidden sm:flex items-center gap-2 mr-1 group relative cursor-pointer select-none" 
-          title="Account"
+          className="hidden sm:flex items-center mr-1 group relative cursor-pointer select-none" 
           role="button"
           tabIndex={0}
           aria-label="User account menu"
@@ -69,23 +68,11 @@ export const UserMenu: React.FC<UserMenuProps> = ({
               <User className="w-6 h-6 text-blue-700" />
             </AvatarFallback>
           </Avatar>
-          <div className="flex flex-col items-end">
-            <span className="text-sm font-semibold text-gray-900">{user.name}</span>
-            <div className="flex items-center gap-1">
-              <span className="text-xs text-gray-500 capitalize">{user.role}</span>
-              {user.isActive && (
-                <Badge variant="secondary" className="text-xs px-1 py-0">
-                  Active
-                </Badge>
-              )}
-            </div>
-          </div>
-          <ChevronDown className="w-4 h-4 text-gray-700 ml-1 group-hover:text-blue-700 transition" />
         </div>
       </PopoverTrigger>
-      <PopoverContent className="w-64 p-0">
+      <PopoverContent className="w-64 mr-8 rounded-xl shadow-lg p-0 border border-gray-100">
         {/* User Info Header */}
-        <div className="p-4 border-b border-gray-100">
+        <div className="px-6 pt-5 pb-4 border-b border-gray-100 rounded-t-xl bg-white">
           <div className="flex items-center gap-3">
             <Avatar className="w-12 h-12 bg-gray-200">
               <AvatarFallback>
@@ -93,7 +80,7 @@ export const UserMenu: React.FC<UserMenuProps> = ({
               </AvatarFallback>
             </Avatar>
             <div className="flex-1 min-w-0">
-              <div className="font-semibold text-gray-900 truncate">{user.name}</div>
+              <div className="font-semibold text-blue-900 truncate text-base">{user.name}</div>
               <div className="text-sm text-gray-500 truncate">{user.email}</div>
               {user.department && (
                 <div className="text-xs text-gray-400 truncate">{user.department}</div>
@@ -101,11 +88,11 @@ export const UserMenu: React.FC<UserMenuProps> = ({
             </div>
           </div>
           <div className="mt-3 flex items-center gap-2">
-            <Badge variant="outline" className="text-xs">
+            <Badge variant="outline" className="text-xs text-blue-700 border-blue-200 bg-blue-50">
               {user.role}
             </Badge>
             {user.lastLogin && (
-              <span className="text-xs text-gray-500">
+              <span className="text-xs text-gray-400">
                 Last login: {new Date(user.lastLogin).toLocaleDateString()}
               </span>
             )}
@@ -113,89 +100,85 @@ export const UserMenu: React.FC<UserMenuProps> = ({
         </div>
 
         {/* Menu Items */}
-        <ul>
-          <li>
+        <ul className="py-2 px-2 bg-white rounded-b-xl">
+          <li className="mb-1">
             <Button
               variant="ghost"
-              className="w-full flex items-center gap-3 justify-start px-4 py-3 text-gray-700 hover:bg-gray-100"
+              className="w-full flex items-center gap-3 justify-start px-4 py-3 text-blue-900 hover:bg-blue-50 hover:text-blue-900 rounded-lg transition"
               onClick={() => handleMenuAction("profile")}
             >
-              <User className="w-4 h-4" />
+              <User className="w-4 h-4 text-blue-700" />
               <div className="flex-1 text-left">
-                <div>Profile</div>
+                <div className="font-medium text-blue-900">Profile</div>
                 <div className="text-xs text-gray-500">View and edit your profile</div>
               </div>
             </Button>
           </li>
-          <li>
+          <li className="mb-1">
             <Button
               variant="ghost"
-              className="w-full flex items-center gap-3 justify-start px-4 py-3 text-gray-700 hover:bg-gray-100"
+              className="w-full flex items-center gap-3 justify-start px-4 py-3 text-blue-900 hover:bg-blue-50 hover:text-blue-900 rounded-lg transition"
               onClick={() => handleMenuAction("settings")}
             >
-              <Settings className="w-4 h-4" />
+              <Settings className="w-4 h-4 text-blue-700" />
               <div className="flex-1 text-left">
-                <div>Settings</div>
+                <div className="font-medium text-blue-900">Settings</div>
                 <div className="text-xs text-gray-500">Manage your preferences</div>
               </div>
             </Button>
           </li>
-          <li>
+          <li className="mb-2">
             <Button
               variant="ghost"
-              className="w-full flex items-center gap-3 justify-start px-4 py-3 text-gray-700 hover:bg-gray-100"
+              className="w-full flex items-center gap-3 justify-start px-4 py-3 text-blue-900 hover:bg-blue-50 hover:text-blue-900 rounded-lg transition"
               onClick={() => handleMenuAction("help")}
             >
-              <HelpCircle className="w-4 h-4" />
+              <HelpCircle className="w-4 h-4 text-blue-700" />
               <div className="flex-1 text-left">
-                <div>Help & Support</div>
+                <div className="font-medium text-blue-900">Help & Support</div>
                 <div className="text-xs text-gray-500">Get help and documentation</div>
               </div>
             </Button>
           </li>
-          
           {/* Divider */}
-          <li className="border-t border-gray-100 my-1"></li>
-          
-          <li>
+          <li className="border-t border-gray-100 my-2"></li>
+          <li className="mb-1">
             <Button
               variant="ghost"
-              className="w-full flex items-center gap-3 justify-start px-4 py-3 text-gray-700 hover:bg-gray-100"
+              className="w-full flex items-center gap-3 justify-start px-4 py-3 text-blue-900 hover:bg-blue-50 hover:text-blue-900 rounded-lg transition"
               onClick={() => window.location.href = "/settings/security"}
             >
-              <Shield className="w-4 h-4" />
+              <Shield className="w-4 h-4 text-blue-700" />
               <div className="flex-1 text-left">
-                <div>Security</div>
+                <div className="font-medium text-blue-900">Security</div>
                 <div className="text-xs text-gray-500">Password and security settings</div>
               </div>
             </Button>
           </li>
-          <li>
+          <li className="mb-2">
             <Button
               variant="ghost"
-              className="w-full flex items-center gap-3 justify-start px-4 py-3 text-gray-700 hover:bg-gray-100"
+              className="w-full flex items-center gap-3 justify-start px-4 py-3 text-blue-900 hover:bg-blue-50 hover:text-blue-900 rounded-lg transition"
               onClick={() => window.location.href = "/settings/activity"}
             >
-              <Activity className="w-4 h-4" />
+              <Activity className="w-4 h-4 text-blue-700" />
               <div className="flex-1 text-left">
-                <div>Activity</div>
+                <div className="font-medium text-blue-900">Activity</div>
                 <div className="text-xs text-gray-500">View your recent activity</div>
               </div>
             </Button>
           </li>
-          
           {/* Divider */}
-          <li className="border-t border-gray-100 my-1"></li>
-          
+          <li className="border-t border-gray-100 my-2"></li>
           <li>
             <Button
               variant="ghost"
-              className="w-full flex items-center gap-3 justify-start px-4 py-3 text-red-600 hover:bg-red-50"
+              className="w-full flex items-center gap-3 justify-start px-4 py-3 text-red-600 hover:bg-red-100 rounded-lg transition"
               onClick={() => handleMenuAction("logout")}
             >
-              <LogOut className="w-4 h-4" />
+              <LogOut className="w-4 h-4 text-red-500" />
               <div className="flex-1 text-left">
-                <div>Sign Out</div>
+                <div className="font-medium text-red-600">Sign Out</div>
                 <div className="text-xs text-red-500">Sign out of your account</div>
               </div>
             </Button>

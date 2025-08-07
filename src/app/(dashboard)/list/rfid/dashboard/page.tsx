@@ -1,6 +1,5 @@
 "use client";
 
-import AttendanceHeader from "@/components/AttendanceHeader";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +9,7 @@ import Link from "next/link";
 import { useState, useMemo } from "react";
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { Skeleton } from "@/components/ui/skeleton";
+import PageHeader from '@/components/PageHeader/PageHeader';
 
 // Simulate loading state for demonstration
 const useDashboardData = () => {
@@ -119,10 +119,14 @@ export default function RFIDDashboardPage() {
     <TooltipProvider>
       <div className="container mx-auto p-6 space-y-6">
         {/* Header */}
-        <AttendanceHeader
+        <PageHeader
           title="RFID Dashboard"
           subtitle="Monitor, analyze, and manage your RFID system at a glance."
-          currentSection="RFID"
+          breadcrumbs={[
+            { label: 'Home', href: '/' },
+            { label: 'RFID Management', href: '/rfid' },
+            { label: 'Dashboard' }
+          ]}
         />
 
         {/* Top Bar: Refresh & Last Updated */}

@@ -22,7 +22,7 @@ interface PDFExportProps {
   };
   className?: string;
   variant?: 'default' | 'outline' | 'ghost';
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'default' | 'sm' | 'lg' | 'icon';
 }
 
 export function PDFExport({
@@ -33,7 +33,7 @@ export function PDFExport({
   summary,
   className = "",
   variant = "outline",
-  size = "sm"
+  size = "default"
 }: PDFExportProps) {
   const [isExporting, setIsExporting] = useState(false);
 

@@ -12,6 +12,7 @@ export interface PaginationProps {
   onPageChange: (page: number) => void
   className?: string
   disabled?: boolean
+  entityLabel?: string // new prop
 }
 
 export function Pagination({
@@ -22,10 +23,8 @@ export function Pagination({
   onPageChange,
   className,
   disabled = false,
+  entityLabel = 'item', // default
 }: PaginationProps) {
-  if (totalItems === 0) {
-    return null;
-  }
   
   const startItem = (currentPage - 1) * itemsPerPage + 1
   const endItem = Math.min(currentPage * itemsPerPage, totalItems)
@@ -36,10 +35,13 @@ export function Pagination({
     }
   }
 
+  // Pluralize entity label
+  const pluralLabel = totalItems === 1 ? entityLabel : entityLabel + 's';
+
   return (
     <div className={cn("flex items-center justify-between", className)}>
       <div className="text-sm text-muted-foreground">
-        Showing {startItem} to {endItem} of {totalItems} results
+        Showing {startItem} to {endItem} of {totalItems} {pluralLabel}
       </div>
       {totalPages > 1 && (
         <div className="flex items-center gap-2">
@@ -72,7 +74,8 @@ export function CompactPagination({
   onPageChange,
   className,
   disabled = false,
-}: Omit<PaginationProps, "totalItems" | "itemsPerPage">) {
+  entityLabel = 'item', // new prop
+}: Omit<PaginationProps, "totalItems" | "itemsPerPage"> & { entityLabel?: string }) {
   const handlePageChange = (page: number) => {
     if (page >= 1 && page <= totalPages && page !== currentPage && !disabled) {
       onPageChange(page)
@@ -83,11 +86,14 @@ export function CompactPagination({
     return null
   }
 
+  // Pluralize entity label
+  const pluralLabel = totalPages === 1 ? entityLabel : entityLabel + 's';
+
   return (
     <div className={cn("flex items-center justify-between gap-4", className)}>
       {/* Summary */}
       <div className="text-sm text-muted-foreground">
-        Page {currentPage} of {totalPages}
+        Page {currentPage} of {totalPages} {pluralLabel}
       </div>
 
       {/* Controls */}

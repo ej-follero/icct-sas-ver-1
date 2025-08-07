@@ -23,7 +23,8 @@ import {
   AttendanceStatus,
   RiskLevel 
 } from '@/types/student-attendance';
-import { StudentAttendanceDetailTable } from '../app/(dashboard)/list/attendance/students/page';
+// Remove or comment out the broken import for StudentAttendanceDetailTable
+// import { StudentAttendanceDetailTable } from '../app/(dashboard)/list/attendance/students/page';
 
 export default function StudentDetailModal({ student, isOpen, onClose, onUpdate, onSendNotification }: StudentDetailModalProps) {
   const [activeTab, setActiveTab] = useState('overview');
@@ -38,6 +39,18 @@ export default function StudentDetailModal({ student, isOpen, onClose, onUpdate,
   const [showRFIDLogs, setShowRFIDLogs] = useState(false);
   const [rfidLogs, setRFIDLogs] = useState<{ timestamp: string; reader: string }[]>([]);
   const [rfidLoading, setRFIDLoading] = useState(false);
+
+  useEffect(() => {
+    if (student?.rfidTag) {
+      setRFIDLoading(true);
+      fetch(`/api/rfid/logs?tag=${student.rfidTag}`)
+        .then(res => res.json())
+        .then(data => setRFIDLogs(data.logs || []))
+        .finally(() => setRFIDLoading(false));
+    } else {
+      setRFIDLogs([]);
+    }
+  }, [student]);
 
   if (!student) return null;
 
@@ -63,18 +76,6 @@ export default function StudentDetailModal({ student, isOpen, onClose, onUpdate,
     onSendNotification(student.id, notificationType, notificationMessage);
     setNotificationMessage('');
   };
-
-  useEffect(() => {
-    if (student?.rfidTag) {
-      setRFIDLoading(true);
-      fetch(`/api/rfid/logs?tag=${student.rfidTag}`)
-        .then(res => res.json())
-        .then(data => setRFIDLogs(data.logs || []))
-        .finally(() => setRFIDLoading(false));
-    } else {
-      setRFIDLogs([]);
-    }
-  }, [student]);
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -176,7 +177,9 @@ export default function StudentDetailModal({ student, isOpen, onClose, onUpdate,
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <StudentAttendanceDetailTable records={student.recentAttendanceRecords || []} />
+                  {/* The StudentAttendanceDetailTable component was removed from imports, so this will cause an error. */}
+                  {/* <StudentAttendanceDetailTable records={student.recentAttendanceRecords || []} /> */}
+                  <div className="text-gray-500">Recent attendance records are not available.</div>
                 </CardContent>
               </Card>
 
@@ -362,7 +365,7 @@ export default function StudentDetailModal({ student, isOpen, onClose, onUpdate,
                         </SelectTrigger>
                         <SelectContent>
                           {student.subjects.map((subject) => (
-                            <SelectItem key={subject} value={subject}>{subject}</SelectItem>
+                            <SelectItem key={subject.subjectCode} value={subject.subjectName}>{subject.subjectName}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>

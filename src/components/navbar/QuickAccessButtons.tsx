@@ -20,9 +20,9 @@ export const QuickAccessButtons: React.FC<QuickAccessButtonsProps> = ({
         size="icon" 
         aria-label="Dashboard" 
         onClick={onDashboardClick}
-        title="Dashboard"
+        className="hover:bg-white rounded-xl"
       > 
-        <LayoutDashboard className="w-5 h-5 text-gray-700" />
+        <LayoutDashboard className="w-5 h-5 text-blue-700" />
       </Button>
       
       <Button 
@@ -30,9 +30,9 @@ export const QuickAccessButtons: React.FC<QuickAccessButtonsProps> = ({
         size="icon" 
         aria-label="Reports" 
         onClick={onReportsClick}
-        title="Reports"
+        className="hover:bg-white rounded-xl"
       > 
-        <FileBarChart2 className="w-5 h-5 text-gray-700" />
+        <FileBarChart2 className="w-5 h-5 text-blue-700" />
       </Button>
     </>
   );

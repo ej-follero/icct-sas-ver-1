@@ -46,7 +46,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
-import AttendanceHeader from '../../../../components/AttendanceHeader';
+import PageHeader from '@/components/PageHeader/PageHeader';
 
 // Types
 interface AcademicEvent {
@@ -381,10 +381,14 @@ export default function AcademicCalendarPage() {
 
   return (
     <div className="flex flex-col min-h-screen p-6 bg-gray-50">
-      <AttendanceHeader
+      <PageHeader
         title="Academic Calendar"
         subtitle="Manage academic events, deadlines, and important dates"
-        currentSection="Academic Calendar"
+        breadcrumbs={[
+          { label: 'Home', href: '/' },
+          { label: 'Academic Management', href: '/academic-management' },
+          { label: 'Academic Calendar' }
+        ]}
       />
 
       {/* Header */}

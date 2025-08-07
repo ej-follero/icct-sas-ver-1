@@ -15,16 +15,6 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator
 } from "@/components/ui/dropdown-menu";
-import {
-  Command,
-  CommandDialog,
-  CommandInput,
-  CommandList,
-  CommandEmpty,
-  CommandGroup,
-  CommandItem,
-  CommandSeparator
-} from "@/components/ui/command";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -45,12 +35,12 @@ import {
 import { FilterChips } from '@/components/FilterChips';
 import { FilterDialog } from '@/components/FilterDialog';
 import { AttendanceAnalytics } from '@/components/AttendanceAnalytics';
-import { TableList, TableListColumn } from '@/components/TableList';
-import { TableCardView } from '@/components/TableCardView';
-import { BulkActionsBar } from '@/components/BulkActionsBar';
-import { TablePagination } from '@/components/TablePagination';
+import { TableList, TableListColumn } from '@/components/reusable/Table/TableList';
+import { TableCardView } from '@/components/reusable/Table/TableCardView';
+import BulkActionsBar from '@/components/reusable/BulkActionsBar';
+import { TablePagination } from '@/components/reusable/Table/TablePagination';
 import { EmptyState } from '@/components/reusable';
-import AttendanceHeader from '../../../../../components/AttendanceHeader';
+import PageHeader from '@/components/PageHeader/PageHeader';
 
 interface Filters extends Record<string, string[]> {
   departments: string[];
@@ -586,56 +576,10 @@ export default function InstructorAttendancePage() {
     fetchInstructorAttendance();
   };
 
-  const handleTestDB = async () => {
-    try {
-      const response = await fetch('/api/test-db');
-      const data = await response.json();
-      
-      if (data.success) {
-        alert(`Database connection successful!\nInstructors: ${data.counts.instructors}\nDepartments: ${data.counts.departments}\nAttendance: ${data.counts.attendance}`);
-      } else {
-        alert(`Database test failed: ${data.details}`);
-      }
-    } catch (err) {
-      alert(`Database test error: ${err instanceof Error ? err.message : 'Unknown error'}`);
-    }
-  };
-
   // Loading skeleton
   if (loading && instructors.length === 0) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-[#f8fafc] via-[#ffffff] to-[#f8fafc] p-0">
-        <div className="container mx-auto p-6 space-y-6">
-          <AttendanceHeader
-            title="Instructor Attendance Management"
-            subtitle="Monitor and manage instructor attendance records with real-time insights and comprehensive analytics"
-            currentSection="Instructors"
-          />
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <Card key={i} className="border border-blue-200">
-                <CardContent className="p-6">
-                  <div className="flex items-start gap-4">
-                    <Skeleton className="w-12 h-12 rounded-full" />
-                    <div className="flex-1 space-y-2">
-                      <Skeleton className="h-4 w-3/4" />
-                      <Skeleton className="h-3 w-1/2" />
-                      <Skeleton className="h-3 w-2/3" />
-                    </div>
-                    <Skeleton className="w-16 h-6" />
-                  </div>
-                  <div className="mt-4 space-y-2">
-                    <Skeleton className="h-3 w-full" />
-                    <Skeleton className="h-3 w-4/5" />
-                    <Skeleton className="h-3 w-3/4" />
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      </div>
+      <></>
     );
   }
 
@@ -644,10 +588,14 @@ export default function InstructorAttendancePage() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-[#f8fafc] via-[#ffffff] to-[#f8fafc] p-0">
         <div className="container mx-auto p-6 space-y-6">
-          <AttendanceHeader
+          <PageHeader
             title="Instructor Attendance Management"
             subtitle="Monitor and manage instructor attendance records with real-time insights and comprehensive analytics"
-            currentSection="Instructors"
+            breadcrumbs={[
+              { label: 'Home', href: '/' },
+              { label: 'Attendance Management', href: '/attendance' },
+              { label: 'Instructors' }
+            ]}
           />
           
           <Card className="border border-red-200">
@@ -669,26 +617,16 @@ export default function InstructorAttendancePage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#f8fafc] via-[#ffffff] to-[#f8fafc] p-0">
       <div className="container mx-auto p-6 space-y-6">
-        {/* Blue Gradient Header */}
-        <div className="bg-gradient-to-r from-[#1e40af] to-[#3b82f6] px-6 py-6 rounded-t-2xl">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 flex items-center justify-center">
-                <Search className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-white">Instructor Attendance Report</h3>
-                <p className="text-blue-100 text-sm">Search, filter and manage instructor attendance records</p>
-              </div>
-            </div>
-          </div>
-        </div>
 
         {/* Main Navigation Header Card */}
-        <AttendanceHeader
+        <PageHeader
           title="Instructor Attendance Management"
           subtitle="Monitor and manage instructor attendance records with real-time insights and comprehensive analytics"
-          currentSection="Instructors"
+          breadcrumbs={[
+            { label: 'Home', href: '/' },
+            { label: 'Attendance Management', href: '/attendance' },
+            { label: 'Instructors' }
+          ]}
         />
 
         {/* Instructor Attendance Management - Main Content */}
@@ -818,8 +756,26 @@ export default function InstructorAttendancePage() {
           </div>
           </div>
           
-          <div>
-            <Card className="border border-blue-200 shadow-lg rounded-xl overflow-hidden">
+  
+          <Card className="border border-blue-200 shadow-lg rounded-xl overflow-hidden p-0">
+          <CardHeader className="p-0">
+            {/* Blue Gradient Header - flush to card edge, no rounded corners */}
+            <div className="bg-gradient-to-r from-[#1e40af] to-[#3b82f6] p-0">
+              <div className="container mx-auto px-6 py-6">
+                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 flex items-center justify-center">
+                      <Search className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-white">Instructor Attendance Report</h3>
+                      <p className="text-blue-100 text-sm">Search, filter and manage instructor attendance records</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </CardHeader>
               {/* Search and Actions Section */}
               <div className="border-b border-blue-100 p-6">
                 <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
@@ -879,14 +835,6 @@ export default function InstructorAttendancePage() {
                     >
                       <RefreshCw className="w-4 h-4 mr-2" />
                       Refresh
-                    </Button>
-                    <Button 
-                      onClick={handleTestDB}
-                      variant="outline" 
-                      className="border-blue-200 text-blue-700 hover:bg-blue-50"
-                    >
-                      <Activity className="w-4 h-4 mr-2" />
-                      Test DB
                     </Button>
                     <Button 
                       variant="outline" 
@@ -1208,7 +1156,7 @@ export default function InstructorAttendancePage() {
           </div>
         </div>
       </div>
-
+  )
       {/* Instructor Detail Modal */}
       {selectedInstructor && (
         <InstructorDetailModal
@@ -1220,6 +1168,4 @@ export default function InstructorAttendancePage() {
           }}
         />
       )}
-    </div>
-  );
 }

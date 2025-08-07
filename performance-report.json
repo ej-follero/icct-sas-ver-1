@@ -1,0 +1,48 @@
+{
+  "summary": {
+    "totalDuration": 3084,
+    "totalApiCalls": 0,
+    "totalErrors": 1,
+    "averageApiResponseTime": 0,
+    "averageRenderTime": 45,
+    "memoryPeak": null
+  },
+  "apiPerformance": {},
+  "renderPerformance": {
+    "StudentTable": {
+      "count": 1,
+      "totalTime": 45,
+      "averageTime": 45,
+      "slowRenders": 1
+    },
+    "FilterBar": {
+      "count": 1,
+      "totalTime": 12,
+      "averageTime": 12,
+      "slowRenders": 0
+    },
+    "Analytics": {
+      "count": 1,
+      "totalTime": 78,
+      "averageTime": 78,
+      "slowRenders": 1
+    }
+  },
+  "errors": [
+    {
+      "type": "API_ERROR",
+      "url": "http://localhost:3000/api/attendance/students",
+      "method": "GET",
+      "duration": 61,
+      "error": "fetch failed",
+      "timestamp": "2025-07-12T11:21:51.665Z"
+    }
+  ],
+  "bundleSize": {},
+  "recommendations": [
+    "Optimize component StudentTable: Average render time is 45ms",
+    "Investigate slow renders in StudentTable: 1 renders > 16ms",
+    "Optimize component Analytics: Average render time is 78ms",
+    "Investigate slow renders in Analytics: 1 renders > 16ms"
+  ]
+}

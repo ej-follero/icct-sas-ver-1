@@ -4,15 +4,15 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import Logo from "@/components/Logo";
 import CustomMenu from "@/components/Menu";
-import { Menu, X } from "lucide-react";
+import { Menu, X, Maximize2, Minimize2, LayoutDashboard, FileBarChart2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
 import { SearchBar } from "@/components/navbar/SearchBar";
 import { QuickAccessButtons } from "@/components/navbar/QuickAccessButtons";
 import { NotificationPopover } from "@/components/navbar/NotificationPopover";
 import { UserMenu } from "@/components/navbar/UserMenu";
-import { UtilityButtons } from "@/components/navbar/UtilityButtons";
 import { useSearch } from "@/hooks/useSearch";
+import Sidebar, { Role } from "@/components/Menu";
 
 const HEADER_HEIGHT = 64;
 
@@ -20,14 +20,16 @@ const HEADER_HEIGHT = 64;
  * Navbar component
  * Automatically hides the search bar if another search bar exists elsewhere on the page.
  */
-const Navbar = () => {
-  const [drawerOpen, setDrawerOpen] = useState(false);
+const Navbar = ({ onSidebarToggle, sidebarCollapsed, logoOnly = false, hideLogo = false, role = "admin" }: { onSidebarToggle: () => void; sidebarCollapsed: boolean; logoOnly?: boolean; hideLogo?: boolean; role?: Role }) => {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [messagesOpen, setMessagesOpen] = useState(false);
   const [shouldShowSearchBar, setShouldShowSearchBar] = useState(true);
   const navbarRef = useRef<HTMLDivElement>(null);
-  
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  // Mobile drawer state
+  const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
+
   const {
     query,
     setQuery,
@@ -63,18 +65,6 @@ const Navbar = () => {
     return () => clearTimeout(timer);
   }, []);
 
-  // Close mobile menu when screen size changes to desktop
-  useEffect(() => {
-    const handleResize = () => {
-      if (window.innerWidth >= 768 && drawerOpen) { // 768px is the md breakpoint
-        setDrawerOpen(false);
-      }
-    };
-
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, [drawerOpen]);
-
   const handleQuickAccess = useCallback((type: string) => {
     switch (type) {
       case "dashboard":
@@ -88,29 +78,149 @@ const Navbar = () => {
     }
   }, []);
 
-  const handleDrawerToggle = useCallback(() => {
-    setDrawerOpen((open) => !open);
+  // Fullscreen toggle logic
+  const handleFullscreenToggle = useCallback(() => {
+    if (!isFullscreen) {
+      const elem = document.documentElement;
+      if (elem.requestFullscreen) {
+        elem.requestFullscreen();
+      } else if ((elem as any).webkitRequestFullscreen) {
+        (elem as any).webkitRequestFullscreen();
+      } else if ((elem as any).msRequestFullscreen) {
+        (elem as any).msRequestFullscreen();
+      }
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+      } else if ((document as any).webkitExitFullscreen) {
+        (document as any).webkitExitFullscreen();
+      } else if ((document as any).msExitFullscreen) {
+        (document as any).msExitFullscreen();
+      }
+    }
+  }, [isFullscreen]);
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    document.addEventListener("webkitfullscreenchange", handleFullscreenChange);
+    document.addEventListener("msfullscreenchange", handleFullscreenChange);
+    return () => {
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+      document.removeEventListener("webkitfullscreenchange", handleFullscreenChange);
+      document.removeEventListener("msfullscreenchange", handleFullscreenChange);
+    };
   }, []);
 
-  const handleDrawerClose = useCallback(() => {
-    setDrawerOpen(false);
-  }, []);
+  // Accessibility: close drawer on Escape
+  useEffect(() => {
+    if (!mobileDrawerOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMobileDrawerOpen(false);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [mobileDrawerOpen]);
+
+  if (logoOnly) {
+    return (
+      <div className={`flex items-center h-full w-full justify-between`}>
+        <div className="flex-shrink-0">
+          <Logo variant={sidebarCollapsed ? "compact" : "default"} />
+        </div>
+        <div className="flex-shrink-0">
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            onClick={onSidebarToggle}
+            className="md:inline-flex flex-shrink-0 hover:bg-white rounded-xl"
+          >
+            <Menu className="w-6 h-6 text-blue-700" />
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <TooltipProvider>
+      {/* Mobile Drawer and Backdrop */}
+      {/* Only visible on mobile */}
+      {mobileDrawerOpen && (
+        <>
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 bg-black bg-opacity-40 z-40 md:hidden"
+            onClick={() => setMobileDrawerOpen(false)}
+            aria-label="Close menu backdrop"
+          />
+          {/* Drawer */}
+          <div
+            className="fixed top-[64px] left-0 h-[calc(100vh-64px)] w-64 bg-white z-50 shadow-2xl transition-transform duration-200 md:hidden"
+            style={{ transform: mobileDrawerOpen ? 'translateX(0)' : 'translateX(-100%)' }}
+            aria-label="Mobile menu drawer"
+          >
+            <div className="flex justify-end p-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Close menu"
+                onClick={() => setMobileDrawerOpen(false)}
+                className="hover:bg-gray-100 rounded-xl"
+              >
+                <X className="w-6 h-6 text-blue-700" />
+              </Button>
+            </div>
+            {/* Sidebar navigation inside drawer */}
+            <Sidebar role={role} collapsed={false} />
+          </div>
+        </>
+      )}
       <header
         ref={navbarRef}
-        className="fixed top-0 left-0 w-full h-16 bg-white z-50 shadow border-b border-gray-200"
+        className="fixed top-0 left-0 w-full h-16 bg-blue-100 z-50 shadow border-b border-gray-200 pt-8 pb-8"
         style={{ height: HEADER_HEIGHT }}
       >
-        <nav className="w-full flex items-center justify-end gap-2 h-full px-8">
-          <div className="flex items-center gap-2">
+        <nav className="w-full flex items-center justify-between gap-2 h-full px-2 md:px-0">
+          {/* Left side: Logo and Hamburger icon, together and spaced */}
+          {!hideLogo && (
+            <div className="flex items-center w-auto md:w-64 justify-between">
+              <div className="flex-shrink-0">
+                <Logo variant={sidebarCollapsed ? "compact" : "default"} />
+              </div>
+              {/* Hamburger for mobile */}
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+                onClick={() => setMobileDrawerOpen(true)}
+                className="inline-flex md:hidden hover:bg-white rounded-xl ml-2"
+              >
+                <Menu className="w-6 h-6 text-blue-700" />
+              </Button>
+              {/* Sidebar toggle for desktop */}
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+                onClick={onSidebarToggle}
+                className="hidden md:inline-flex hover:bg-white rounded-xl ml-2"
+              >
+                <Menu className="w-6 h-6 text-blue-700" />
+              </Button>
+            </div>
+          )}
+          {/* Right side: Controls (hidden on mobile) */}
+          <div className="hidden md:flex items-center gap-2 flex-1 w-full justify-end pr-0 md:pr-16">
             {/* Search Bar */}
             {shouldShowSearchBar && (
               <SearchBar
                 value={query}
                 onChange={setQuery}
-                placeholder="Search students, teachers, courses..."
+                placeholder="Search....."
                 results={results}
                 loading={loading}
                 history={history}
@@ -122,72 +232,100 @@ const Navbar = () => {
                 getSuggestions={getSuggestions}
               />
             )}
-            
             {/* Quick Access Buttons */}
-            <QuickAccessButtons
-              onDashboardClick={() => handleQuickAccess("dashboard")}
-              onReportsClick={() => handleQuickAccess("reports")}
-            />
-            
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Dashboard"
+                    onClick={() => handleQuickAccess("dashboard")}
+                    className="hover:bg-white rounded-xl"
+                  >
+                    <LayoutDashboard className="w-5 h-5 text-blue-700" />
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>Main Dashboard</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Reports"
+                    onClick={() => handleQuickAccess("reports")}
+                    className="hover:bg-white rounded-xl"
+                  >
+                    <FileBarChart2 className="w-5 h-5 text-blue-700" />
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>Reports</TooltipContent>
+            </Tooltip>
             {/* Messages Popover */}
-            <NotificationPopover
-              type="messages"
-              open={messagesOpen}
-              onOpenChange={setMessagesOpen}
-            />
-            
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span>
+                  <NotificationPopover
+                    type="messages"
+                    open={messagesOpen}
+                    onOpenChange={setMessagesOpen}
+                  />
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>Messages</TooltipContent>
+            </Tooltip>
             {/* Notifications Popover */}
-            <NotificationPopover
-              type="notifications"
-              open={notificationsOpen}
-              onOpenChange={setNotificationsOpen}
-            />
-            
-            {/* Utility Buttons */}
-            <UtilityButtons />
-            
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span>
+                  <NotificationPopover
+                    type="notifications"
+                    open={notificationsOpen}
+                    onOpenChange={setNotificationsOpen}
+                  />
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>Notifications</TooltipContent>
+            </Tooltip>
+            {/* Fullscreen Toggle Button */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+                    onClick={handleFullscreenToggle}
+                    className="hover:bg-white rounded-xl"
+                  >
+                    {isFullscreen ? (
+                      <Minimize2 className="w-5 h-5 text-blue-700" />
+                    ) : (
+                      <Maximize2 className="w-5 h-5 text-blue-700" />
+                    )}
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>{isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}</TooltipContent>
+            </Tooltip>
             {/* User Menu */}
-            <UserMenu
-              open={userMenuOpen}
-              onOpenChange={setUserMenuOpen}
-            />
-            
-            {/* Mobile Menu Button */}
-            <div className="flex md:hidden ml-1">
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label={drawerOpen ? "Close navigation menu" : "Open navigation menu"}
-                onClick={handleDrawerToggle}
-              >
-                {drawerOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-              </Button>
-            </div>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span>
+                  <UserMenu
+                    open={userMenuOpen}
+                    onOpenChange={setUserMenuOpen}
+                  />
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>Account</TooltipContent>
+            </Tooltip>
           </div>
         </nav>
-
-        {/* Mobile Drawer */}
-        {drawerOpen && (
-          <div className="fixed inset-0 z-50 bg-black/30" onClick={handleDrawerClose}>
-            <aside
-              className="fixed top-0 right-0 h-full w-72 bg-gray-50 shadow-lg flex flex-col"
-              style={{ minHeight: "100vh" }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex items-center justify-end h-16 px-4 border-b border-gray-200">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label="Close navigation menu"
-                  onClick={handleDrawerClose}
-                >
-                  <X className="w-6 h-6" />
-                </Button>
-              </div>
-              <CustomMenu role="admin" />
-            </aside>
-          </div>
-        )}
       </header>
     </TooltipProvider>
   );

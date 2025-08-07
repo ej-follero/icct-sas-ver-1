@@ -29,7 +29,7 @@ export default function SelectDropdown({
   return (
     <Select value={value} onValueChange={onValueChange}>
       <SelectTrigger
-        className={`w-full px-2 py-1.5 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:outline-none text-blue-700 ${className}`}
+        className={`w-full px-2 pr-6 py-1.5 text-xs border border-gray-300 rounded text-gray-500 ${className}`}
       >
         <SelectValue placeholder={placeholder} />
       </SelectTrigger>
@@ -38,7 +38,7 @@ export default function SelectDropdown({
           <SelectItem
             key={opt.value}
             value={opt.value}
-            className="text-blue-900 focus:bg-blue-100 data-[state=checked]:bg-blue-200"
+            className="text-blue-900 focus:bg-blue-100 data-[state=checked]:bg-blue-200 rounded"
           >
             {opt.label}
           </SelectItem>

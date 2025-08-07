@@ -1,12 +1,13 @@
 "use client";
 
 import React, { useCallback } from "react";
-import { Bell, MessageCircle, CheckCheck, AlertTriangle, Info, ExternalLink } from "lucide-react";
+import { Bell, MessageCircle, CheckCheck, AlertTriangle, Info, ExternalLink, Calendar as CalendarIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { useNotifications, type NotificationItem } from "@/hooks/useNotifications";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 
 interface NotificationPopoverProps {
   type: "notifications" | "messages";
@@ -79,92 +80,116 @@ export const NotificationPopover: React.FC<NotificationPopoverProps> = ({
     <Popover open={open} onOpenChange={onOpenChange}>
       <PopoverTrigger asChild>
         <div
-          className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-10 w-10 relative cursor-pointer"
+          className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:bg-white hover:text-accent-foreground h-10 w-10 relative cursor-pointer rounded-xl"
           role="button"
           tabIndex={0}
           aria-label={title}
-          title={title}
         >
           <Badge
             variant="destructive"
-            className="absolute -top-2 -right-2 text-xs min-w-[1.5rem] min-h-[1.5rem] flex items-center justify-center border-2 border-white shadow-sm"
+            className="absolute -top-1.5 -right-1.5 text-[9px] min-w-[1.5rem] min-h-[0.5rem] px-0.5 py-0 flex items-center justify-center font-bold"
             hidden={unreadCount === 0}
           >
             {unreadCount > 99 ? '99+' : unreadCount}
           </Badge>
-          <Icon className="w-5 h-5 text-gray-700" />
+          <Icon className="w-5 h-5 text-blue-700" />
         </div>
       </PopoverTrigger>
-      <PopoverContent className="w-80 p-0">
-        <div className="p-3 border-b flex items-center justify-between">
-          <span className="font-semibold">{title}</span>
-          {unreadCount > 0 && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="gap-1 text-xs"
-              onClick={handleMarkAllRead}
-              disabled={loading}
-            >
-              <CheckCheck className="w-4 h-4" />
-              Mark all as read
-            </Button>
-          )}
-        </div>
-        
-        {loading ? (
-          <div className="p-4 text-center text-gray-500">
-            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500 mx-auto"></div>
-            <p className="mt-2 text-sm">Loading...</p>
+      <PopoverContent className="w-[380px] p-0 rounded-xl shadow-lg border border-gray-100 bg-white">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 pt-5 pb-3 border-b border-gray-100">
+          <div className="flex items-center gap-2">
+            <span className="font-extrabold text-blue-900 text-lg">{title}</span>
+            <span className="font-bold text-blue-900 text-base">({items.length})</span>
           </div>
-        ) : items.length === 0 ? (
-          <div className="p-4 text-center text-gray-500">
-            <Icon className="w-8 h-8 mx-auto mb-2 text-gray-300" />
-            <p className="text-sm">No {type} yet</p>
-            <p className="text-xs mt-1">You&apos;re all caught up!</p>
-          </div>
-        ) : (
-          <ul className="max-h-96 overflow-y-auto">
-            {items.map((item) => (
-              <li
-                key={item.id}
-                className={cn(
-                  "px-4 py-3 border-b last:border-b-0 cursor-pointer transition-colors",
-                  item.unread ? getPriorityColor(item.priority) : "hover:bg-gray-50",
-                  item.actionUrl && "hover:bg-blue-50"
-                )}
-                onClick={() => handleItemClick(item)}
+          <div className="flex items-center gap-3">
+            {unreadCount > 0 && (
+              <button
+                className="text-red-500 font-semibold text-sm hover:underline focus:outline-none"
+                onClick={handleMarkAllRead}
+                disabled={loading}
               >
-                <div className="flex items-start gap-3">
-                  <div className="flex-shrink-0 mt-0.5">
-                    {getPriorityIcon(item.priority)}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <div className="font-medium text-gray-800 truncate">
-                        {isMessages ? item.from : item.title}
-                      </div>
-                      {item.unread && (
-                        <Badge variant="secondary" className="text-xs">
-                          New
-                        </Badge>
+                Mark all as read
+              </button>
+            )}
+          </div>
+        </div>
+        {/* List */}
+        <div className="max-h-96 overflow-y-auto bg-white">
+          {loading ? (
+            <div className="p-6 text-center text-gray-500">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500 mx-auto"></div>
+              <p className="mt-2 text-sm">Loading...</p>
+            </div>
+          ) : items.length === 0 ? (
+            <div className="p-6 text-center text-gray-500">
+              <Icon className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+              <p className="text-sm">No {type} yet</p>
+              <p className="text-xs mt-1">You're all caught up!</p>
+            </div>
+          ) : (
+            <ul>
+              {items.map((item) => (
+                <li
+                  key={item.id}
+                  className="flex gap-3 px-6 py-4 border-b last:border-b-0 bg-white items-start"
+                >
+                  {/* Avatar or icon */}
+                  <div className="flex-shrink-0">
+                    <Avatar className="h-10 w-10">
+                      {typeof (item as any).avatarUrl === "string" && (item as any).avatarUrl ? (
+                        <AvatarImage src={(item as any).avatarUrl} alt={item.from || item.title || ""} />
+                      ) : (
+                        <AvatarFallback>{(item.from || item.title || "?").charAt(0)}</AvatarFallback>
                       )}
-                      {item.actionUrl && (
-                        <ExternalLink className="w-3 h-3 text-gray-400" />
+                    </Avatar>
+                  </div>
+                  {/* Content */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="font-bold text-blue-900 text-base truncate">
+                        {isMessages ? item.from : item.title}
+                      </span>
+                      {item.unread && (
+                        <Badge variant="info" className="text-xs px-2 py-0.5 rounded-full font-semibold">New</Badge>
                       )}
                     </div>
-                    <div className="text-gray-500 text-xs mt-1 line-clamp-2">
+                    <div className="text-gray-700 text-sm mb-1">
                       {item.message}
                     </div>
-                    <div className="text-gray-400 text-xs mt-1">
-                      {item.time}
-                    </div>
+                    <div className="text-xs text-gray-400 mb-2">{item.time}</div>
+                    {/* Actions for notifications */}
+                    {type === "notifications" && "actions" in item && Array.isArray((item as any).actions) && (
+                      <div className="flex gap-2 mt-1">
+                        <Button variant="outline" size="sm" className="border-gray-200 text-gray-700 px-3 py-1 rounded-md">Deny</Button>
+                        <Button variant="icct" size="sm" className="px-3 py-1 rounded-md">Approve</Button>
+                      </div>
+                    )}
                   </div>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        {/* Footer */}
+        <div className="flex gap-2 px-6 py-4 border-t border-gray-100 bg-white rounded-b-xl">
+          <Button
+            variant="outline"
+            size="lg"
+            className="flex-1 border-gray-200 text-gray-700 font-semibold rounded-xl"
+            onClick={() => onOpenChange(false)}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="icct"
+            size="lg"
+            className="flex-1 font-bold rounded-xl"
+            onClick={() => window.location.href = type === "messages" ? "/messages" : "/notifications"}
+          >
+            View All
+          </Button>
+        </div>
       </PopoverContent>
     </Popover>
   );

@@ -24,10 +24,10 @@ export const Checkbox = React.forwardRef<HTMLButtonElement, CheckboxProps>(
         [
           "w-6 h-6 min-w-[1.5rem] min-h-[1.5rem] flex items-center justify-center border-0 rounded transition-all duration-150 outline-none ring-offset-2",
           checked
-            ? "bg-blue-600 text-white focus-visible:ring-2 focus-visible:ring-blue-500"
+            ? "bg-gray-500 text-white focus-visible:ring-2 focus-visible:ring-gray-500"
             : "bg-white text-gray-400 focus-visible:ring-2 focus-visible:ring-gray-300",
           indeterminate ? "bg-gray-200" : "",
-          !checked && !indeterminate ? "hover:bg-blue-50" : "hover:bg-blue-700",
+          !checked && !indeterminate ? "hover:bg-gray-50" : "hover:bg-gray-700",
           "focus-visible:z-10",
           className || ""
         ].join(" ")
@@ -35,7 +35,7 @@ export const Checkbox = React.forwardRef<HTMLButtonElement, CheckboxProps>(
       {...props}
     >
       {indeterminate ? (
-        <span className="block w-3 h-0.5 bg-blue-600 rounded transition-all duration-150" />
+        <span className="block w-3 h-0.5 bg-gray-600 rounded transition-all duration-150" />
       ) : checked ? (
         <CheckSquare className="w-4 h-4 transition-colors duration-150" />
       ) : (

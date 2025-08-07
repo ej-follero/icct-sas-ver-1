@@ -1,6 +1,6 @@
 "use client";
 
-import AttendanceHeader from "@/components/AttendanceHeader";
+import PageHeader from '@/components/PageHeader/PageHeader';
 import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -121,10 +121,14 @@ export default function RFIDTagsPage() {
     <TooltipProvider>
       <div className="container mx-auto p-6 space-y-6">
         {/* Header */}
-        <AttendanceHeader
+        <PageHeader
           title="RFID Tags"
           subtitle="Manage and monitor RFID tags assigned to students"
-          currentSection="RFID"
+          breadcrumbs={[
+            { label: 'Home', href: '/' },
+            { label: 'RFID Management', href: '/rfid' },
+            { label: 'Tags' }
+          ]}
         />
 
         {/* Sticky Top Bar */}

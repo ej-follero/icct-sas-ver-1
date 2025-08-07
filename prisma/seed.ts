@@ -764,14 +764,16 @@ async function main() {
                    roomType === 'LABORATORY' ? faker.number.int({ min: 20, max: 40 }) :
                    roomType === 'CONFERENCE' ? faker.number.int({ min: 50, max: 150 }) :
                    faker.number.int({ min: 25, max: 35 });
-    
+    // Use enums for building and floor
+    const buildingEnum = ['BuildingA', 'BuildingB', 'BuildingC', 'BuildingD', 'BuildingE'][i % 5];
+    const floorEnum = ['F1', 'F2', 'F3', 'F4', 'F5', 'F6'][i % 6];
     rooms.push(await prisma.room.create({
         data: {
         roomNo: `${roomType === 'LECTURE' ? 'L' : roomType === 'LABORATORY' ? 'LAB' : roomType === 'CONFERENCE' ? 'CONF' : 'OFF'}${String(i + 1).padStart(3, '0')}`,
         roomType: roomType as any,
         roomCapacity: capacity,
-        roomBuildingLoc: `Building ${String.fromCharCode(65 + (i % 5))}`,
-        roomFloorLoc: `${1 + (i % 4)}F`,
+        roomBuildingLoc: buildingEnum,
+        roomFloorLoc: floorEnum,
         readerId: `READER-${String(i + 1).padStart(3, '0')}`,
         status: 'AVAILABLE',
         isActive: true,
@@ -781,7 +783,7 @@ async function main() {
     }));
   }
 
-  // 12. Create Subject Schedules (for each subject, assign to section, instructor, and time slot)
+  // 12. Create Subject Schedules (multiple schedules per subject for different time slots)
   console.log('📅 Creating subject schedules...');
   const subjectSchedules: any[] = [];
   const timeSlots = [
@@ -789,7 +791,8 @@ async function main() {
     { start: '11:00', end: '13:00', label: 'NOON' },
     { start: '17:00', end: '19:00', label: 'EVENING' },
   ];
-  let scheduleIdx = 0;
+  const daysOfWeek: ('MONDAY' | 'TUESDAY' | 'WEDNESDAY' | 'THURSDAY' | 'FRIDAY')[] = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY'];
+  
   for (const subject of subjects) {
     const course = allCourseOfferings.find(c => c.courseId === subject.courseId);
     if (!course) continue; // skip if course not found
@@ -798,31 +801,93 @@ async function main() {
     const deptInstructors = instructors.filter(i => i.departmentId === course.departmentId);
     const courseSections = sections.filter(s => s.courseId === course.courseId);
     if (deptInstructors.length === 0 || courseSections.length === 0) continue;
-    const section = courseSections[scheduleIdx % courseSections.length];
-    const instructor = deptInstructors[scheduleIdx % deptInstructors.length];
-    const timeSlot = timeSlots[scheduleIdx % timeSlots.length];
-    const room = rooms[scheduleIdx % rooms.length];
-    subjectSchedules.push(await prisma.subjectSchedule.create({
-      data: {
-        subjectId: subject.subjectId,
-        sectionId: section.sectionId,
-        instructorId: instructor.instructorId,
-        roomId: room.roomId,
-        day: faker.helpers.arrayElement(['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY']),
-        startTime: timeSlot.start,
-        endTime: timeSlot.end,
-        slots: 100,
-        scheduleType: 'REGULAR',
-        status: 'ACTIVE',
-        semesterId: course.semesterId,
-        academicYear: '2024-2025',
-        isRecurring: true,
-        startDate: trimester.startDate,
-        endDate: trimester.endDate,
-        maxStudents: 100,
+    
+    // Create multiple schedules for each subject (morning, noon, evening)
+    for (let timeSlotIndex = 0; timeSlotIndex < timeSlots.length; timeSlotIndex++) {
+      const timeSlot = timeSlots[timeSlotIndex];
+      const section = courseSections[timeSlotIndex % courseSections.length];
+      const instructor = deptInstructors[timeSlotIndex % deptInstructors.length];
+      const day = daysOfWeek[timeSlotIndex % daysOfWeek.length];
+
+      // Find a room that is not already booked for this day/time
+      let availableRoom = null;
+      for (const room of rooms) {
+        const overlap = subjectSchedules.find(s =>
+          s.roomId === room.roomId &&
+          s.day === day &&
+          !(
+            timeSlot.end <= s.startTime || // ends before existing starts
+            timeSlot.start >= s.endTime    // starts after existing ends
+          )
+        );
+        if (!overlap) {
+          availableRoom = room;
+          break;
+        }
       }
-    }));
-    scheduleIdx++;
+      if (!availableRoom) {
+        console.warn('No available room for', day, timeSlot, 'skipping schedule');
+        continue;
+      }
+
+      subjectSchedules.push(await prisma.subjectSchedule.create({
+        data: {
+          subjectId: subject.subjectId,
+          sectionId: section.sectionId,
+          instructorId: instructor.instructorId,
+          roomId: availableRoom.roomId,
+          day: day,
+          startTime: timeSlot.start,
+          endTime: timeSlot.end,
+          slots: 100,
+          scheduleType: 'REGULAR',
+          status: 'ACTIVE',
+          semesterId: course.semesterId,
+          academicYear: '2024-2025',
+          isRecurring: true,
+          startDate: trimester.startDate,
+          endDate: trimester.endDate,
+          maxStudents: 100,
+        }
+      }));
+    }
+  }
+
+  // 12.5. Create Student Schedules (enroll students in subject schedules)
+  console.log('📚 Enrolling students in subject schedules...');
+  const studentSchedules: any[] = [];
+  let studentScheduleIdx = 0;
+  
+  // Get all student-section enrollments to properly align students with their sections
+  const studentSectionEnrollments = await prisma.studentSection.findMany({
+    include: {
+      Student: true,
+      Section: true
+    }
+  });
+  
+  for (const subjectSchedule of subjectSchedules) {
+    // Get students enrolled in the same section as this subject schedule
+    const sectionStudents = studentSectionEnrollments
+      .filter(enrollment => enrollment.sectionId === subjectSchedule.sectionId)
+      .map(enrollment => enrollment.Student);
+    
+    // Enroll each student in this subject schedule
+    for (const student of sectionStudents) {
+      studentSchedules.push(await prisma.studentSchedule.create({
+        data: {
+          studentId: student.studentId,
+          scheduleId: subjectSchedule.subjectSchedId,
+          status: 'ACTIVE',
+          enrolledAt: faker.date.between({ 
+            from: currentTrimester.registrationStart!, 
+            to: currentTrimester.enrollmentEnd! 
+          }),
+          notes: `Enrolled in subject schedule`,
+        }
+      }));
+      studentScheduleIdx++;
+    }
   }
 
   // 13. Generate Attendance Data for 1 month for all students and instructors (reduced from 3 months)
@@ -830,7 +895,10 @@ async function main() {
   const attendanceRecords = [];
   
   for (const subjectSchedule of subjectSchedules) {
-    const scheduleStudents = students.filter((_, index) => index % subjectSchedules.length === subjectSchedules.indexOf(subjectSchedule));
+    // Get students enrolled in the same section as this subject schedule
+    const scheduleStudents = studentSectionEnrollments
+      .filter(enrollment => enrollment.sectionId === subjectSchedule.sectionId)
+      .map(enrollment => enrollment.Student);
     const course = allCourseOfferings.find(c => c.courseId === sections.find(s => s.sectionId === subjectSchedule.sectionId)?.courseId);
     const trimester = course ? createdTrimesters.find(t => t.semesterId === course.semesterId) : null;
     if (!trimester) continue;
@@ -1277,6 +1345,7 @@ async function main() {
   console.log(`👨‍🏫 Created ${instructors.length} instructors`);
   console.log(`📚 Created ${subjects.length} subjects with ${subjectSchedules.length} schedules`);
   console.log(`📋 Created ${sections.length} sections across ${allCourseOfferings.length} courses`);
+  console.log(`📚 Created ${studentSchedules.length} student enrollments in subject schedules`);
   console.log(`📊 Generated ${attendanceRecords.length} attendance records`);
 }
 

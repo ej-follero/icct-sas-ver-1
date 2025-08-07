@@ -54,6 +54,7 @@ type MenuItem = {
 
 type MenuSection = {
   title: string;
+  sectionIcon: JSX.Element;
   items: MenuItem[];
 };
 
@@ -66,12 +67,14 @@ const menuConfig: MenuConfig = {
   admin: [
     {
       title: "DASHBOARD",
+      sectionIcon: <LayoutDashboard className="w-5 h-5" />,
       items: [
         { icon: <LayoutDashboard className="w-5 h-5" />, label: "Dashboard", href: "/dashboard" },
       ],
     },
     {
       title: "ATTENDANCE MANAGEMENT",
+      sectionIcon: <UserCheck className="w-5 h-5" />,
       items: [
         { icon: <Users className="w-5 h-5" />, label: "Student Attendance", href: "/list/attendance/students" },
         { icon: <UserCheck className="w-5 h-5" />, label: "Instructor Attendance", href: "/list/attendance/instructors" },
@@ -80,6 +83,7 @@ const menuConfig: MenuConfig = {
     },
     {
       title: "ACADEMIC MANAGEMENT",
+      sectionIcon: <BookOpen className="w-5 h-5" />,
       items: [
         { icon: <School className="w-5 h-5" />, label: "Departments", href: "/list/departments" },
         { icon: <BookOpen className="w-5 h-5" />, label: "Courses", href: "/list/courses" },
@@ -92,6 +96,7 @@ const menuConfig: MenuConfig = {
     },
     {
       title: "USER MANAGEMENT",
+      sectionIcon: <UserCircle className="w-5 h-5" />,
       items: [
         { icon: <Users className="w-5 h-5" />, label: "Students", href: "/list/students" },
         { icon: <UserCheck className="w-5 h-5" />, label: "Instructors", href: "/list/instructors" },
@@ -101,6 +106,7 @@ const menuConfig: MenuConfig = {
     },
     {
       title: "RFID MANAGEMENT",
+      sectionIcon: <ScanLine className="w-5 h-5" />,
       items: [
         { icon: <Activity className="w-5 h-5" />, label: "RFID Dashboard", href: "/list/rfid/dashboard" },
         { icon: <ScanLine className="w-5 h-5" />, label: "Readers", href: "/list/rfid/readers" },
@@ -111,6 +117,7 @@ const menuConfig: MenuConfig = {
     },
     {
       title: "ANALYTICS & REPORTS",
+      sectionIcon: <BarChart3 className="w-5 h-5" />,
       items: [
         { icon: <BarChart3 className="w-5 h-5" />, label: "Dashboard", href: "/analytics/dashboard" },
         { icon: <TrendingUp className="w-5 h-5" />, label: "Attendance Trends", href: "/analytics/trends" },
@@ -124,6 +131,7 @@ const menuConfig: MenuConfig = {
     },
     {
       title: "COMMUNICATION",
+      sectionIcon: <Mail className="w-5 h-5" />,
       items: [
         { icon: <MessageCircle className="w-5 h-5" />, label: "Communication Hub", href: "/list/communication" },
         { icon: <Megaphone className="w-5 h-5" />, label: "Announcements", href: "/list/announcements" },
@@ -134,6 +142,7 @@ const menuConfig: MenuConfig = {
     },
     {
       title: "SYSTEM SETTINGS",
+      sectionIcon: <Settings className="w-5 h-5" />,
       items: [
         { icon: <Users className="w-5 h-5" />, label: "Admin Users", href: "/settings/admin-users" },
         { icon: <Shield className="w-5 h-5" />, label: "Roles & Permissions", href: "/settings/roles" },
@@ -149,6 +158,7 @@ const menuConfig: MenuConfig = {
     },
     {
       title: "LOGOUT",
+      sectionIcon: <LogOut className="w-5 h-5" />,
       items: [
         { icon: <LogOut className="w-5 h-5" />, label: "Logout", href: "/logout" },
       ],
@@ -158,12 +168,14 @@ const menuConfig: MenuConfig = {
   teacher: [
     {
       title: "SCHEDULE",
+      sectionIcon: <Calendar className="w-5 h-5" />,
       items: [
         { icon: <Calendar className="w-5 h-5" />, label: "My Schedule", href: "/list/schedule" },
       ],
     },
     {
       title: "ATTENDANCE",
+      sectionIcon: <Clock className="w-5 h-5" />,
       items: [
         { icon: <Clock className="w-5 h-5" />, label: "Record Attendance", href: "/list/attendance/record" },
         { icon: <Clock className="w-5 h-5" />, label: "My Attendance Log", href: "/list/attendance/log" },
@@ -172,6 +184,7 @@ const menuConfig: MenuConfig = {
     },
     {
       title: "CLASS MANAGEMENT",
+      sectionIcon: <School className="w-5 h-5" />,
       items: [
         { icon: <School className="w-5 h-5" />, label: "My Classes", href: "/list/classes" },
         { icon: <School className="w-5 h-5" />, label: "My Subjects", href: "/list/subjects" },
@@ -180,6 +193,7 @@ const menuConfig: MenuConfig = {
     },
     {
       title: "ANALYTICS",
+      sectionIcon: <BarChart3 className="w-5 h-5" />,
       items: [
         { icon: <BarChart3 className="w-5 h-5" />, label: "My Analytics", href: "/teacher/analytics" },
         { icon: <TrendingUp className="w-5 h-5" />, label: "Class Trends", href: "/teacher/class-trends" },
@@ -189,6 +203,7 @@ const menuConfig: MenuConfig = {
     },
     {
       title: "REPORTS",
+      sectionIcon: <BarChart3 className="w-5 h-5" />,
       items: [
         { icon: <BarChart3 className="w-5 h-5" />, label: "My Reports", href: "/teacher/reports" },
         { icon: <FileText className="w-5 h-5" />, label: "Class Reports", href: "/teacher/class-reports" },
@@ -197,6 +212,7 @@ const menuConfig: MenuConfig = {
     },
     {
       title: "ANNOUNCEMENTS",
+      sectionIcon: <Megaphone className="w-5 h-5" />,
       items: [
         { icon: <Megaphone className="w-5 h-5" />, label: "View Announcements", href: "/list/announcements" },
         { icon: <Megaphone className="w-5 h-5" />, label: "Post Announcement", href: "/list/announcements/post" },
@@ -204,6 +220,7 @@ const menuConfig: MenuConfig = {
     },
     {
       title: "MESSAGES",
+      sectionIcon: <MessageCircle className="w-5 h-5" />,
       items: [
         { icon: <MessageCircle className="w-5 h-5" />, label: "Inbox", href: "/list/messages/inbox" },
         { icon: <MessageCircle className="w-5 h-5" />, label: "Contact Students", href: "/list/messages/contact" },
@@ -211,6 +228,7 @@ const menuConfig: MenuConfig = {
     },
     {
       title: "PROFILE",
+      sectionIcon: <User className="w-5 h-5" />,
       items: [
         { icon: <User className="w-5 h-5" />, label: "View Profile", href: "/profile" },
         { icon: <User className="w-5 h-5" />, label: "Edit Info", href: "/profile/edit" },
@@ -219,6 +237,7 @@ const menuConfig: MenuConfig = {
     },
     {
       title: "LOGOUT",
+      sectionIcon: <LogOut className="w-5 h-5" />,
       items: [
         { icon: <LogOut className="w-5 h-5" />, label: "Logout", href: "/logout" },
       ],
@@ -228,12 +247,14 @@ const menuConfig: MenuConfig = {
   student: [
     {
       title: "SCHEDULE",
+      sectionIcon: <Calendar className="w-5 h-5" />,
       items: [
         { icon: <Calendar className="w-5 h-5" />, label: "Weekly Timetable", href: "/list/schedule" },
       ],
     },
     {
       title: "ATTENDANCE",
+      sectionIcon: <Clock className="w-5 h-5" />,
       items: [
         { icon: <Clock className="w-5 h-5" />, label: "Attendance Records", href: "/list/attendance/records" },
         { icon: <Clock className="w-5 h-5" />, label: "Absences & Late Logs", href: "/list/attendance/logs" },
@@ -242,6 +263,7 @@ const menuConfig: MenuConfig = {
     },
     {
       title: "ANALYTICS",
+      sectionIcon: <BarChart3 className="w-5 h-5" />,
       items: [
         { icon: <BarChart3 className="w-5 h-5" />, label: "My Analytics", href: "/student/analytics" },
         { icon: <TrendingUp className="w-5 h-5" />, label: "Attendance Trends", href: "/student/trends" },
@@ -251,6 +273,7 @@ const menuConfig: MenuConfig = {
     },
     {
       title: "ACADEMICS",
+      sectionIcon: <School className="w-5 h-5" />,
       items: [
         { icon: <School className="w-5 h-5" />, label: "Subjects", href: "/list/subjects" },
         { icon: <School className="w-5 h-5" />, label: "Class Info", href: "/list/class-info" },
@@ -258,6 +281,7 @@ const menuConfig: MenuConfig = {
     },
     {
       title: "ANNOUNCEMENTS",
+      sectionIcon: <Megaphone className="w-5 h-5" />,
       items: [
         { icon: <Megaphone className="w-5 h-5" />, label: "School Events", href: "/list/announcements/events" },
         { icon: <Megaphone className="w-5 h-5" />, label: "Class Updates", href: "/list/announcements/updates" },
@@ -265,6 +289,7 @@ const menuConfig: MenuConfig = {
     },
     {
       title: "MESSAGES",
+      sectionIcon: <MessageCircle className="w-5 h-5" />,
       items: [
         { icon: <MessageCircle className="w-5 h-5" />, label: "Inbox", href: "/list/messages/inbox" },
         { icon: <MessageCircle className="w-5 h-5" />, label: "Contact Instructor", href: "/list/messages/contact" },
@@ -272,6 +297,7 @@ const menuConfig: MenuConfig = {
     },
     {
       title: "PROFILE",
+      sectionIcon: <User className="w-5 h-5" />,
       items: [
         { icon: <User className="w-5 h-5" />, label: "View Profile", href: "/profile" },
         { icon: <User className="w-5 h-5" />, label: "Edit Info", href: "/profile/edit" },
@@ -280,6 +306,7 @@ const menuConfig: MenuConfig = {
     },
     {
       title: "LOGOUT",
+      sectionIcon: <LogOut className="w-5 h-5" />,
       items: [
         { icon: <LogOut className="w-5 h-5" />, label: "Logout", href: "/logout" },
       ],
@@ -289,12 +316,14 @@ const menuConfig: MenuConfig = {
   parent: [
     {
       title: "SCHEDULE",
+      sectionIcon: <Calendar className="w-5 h-5" />,
       items: [
         { icon: <Calendar className="w-5 h-5" />, label: "Class Schedule", href: "/list/schedule" },
       ],
     },
     {
       title: "ATTENDANCE",
+      sectionIcon: <Clock className="w-5 h-5" />,
       items: [
         { icon: <Clock className="w-5 h-5" />, label: "My Child's Daily Attendance", href: "/list/attendance/daily" },
         { icon: <Clock className="w-5 h-5" />, label: "Absences & Late Records", href: "/list/attendance/records" },
@@ -302,6 +331,7 @@ const menuConfig: MenuConfig = {
     },
     {
       title: "ANALYTICS",
+      sectionIcon: <BarChart2 className="w-5 h-5" />,
       items: [
         { icon: <BarChart2 className="w-5 h-5" />, label: "Attendance Summary", href: "/list/analytics/summary" },
         { icon: <BarChart2 className="w-5 h-5" />, label: "Attendance Trends", href: "/list/analytics/trends" },
@@ -309,6 +339,7 @@ const menuConfig: MenuConfig = {
     },
     {
       title: "ANNOUNCEMENTS",
+      sectionIcon: <Megaphone className="w-5 h-5" />,
       items: [
         { icon: <Megaphone className="w-5 h-5" />, label: "School Events", href: "/list/announcements/events" },
         { icon: <Megaphone className="w-5 h-5" />, label: "Class Updates", href: "/list/announcements/updates" },
@@ -316,6 +347,7 @@ const menuConfig: MenuConfig = {
     },
     {
       title: "MESSAGES",
+      sectionIcon: <MessageCircle className="w-5 h-5" />,
       items: [
         { icon: <MessageCircle className="w-5 h-5" />, label: "Inbox", href: "/list/messages/inbox" },
         { icon: <MessageCircle className="w-5 h-5" />, label: "Contact Teacher", href: "/list/messages/contact" },
@@ -323,6 +355,7 @@ const menuConfig: MenuConfig = {
     },
     {
       title: "PROFILE",
+      sectionIcon: <User className="w-5 h-5" />,
       items: [
         { icon: <User className="w-5 h-5" />, label: "View Profile", href: "/profile" },
         { icon: <User className="w-5 h-5" />, label: "Edit Info", href: "/profile/edit" },
@@ -331,6 +364,7 @@ const menuConfig: MenuConfig = {
     },
     {
       title: "LOGOUT",
+      sectionIcon: <LogOut className="w-5 h-5" />,
       items: [
         { icon: <LogOut className="w-5 h-5" />, label: "Logout", href: "/logout" },
       ],
@@ -339,7 +373,7 @@ const menuConfig: MenuConfig = {
 };
 // --- END FULL MENU CONFIG ---
 
-export default function Sidebar({ role }: { role: Role }) {
+export default function Sidebar({ role, collapsed = false }: { role: Role; collapsed?: boolean }) {
   const pathname = usePathname();
   const [openSections, setOpenSections] = useState<Record<string, boolean>>(() => {
     // Initialize sections based on current path
@@ -350,18 +384,38 @@ export default function Sidebar({ role }: { role: Role }) {
     return initial;
   });
 
+  // Hover state for hover-expandable sidebar
+  const [hovered, setHovered] = useState(false);
+
+  // Sidebar is expanded if not collapsed, or if collapsed but hovered
+  const expanded = !collapsed || hovered;
+
   const toggleSection = (title: string) => {
     setOpenSections((prev) => ({ ...prev, [title]: !prev[title] }));
   };
 
   return (
-    <aside className="w-64 min-h-screen bg-white border-r flex flex-col">
-      <div className="h-16 flex items-center justify-center border-b bg-[#0c2556]">
-        <Logo />
-      </div>
-      <nav className="flex-1 bg-[#0c2556] backdrop-blur-md shadow-lg overflow-y-auto px-3 py-6">
+    <aside
+      className={
+        `transition-all duration-200 min-h-screen flex flex-col
+        ${collapsed && !hovered ? 'w-16 items-center bg-[#0c2556]' : 'w-64 bg-white'}
+        ${collapsed && hovered ? 'fixed z-40 left-0' : ''}`
+      }
+      onMouseEnter={() => collapsed && setHovered(true)}
+      onMouseLeave={() => collapsed && setHovered(false)}
+      style={
+        collapsed && hovered
+          ? {
+              transition: 'width 0.2s',
+              top: '64px', // Navbar height
+              height: 'calc(100vh - 64px)',
+            }
+          : { transition: 'width 0.2s' }
+      }
+    >
+      <nav className={`flex-1 bg-[#0c2556] backdrop-blur-md shadow-lg overflow-y-auto ${expanded ? 'px-3 py-6' : 'px-0 py-2'}`}>
         {menuConfig[role].map((section) => (
-          <div key={section.title} className="mb-4">
+          <div key={section.title} className={`mb-4 ${!expanded ? 'flex flex-col items-center' : ''}`}>
             <button
               type="button"
               onClick={() => toggleSection(section.title)}
@@ -369,40 +423,48 @@ export default function Sidebar({ role }: { role: Role }) {
                 "flex items-center w-full text-xs font-semibold uppercase tracking-wider px-3 py-2 mb-1 rounded transition-colors duration-200",
                 openSections[section.title]
                   ? "bg-blue-800 text-white"
-                  : "text-blue-200 hover:bg-blue-800/50 hover:text-white"
+                  : "text-blue-200 hover:bg-blue-800/50 hover:text-white",
+                !expanded ? 'justify-center px-0' : 'justify-start text-left'
               )}
               aria-expanded={openSections[section.title]}
             >
-              {section.title}
-              <span className="ml-auto">
-                {openSections[section.title] ? (
-                  <ChevronUp className="w-4 h-4" />
-                ) : (
-                  <ChevronDown className="w-4 h-4" />
-                )}
-              </span>
+              {section.sectionIcon}
+              {expanded && (
+                <>
+                  <span className="ml-2 text-left">{section.title}</span>
+                  <span className="ml-auto">
+                    {openSections[section.title] ? (
+                      <ChevronUp className="w-4 h-4" />
+                    ) : (
+                      <ChevronDown className="w-4 h-4" />
+                    )}
+                  </span>
+                </>
+              )}
             </button>
-            <ul 
+            <ul
               className={cn(
                 "space-y-1 pl-2 transition-all duration-200",
-                !openSections[section.title] && "hidden"
+                !openSections[section.title] && "hidden",
+                !expanded ? 'pl-0 space-y-0' : ''
               )}
               role="menu"
             >
               {section.items.map((item) => (
-                <li key={item.href}>
+                <li key={item.href} className={!expanded ? 'flex justify-center' : ''}>
                   <Link
                     href={item.href}
                     className={cn(
-                      "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200",
+                      "flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-colors duration-200",
                       pathname === item.href
-                        ? "bg-blue-700 text-white font-semibold"
-                        : "text-blue-100 hover:bg-blue-800/50 hover:text-white"
+                        ? "bg-blue-500 text-white font-semibold"
+                        : "text-blue-100 hover:bg-blue-800/50 hover:text-white",
+                      !expanded ? 'justify-center px-0' : 'justify-start text-left'
                     )}
                     role="menuitem"
                   >
                     {item.icon}
-                    {item.label}
+                    {expanded && <span className="text-left">{item.label}</span>}
                   </Link>
                 </li>
               ))}

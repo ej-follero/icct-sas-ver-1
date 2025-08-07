@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server';
+import { Status } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 
 // GET a single department by ID
 export async function GET(request: Request, { params }: { params: { id: string } }) {
   try {
     const department = await prisma.department.findUnique({
-      where: { id: params.id },
+      where: { departmentId: parseInt(params.id) },
       include: {
-        courseOfferings: true,
+        CourseOffering: true,
         // Any other relations you want to include
       },
     });
@@ -27,21 +28,65 @@ export async function GET(request: Request, { params }: { params: { id: string }
 export async function PATCH(request: Request, { params }: { params: { id: string } }) {
   try {
     const body = await request.json();
-    const { name, code, headOfDepartment, description, status /* any other fields */ } = body;
+    const { name, code, headOfDepartment, description, status, courseOfferings, logo } = body;
 
     const department = await prisma.department.update({
-      where: { id: params.id },
+      where: { departmentId: parseInt(params.id) },
       data: {
-        name,
-        code,
-        headOfDepartment,
-        description,
-        status,
-        // update other fields as necessary
+        departmentName: name,
+        departmentCode: code,
+        departmentDescription: description,
+        departmentStatus: status === 'active' ? Status.ACTIVE : Status.INACTIVE,
+        headOfDepartment: headOfDepartment ? parseInt(headOfDepartment) : null,
+        departmentLogo: logo || null,
       },
     });
 
-    return NextResponse.json(department);
+    // Handle course assignments if provided
+    if (courseOfferings && Array.isArray(courseOfferings)) {
+      const courseIds = courseOfferings.map((course: any) => parseInt(course.id));
+      
+      // Get all courses currently assigned to this department
+      const currentCourses = await prisma.courseOffering.findMany({
+        where: {
+          departmentId: parseInt(params.id)
+        },
+        select: {
+          courseId: true
+        }
+      });
+      
+      const currentCourseIds = currentCourses.map(c => c.courseId);
+      
+      // Remove courses that are no longer selected
+      const coursesToRemove = currentCourseIds.filter(id => !courseIds.includes(id));
+      if (coursesToRemove.length > 0) {
+        // Since departmentId is required, we'll need to assign them to a default department
+        // For now, we'll assign them to department 1 (you may want to create a "Unassigned" department)
+        await prisma.courseOffering.updateMany({
+          where: {
+            courseId: { in: coursesToRemove }
+          },
+          data: {
+            departmentId: 1 // Default department - you may want to handle this differently
+          }
+        });
+      }
+      
+      // Assign the selected courses to this department
+      if (courseIds.length > 0) {
+        await prisma.courseOffering.updateMany({
+          where: {
+            courseId: { in: courseIds }
+          },
+          data: {
+            departmentId: parseInt(params.id)
+          }
+        });
+      }
+    }
+
+    return NextResponse.json({ success: true, data: department });
   } catch (error) {
     console.error('[DEPARTMENT_PATCH]', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
@@ -53,20 +98,23 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
   try {
     // Optional: Check for related records before deleting
     const department = await prisma.department.findUnique({
-      where: { id: params.id },
-      include: { courseOfferings: true, instructors: true },
+      where: { departmentId: parseInt(params.id) },
+      include: { 
+        CourseOffering: true, 
+        Instructor: true 
+      },
     });
 
     if (!department) {
       return NextResponse.json({ error: 'Department not found' }, { status: 404 });
     }
 
-    if (department.courseOfferings.length > 0 || department.instructors.length > 0) {
+    if (department.CourseOffering.length > 0 || department.Instructor.length > 0) {
       return NextResponse.json({ error: 'Cannot delete department with associated courses or instructors.' }, { status: 400 });
     }
 
     await prisma.department.delete({
-      where: { id: params.id },
+      where: { departmentId: parseInt(params.id) },
     });
 
     return NextResponse.json({ success: true, message: 'Department deleted successfully' });

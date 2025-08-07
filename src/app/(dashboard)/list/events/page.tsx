@@ -6,7 +6,7 @@ import { Filter, SortAsc, Plus, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import TableSearch from "@/components/TableSearch";
+import TableSearch from "@/components/reusable/Search/TableSearch";
 import { Pagination } from "@/components/Pagination";
 
 // Event type

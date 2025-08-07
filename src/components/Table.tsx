@@ -34,7 +34,7 @@ const Table = ({ columns, renderRow, data, ariaLabel }: TableProps) => {
         <tbody>
           {data.map((item, index) => (
             <tr
-              key={item.id ?? index}
+              key={item.id !== undefined && item.id !== null ? item.id : `row-${index}`}
               className="even:bg-gray-50 hover:bg-gray-100 cursor-default text-sm"
             >
               {renderRow(item, columns)}

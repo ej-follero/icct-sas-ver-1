@@ -15,7 +15,7 @@ import { Progress } from "../../../../components/ui/progress";
 import { toast } from "sonner";
 import CalendarView from "@/components/CalendarView";
 import Table from "@/components/Table";
-import AttendanceHeader from '../../../../components/AttendanceHeader';
+import PageHeader from '@/components/PageHeader/PageHeader';
 import ScheduleFilters from '../../../../components/ScheduleFilters';
 import BulkActions from '../../../../components/BulkActions';
 import { ICCT_CLASSES } from '../../../../lib/colors';
@@ -227,7 +227,7 @@ export default function ClassSchedulesPage() {
 
   return (
     <div className={`flex flex-col min-h-screen p-6 ${ICCT_CLASSES.gradient.primarySubtle}`}>
-      <AttendanceHeader
+      <PageHeader
         title="Class Schedules"
         subtitle="Manage class schedules and timetables"
         currentSection="Class Schedules"

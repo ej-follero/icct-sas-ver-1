@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
-import { PrismaClient, Status } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { Status } from '@prisma/client';
+import { prisma } from '@/lib/prisma';
 
 // GET all departments
 export async function GET() {
@@ -24,44 +23,102 @@ export async function GET() {
             },
           },
         },
-        Instructor: {
+        head: {
           select: {
-            instructorId: true,
-            firstName: true,
-            lastName: true,
+            userId: true,
+            userName: true,
           },
         },
       },
     });
 
-    console.log('Raw departments from database:', departments); // Debug log
+    // Get instructor information for department heads
+    const departmentHeadIds = departments
+      .filter(dept => dept.headOfDepartment)
+      .map(dept => dept.headOfDepartment!);
+    
+    console.log('Department head IDs:', departmentHeadIds);
+    
+    const headInstructors = await prisma.instructor.findMany({
+      where: {
+        instructorId: {
+          in: departmentHeadIds
+        }
+      },
+      select: {
+        instructorId: true,
+        firstName: true,
+        lastName: true,
+        middleName: true,
+        email: true,
+        phoneNumber: true,
+        officeLocation: true,
+        officeHours: true,
+      }
+    });
 
-    const formattedDepartments = departments.map(dept => ({
-      id: dept.departmentId.toString(),
-      name: dept.departmentName,
-      code: dept.departmentCode,
-      description: dept.departmentDescription,
-      headOfDepartment: dept.Instructor[0] ? `${dept.Instructor[0].firstName} ${dept.Instructor[0].lastName}` : 'Not Assigned',
-      totalInstructors: dept._count.Instructor,
-      status: dept.departmentStatus === Status.ACTIVE ? 'active' : 'inactive',
-      courseOfferings: dept.CourseOffering.map(course => ({
-        id: course.courseId.toString(),
-        name: course.courseName,
-        code: course.courseCode,
-        description: course.description,
-        status: course.courseStatus === 'ACTIVE' ? 'active' : 'inactive',
-        totalStudents: course._count.Student,
-        totalSections: course._count.Section,
-      })),
-    }));
+    console.log('Found head instructors:', headInstructors.length);
+    console.log('Sample head instructor:', headInstructors[0]);
 
-    console.log('Formatted departments:', formattedDepartments); // Debug log
+    // Create a map for quick lookup
+    const headInstructorMap = new Map(
+      headInstructors.map(instructor => [instructor.instructorId, instructor])
+    );
+
+
+
+    const formattedDepartments = departments.map(dept => {
+      const headInstructor = dept.headOfDepartment ? headInstructorMap.get(dept.headOfDepartment) : null;
+      
+      const formattedDept = {
+        id: dept.departmentId.toString(),
+        name: dept.departmentName,
+        code: dept.departmentCode,
+        description: dept.departmentDescription,
+        headOfDepartment: headInstructor ? 
+          `${headInstructor.firstName} ${headInstructor.lastName}`.trim() : 
+          (dept.head ? dept.head.userName : 'Not Assigned'),
+        headOfDepartmentDetails: headInstructor ? {
+          firstName: headInstructor.firstName,
+          lastName: headInstructor.lastName,
+          middleName: headInstructor.middleName,
+          fullName: `${headInstructor.firstName} ${headInstructor.middleName ? headInstructor.middleName + ' ' : ''}${headInstructor.lastName}`.trim(),
+          email: headInstructor.email,
+          phoneNumber: headInstructor.phoneNumber,
+          officeLocation: headInstructor.officeLocation,
+          officeHours: headInstructor.officeHours,
+        } : null,
+        totalInstructors: dept._count.Instructor,
+        status: dept.departmentStatus === Status.ACTIVE ? 'active' : 'inactive',
+        logo: dept.departmentLogo,
+        courseOfferings: dept.CourseOffering.map(course => ({
+          id: course.courseId.toString(),
+          name: course.courseName,
+          code: course.courseCode,
+          description: course.description,
+          status: course.courseStatus === 'ACTIVE' ? 'active' : 'inactive',
+          totalStudents: course._count.Student,
+          totalSections: course._count.Section,
+        })),
+      };
+      
+      console.log(`Department ${formattedDept.name}: headOfDepartment = "${formattedDept.headOfDepartment}"`);
+      
+      return formattedDept;
+    });
+
+
 
     return NextResponse.json({ data: formattedDepartments });
   } catch (error) {
     console.error('Error fetching departments:', error);
+    console.error('Error details:', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      name: error instanceof Error ? error.name : 'Unknown'
+    });
     return NextResponse.json(
-      { error: 'Failed to fetch departments' },
+      { error: 'Failed to fetch departments', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }
@@ -71,7 +128,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { name, code, description, status } = body;
+    const { name, code, description, status, courseOfferings, headOfDepartment, logo } = body;
 
     const newDepartment = await prisma.department.create({
       data: {
@@ -79,8 +136,25 @@ export async function POST(request: Request) {
         departmentCode: code,
         departmentDescription: description,
         departmentStatus: status === 'active' ? Status.ACTIVE : Status.INACTIVE,
+        headOfDepartment: headOfDepartment ? parseInt(headOfDepartment) : null,
+        departmentLogo: logo || null,
       },
     });
+
+    // Handle course assignments if provided
+    if (courseOfferings && Array.isArray(courseOfferings) && courseOfferings.length > 0) {
+      const courseIds = courseOfferings.map((course: any) => parseInt(course.id));
+      
+      // Update courses to assign them to this department
+      await prisma.courseOffering.updateMany({
+        where: {
+          courseId: { in: courseIds }
+        },
+        data: {
+          departmentId: newDepartment.departmentId
+        }
+      });
+    }
 
     // Format the response to match the frontend expectations
     const formattedDepartment = {
@@ -89,6 +163,7 @@ export async function POST(request: Request) {
       code: newDepartment.departmentCode,
       description: newDepartment.departmentDescription,
       status: newDepartment.departmentStatus === Status.ACTIVE ? 'active' : 'inactive',
+      logo: newDepartment.departmentLogo,
       totalInstructors: 0,
     };
 
@@ -100,4 +175,4 @@ export async function POST(request: Request) {
       { status: 500 }
     );
   }
-} 
+}
