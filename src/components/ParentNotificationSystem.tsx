@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Send, Mail, MessageSquare, Clock, CheckCircle, AlertTriangle, User, FileText } from 'lucide-react';
+import { Send, Mail, Clock, CheckCircle, AlertTriangle, User, FileText } from 'lucide-react';
 
 interface NotificationTemplate {
   id: string;
@@ -40,7 +40,7 @@ export default function ParentNotificationSystem() {
   const [selectedTemplate, setSelectedTemplate] = useState<string>('');
   const [customMessage, setCustomMessage] = useState('');
   const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
-  const [notificationMethod, setNotificationMethod] = useState<'email' | 'sms' | 'both'>('email');
+  const [notificationMethod, setNotificationMethod] = useState<'email'>('email');
 
   const handleSendNotification = () => {
     console.log('Sending notification:', {
@@ -149,8 +149,7 @@ export default function ParentNotificationSystem() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="email">Email Only</SelectItem>
-                <SelectItem value="sms">SMS Only</SelectItem>
-                <SelectItem value="both">Email + SMS</SelectItem>
+                
               </SelectContent>
             </Select>
           </div>

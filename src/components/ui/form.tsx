@@ -7,12 +7,15 @@ import { cn } from "@/lib/utils";
 
 const Form = React.forwardRef<
   HTMLFormElement,
-  React.FormHTMLAttributes<HTMLFormElement>
->(({ className, ...props }, ref) => {
+  React.FormHTMLAttributes<HTMLFormElement> & {
+    onSubmit?: (e: React.FormEvent<HTMLFormElement>) => void;
+  }
+>(({ className, onSubmit, ...props }, ref) => {
   return (
     <form
       ref={ref}
       className={cn("space-y-6", className)}
+      onSubmit={onSubmit}
       {...props}
     />
   );

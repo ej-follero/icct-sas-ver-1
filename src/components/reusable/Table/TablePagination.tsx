@@ -45,8 +45,8 @@ export const TablePagination: React.FC<TablePaginationProps> = ({
 
   return (
     <div className={`flex flex-col lg:flex-row lg:items-center lg:justify-between gap-8 px-6 py-6 ${className}`}>
-      {/* Left Side - Page Size & Info */}
-      <div className="flex flex-col sm:flex-row sm:items-center gap-6">
+      {/* Left Side - Page Size & Info (always row) */}
+      <div className="flex flex-row items-center gap-4">
         <div className="flex items-center gap-3">
           <span className="text-sm font-semibold text-blue-800 uppercase tracking-wide">Show:</span>
           <Select value={String(pageSize)} onValueChange={v => onPageSizeChange(Number(v))}>

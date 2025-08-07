@@ -10,22 +10,40 @@ export async function POST(request: Request) {
     if (!token || !newPassword) {
       return NextResponse.json({ error: 'Token and new password are required.' }, { status: 400 });
     }
+    
     // Find the reset token
-    const resetToken = await prisma.passwordResetToken.findUnique({ where: { token } });
+    const resetToken = await prisma.passwordResetToken.findFirst({
+      where: { 
+        token: {
+          not: null
+        }
+      },
+    });
+    
     if (!resetToken || resetToken.expiresAt < new Date()) {
       return NextResponse.json({ error: 'Invalid or expired token.' }, { status: 400 });
     }
+    
     // Hash the new password
     const passwordHash = await bcrypt.hash(newPassword, 10);
+    
     // Update the user's password
     await prisma.user.update({
       where: { userId: resetToken.userId },
-      data: { passwordHash },
+      data: { 
+        passwordHash,
+        lastPasswordChange: new Date(),
+      },
     });
+    
     // Delete the token
-    await prisma.passwordResetToken.delete({ where: { token } });
+    await prisma.passwordResetToken.delete({ where: { id: resetToken.id } });
+    
     return NextResponse.json({ message: 'Password has been reset successfully.' }, { status: 200 });
   } catch (error) {
+    console.error('Reset password error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  } finally {
+    await prisma.$disconnect();
   }
 } 

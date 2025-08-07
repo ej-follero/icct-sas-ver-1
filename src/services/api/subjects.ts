@@ -11,6 +11,7 @@ interface FetchSubjectsParams {
   status?: string;
   sortField?: string;
   sortOrder?: string;
+  courseId?: string;
 }
 
 interface FetchSubjectsResponse {

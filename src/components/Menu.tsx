@@ -43,27 +43,173 @@ import {
   Database,
   Palette,
   Zap,
+  Wifi,
+  RotateCcw,
+  Key,
+  Globe,
+  Upload,
 } from "lucide-react";
 import { cn } from "@/lib/utils"; // shadcn classnames utility
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 type MenuItem = {
   icon: JSX.Element;
   label: string;
   href: string;
+  description?: string;
+  subItems?: MenuItem[];
 };
 
 type MenuSection = {
   title: string;
   sectionIcon: JSX.Element;
   items: MenuItem[];
+  compact?: boolean;
 };
 
-type Role = "admin" | "teacher" | "student" | "parent";
+type Role = "super_admin" | "admin" | "department_head" | "teacher" | "student" | "parent" | "system_auditor";
 
 type MenuConfig = Record<Role, MenuSection[]>;
 
 // --- FULL MENU CONFIG ---
 const menuConfig: MenuConfig = {
+  super_admin: [
+    {
+      title: "DASHBOARD",
+      sectionIcon: <LayoutDashboard className="w-5 h-5" />,
+      items: [
+        { icon: <LayoutDashboard className="w-5 h-5" />, label: "System Dashboard", href: "/dashboard", description: "System-wide overview" },
+      ],
+    },
+    {
+      title: "USER MANAGEMENT",
+      sectionIcon: <UserCircle className="w-5 h-5" />,
+      items: [
+        { icon: <Users className="w-5 h-5" />, label: "Users", href: "/list/users", description: "Manage all users" },
+        { icon: <Shield className="w-5 h-5" />, label: "Roles", href: "/settings/roles", description: "Manage roles and permissions" },
+        { icon: <UserCheck className="w-5 h-5" />, label: "Super Admin Users", href: "/settings/super-admin-users", description: "Manage Super Admin accounts" },
+        { icon: <Activity className="w-5 h-5" />, label: "Admin Audit", href: "/settings/admin-audit", description: "Admin user audit trail" },
+      ],
+    },
+    {
+      title: "EMERGENCY & RECOVERY",
+      sectionIcon: <AlertTriangle className="w-5 h-5" />,
+      compact: true,
+      items: [
+        { icon: <AlertTriangle className="w-5 h-5" />, label: "Emergency Access", href: "/settings/emergency-access", description: "Emergency system access" },
+        { icon: <RotateCcw className="w-5 h-5" />, label: "System Recovery", href: "/settings/system-recovery", description: "System recovery procedures" },
+        { icon: <Activity className="w-5 h-5" />, label: "Emergency Procedures", href: "/settings/emergency-procedures", description: "Emergency escalation paths" },
+      ],
+    },
+    {
+      title: "DATABASE ADMINISTRATION",
+      sectionIcon: <Database className="w-5 h-5" />,
+      compact: true,
+      items: [
+        { icon: <Database className="w-5 h-5" />, label: "Database Management", href: "/settings/database-management", description: "Database operations" },
+        { icon: <Upload className="w-5 h-5" />, label: "Migrations", href: "/settings/database-migrations", description: "Schema migrations" },
+        { icon: <Download className="w-5 h-5" />, label: "Advanced Backup", href: "/settings/database-backup", description: "Advanced backup management" },
+        { icon: <RotateCcw className="w-5 h-5" />, label: "Data Restoration", href: "/settings/database-restore", description: "Data restoration" },
+      ],
+    },
+    {
+      title: "API MANAGEMENT",
+      sectionIcon: <Settings className="w-5 h-5" />,
+      compact: true,
+      items: [
+        { icon: <Key className="w-5 h-5" />, label: "API Keys", href: "/settings/api-keys", description: "API key management" },
+        { icon: <Globe className="w-5 h-5" />, label: "API Endpoints", href: "/settings/api-endpoints", description: "API endpoint configuration" },
+        { icon: <Activity className="w-5 h-5" />, label: "API Monitoring", href: "/settings/api-monitoring", description: "API usage monitoring" },
+      ],
+    },
+    {
+      title: "RFID MANAGEMENT",
+      sectionIcon: <ScanLine className="w-5 h-5" />,
+      compact: true,
+      items: [
+        { icon: <BarChart3 className="w-5 h-5" />, label: "Overview", href: "/list/rfid/dashboard", description: "System dashboard & analytics" },
+        {
+          icon: <Wifi className="w-5 h-5" />,
+          label: "Devices",
+          href: "#",
+          description: "Manage RFID readers and tags",
+          subItems: [
+            { icon: <Wifi className="w-5 h-5" />, label: "Readers", href: "/list/rfid/readers", description: "Manage RFID devices" },
+            { icon: <CreditCard className="w-5 h-5" />, label: "Tags", href: "/list/rfid/tags", description: "Manage student cards" },
+          ]
+        },
+        { icon: <FileText className="w-5 h-5" />, label: "Activity", href: "/list/rfid/logs", description: "View scan history" },
+        { icon: <Settings className="w-5 h-5" />, label: "Config", href: "/list/rfid/config", description: "System configuration" },
+      ],
+    },
+    {
+      title: "COMMUNICATION",
+      sectionIcon: <Mail className="w-5 h-5" />,
+      compact: true,
+      items: [
+        { icon: <MessageCircle className="w-5 h-5" />, label: "Hub", href: "/list/communication", description: "Central communication hub" },
+        {
+          icon: <Megaphone className="w-5 h-5" />,
+          label: "Broadcasts",
+          href: "#",
+          description: "Announcements and events",
+          subItems: [
+            { icon: <Megaphone className="w-5 h-5" />, label: "Announcements", href: "/list/announcements", description: "Broadcast announcements" },
+            { icon: <Calendar className="w-5 h-5" />, label: "Events", href: "/list/events", description: "Manage events" },
+          ]
+        },
+        { icon: <Mail className="w-5 h-5" />, label: "Email", href: "/list/email", description: "Email management" },
+        { icon: <FileText className="w-5 h-5" />, label: "Logs", href: "/list/communication/logs", description: "Communication logs" },
+      ],
+    },
+    {
+      title: "SYSTEM ANALYTICS",
+      sectionIcon: <BarChart3 className="w-5 h-5" />,
+      compact: true,
+      items: [
+        { icon: <BarChart3 className="w-5 h-5" />, label: "System-wide Analytics", href: "/analytics/system-wide", description: "System-wide analytics" },
+        { icon: <Activity className="w-5 h-5" />, label: "Performance Metrics", href: "/analytics/performance-metrics", description: "Performance monitoring" },
+        { icon: <Shield className="w-5 h-5" />, label: "Security Analytics", href: "/analytics/security-analytics", description: "Security analytics" },
+      ],
+    },
+    {
+      title: "SYSTEM SETTINGS",
+      sectionIcon: <Settings className="w-5 h-5" />,
+      compact: true,
+      items: [
+        { icon: <Users className="w-5 h-5" />, label: "Admin Users", href: "/settings/admin-users", description: "Manage admin accounts" },
+        {
+          icon: <Shield className="w-5 h-5" />, label: "Access Control", href: "#", description: "Security settings",
+          subItems: [
+            { icon: <Shield className="w-5 h-5" />, label: "Security", href: "/settings/security", description: "Security settings" },
+          ]
+        },
+        {
+          icon: <Activity className="w-5 h-5" />, label: "System Health", href: "#", description: "Monitor and maintain system health",
+          subItems: [
+            { icon: <Activity className="w-5 h-5" />, label: "Status", href: "/settings/system-status", description: "System status overview" },
+            { icon: <Database className="w-5 h-5" />, label: "Backup", href: "/settings/backup", description: "Backup and restore data" },
+          ]
+        },
+        {
+          icon: <Settings className="w-5 h-5" />, label: "Advanced Configuration", href: "#", description: "Advanced system settings",
+          subItems: [
+            { icon: <Settings className="w-5 h-5" />, label: "System Override", href: "/settings/system-override", description: "System configuration override" },
+            { icon: <Settings className="w-5 h-5" />, label: "Advanced Config", href: "/settings/advanced-config", description: "Advanced system settings" },
+            { icon: <Zap className="w-5 h-5" />, label: "Performance Tuning", href: "/settings/performance-tuning", description: "Performance optimization" },
+          ]
+        },
+      ],
+    },
+    {
+      title: "LOGOUT",
+      sectionIcon: <LogOut className="w-5 h-5" />,
+      items: [
+        { icon: <LogOut className="w-5 h-5" />, label: "Logout", href: "/logout" },
+      ],
+    },
+  ],
+
   admin: [
     {
       title: "DASHBOARD",
@@ -84,76 +230,214 @@ const menuConfig: MenuConfig = {
     {
       title: "ACADEMIC MANAGEMENT",
       sectionIcon: <BookOpen className="w-5 h-5" />,
+      compact: true,
       items: [
-        { icon: <School className="w-5 h-5" />, label: "Departments", href: "/list/departments" },
-        { icon: <BookOpen className="w-5 h-5" />, label: "Courses", href: "/list/courses" },
-        { icon: <Book className="w-5 h-5" />, label: "Subjects", href: "/list/subjects" },
-        { icon: <Users className="w-5 h-5" />, label: "Sections", href: "/list/sections" },
-        { icon: <DoorOpen className="w-5 h-5" />, label: "Rooms", href: "/list/rooms" },
-        { icon: <CalendarRange className="w-5 h-5" />, label: "Class Schedules", href: "/list/schedules" },
-        { icon: <Calendar className="w-5 h-5" />, label: "Academic Calendar", href: "/list/academic-calendar" },
+        {
+          icon: <School className="w-5 h-5" />, label: "Structure", href: "#", description: "Core academic entities",
+          subItems: [
+            { icon: <School className="w-5 h-5" />, label: "Departments", href: "/list/departments", description: "Manage departments" },
+            { icon: <BookOpen className="w-5 h-5" />, label: "Courses", href: "/list/courses", description: "Manage courses" },
+            { icon: <Book className="w-5 h-5" />, label: "Subjects", href: "/list/subjects", description: "Manage subjects" },
+          ]
+        },
+        {
+          icon: <CalendarRange className="w-5 h-5" />, label: "Scheduling", href: "#", description: "Time and schedule management",
+          subItems: [
+            { icon: <CalendarRange className="w-5 h-5" />, label: "Schedules", href: "/list/schedules", description: "Class schedules" },
+            { icon: <Calendar className="w-5 h-5" />, label: "Calendar", href: "/list/academic-calendar", description: "Academic calendar" },
+          ]
+        },
+        {
+          icon: <Users className="w-5 h-5" />, label: "Resources", href: "#", description: "Physical and logical resources",
+          subItems: [
+            { icon: <Users className="w-5 h-5" />, label: "Sections", href: "/list/sections", description: "Manage sections" },
+            { icon: <DoorOpen className="w-5 h-5" />, label: "Rooms", href: "/list/rooms", description: "Manage rooms" },
+          ]
+        },
       ],
     },
     {
       title: "USER MANAGEMENT",
       sectionIcon: <UserCircle className="w-5 h-5" />,
       items: [
-        { icon: <Users className="w-5 h-5" />, label: "Students", href: "/list/students" },
-        { icon: <UserCheck className="w-5 h-5" />, label: "Instructors", href: "/list/instructors" },
-        { icon: <UserCircle className="w-5 h-5" />, label: "Parents", href: "/list/parents" },
-        { icon: <Shield className="w-5 h-5" />, label: "Student User Accounts", href: "/list/user-management/students" },
+        { icon: <Users className="w-5 h-5" />, label: "Users", href: "/list/users" },
+        { icon: <Shield className="w-5 h-5" />, label: "Roles", href: "/settings/roles" },
       ],
     },
     {
       title: "RFID MANAGEMENT",
       sectionIcon: <ScanLine className="w-5 h-5" />,
+      compact: true,
       items: [
-        { icon: <Activity className="w-5 h-5" />, label: "RFID Dashboard", href: "/list/rfid/dashboard" },
-        { icon: <ScanLine className="w-5 h-5" />, label: "Readers", href: "/list/rfid/readers" },
-        { icon: <CreditCard className="w-5 h-5" />, label: "Tags", href: "/list/rfid/tags" },
-        { icon: <FileText className="w-5 h-5" />, label: "Access Logs", href: "/list/rfid/logs" },
-        { icon: <Settings className="w-5 h-5" />, label: "Configuration", href: "/list/rfid/config" },
-      ],
-    },
-    {
-      title: "ANALYTICS & REPORTS",
-      sectionIcon: <BarChart3 className="w-5 h-5" />,
-      items: [
-        { icon: <BarChart3 className="w-5 h-5" />, label: "Dashboard", href: "/analytics/dashboard" },
-        { icon: <TrendingUp className="w-5 h-5" />, label: "Attendance Trends", href: "/analytics/trends" },
-        { icon: <Users className="w-5 h-5" />, label: "Student Performance", href: "/analytics/student-performance" },
-        { icon: <School className="w-5 h-5" />, label: "Department Analytics", href: "/analytics/department" },
-        { icon: <Activity className="w-5 h-5" />, label: "RFID Insights", href: "/analytics/rfid" },
-        { icon: <FileText className="w-5 h-5" />, label: "Report Hub", href: "/reports" },
-        { icon: <Download className="w-5 h-5" />, label: "Export Data", href: "/reports/export" },
-        { icon: <FileText className="w-5 h-5" />, label: "System Logs", href: "/reports/system-logs" },
+        { icon: <BarChart3 className="w-5 h-5" />, label: "Overview", href: "/list/rfid/dashboard", description: "System dashboard & analytics" },
+        {
+          icon: <Wifi className="w-5 h-5" />,
+          label: "Devices",
+          href: "#",
+          description: "Manage RFID readers and tags",
+          subItems: [
+            { icon: <Wifi className="w-5 h-5" />, label: "Readers", href: "/list/rfid/readers", description: "Manage RFID devices" },
+            { icon: <CreditCard className="w-5 h-5" />, label: "Tags", href: "/list/rfid/tags", description: "Manage student cards" },
+          ]
+        },
+        { icon: <FileText className="w-5 h-5" />, label: "Activity", href: "/list/rfid/logs", description: "View scan history" },
+        { icon: <Settings className="w-5 h-5" />, label: "Config", href: "/list/rfid/config", description: "System configuration" },
       ],
     },
     {
       title: "COMMUNICATION",
       sectionIcon: <Mail className="w-5 h-5" />,
+      compact: true,
       items: [
-        { icon: <MessageCircle className="w-5 h-5" />, label: "Communication Hub", href: "/list/communication" },
-        { icon: <Megaphone className="w-5 h-5" />, label: "Announcements", href: "/list/announcements" },
-        { icon: <Calendar className="w-5 h-5" />, label: "Events", href: "/list/events" },
-        { icon: <Mail className="w-5 h-5" />, label: "Email Management", href: "/list/communication?tab=email" },
-        { icon: <FileText className="w-5 h-5" />, label: "Communication Logs", href: "/list/communication?tab=logs" },
+        { icon: <MessageCircle className="w-5 h-5" />, label: "Hub", href: "/list/communication", description: "Central communication hub" },
+        {
+          icon: <Megaphone className="w-5 h-5" />,
+          label: "Broadcasts",
+          href: "#",
+          description: "Announcements and events",
+          subItems: [
+            { icon: <Megaphone className="w-5 h-5" />, label: "Announcements", href: "/list/announcements", description: "Broadcast announcements" },
+            { icon: <Calendar className="w-5 h-5" />, label: "Events", href: "/list/events", description: "Manage events" },
+          ]
+        },
+        { icon: <Mail className="w-5 h-5" />, label: "Email", href: "/list/email", description: "Email management" },
+        { icon: <FileText className="w-5 h-5" />, label: "Logs", href: "/list/communication/logs", description: "Communication logs" },
       ],
     },
     {
       title: "SYSTEM SETTINGS",
       sectionIcon: <Settings className="w-5 h-5" />,
+      compact: true,
       items: [
-        { icon: <Users className="w-5 h-5" />, label: "Admin Users", href: "/settings/admin-users" },
-        { icon: <Shield className="w-5 h-5" />, label: "Roles & Permissions", href: "/settings/roles" },
-        { icon: <Shield className="w-5 h-5" />, label: "Security", href: "/settings/security" },
-        { icon: <Activity className="w-5 h-5" />, label: "System Status", href: "/settings/system-status" },
-        { icon: <FileText className="w-5 h-5" />, label: "Audit Logs", href: "/settings/audit-logs" },
-        { icon: <Database className="w-5 h-5" />, label: "Backup & Restore", href: "/settings/backup" },
-        { icon: <Settings className="w-5 h-5" />, label: "General", href: "/settings/general" },
-        { icon: <Zap className="w-5 h-5" />, label: "Integrations", href: "/settings/integrations" },
-        { icon: <Palette className="w-5 h-5" />, label: "Theme/Appearance", href: "/settings/theme" },
-        { icon: <Bell className="w-5 h-5" />, label: "Notifications", href: "/settings/notifications" },
+        { icon: <Users className="w-5 h-5" />, label: "Admin Users", href: "/settings/admin-users", description: "Manage admin accounts" },
+        {
+          icon: <Shield className="w-5 h-5" />, label: "Access Control", href: "#", description: "Security settings",
+          subItems: [
+            { icon: <Shield className="w-5 h-5" />, label: "Security", href: "/settings/security", description: "Security settings" },
+          ]
+        },
+        {
+          icon: <Activity className="w-5 h-5" />, label: "System Health", href: "#", description: "Monitor and maintain system health",
+          subItems: [
+            { icon: <Activity className="w-5 h-5" />, label: "Status", href: "/settings/system-status", description: "System status overview" },
+            { icon: <Database className="w-5 h-5" />, label: "Backup", href: "/settings/backup", description: "Backup and restore data" },
+          ]
+        },
+      ],
+    },
+    {
+      title: "LOGOUT",
+      sectionIcon: <LogOut className="w-5 h-5" />,
+      items: [
+        { icon: <LogOut className="w-5 h-5" />, label: "Logout", href: "/logout" },
+      ],
+    },
+  ],
+
+  department_head: [
+    {
+      title: "DASHBOARD",
+      sectionIcon: <LayoutDashboard className="w-5 h-5" />,
+      items: [
+        { icon: <LayoutDashboard className="w-5 h-5" />, label: "Dashboard", href: "/dashboard" },
+      ],
+    },
+    {
+      title: "ACADEMIC MANAGEMENT",
+      sectionIcon: <BookOpen className="w-5 h-5" />,
+      compact: true,
+      items: [
+        {
+          icon: <School className="w-5 h-5" />, label: "Structure", href: "#", description: "Core academic entities",
+          subItems: [
+            { icon: <School className="w-5 h-5" />, label: "Departments", href: "/list/departments", description: "Manage departments" },
+            { icon: <BookOpen className="w-5 h-5" />, label: "Courses", href: "/list/courses", description: "Manage courses" },
+            { icon: <Book className="w-5 h-5" />, label: "Subjects", href: "/list/subjects", description: "Manage subjects" },
+          ]
+        },
+        {
+          icon: <CalendarRange className="w-5 h-5" />, label: "Scheduling", href: "#", description: "Time and schedule management",
+          subItems: [
+            { icon: <CalendarRange className="w-5 h-5" />, label: "Schedules", href: "/list/schedules", description: "Class schedules" },
+            { icon: <Calendar className="w-5 h-5" />, label: "Calendar", href: "/list/academic-calendar", description: "Academic calendar" },
+          ]
+        },
+        {
+          icon: <Users className="w-5 h-5" />, label: "Resources", href: "#", description: "Physical and logical resources",
+          subItems: [
+            { icon: <Users className="w-5 h-5" />, label: "Sections", href: "/list/sections", description: "Manage sections" },
+            { icon: <DoorOpen className="w-5 h-5" />, label: "Rooms", href: "/list/rooms", description: "Manage rooms" },
+          ]
+        },
+      ],
+    },
+    {
+      title: "USER MANAGEMENT",
+      sectionIcon: <UserCircle className="w-5 h-5" />,
+      items: [
+        { icon: <Users className="w-5 h-5" />, label: "Users", href: "/list/users" },
+        { icon: <Shield className="w-5 h-5" />, label: "Roles", href: "/settings/roles" },
+      ],
+    },
+    {
+      title: "RFID MANAGEMENT",
+      sectionIcon: <ScanLine className="w-5 h-5" />,
+      compact: true,
+      items: [
+        { icon: <BarChart3 className="w-5 h-5" />, label: "Overview", href: "/list/rfid/dashboard", description: "System dashboard & analytics" },
+        {
+          icon: <Wifi className="w-5 h-5" />,
+          label: "Devices",
+          href: "#",
+          description: "Manage RFID readers and tags",
+          subItems: [
+            { icon: <Wifi className="w-5 h-5" />, label: "Readers", href: "/list/rfid/readers", description: "Manage RFID devices" },
+            { icon: <CreditCard className="w-5 h-5" />, label: "Tags", href: "/list/rfid/tags", description: "Manage student cards" },
+          ]
+        },
+        { icon: <FileText className="w-5 h-5" />, label: "Activity", href: "/list/rfid/logs", description: "View scan history" },
+        { icon: <Settings className="w-5 h-5" />, label: "Config", href: "/list/rfid/config", description: "System configuration" },
+      ],
+    },
+    {
+      title: "COMMUNICATION",
+      sectionIcon: <Mail className="w-5 h-5" />,
+      compact: true,
+      items: [
+        { icon: <MessageCircle className="w-5 h-5" />, label: "Hub", href: "/list/communication", description: "Central communication hub" },
+        {
+          icon: <Megaphone className="w-5 h-5" />,
+          label: "Broadcasts",
+          href: "#",
+          description: "Announcements and events",
+          subItems: [
+            { icon: <Megaphone className="w-5 h-5" />, label: "Announcements", href: "/list/announcements", description: "Broadcast announcements" },
+            { icon: <Calendar className="w-5 h-5" />, label: "Events", href: "/list/events", description: "Manage events" },
+          ]
+        },
+        { icon: <Mail className="w-5 h-5" />, label: "Email", href: "/list/email", description: "Email management" },
+        { icon: <FileText className="w-5 h-5" />, label: "Logs", href: "/list/communication/logs", description: "Communication logs" },
+      ],
+    },
+    {
+      title: "SYSTEM SETTINGS",
+      sectionIcon: <Settings className="w-5 h-5" />,
+      compact: true,
+      items: [
+        { icon: <Users className="w-5 h-5" />, label: "Admin Users", href: "/settings/admin-users", description: "Manage admin accounts" },
+        {
+          icon: <Shield className="w-5 h-5" />, label: "Access Control", href: "#", description: "Security settings",
+          subItems: [
+            { icon: <Shield className="w-5 h-5" />, label: "Security", href: "/settings/security", description: "Security settings" },
+          ]
+        },
+        {
+          icon: <Activity className="w-5 h-5" />, label: "System Health", href: "#", description: "Monitor and maintain system health",
+          subItems: [
+            { icon: <Activity className="w-5 h-5" />, label: "Status", href: "/settings/system-status", description: "System status overview" },
+            { icon: <Database className="w-5 h-5" />, label: "Backup", href: "/settings/backup", description: "Backup and restore data" },
+          ]
+        },
       ],
     },
     {
@@ -370,6 +654,115 @@ const menuConfig: MenuConfig = {
       ],
     },
   ],
+
+  system_auditor: [
+    {
+      title: "DASHBOARD",
+      sectionIcon: <LayoutDashboard className="w-5 h-5" />,
+      items: [
+        { icon: <LayoutDashboard className="w-5 h-5" />, label: "Audit Dashboard", href: "/dashboard", description: "Compliance overview" },
+      ],
+    },
+    {
+      title: "SYSTEM MONITORING",
+      sectionIcon: <Activity className="w-5 h-5" />,
+      compact: true,
+      items: [
+        { icon: <Activity className="w-5 h-5" />, label: "System Health", href: "/settings/system-status", description: "Monitor system health" },
+        { icon: <Database className="w-5 h-5" />, label: "Database Logs", href: "/list/system-logs", description: "View system logs" },
+        { icon: <Shield className="w-5 h-5" />, label: "Security Audit", href: "/settings/audit-logs", description: "Security compliance logs" },
+        { icon: <FileText className="w-5 h-5" />, label: "Compliance Reports", href: "/reports/compliance", description: "Generate compliance reports" },
+      ]
+    },
+    {
+      title: "USER MANAGEMENT",
+      sectionIcon: <UserCircle className="w-5 h-5" />,
+      items: [
+        { icon: <Users className="w-5 h-5" />, label: "Users", href: "/list/users", description: "View user accounts (read-only)" },
+        { icon: <Shield className="w-5 h-5" />, label: "Roles", href: "/settings/roles", description: "View role configurations" },
+        { icon: <Activity className="w-5 h-5" />, label: "User Activity", href: "/reports/user-activity", description: "User access logs" },
+      ],
+    },
+    {
+      title: "RFID MANAGEMENT",
+      sectionIcon: <ScanLine className="w-5 h-5" />,
+      compact: true,
+      items: [
+        { icon: <BarChart3 className="w-5 h-5" />, label: "Overview", href: "/list/rfid/dashboard", description: "RFID system analytics" },
+        {
+          icon: <Wifi className="w-5 h-5" />,
+          label: "Devices",
+          href: "#",
+          description: "View RFID readers and tags",
+          subItems: [
+            { icon: <Wifi className="w-5 h-5" />, label: "Readers", href: "/list/rfid/readers", description: "RFID device status" },
+            { icon: <CreditCard className="w-5 h-5" />, label: "Tags", href: "/list/rfid/tags", description: "Tag assignment logs" },
+          ]
+        },
+        { icon: <FileText className="w-5 h-5" />, label: "Activity", href: "/list/rfid/logs", description: "RFID scan history" },
+        { icon: <Settings className="w-5 h-5" />, label: "Config", href: "/list/rfid/config", description: "System configuration" },
+      ],
+    },
+    {
+      title: "ATTENDANCE AUDIT",
+      sectionIcon: <Clock className="w-5 h-5" />,
+      compact: true,
+      items: [
+        { icon: <BarChart3 className="w-5 h-5" />, label: "Attendance Analytics", href: "/analytics/dashboard", description: "Attendance trends" },
+        { icon: <FileText className="w-5 h-5" />, label: "Attendance Reports", href: "/reports/attendance", description: "Generate attendance reports" },
+        { icon: <Activity className="w-5 h-5" />, label: "Verification Logs", href: "/reports/verification", description: "Attendance verification audit" },
+        { icon: <AlertTriangle className="w-5 h-5" />, label: "Discrepancies", href: "/reports/discrepancies", description: "Attendance discrepancies" },
+      ],
+    },
+    {
+      title: "COMMUNICATION",
+      sectionIcon: <Mail className="w-5 h-5" />,
+      compact: true,
+      items: [
+        { icon: <MessageCircle className="w-5 h-5" />, label: "Hub", href: "/list/communication", description: "Communication overview" },
+        {
+          icon: <Megaphone className="w-5 h-5" />,
+          label: "Broadcasts",
+          href: "#",
+          description: "Announcements and events",
+          subItems: [
+            { icon: <Megaphone className="w-5 h-5" />, label: "Announcements", href: "/list/announcements", description: "View announcements" },
+            { icon: <Calendar className="w-5 h-5" />, label: "Events", href: "/list/events", description: "View events" },
+          ]
+        },
+        { icon: <Mail className="w-5 h-5" />, label: "Email", href: "/list/email", description: "Email logs" },
+        { icon: <FileText className="w-5 h-5" />, label: "Logs", href: "/list/communication/logs", description: "Communication logs" },
+      ],
+    },
+    {
+      title: "SYSTEM SETTINGS",
+      sectionIcon: <Settings className="w-5 h-5" />,
+      compact: true,
+      items: [
+        { icon: <Users className="w-5 h-5" />, label: "Admin Users", href: "/settings/admin-users", description: "View admin accounts" },
+        {
+          icon: <Shield className="w-5 h-5" />, label: "Access Control", href: "#", description: "Security settings",
+          subItems: [
+            { icon: <Shield className="w-5 h-5" />, label: "Security", href: "/settings/security", description: "Security settings" },
+          ]
+        },
+        {
+          icon: <Activity className="w-5 h-5" />, label: "System Health", href: "#", description: "Monitor system health",
+          subItems: [
+            { icon: <Activity className="w-5 h-5" />, label: "Status", href: "/settings/system-status", description: "System status overview" },
+            { icon: <Database className="w-5 h-5" />, label: "Backup", href: "/settings/backup", description: "Backup logs" },
+          ]
+        },
+      ],
+    },
+    {
+      title: "LOGOUT",
+      sectionIcon: <LogOut className="w-5 h-5" />,
+      items: [
+        { icon: <LogOut className="w-5 h-5" />, label: "Logout", href: "/logout" },
+      ],
+    },
+  ],
 };
 // --- END FULL MENU CONFIG ---
 
@@ -395,84 +788,146 @@ export default function Sidebar({ role, collapsed = false }: { role: Role; colla
   };
 
   return (
-    <aside
-      className={
-        `transition-all duration-200 min-h-screen flex flex-col
-        ${collapsed && !hovered ? 'w-16 items-center bg-[#0c2556]' : 'w-64 bg-white'}
-        ${collapsed && hovered ? 'fixed z-40 left-0' : ''}`
-      }
-      onMouseEnter={() => collapsed && setHovered(true)}
-      onMouseLeave={() => collapsed && setHovered(false)}
-      style={
-        collapsed && hovered
-          ? {
-              transition: 'width 0.2s',
-              top: '64px', // Navbar height
-              height: 'calc(100vh - 64px)',
-            }
-          : { transition: 'width 0.2s' }
-      }
-    >
-      <nav className={`flex-1 bg-[#0c2556] backdrop-blur-md shadow-lg overflow-y-auto ${expanded ? 'px-3 py-6' : 'px-0 py-2'}`}>
-        {menuConfig[role].map((section) => (
-          <div key={section.title} className={`mb-4 ${!expanded ? 'flex flex-col items-center' : ''}`}>
-            <button
-              type="button"
-              onClick={() => toggleSection(section.title)}
-              className={cn(
-                "flex items-center w-full text-xs font-semibold uppercase tracking-wider px-3 py-2 mb-1 rounded transition-colors duration-200",
-                openSections[section.title]
-                  ? "bg-blue-800 text-white"
-                  : "text-blue-200 hover:bg-blue-800/50 hover:text-white",
-                !expanded ? 'justify-center px-0' : 'justify-start text-left'
-              )}
-              aria-expanded={openSections[section.title]}
-            >
-              {section.sectionIcon}
-              {expanded && (
-                <>
-                  <span className="ml-2 text-left">{section.title}</span>
-                  <span className="ml-auto">
-                    {openSections[section.title] ? (
-                      <ChevronUp className="w-4 h-4" />
-                    ) : (
-                      <ChevronDown className="w-4 h-4" />
-                    )}
-                  </span>
-                </>
-              )}
-            </button>
-            <ul
-              className={cn(
-                "space-y-1 pl-2 transition-all duration-200",
-                !openSections[section.title] && "hidden",
-                !expanded ? 'pl-0 space-y-0' : ''
-              )}
-              role="menu"
-            >
-              {section.items.map((item) => (
-                <li key={item.href} className={!expanded ? 'flex justify-center' : ''}>
-                  <Link
-                    href={item.href}
-                    className={cn(
-                      "flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-colors duration-200",
-                      pathname === item.href
-                        ? "bg-blue-500 text-white font-semibold"
-                        : "text-blue-100 hover:bg-blue-800/50 hover:text-white",
-                      !expanded ? 'justify-center px-0' : 'justify-start text-left'
-                    )}
-                    role="menuitem"
-                  >
-                    {item.icon}
-                    {expanded && <span className="text-left">{item.label}</span>}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ))}
-      </nav>
-    </aside>
+    <TooltipProvider>
+      <aside
+        className={
+          `transition-all duration-200 min-h-screen flex flex-col
+          ${collapsed && !hovered ? 'w-16 items-center bg-[#0c2556]' : 'w-64 bg-white'}
+          ${collapsed && hovered ? 'fixed z-40 left-0' : ''}`
+        }
+        onMouseEnter={() => collapsed && setHovered(true)}
+        onMouseLeave={() => collapsed && setHovered(false)}
+        style={
+          collapsed && hovered
+            ? {
+                transition: 'width 0.2s',
+                top: '64px', // Navbar height
+                height: 'calc(100vh - 64px)',
+              }
+            : { transition: 'width 0.2s' }
+        }
+      >
+        <nav className={`flex-1 bg-[#0c2556] backdrop-blur-md shadow-lg overflow-y-auto ${expanded ? 'px-3 py-6' : 'px-0 py-2'}`}>
+          {menuConfig[role].map((section) => (
+            <div key={section.title} className={`mb-4 ${!expanded ? 'flex flex-col items-center' : ''}`}>
+              <button
+                type="button"
+                onClick={() => toggleSection(section.title)}
+                className={cn(
+                  "flex items-center w-full text-xs font-semibold uppercase tracking-wider px-3 py-2 mb-1 rounded transition-colors duration-200",
+                  openSections[section.title]
+                    ? "bg-blue-800 text-white"
+                    : "text-blue-200 hover:bg-blue-800/50 hover:text-white",
+                  !expanded ? 'justify-center px-0' : 'justify-start text-left'
+                )}
+                aria-expanded={openSections[section.title]}
+              >
+                {section.sectionIcon}
+                {expanded && (
+                  <>
+                    <span className="ml-2 text-left">{section.title}</span>
+                    <span className="ml-auto">
+                      {openSections[section.title] ? (
+                        <ChevronUp className="w-4 h-4" />
+                      ) : (
+                        <ChevronDown className="w-4 h-4" />
+                      )}
+                    </span>
+                  </>
+                )}
+              </button>
+              <ul
+                className={cn(
+                  "space-y-1 pl-2 transition-all duration-200",
+                  !openSections[section.title] && "hidden",
+                  !expanded ? 'pl-0 space-y-0' : '',
+                  section.compact ? 'space-y-0.5' : ''
+                )}
+                role="menu"
+              >
+                {section.items.map((item) => (
+                  item.subItems ? (
+                    <li key={item.label} className={!expanded ? 'flex flex-col items-center' : ''}>
+                      <div className={cn(
+                        "flex items-center gap-3 px-3 py-2 rounded text-sm font-semibold text-blue-200",
+                        section.compact ? 'py-1.5' : '',
+                        !expanded ? 'justify-center px-0' : 'justify-start text-left'
+                      )}>
+                        {item.icon}
+                        {expanded && <span className="text-left">{item.label}</span>}
+                      </div>
+                      <ul className="pl-6 space-y-0.5">
+                        {item.subItems.map((sub) => (
+                          <li key={sub.href} className={!expanded ? 'flex justify-center' : ''}>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Link
+                                  href={sub.href}
+                                  className={cn(
+                                    "flex items-center gap-3 px-3 py-2 rounded text-sm font-medium transition-colors duration-200",
+                                    pathname === sub.href
+                                      ? "bg-blue-500 text-white font-semibold"
+                                      : "text-blue-100 hover:bg-blue-800/50 hover:text-white",
+                                    !expanded ? 'justify-center px-0' : 'justify-start text-left',
+                                    section.compact ? 'py-1.5' : ''
+                                  )}
+                                  role="menuitem"
+                                >
+                                  {sub.icon}
+                                  {expanded && <span className="text-left">{sub.label}</span>}
+                                </Link>
+                              </TooltipTrigger>
+                              {(!expanded || sub.description) && (
+                                <TooltipContent side="right" className="max-w-xs">
+                                  <div>
+                                    <p className="font-medium">{sub.label}</p>
+                                    {sub.description && <p className="text-xs text-muted-foreground">{sub.description}</p>}
+                                  </div>
+                                </TooltipContent>
+                              )}
+                            </Tooltip>
+                          </li>
+                        ))}
+                      </ul>
+                    </li>
+                  ) : (
+                    <li key={item.href} className={!expanded ? 'flex justify-center' : ''}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Link
+                            href={item.href}
+                            className={cn(
+                              "flex items-center gap-3 px-3 py-2 rounded text-sm font-medium transition-colors duration-200",
+                              pathname === item.href
+                                ? "bg-blue-500 text-white font-semibold"
+                                : "text-blue-100 hover:bg-blue-800/50 hover:text-white",
+                              !expanded ? 'justify-center px-0' : 'justify-start text-left',
+                              section.compact ? 'py-1.5' : ''
+                            )}
+                            role="menuitem"
+                          >
+                            {item.icon}
+                            {expanded && <span className="text-left">{item.label}</span>}
+                          </Link>
+                        </TooltipTrigger>
+                        {(!expanded || item.description) && (
+                          <TooltipContent side="right" className="max-w-xs">
+                            <div>
+                              <p className="font-medium">{item.label}</p>
+                              {item.description && <p className="text-xs text-muted-foreground">{item.description}</p>}
+                            </div>
+                          </TooltipContent>
+                        )}
+                      </Tooltip>
+                    </li>
+                  )
+                ))}
+              </ul>
+            </div>
+          ))}
+        </nav>
+      </aside>
+    </TooltipProvider>
   );
 }
 export type { Role };

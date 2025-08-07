@@ -11,6 +11,7 @@ interface TableExpandedRowProps<T> {
   className?: string;
 }
 
+// Note: This component should only return a <td> so it can be rendered inside a <tr> as expanded content.
 export function TableExpandedRow<T>({
   colSpan,
   title,
@@ -29,7 +30,7 @@ export function TableExpandedRow<T>({
             <TableHeader>
               <TableRow>
                 {headers.map((header, idx) => (
-                  <TableHead key={idx} className="text-blue-900 font-semibold">{header}</TableHead>
+                  <TableHead key={idx} className="text-blue-900 font-semibold text-center">{header}</TableHead>
                 ))}
               </TableRow>
             </TableHeader>

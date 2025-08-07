@@ -428,7 +428,7 @@ export default function StudentDetailModal({ student, isOpen, onClose, onUpdate,
                       Send Email
                     </Button>
                     <Button variant="outline" onClick={handleSendNotification} className="flex-1">
-                      Send SMS
+                      Send Email
                     </Button>
                   </div>
                 </CardContent>

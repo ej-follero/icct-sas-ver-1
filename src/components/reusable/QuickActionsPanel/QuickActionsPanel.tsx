@@ -197,12 +197,7 @@ export function QuickActionsPanel({
             })}
           </div>
 
-          {/* Footer */}
-          <div className="mt-6 pt-4 border-t border-gray-200">
-            <p className="text-gray-500 text-sm text-right">
-              Last action: <span className="font-semibold">{lastActionTime}</span>
-            </p>
-          </div>
+
         </div>
       </div>
     );

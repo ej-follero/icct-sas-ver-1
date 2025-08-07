@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
               data: {
                 departmentName: record.departmentName,
                 departmentCode: record.departmentCode,
-                departmentDescription: record.departmentDescription,
+                departmentDescription: record.departmentDescription || '', // Provide default empty string
                 departmentStatus: record.departmentStatus,
               }
             });
@@ -92,7 +92,7 @@ export async function POST(request: NextRequest) {
           data: {
             departmentName: record.departmentName,
             departmentCode: record.departmentCode,
-            departmentDescription: record.departmentDescription,
+            departmentDescription: record.departmentDescription || '', // Provide default empty string
             departmentStatus: record.departmentStatus,
             // Set default values for required fields
             departmentType: 'ACADEMIC',
@@ -102,7 +102,7 @@ export async function POST(request: NextRequest) {
         results.details.push({
           index: i,
           success: true,
-          departmentId: newDepartment.id
+          departmentId: newDepartment.departmentId.toString() // Use departmentId instead of id
         });
         results.success++;
 

@@ -20,16 +20,46 @@ import {
   FileSpreadsheet,
   FileX,
   AlertTriangle,
-  Info
+  Info,
+  XCircle
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { toast } from "sonner";
 
 interface ImportRecord {
-  departmentName: string;
-  departmentCode: string;
+  // Department fields
+  departmentName?: string;
+  departmentCode?: string;
   departmentDescription?: string;
-  departmentStatus: "ACTIVE" | "INACTIVE";
+  departmentStatus?: "ACTIVE" | "INACTIVE";
+  
+  // Section fields
+  sectionName?: string;
+  sectionCapacity?: number;
+  sectionStatus?: "ACTIVE" | "INACTIVE";
+  yearLevel?: number;
+  courseId?: number;
+  academicYear?: string;
+  semester?: string;
+  roomAssignment?: string;
+  scheduleNotes?: string;
+  
+  // Role fields
+  roleName?: string;
+  roleDescription?: string;
+  rolePermissions?: string[];
+  roleStatus?: "ACTIVE" | "INACTIVE" | "ARCHIVED";
+  
+  // User fields
+  userName?: string;
+  email?: string;
+  role?: "SUPER_ADMIN" | "ADMIN" | "DEPARTMENT_HEAD" | "INSTRUCTOR" | "STUDENT" | "GUARDIAN" | "SYSTEM_AUDITOR";
+  status?: "active" | "inactive" | "suspended" | "pending" | "blocked";
+  isEmailVerified?: boolean;
+  twoFactorEnabled?: boolean;
+  passwordHash?: string;
+  
+  // Common fields
   errors?: string[];
   isValid?: boolean;
 }
@@ -42,6 +72,7 @@ interface ImportDialogProps {
   templateUrl?: string;
   acceptedFileTypes?: string[];
   maxFileSize?: number; // in MB
+  currentUserRole?: string; // For role-based validation
 }
 
 export function ImportDialog({
@@ -51,7 +82,8 @@ export function ImportDialog({
   entityName,
   templateUrl,
   acceptedFileTypes = [".csv", ".xlsx", ".xls"],
-  maxFileSize = 5
+  maxFileSize = 5,
+  currentUserRole
 }: ImportDialogProps) {
   const [file, setFile] = useState<File | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -301,59 +333,140 @@ export function ImportDialog({
           let parsedData: any[] = [];
 
           if (file.name.toLowerCase().endsWith('.csv')) {
-            // Parse CSV with better handling
+            // Parse CSV with enhanced handling
             const csvText = data as string;
-            console.log('CSV Content:', csvText.substring(0, 500)); // Debug log
+            console.log('CSV Content Preview:', csvText.substring(0, 500)); // Debug log
             
-            const lines = csvText.split('\n').filter(line => line.trim() !== '');
-            console.log('CSV Lines:', lines.length); // Debug log
+            // Handle different line endings and encoding
+            const lines = csvText
+              .split(/\r?\n/)
+              .filter(line => line.trim() !== '')
+              .map(line => line.trim());
+            
+            console.log('CSV Lines Count:', lines.length); // Debug log
             
             if (lines.length === 0) {
               reject(new Error("CSV file is empty"));
               return;
             }
 
-            // Parse headers - handle quoted fields
+            // Parse headers with better handling
             const headerLine = lines[0];
-            const headers = parseCSVLine(headerLine).map((h: string) => h.trim().replace(/"/g, ''));
+            const headers = parseCSVLine(headerLine)
+              .map((h: string) => h.trim().replace(/"/g, '').replace(/\s+/g, '_'))
+              .filter(h => h.length > 0);
+            
             console.log('CSV Headers:', headers); // Debug log
             
-            // Parse data rows
-            parsedData = lines.slice(1).map((line, index) => {
-              const values = parseCSVLine(line);
-              const row: any = {};
-              headers.forEach((header: string, i: number) => {
-                row[header] = (values[i] || '').trim().replace(/"/g, '');
-              });
-              return row;
-            }).filter(row => Object.values(row).some(val => val !== ''));
-            
-            console.log('Parsed CSV Data:', parsedData); // Debug log
-          } else {
-            // Parse Excel with better error handling
-            console.log('Parsing Excel file...'); // Debug log
-            const workbook = XLSX.read(data, { type: 'binary' });
-            console.log('Excel Sheets:', workbook.SheetNames); // Debug log
-            
-            const sheetName = workbook.SheetNames[0];
-            const worksheet = workbook.Sheets[sheetName];
-            
-            if (!worksheet) {
-              reject(new Error("No worksheet found in Excel file"));
+            if (headers.length === 0) {
+              reject(new Error("No valid headers found in CSV file"));
               return;
             }
             
-            parsedData = XLSX.utils.sheet_to_json(worksheet);
-            console.log('Parsed Excel Data:', parsedData); // Debug log
-            console.log('Excel Headers (first row keys):', parsedData.length > 0 ? Object.keys(parsedData[0]) : 'No data'); // Debug log
+            // Parse data rows with validation
+            parsedData = lines.slice(1)
+              .map((line, index) => {
+                try {
+                  const values = parseCSVLine(line);
+                  const row: any = {};
+                  
+                  headers.forEach((header: string, i: number) => {
+                    const value = (values[i] || '').trim().replace(/"/g, '');
+                    row[header] = value;
+                  });
+                  
+                  // Only include rows that have at least one non-empty value
+                  return Object.values(row).some(val => val !== '') ? row : null;
+                } catch (error) {
+                  console.warn(`Error parsing CSV line ${index + 2}:`, error);
+                  return null;
+                }
+              })
+              .filter(row => row !== null);
+            
+            console.log('Parsed CSV Data Count:', parsedData.length); // Debug log
+          } else {
+            // Parse Excel with enhanced error handling
+            console.log('Parsing Excel file...'); // Debug log
+            
+            try {
+              const workbook = XLSX.read(data, { 
+                type: 'binary',
+                cellDates: true,
+                cellNF: false,
+                cellText: false
+              });
+              
+              console.log('Excel Sheets:', workbook.SheetNames); // Debug log
+              
+              // Try to find the first sheet with data
+              let worksheet = null;
+              let sheetName = '';
+              
+              for (const name of workbook.SheetNames) {
+                const sheet = workbook.Sheets[name];
+                const jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+                
+                if (jsonData.length > 1) { // Has headers + at least one data row
+                  worksheet = sheet;
+                  sheetName = name;
+                  break;
+                }
+              }
+              
+              if (!worksheet) {
+                reject(new Error("No worksheet with data found in Excel file"));
+                return;
+              }
+              
+              console.log('Using Excel sheet:', sheetName); // Debug log
+              
+              // Parse with better options
+              parsedData = XLSX.utils.sheet_to_json(worksheet, {
+                header: 1,
+                defval: '',
+                blankrows: false
+              });
+              
+              // Convert to object format
+              if (parsedData.length > 0) {
+                const headers = parsedData[0] as string[];
+                const dataRows = parsedData.slice(1);
+                
+                parsedData = dataRows
+                  .map((row: any, index) => {
+                    try {
+                      const obj: any = {};
+                      headers.forEach((header: string, i: number) => {
+                        if (header && i < row.length) {
+                          obj[header] = row[i];
+                        }
+                      });
+                      return Object.values(obj).some(val => val !== '') ? obj : null;
+                    } catch (error) {
+                      console.warn(`Error parsing Excel row ${index + 2}:`, error);
+                      return null;
+                    }
+                  })
+                  .filter(row => row !== null);
+              }
+              
+              console.log('Parsed Excel Data Count:', parsedData.length); // Debug log
+              console.log('Excel Headers:', parsedData.length > 0 ? Object.keys(parsedData[0]) : 'No data'); // Debug log
+            } catch (error) {
+              console.error('Excel parsing error:', error);
+              reject(new Error(`Failed to parse Excel file: ${error instanceof Error ? error.message : 'Unknown error'}`));
+              return;
+            }
           }
 
           if (parsedData.length === 0) {
-            reject(new Error("No data found in file"));
+            reject(new Error("No valid data found in file"));
             return;
           }
 
-          console.log('Final parsed data:', parsedData); // Debug log
+          console.log('Final parsed data count:', parsedData.length); // Debug log
+          console.log('Sample data:', parsedData.slice(0, 2)); // Debug log
           resolve(parsedData);
         } catch (error) {
           console.error('Parse error:', error); // Debug log
@@ -367,7 +480,7 @@ export function ImportDialog({
       };
 
       if (file.name.toLowerCase().endsWith('.csv')) {
-        reader.readAsText(file);
+        reader.readAsText(file, 'UTF-8');
       } else {
         reader.readAsBinaryString(file);
       }
@@ -477,6 +590,356 @@ export function ImportDialog({
             active = isActive === '1' || isActive.toLowerCase() === 'true';
           }
           record.isActive = active;
+        }
+
+        record.errors = errors;
+        record.isValid = true;
+        return record;
+      });
+    } else if (entityName.toLowerCase() === 'section') {
+      // Section schema validation
+      return data.map((row, index) => {
+        const errors: string[] = [];
+        const record: ImportRecord = {
+          sectionName: '',
+          sectionCapacity: 40,
+          sectionStatus: 'ACTIVE',
+          yearLevel: 1,
+          courseId: 1,
+          academicYear: '2024-2025',
+          semester: 'FIRST_SEMESTER',
+          roomAssignment: '',
+          scheduleNotes: ''
+        };
+
+        // Helper function to get value regardless of case
+        const getValue = (obj: any, key: string): string => {
+          const lowerKey = key.toLowerCase();
+          const upperKey = key.toUpperCase();
+          if (obj[key] !== undefined) return obj[key];
+          if (obj[lowerKey] !== undefined) return obj[lowerKey];
+          if (obj[upperKey] !== undefined) return obj[upperKey];
+          return '';
+        };
+
+        // sectionName (required)
+        const sectionName = getValue(row, 'sectionName');
+        if (!sectionName || sectionName.trim() === '') {
+          errors.push('Section name is missing - will use placeholder');
+          record.sectionName = `Section ${index + 1}`;
+        } else {
+          record.sectionName = sectionName.trim();
+          if (record.sectionName.length < 2) {
+            errors.push('Section name is too short (min 2 characters)');
+          }
+          if (record.sectionName.length > 50) {
+            errors.push('Section name is too long (max 50 characters)');
+          }
+        }
+
+        // sectionCapacity (required)
+        const sectionCapacity = parseInt(getValue(row, 'sectionCapacity'), 10);
+        if (isNaN(sectionCapacity) || sectionCapacity <= 0) {
+          errors.push('Invalid or missing section capacity - will default to 40');
+          record.sectionCapacity = 40;
+        } else {
+          record.sectionCapacity = sectionCapacity;
+          if (sectionCapacity > 100) {
+            errors.push('Section capacity is very high (max recommended: 100)');
+          }
+        }
+
+        // sectionStatus (required)
+        const sectionStatus = getValue(row, 'sectionStatus').toUpperCase();
+        if (sectionStatus === 'ACTIVE' || sectionStatus === 'INACTIVE') {
+          record.sectionStatus = sectionStatus as "ACTIVE" | "INACTIVE";
+        } else {
+          errors.push('Invalid section status - will default to ACTIVE');
+          record.sectionStatus = 'ACTIVE';
+        }
+
+        // yearLevel (required)
+        const yearLevel = parseInt(getValue(row, 'yearLevel'), 10);
+        if (isNaN(yearLevel) || yearLevel < 1 || yearLevel > 4) {
+          errors.push('Invalid year level - must be between 1 and 4, will default to 1');
+          record.yearLevel = 1;
+        } else {
+          record.yearLevel = yearLevel;
+        }
+
+        // courseId (required)
+        const courseId = parseInt(getValue(row, 'courseId'), 10);
+        if (isNaN(courseId) || courseId <= 0) {
+          errors.push('Invalid or missing course ID - will default to 1');
+          record.courseId = 1;
+        } else {
+          record.courseId = courseId;
+        }
+
+        // academicYear (optional)
+        const academicYear = getValue(row, 'academicYear');
+        if (academicYear) {
+          record.academicYear = academicYear.trim();
+        }
+
+        // semester (optional)
+        const semester = getValue(row, 'semester').toUpperCase();
+        const validSemesters = ['FIRST_SEMESTER', 'SECOND_SEMESTER', 'THIRD_SEMESTER'];
+        if (semester && validSemesters.includes(semester)) {
+          record.semester = semester;
+        } else if (semester) {
+          errors.push('Invalid semester - will default to FIRST_SEMESTER');
+          record.semester = 'FIRST_SEMESTER';
+        }
+
+        // roomAssignment (optional)
+        const roomAssignment = getValue(row, 'roomAssignment');
+        if (roomAssignment) {
+          record.roomAssignment = roomAssignment.trim();
+        }
+
+        // scheduleNotes (optional)
+        const scheduleNotes = getValue(row, 'scheduleNotes');
+        if (scheduleNotes) {
+          record.scheduleNotes = scheduleNotes.trim();
+        }
+
+        record.errors = errors;
+        record.isValid = true;
+        return record;
+      });
+    } else if (entityName.toLowerCase() === 'role') {
+      // Role schema validation
+      return data.map((row, index) => {
+        const errors: string[] = [];
+        const record: ImportRecord = {
+          roleName: '',
+          roleDescription: '',
+          rolePermissions: [],
+          roleStatus: 'ACTIVE'
+        };
+
+        // Helper function to get value regardless of case
+        const getValue = (obj: any, key: string): string => {
+          const lowerKey = key.toLowerCase();
+          const upperKey = key.toUpperCase();
+          if (obj[key] !== undefined) return obj[key];
+          if (obj[lowerKey] !== undefined) return obj[lowerKey];
+          if (obj[upperKey] !== undefined) return obj[upperKey];
+          return '';
+        };
+
+        // roleName (required)
+        const roleName = getValue(row, 'roleName') || getValue(row, 'name');
+        if (!roleName || roleName.trim() === '') {
+          errors.push('Role name is missing - will use placeholder');
+          record.roleName = `Role ${index + 1}`;
+        } else {
+          record.roleName = roleName.trim();
+          if (record.roleName.length < 2) {
+            errors.push('Role name is too short (min 2 characters)');
+          }
+          if (record.roleName.length > 50) {
+            errors.push('Role name is too long (max 50 characters)');
+          }
+          
+          // Admin-specific role name validation
+          if (currentUserRole === 'ADMIN') {
+            const restrictedRoleNames = [
+              'SUPER_ADMIN',
+              'SUPER ADMIN',
+              'SUPERADMIN',
+              'SYSTEM_ADMIN',
+              'SYSTEM ADMIN',
+              'ROOT',
+              'ADMINISTRATOR'
+            ];
+            
+            const normalizedRoleName = record.roleName.toUpperCase().replace(/[^A-Z0-9]/g, '');
+            const isRestricted = restrictedRoleNames.some(restricted => 
+              restricted.toUpperCase().replace(/[^A-Z0-9]/g, '') === normalizedRoleName
+            );
+            
+            if (isRestricted) {
+              errors.push('Warning: Role name may be restricted for Admin users');
+              // Modify the role name to make it Admin-appropriate
+              record.roleName = `Admin_${record.roleName}`;
+            }
+          }
+        }
+
+        // roleDescription (optional)
+        const roleDescription = getValue(row, 'roleDescription') || getValue(row, 'description');
+        if (roleDescription) {
+          record.roleDescription = roleDescription.trim();
+        }
+
+        // rolePermissions (required)
+        const rolePermissions = getValue(row, 'rolePermissions') || getValue(row, 'permissions');
+        if (rolePermissions) {
+          // Handle comma-separated permissions or JSON array
+          let permissions: string[] = [];
+          try {
+            // Try to parse as JSON first
+            const parsed = JSON.parse(rolePermissions);
+            if (Array.isArray(parsed)) {
+              permissions = parsed;
+            } else {
+              // If not an array, treat as comma-separated string
+              permissions = rolePermissions.split(',').map(p => p.trim()).filter(p => p);
+            }
+          } catch {
+            // If JSON parsing fails, treat as comma-separated string
+            permissions = rolePermissions.split(',').map(p => p.trim()).filter(p => p);
+          }
+          
+          if (permissions.length === 0) {
+            errors.push('No valid permissions found - will use default permissions');
+            record.rolePermissions = ['View Users', 'View Attendance'];
+          } else {
+            // Admin-specific permission validation
+            if (currentUserRole === 'ADMIN') {
+              const restrictedPermissions = [
+                'Manage Super Admins',
+                'Emergency Access',
+                'Database Management',
+                'Backup & Restore',
+                'API Management',
+                'System Settings',
+                'System Analytics'
+              ];
+              
+              const hasRestrictedPermissions = permissions.some(perm => 
+                restrictedPermissions.includes(perm)
+              );
+              
+              if (hasRestrictedPermissions) {
+                errors.push('Warning: Role contains system-level permissions that may be restricted for Admin users');
+                // Filter out restricted permissions for Admin users
+                const filteredPermissions = permissions.filter(perm => 
+                  !restrictedPermissions.includes(perm)
+                );
+                if (filteredPermissions.length === 0) {
+                  errors.push('No valid permissions remaining after filtering - will use default permissions');
+                  record.rolePermissions = ['View Users', 'View Attendance'];
+                } else {
+                  record.rolePermissions = filteredPermissions;
+                }
+              } else {
+                record.rolePermissions = permissions;
+              }
+            } else {
+              record.rolePermissions = permissions;
+            }
+          }
+        } else {
+          errors.push('Permissions are missing - will use default permissions');
+          record.rolePermissions = ['View Users', 'View Attendance'];
+        }
+
+        // roleStatus (optional)
+        const roleStatus = getValue(row, 'roleStatus') || getValue(row, 'status');
+        if (roleStatus) {
+          const status = roleStatus.toUpperCase().trim();
+          if (status === 'ACTIVE' || status === 'INACTIVE' || status === 'ARCHIVED') {
+            record.roleStatus = status as "ACTIVE" | "INACTIVE" | "ARCHIVED";
+          } else {
+            errors.push('Invalid status - will default to "ACTIVE"');
+            record.roleStatus = 'ACTIVE';
+          }
+        }
+
+        record.errors = errors;
+        record.isValid = true;
+        return record;
+      });
+    }
+
+    if (entityName.toLowerCase() === 'users') {
+      // User schema validation
+      return data.map((row, index) => {
+        const errors: string[] = [];
+        const record: any = {
+          userName: '',
+          email: '',
+          role: 'STUDENT',
+          status: 'active',
+          isEmailVerified: false,
+          twoFactorEnabled: false
+        };
+
+        // Helper function to get value regardless of case
+        const getValue = (obj: any, key: string): string => {
+          const lowerKey = key.toLowerCase();
+          const upperKey = key.toUpperCase();
+          if (obj[key] !== undefined) return obj[key];
+          if (obj[lowerKey] !== undefined) return obj[lowerKey];
+          if (obj[upperKey] !== undefined) return obj[upperKey];
+          return '';
+        };
+
+        // userName (required)
+        const userName = getValue(row, 'userName') || getValue(row, 'username');
+        if (!userName || userName.trim() === '') {
+          errors.push('Username is missing - will use placeholder');
+          record.userName = `user${index + 1}`;
+        } else {
+          record.userName = userName.trim();
+          if (record.userName.length < 3) {
+            errors.push('Username is too short (min 3 characters)');
+          }
+          if (record.userName.length > 50) {
+            errors.push('Username is too long (max 50 characters)');
+          }
+        }
+
+        // email (required)
+        const email = getValue(row, 'email');
+        if (!email || email.trim() === '') {
+          errors.push('Email is missing - will skip this record');
+          record.isValid = false;
+          record.errors = errors;
+          return record;
+        } else {
+          record.email = email.trim().toLowerCase();
+          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+          if (!emailRegex.test(record.email)) {
+            errors.push('Invalid email format');
+          }
+        }
+
+        // role (required)
+        const role = getValue(row, 'role').toUpperCase();
+        const validRoles = ['SUPER_ADMIN', 'ADMIN', 'DEPARTMENT_HEAD', 'INSTRUCTOR', 'STUDENT', 'GUARDIAN', 'SYSTEM_AUDITOR'];
+        if (!role || !validRoles.includes(role)) {
+          errors.push('Invalid or missing role - will default to STUDENT');
+          record.role = 'STUDENT';
+        } else {
+          record.role = role;
+        }
+
+        // status (optional)
+        const status = getValue(row, 'status').toLowerCase();
+        const validStatuses = ['active', 'inactive', 'suspended', 'pending', 'blocked'];
+        if (status && validStatuses.includes(status)) {
+          record.status = status;
+        } else if (status) {
+          errors.push('Invalid status - will default to active');
+          record.status = 'active';
+        }
+
+        // isEmailVerified (optional)
+        const isEmailVerified = getValue(row, 'isEmailVerified');
+        if (isEmailVerified !== '') {
+          const value = isEmailVerified.toLowerCase().trim();
+          record.isEmailVerified = value === 'true' || value === '1' || value === 'yes';
+        }
+
+        // twoFactorEnabled (optional)
+        const twoFactorEnabled = getValue(row, 'twoFactorEnabled');
+        if (twoFactorEnabled !== '') {
+          const value = twoFactorEnabled.toLowerCase().trim();
+          record.twoFactorEnabled = value === 'true' || value === '1' || value === 'yes';
         }
 
         record.errors = errors;
@@ -695,6 +1158,239 @@ export function ImportDialog({
         ];
         headers = ['roomNo', 'roomType', 'roomCapacity', 'roomBuildingLoc', 'roomFloorLoc', 'readerId', 'status', 'isActive'];
         sheetName = "Rooms Template";
+      } else if (entityName.toLowerCase() === 'courseoffering') {
+        const templateData = [
+          {
+            courseCode: "BSCS",
+            courseName: "Bachelor of Science in Computer Science",
+            courseType: "MANDATORY", // or "ELECTIVE"
+            departmentId: 1, // Must match an existing departmentId in your DB
+            totalUnits: 150
+          },
+          {
+            courseCode: "BSIT",
+            courseName: "Bachelor of Science in Information Technology",
+            courseType: "ELECTIVE",
+            departmentId: 2,
+            totalUnits: 140
+          }
+        ];
+        const headers = ['courseCode', 'courseName', 'courseType', 'departmentId', 'totalUnits'];
+        const sheetName = "CourseOffering Template";
+        const ws = XLSX.utils.json_to_sheet(templateData, { header: headers });
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, sheetName);
+        XLSX.writeFile(wb, `courseoffering-import-template.xlsx`);
+        return;
+      } else if (entityName.toLowerCase() === 'section') {
+        const templateData = [
+          {
+            sectionName: "BSIT 1-A",
+            sectionCapacity: 40,
+            sectionStatus: "ACTIVE",
+            yearLevel: 1,
+            courseId: 1, // Must match an existing courseId in your DB
+            academicYear: "2024-2025",
+            semester: "FIRST_SEMESTER", // FIRST_SEMESTER, SECOND_SEMESTER, THIRD_SEMESTER
+            roomAssignment: "Room 101",
+            scheduleNotes: "Monday, Wednesday, Friday 8:00 AM - 10:00 AM"
+          },
+          {
+            sectionName: "BSCS 2-B",
+            sectionCapacity: 35,
+            sectionStatus: "ACTIVE",
+            yearLevel: 2,
+            courseId: 2, // Must match an existing courseId in your DB
+            academicYear: "2024-2025",
+            semester: "FIRST_SEMESTER",
+            roomAssignment: "Room 205",
+            scheduleNotes: "Tuesday, Thursday 1:00 PM - 3:00 PM"
+          },
+          {
+            sectionName: "BSIS 3-C",
+            sectionCapacity: 30,
+            sectionStatus: "INACTIVE",
+            yearLevel: 3,
+            courseId: 3, // Must match an existing courseId in your DB
+            academicYear: "2024-2025",
+            semester: "SECOND_SEMESTER",
+            roomAssignment: "Lab 301",
+            scheduleNotes: "Monday, Wednesday, Friday 2:00 PM - 4:00 PM"
+          }
+        ];
+        const headers = ['sectionName', 'sectionCapacity', 'sectionStatus', 'yearLevel', 'courseId', 'academicYear', 'semester', 'roomAssignment', 'scheduleNotes'];
+        const sheetName = "Sections Template";
+        const ws = XLSX.utils.json_to_sheet(templateData, { header: headers });
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, sheetName);
+        XLSX.writeFile(wb, `section-import-template.xlsx`);
+        return;
+      } else if (entityName.toLowerCase() === 'users') {
+        const templateData = [
+          {
+            userName: "john.doe",
+            email: "john.doe@icct.edu",
+            role: "STUDENT",
+            status: "active",
+            isEmailVerified: "false",
+            twoFactorEnabled: "false"
+          },
+          {
+            userName: "jane.smith",
+            email: "jane.smith@icct.edu",
+            role: "INSTRUCTOR",
+            status: "active",
+            isEmailVerified: "true",
+            twoFactorEnabled: "true"
+          },
+          {
+            userName: "admin.user",
+            email: "admin@icct.edu",
+            role: "ADMIN",
+            status: "active",
+            isEmailVerified: "true",
+            twoFactorEnabled: "false"
+          },
+          {
+            userName: "dept.head",
+            email: "dept.head@icct.edu",
+            role: "DEPARTMENT_HEAD",
+            status: "active",
+            isEmailVerified: "true",
+            twoFactorEnabled: "false"
+          },
+          {
+            userName: "super.admin",
+            email: "super.admin@icct.edu",
+            role: "SUPER_ADMIN",
+            status: "active",
+            isEmailVerified: "true",
+            twoFactorEnabled: "true"
+          }
+        ];
+        const headers = ['userName', 'email', 'role', 'status', 'isEmailVerified', 'twoFactorEnabled'];
+        const sheetName = "Users Template";
+        
+        // Add instructions sheet
+        const instructionsData = [
+          {
+            field: "userName",
+            description: "Required: Unique username (3-50 characters)",
+            example: "john.doe",
+            notes: "Will be used for login"
+          },
+          {
+            field: "email",
+            description: "Required: Valid email address",
+            example: "john.doe@icct.edu",
+            notes: "Must be unique in the system"
+          },
+          {
+            field: "role",
+            description: "Required: User role",
+            example: "STUDENT",
+            notes: "Valid roles: SUPER_ADMIN, ADMIN, DEPARTMENT_HEAD, INSTRUCTOR, STUDENT, GUARDIAN, SYSTEM_AUDITOR"
+          },
+          {
+            field: "status",
+            description: "Optional: User status (defaults to 'active')",
+            example: "active",
+            notes: "Valid statuses: active, inactive, suspended, pending, blocked"
+          },
+          {
+            field: "isEmailVerified",
+            description: "Optional: Email verification status (defaults to false)",
+            example: "false",
+            notes: "Use 'true' or 'false' (string)"
+          },
+          {
+            field: "twoFactorEnabled",
+            description: "Optional: Two-factor authentication (defaults to false)",
+            example: "false",
+            notes: "Use 'true' or 'false' (string)"
+          }
+        ];
+        
+        // Create main data sheet
+        const ws = XLSX.utils.json_to_sheet(templateData, { header: headers });
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, sheetName);
+        
+        // Add instructions sheet
+        const wsInstructions = XLSX.utils.json_to_sheet(instructionsData);
+        XLSX.utils.book_append_sheet(wb, wsInstructions, "Instructions");
+        
+        XLSX.writeFile(wb, `users-import-template.xlsx`);
+        return;
+      } else if (entityName.toLowerCase() === 'role') {
+        const templateData = [
+          {
+            roleName: "Department Head",
+            roleDescription: "Department-specific administration and oversight",
+            rolePermissions: "View Users, Edit Users, View Attendance, Manage Departments, Department Reports, Department Users",
+            roleStatus: "ACTIVE"
+          },
+          {
+            roleName: "Instructor",
+            roleDescription: "Classroom and attendance management",
+            rolePermissions: "View Attendance, Edit Attendance, View Reports, Send Announcements",
+            roleStatus: "ACTIVE"
+          },
+          {
+            roleName: "Student Assistant",
+            roleDescription: "Limited access for student assistants",
+            rolePermissions: "View Attendance, View Reports",
+            roleStatus: "ACTIVE"
+          },
+          {
+            roleName: "Guest User",
+            roleDescription: "Temporary access for external users",
+            rolePermissions: "View Attendance",
+            roleStatus: "INACTIVE"
+          }
+        ];
+        const headers = ['roleName', 'roleDescription', 'rolePermissions', 'roleStatus'];
+        const sheetName = "Roles Template";
+        
+        // Add instructions sheet
+        const instructionsData = [
+          {
+            field: "roleName",
+            description: "Required: Unique role name (2-50 characters)",
+            example: "Department Head",
+            notes: "Must be unique in the system"
+          },
+          {
+            field: "roleDescription",
+            description: "Optional: Role description",
+            example: "Department-specific administration and oversight",
+            notes: "Helps explain the role's purpose"
+          },
+          {
+            field: "rolePermissions",
+            description: "Required: Comma-separated list of permissions",
+            example: "View Users, Edit Users, View Attendance",
+            notes: "Valid permissions: View Users, Edit Users, Delete Users, Assign Roles, View Attendance, Edit Attendance, Manage Departments, View Reports, etc."
+          },
+          {
+            field: "roleStatus",
+            description: "Optional: Role status (defaults to 'ACTIVE')",
+            example: "ACTIVE",
+            notes: "Valid statuses: ACTIVE, INACTIVE, ARCHIVED"
+          }
+        ];
+        
+        // Create main data sheet
+        const ws = XLSX.utils.json_to_sheet(templateData, { header: headers });
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, sheetName);
+        
+        // Add instructions sheet
+        const wsInstructions = XLSX.utils.json_to_sheet(instructionsData);
+        XLSX.utils.book_append_sheet(wb, wsInstructions, "Instructions");
+        
+        XLSX.writeFile(wb, `role-import-template.xlsx`);
+        return;
       } else {
         templateData = [
           {
@@ -800,10 +1496,16 @@ export function ImportDialog({
               </div>
               <div>
                 <DialogTitle className="text-lg font-bold text-white">
-                  Import {entityName}
+                  {entityName.toLowerCase() === 'courseoffering' ? 'Import Course Offerings' : 
+                   entityName.toLowerCase() === 'users' ? 'Import Users' : 
+                   `Import ${entityName}`}
                 </DialogTitle>
                 <p className="text-blue-100 text-sm mt-1">
-                  Upload and import {entityName.toLowerCase()} data from CSV or Excel files
+                  {entityName.toLowerCase() === 'courseoffering'
+                    ? 'Upload and import course offering data from CSV or Excel files'
+                    : entityName.toLowerCase() === 'users'
+                    ? 'Upload and import user data from CSV or Excel files'
+                    : `Upload and import ${entityName.toLowerCase()} data from CSV or Excel files`}
                 </p>
               </div>
             </div>
@@ -875,12 +1577,28 @@ export function ImportDialog({
                     <Upload className="h-8 w-8 text-blue-600" />
                   </div>
                   <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                    Upload {entityName} Data
+                    Upload {entityName.toLowerCase() === 'users' ? 'User' : entityName} Data
                   </h3>
                   <p className="text-gray-600 mb-6">
-                    Select a CSV or Excel file containing {entityName.toLowerCase()} data to import.
+                    Select a CSV or Excel file containing {entityName.toLowerCase() === 'users' ? 'user' : entityName.toLowerCase()} data to import.
                   </p>
                 </div>
+
+                {/* Admin Warning for Role Import */}
+                {currentUserRole === 'ADMIN' && entityName.toLowerCase() === 'role' && (
+                  <div className="bg-amber-50 border border-amber-200 rounded p-4 mb-4">
+                    <div className="flex items-start gap-3">
+                      <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5" />
+                      <div>
+                        <h4 className="font-medium text-amber-900">Admin Access Restrictions</h4>
+                        <p className="text-sm text-amber-700 mt-1">
+                          As an Admin user, you can only import roles with appropriate permissions. 
+                          System-level permissions and restricted role names will be automatically filtered out.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Template Download */}
                 <div className="bg-blue-50 border border-blue-200 rounded p-4">
@@ -947,12 +1665,36 @@ export function ImportDialog({
                 <div className="bg-gray-50 border border-gray-200 rounded p-4">
                   <h4 className="font-medium text-gray-900 mb-2">File Requirements</h4>
                   <ul className="text-sm text-gray-600 space-y-1">
-                    <li>• File must be in CSV or Excel format</li>
-                    <li>• Maximum file size: {maxFileSize}MB</li>
-                    <li>• Required columns: departmentName, departmentCode</li>
-                    <li>• Optional columns: departmentDescription, departmentStatus</li>
-                    <li>• Status values: "ACTIVE" or "INACTIVE" (defaults to "ACTIVE")</li>
-                    <li>• Head of Department is managed separately through the instructor system</li>
+                    {entityName.toLowerCase() === 'courseoffering' ? (
+                      <>
+                        <li>• File must be in CSV or Excel format</li>
+                        <li>• Maximum file size: {maxFileSize}MB</li>
+                        <li>• Required columns: <b>courseCode</b>, <b>courseName</b>, <b>courseType</b>, <b>departmentId</b>, <b>totalUnits</b></li>
+                        <li>• <b>courseType</b> values: "MANDATORY" or "ELECTIVE"</li>
+                        <li>• <b>departmentId</b> must match an existing department in the system</li>
+                        <li>• <b>totalUnits</b> must be a number</li>
+                      </>
+                    ) : entityName.toLowerCase() === 'role' ? (
+                      <>
+                        <li>• File must be in CSV or Excel format</li>
+                        <li>• Maximum file size: {maxFileSize}MB</li>
+                        <li>• Required columns: <b>roleName</b>, <b>rolePermissions</b></li>
+                        <li>• Optional columns: <b>roleDescription</b>, <b>roleStatus</b></li>
+                        <li>• <b>roleName</b> must be unique and between 2-50 characters</li>
+                        <li>• <b>rolePermissions</b> can be comma-separated or JSON array format</li>
+                        <li>• <b>roleStatus</b> values: "ACTIVE", "INACTIVE", or "ARCHIVED" (defaults to "ACTIVE")</li>
+                        <li>• Available permissions: View Users, Edit Users, Delete Users, View Attendance, Edit Attendance, Manage Courses, etc.</li>
+                      </>
+                    ) : (
+                      <>
+                        <li>• File must be in CSV or Excel format</li>
+                        <li>• Maximum file size: {maxFileSize}MB</li>
+                        <li>• Required columns: departmentName, departmentCode</li>
+                        <li>• Optional columns: departmentDescription, departmentStatus</li>
+                        <li>• Status values: "ACTIVE" or "INACTIVE" (defaults to "ACTIVE")</li>
+                        <li>• Head of Department is managed separately through the instructor system</li>
+                      </>
+                    )}
                   </ul>
                 </div>
               </div>
@@ -1022,6 +1764,22 @@ export function ImportDialog({
                       </div>
                     </div>
 
+                    {/* Admin Access Restrictions Warning */}
+                    {currentUserRole === 'ADMIN' && entityName.toLowerCase() === 'role' && (
+                      <div className="bg-amber-50 border border-amber-200 rounded p-4 mb-4">
+                        <div className="flex items-start gap-3">
+                          <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5" />
+                          <div>
+                            <h4 className="font-medium text-amber-900">Admin Access Restrictions Applied</h4>
+                            <p className="text-sm text-amber-700 mt-1">
+                              System-level permissions and restricted role names have been automatically filtered out 
+                              to comply with Admin user restrictions.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Validation Warnings */}
                     {validationErrors.length > 0 && (
                       <div className="bg-yellow-50 border border-yellow-200 rounded p-4">
@@ -1054,52 +1812,175 @@ export function ImportDialog({
                         <h4 className="font-medium text-gray-900 mb-3">Data Preview</h4>
                         <div className="border border-gray-200 rounded overflow-hidden">
                           <div className="overflow-x-auto">
-                            {entityName.toLowerCase() === 'rooms' ? (
+                            {entityName.toLowerCase() === 'courseoffering' ? (
                               <table className="w-full text-sm">
                                 <thead className="bg-gray-50">
                                   <tr>
-                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Room Number</th>
-                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Type</th>
-                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Capacity</th>
-                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Building</th>
-                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Floor</th>
-                                    <th className="px-4 py-2 text-left font-medium text-gray-700">RFID Reader</th>
-                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Status</th>
-                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Active</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Course Code</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Course Name</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Course Type</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Department ID</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Total Units</th>
                                     <th className="px-4 py-2 text-left font-medium text-gray-700">Validation</th>
                                   </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-200">
-                                  {importData.slice(0, 5).map((record, index) => {
-                                    const roomRecord = record as any;
-                                    return (
-                                      <tr key={index} className={roomRecord.errors && roomRecord.errors.length > 0 ? 'bg-yellow-50' : 'bg-white'}>
-                                        <td className="px-4 py-2">{roomRecord?.roomNo}</td>
-                                        <td className="px-4 py-2">{roomRecord?.roomType}</td>
-                                        <td className="px-4 py-2">{roomRecord?.roomCapacity}</td>
-                                        <td className="px-4 py-2">{roomRecord?.roomBuildingLoc}</td>
-                                        <td className="px-4 py-2">{roomRecord?.roomFloorLoc}</td>
-                                        <td className="px-4 py-2">{roomRecord?.readerId || '-'}</td>
-                                        <td className="px-4 py-2">
-                                          <Badge variant={roomRecord?.status === 'AVAILABLE' ? 'success' : 'destructive'}>
-                                            {roomRecord?.status}
-                                          </Badge>
-                                        </td>
-                                        <td className="px-4 py-2">
-                                          <Badge variant={roomRecord?.isActive ? 'success' : 'destructive'}>
-                                            {roomRecord?.isActive ? 'Yes' : 'No'}
-                                          </Badge>
-                                        </td>
-                                        <td className="px-4 py-2">
-                                          {roomRecord?.errors && roomRecord.errors.length > 0 ? (
-                                            <AlertTriangle className="h-4 w-4 text-yellow-600" />
-                                          ) : (
-                                            <CheckCircle className="h-4 w-4 text-green-600" />
-                                          )}
-                                        </td>
-                                      </tr>
-                                    );
-                                  })}
+                                  {importData.slice(0, 5).map((record, index) => (
+                                    <tr key={index} className={record.errors && record.errors.length > 0 ? 'bg-yellow-50' : 'bg-white'}>
+                                      <td className="px-4 py-2">{(record as any).courseCode}</td>
+                                      <td className="px-4 py-2">{(record as any).courseName}</td>
+                                      <td className="px-4 py-2">{(record as any).courseType}</td>
+                                      <td className="px-4 py-2">{(record as any).departmentId}</td>
+                                      <td className="px-4 py-2">{(record as any).totalUnits}</td>
+                                      <td className="px-4 py-2">
+                                        {record.errors && record.errors.length > 0 ? (
+                                          <AlertTriangle className="h-4 w-4 text-yellow-600" />
+                                        ) : (
+                                          <CheckCircle className="h-4 w-4 text-green-600" />
+                                        )}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            ) : entityName.toLowerCase() === 'section' ? (
+                              <table className="w-full text-sm">
+                                <thead className="bg-gray-50">
+                                  <tr>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Section Name</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Capacity</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Status</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Year Level</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Course ID</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Validation</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-200">
+                                  {importData.slice(0, 5).map((record, index) => (
+                                    <tr key={index} className={record.errors && record.errors.length > 0 ? 'bg-yellow-50' : 'bg-white'}>
+                                      <td className="px-4 py-2">{record.sectionName}</td>
+                                      <td className="px-4 py-2">{record.sectionCapacity}</td>
+                                      <td className="px-4 py-2">
+                                        <Badge variant={record.sectionStatus === 'ACTIVE' ? 'success' : 'destructive'}>
+                                          {record.sectionStatus}
+                                        </Badge>
+                                      </td>
+                                      <td className="px-4 py-2">{record.yearLevel}</td>
+                                      <td className="px-4 py-2">{record.courseId}</td>
+                                      <td className="px-4 py-2">
+                                        {record.errors && record.errors.length > 0 ? (
+                                          <AlertTriangle className="h-4 w-4 text-yellow-600" />
+                                        ) : (
+                                          <CheckCircle className="h-4 w-4 text-green-600" />
+                                        )}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            ) : entityName.toLowerCase() === 'role' ? (
+                              <table className="w-full text-sm">
+                                <thead className="bg-gray-50">
+                                  <tr>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Role Name</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Description</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Permissions</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Status</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Validation</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-200">
+                                  {importData.slice(0, 5).map((record, index) => (
+                                    <tr key={index} className={record.errors && record.errors.length > 0 ? 'bg-yellow-50' : 'bg-white'}>
+                                      <td className="px-4 py-2">{record.roleName}</td>
+                                      <td className="px-4 py-2">{record.roleDescription || '-'}</td>
+                                      <td className="px-4 py-2">
+                                        <div className="max-w-xs truncate" title={record.rolePermissions?.join(', ')}>
+                                          {record.rolePermissions?.slice(0, 2).join(', ')}
+                                          {record.rolePermissions && record.rolePermissions.length > 2 && '...'}
+                                        </div>
+                                      </td>
+                                      <td className="px-4 py-2">
+                                        <Badge variant={record.roleStatus === 'ACTIVE' ? 'success' : record.roleStatus === 'INACTIVE' ? 'destructive' : 'secondary'}>
+                                          {record.roleStatus}
+                                        </Badge>
+                                      </td>
+                                      <td className="px-4 py-2">
+                                        {record.errors && record.errors.length > 0 ? (
+                                          <AlertTriangle className="h-4 w-4 text-yellow-600" />
+                                        ) : (
+                                          <CheckCircle className="h-4 w-4 text-green-600" />
+                                        )}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            ) : entityName.toLowerCase() === 'users' ? (
+                              <table className="w-full text-sm">
+                                <thead className="bg-gray-50">
+                                  <tr>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Username</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Email</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Role</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Status</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Email Verified</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">2FA</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Validation</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-200">
+                                  {importData.slice(0, 5).map((record, index) => (
+                                    <tr key={index} className={record.errors && record.errors.length > 0 ? 'bg-yellow-50' : 'bg-white'}>
+                                      <td className="px-4 py-2">{record.userName || '-'}</td>
+                                      <td className="px-4 py-2">{record.email || '-'}</td>
+                                      <td className="px-4 py-2">
+                                        <Badge variant={
+                                          record.role === 'SUPER_ADMIN' ? 'destructive' :
+                                          record.role === 'ADMIN' ? 'default' :
+                                          record.role === 'DEPARTMENT_HEAD' ? 'secondary' :
+                                          record.role === 'INSTRUCTOR' ? 'outline' :
+                                          record.role === 'STUDENT' ? 'success' :
+                                          record.role === 'GUARDIAN' ? 'secondary' :
+                                          'default'
+                                        }>
+                                          {record.role}
+                                        </Badge>
+                                      </td>
+                                      <td className="px-4 py-2">
+                                        <Badge variant={
+                                          record.status === 'active' ? 'success' :
+                                          record.status === 'inactive' ? 'destructive' :
+                                          record.status === 'suspended' ? 'secondary' :
+                                          record.status === 'pending' ? 'outline' :
+                                          'default'
+                                        }>
+                                          {record.status}
+                                        </Badge>
+                                      </td>
+                                      <td className="px-4 py-2">
+                                        {record.isEmailVerified ? (
+                                          <CheckCircle className="h-4 w-4 text-green-600" />
+                                        ) : (
+                                          <XCircle className="h-4 w-4 text-red-600" />
+                                        )}
+                                      </td>
+                                      <td className="px-4 py-2">
+                                        {record.twoFactorEnabled ? (
+                                          <CheckCircle className="h-4 w-4 text-green-600" />
+                                        ) : (
+                                          <XCircle className="h-4 w-4 text-red-600" />
+                                        )}
+                                      </td>
+                                      <td className="px-4 py-2">
+                                        {record.errors && record.errors.length > 0 ? (
+                                          <AlertTriangle className="h-4 w-4 text-yellow-600" />
+                                        ) : (
+                                          <CheckCircle className="h-4 w-4 text-green-600" />
+                                        )}
+                                      </td>
+                                    </tr>
+                                  ))}
                                 </tbody>
                               </table>
                             ) : (

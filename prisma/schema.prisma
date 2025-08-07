@@ -7,40 +7,63 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model RoleManagement {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  description String?
+  permissions Json
+  status      String   @default("ACTIVE")
+  totalUsers  Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  users       User[]   @relation("UserRoles")
+
+  @@index([status])
+  @@index([name])
+}
+
 model User {
-  userId              Int            @id @default(autoincrement())
+  userId              Int                  @id @default(autoincrement())
   userName            String
-  email               String         @unique @db.VarChar(100)
-  passwordHash        String         @db.VarChar(255)
+  email               String               @unique @db.VarChar(100)
+  passwordHash        String               @db.VarChar(255)
   role                Role
-  status              UserStatus     @default(ACTIVE)
+  status              UserStatus           @default(ACTIVE)
   lastLogin           DateTime?
   lastPasswordChange  DateTime?
-  failedLoginAttempts Int            @default(0)
-  isEmailVerified     Boolean        @default(false)
-  isPhoneVerified     Boolean        @default(false)
-  twoFactorEnabled    Boolean        @default(false)
-  createdAt           DateTime       @default(now())
-  updatedAt           DateTime       @updatedAt
-  sessionVersion      Int            @default(1)
+  failedLoginAttempts Int                  @default(0)
+  isEmailVerified     Boolean              @default(false)
+  isPhoneVerified     Boolean              @default(false)
+  twoFactorEnabled    Boolean              @default(false)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  sessionVersion      Int                  @default(1)
+  customRoleId        Int?
   Announcements       Announcement[]
-  attendanceOverrides Attendance[]   @relation("AttendanceOverride")
+  attendanceOverrides Attendance[]         @relation("AttendanceOverride")
   Attendance          Attendance[]
-  VerifiedAttendances Attendance[]   @relation("AttendanceVerification")
-  DepartmentHead      Department[]   @relation("DepartmentHead")
+  VerifiedAttendances Attendance[]         @relation("AttendanceVerification")
+  BackupLogs          BackupLog[]
+  DepartmentHead      Department[]         @relation("DepartmentHead")
   Event               Event[]
   Guardian            Guardian?
   Instructor          Instructor?
-  RFIDLogs            RFIDLogs[]
-  AssignedTags        RFIDTags[]     @relation("TagAssignment")
-  ReportLogs          ReportLog[]
-  Student             Student[]
-  SystemLogs          SystemLogs[]
   PasswordResetTokens PasswordResetToken[]
+  RFIDLogs            RFIDLogs[]
+  AssignedTags        RFIDTags[]           @relation("TagAssignment")
+  ReportLogs          ReportLog[]
+  RestorePoints       RestorePoint[]
+  Student             Student[]
+  SystemBackups       SystemBackup[]
+  SystemLogs          SystemLogs[]
+  BackupSchedules     BackupSchedule[]
+  BackupScheduleLogs  BackupScheduleLog[]
+  CustomRole          RoleManagement?      @relation("UserRoles", fields: [customRoleId], references: [id])
 
   @@index([email])
   @@index([role, status])
   @@index([lastLogin])
+  @@index([customRoleId])
 }
 
 model Student {
@@ -134,6 +157,7 @@ model Instructor {
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
   rfidTag         String            @unique
+  employeeId      String            @unique
   Announcements   Announcement[]    @relation("InstructorToAnnouncements")
   Attendance      Attendance[]      @relation("InstructorToAttendance")
   Department      Department        @relation(fields: [departmentId], references: [departmentId])
@@ -152,8 +176,6 @@ model Room {
   roomNo          String            @unique
   roomType        RoomType
   roomCapacity    Int
-  roomBuildingLoc RoomBuilding      // restore to required
-  roomFloorLoc    RoomFloor         // restore to required
   readerId        String            @unique
   status          RoomStatus        @default(AVAILABLE)
   isActive        Boolean           @default(true)
@@ -162,6 +184,8 @@ model Room {
   notes           String?
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
+  roomBuildingLoc RoomBuilding
+  roomFloorLoc    RoomFloor
   RFIDReader      RFIDReader?
   SubjectSchedule SubjectSchedule[]
 
@@ -187,7 +211,6 @@ model Semester {
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
   Attendance        Attendance[]      @relation("SemesterToAttendance")
-  CourseOfferings   CourseOffering[]
   Sections          Section[]
   SubjectSchedules  SubjectSchedule[]
 
@@ -219,7 +242,6 @@ model StudentSection {
 model Section {
   sectionId         Int               @id @default(autoincrement())
   sectionName       String            @unique
-  sectionType       SectionType
   sectionCapacity   Int
   sectionStatus     SectionStatus
   yearLevel         Int
@@ -251,22 +273,17 @@ model CourseOffering {
   courseStatus CourseStatus @default(ACTIVE)
   description  String?
   departmentId Int
-  academicYear String
-  semester     SemesterType
   totalUnits   Int
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
-  semesterId   Int
   major        String?
   Department   Department   @relation(fields: [departmentId], references: [departmentId])
-  Semester     Semester     @relation(fields: [semesterId], references: [semesterId])
   Section      Section[]
   Student      Student[]
   Subjects     Subjects[]
 
   @@index([courseCode])
   @@index([departmentId, courseStatus])
-  @@index([academicYear, semester])
 }
 
 model Department {
@@ -280,9 +297,9 @@ model Department {
   location              String?
   contactEmail          String?
   contactPhone          String?
-  departmentLogo        String?          // URL or path to department logo image
   createdAt             DateTime         @default(now())
   updatedAt             DateTime         @updatedAt
+  departmentLogo        String?
   CourseOffering        CourseOffering[]
   head                  User?            @relation("DepartmentHead", fields: [headOfDepartment], references: [userId])
   Instructor            Instructor[]
@@ -637,9 +654,137 @@ model PasswordResetToken {
   id        Int      @id @default(autoincrement())
   token     String   @unique
   userId    Int
-  user      User     @relation(fields: [userId], references: [userId])
   expiresAt DateTime
   createdAt DateTime @default(now())
+  User      User     @relation(fields: [userId], references: [userId], onDelete: Cascade)
+}
+
+model SystemBackup {
+  id            Int            @id @default(autoincrement())
+  name          String
+  description   String?
+  type          BackupType
+  size          String
+  status        BackupStatus   @default(IN_PROGRESS)
+  location      BackupLocation
+  isEncrypted   Boolean        @default(true)
+  retentionDays Int            @default(30)
+  filePath      String?
+  checksum      String?
+  createdBy     Int
+  createdAt     DateTime       @default(now())
+  completedAt   DateTime?
+  errorMessage  String?
+  backupLogs    BackupLog[]
+  restorePoints RestorePoint[]
+  scheduleLogs  BackupScheduleLog[]
+  createdByUser User           @relation(fields: [createdBy], references: [userId])
+
+  @@index([status])
+  @@index([type])
+  @@index([createdAt])
+  @@index([createdBy])
+}
+
+model RestorePoint {
+  id            Int           @id @default(autoincrement())
+  name          String
+  description   String?
+  backupId      Int
+  status        RestoreStatus @default(AVAILABLE)
+  createdBy     Int
+  createdAt     DateTime      @default(now())
+  restoredAt    DateTime?
+  errorMessage  String?
+  backup        SystemBackup  @relation(fields: [backupId], references: [id], onDelete: Cascade)
+  createdByUser User          @relation(fields: [createdBy], references: [userId])
+
+  @@index([backupId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model BackupLog {
+  id            Int           @id @default(autoincrement())
+  backupId      Int?
+  action        String
+  status        String
+  message       String?
+  details       Json?
+  createdBy     Int
+  createdAt     DateTime      @default(now())
+  backup        SystemBackup? @relation(fields: [backupId], references: [id])
+  createdByUser User          @relation(fields: [createdBy], references: [userId])
+
+  @@index([backupId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+model BackupSettings {
+  id                Int      @id @default(autoincrement())
+  autoBackup        Boolean  @default(true)
+  backupFrequency   String   @default("WEEKLY")
+  retentionDays     Int      @default(30)
+  encryptionEnabled Boolean  @default(true)
+  cloudStorage      Boolean  @default(false)
+  compressionLevel  String   @default("MEDIUM")
+  maxBackupSize     Int      @default(10)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([autoBackup])
+  @@index([backupFrequency])
+}
+
+model BackupSchedule {
+  id                Int              @id @default(autoincrement())
+  name              String
+  description       String?
+  frequency         ScheduleFrequency
+  interval          Int              @default(1)
+  timeOfDay         String           @default("02:00") // HH:MM format
+  daysOfWeek        DayOfWeek[]      @default([])
+  dayOfMonth        Int?             // For monthly schedules
+  isActive          Boolean          @default(true)
+  lastRun           DateTime?
+  nextRun           DateTime?
+  totalRuns         Int              @default(0)
+  successfulRuns    Int              @default(0)
+  failedRuns        Int              @default(0)
+  backupType        BackupType       @default(FULL)
+  location          BackupLocation   @default(LOCAL)
+  isEncrypted       Boolean          @default(true)
+  retentionDays     Int              @default(30)
+  createdBy         Int
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  createdByUser     User             @relation(fields: [createdBy], references: [userId])
+  scheduleLogs      BackupScheduleLog[]
+
+  @@index([isActive])
+  @@index([nextRun])
+  @@index([createdBy])
+}
+
+model BackupScheduleLog {
+  id            Int              @id @default(autoincrement())
+  scheduleId    Int
+  backupId      Int?
+  status        ScheduleLogStatus @default(PENDING)
+  scheduledAt   DateTime
+  startedAt     DateTime?
+  completedAt   DateTime?
+  errorMessage  String?
+  createdBy     Int
+  createdAt     DateTime         @default(now())
+  schedule      BackupSchedule   @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  backup        SystemBackup?    @relation(fields: [backupId], references: [id])
+  createdByUser User             @relation(fields: [createdBy], references: [userId])
+
+  @@index([scheduleId])
+  @@index([scheduledAt])
+  @@index([backupId])
 }
 
 enum UserStatus {
@@ -738,10 +883,13 @@ enum AttendanceVerification {
 }
 
 enum Role {
+  SUPER_ADMIN
   ADMIN
-  TEACHER
+  DEPARTMENT_HEAD
+  INSTRUCTOR
   STUDENT
   GUARDIAN
+  SYSTEM_AUDITOR
 }
 
 enum StudentType {
@@ -775,11 +923,6 @@ enum SemesterType {
   FIRST_SEMESTER
   SECOND_SEMESTER
   THIRD_SEMESTER
-}
-
-enum SectionType {
-  LECTURE
-  LAB
 }
 
 enum SectionStatus {
@@ -960,14 +1103,54 @@ enum RecipientType {
 
 enum NotificationMethod {
   EMAIL
-  SMS
-  BOTH
 }
 
 enum NotificationStatus {
   PENDING
   SENT
   FAILED
+}
+
+enum BackupType {
+  FULL
+  INCREMENTAL
+  DIFFERENTIAL
+}
+
+enum BackupStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum BackupLocation {
+  LOCAL
+  CLOUD
+  HYBRID
+}
+
+enum RestoreStatus {
+  AVAILABLE
+  RESTORING
+  FAILED
+  COMPLETED
+}
+
+enum ScheduleFrequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+  CUSTOM
+}
+
+enum ScheduleLogStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
 }
 
 enum RoomBuilding {

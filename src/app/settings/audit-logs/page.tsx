@@ -1,5 +1,8 @@
 "use client";
 
+// Force dynamic rendering
+export const dynamic = 'force-dynamic';
+
 import { FileBarChart2 } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import Menu from "@/components/Menu";

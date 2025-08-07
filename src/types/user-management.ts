@@ -3,7 +3,7 @@ export interface BaseUser {
   userId: number;
   userName: string;
   email: string;
-  role: 'ADMIN' | 'TEACHER' | 'STUDENT' | 'GUARDIAN';
+  role: 'SUPER_ADMIN' | 'ADMIN' | 'DEPARTMENT_HEAD' | 'TEACHER' | 'STUDENT' | 'GUARDIAN' | 'SYSTEM_AUDITOR';
   status: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED' | 'PENDING' | 'BLOCKED';
   lastLogin?: Date;
   lastPasswordChange?: Date;

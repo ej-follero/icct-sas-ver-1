@@ -3814,97 +3814,11 @@ export default function StudentAttendancePage() {
   const [refreshInterval, setRefreshInterval] = useState<NodeJS.Timeout | null>(null);
   const [currentTime, setCurrentTime] = useState<string>('');
   const [mounted, setMounted] = useState(false);
-  // Add state for dashboard visibility
-  const [dashboardExpanded, setDashboardExpanded] = useState(true);
   const [searchFilterExpanded, setSearchFilterExpanded] = useState(true);
   const [reportExpanded, setReportExpanded] = useState(true);
   const [quickActionsExpanded, setQuickActionsExpanded] = useState(true);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [showRecentSearches, setShowRecentSearches] = useState(false);
-  
-  // Enhanced Analytics States
-  const [activeAnalyticsTab, setActiveAnalyticsTab] = useState('department');
-  const [analyticsSearchQuery, setAnalyticsSearchQuery] = useState('');
-  const [analyticsSortBy, setAnalyticsSortBy] = useState<'name' | 'rate' | 'total'>('rate');
-  const [analyticsTimeRange, setAnalyticsTimeRange] = useState('today');
-  const [drillDownPath, setDrillDownPath] = useState<string[]>([]);
-  const [showTrends, setShowTrends] = useState(true);
-  const [thresholdAlert, setThresholdAlert] = useState(80);
-  const [isAnalyticsDialogOpen, setIsAnalyticsDialogOpen] = useState(false);
-
-  // NEW: Custom Trend Range States
-  const [customTrendRange, setCustomTrendRange] = useState<'7d' | '30d' | '90d' | 'custom'>('30d');
-  const [customDateRange, setCustomDateRange] = useState<{ start: Date; end: Date }>({
-    start: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
-    end: new Date()
-  });
-  const [showCustomDatePicker, setShowCustomDatePicker] = useState(false);
-
-  // NEW: Drill-down Feature States
-  const [drillDownLevel, setDrillDownLevel] = useState<'department' | 'course' | 'section' | 'instructor' | null>(null);
-  const [drillDownData, setDrillDownData] = useState<any[]>([]);
-  const [drillDownHistory, setDrillDownHistory] = useState<Array<{ level: string; value: string; data: any[] }>>([]);
-  const [showDrillDownBreadcrumb, setShowDrillDownBreadcrumb] = useState(false);
-
-
-
-  // NEW: User Customization States
-  const [userPreferences, setUserPreferences] = useState({
-    defaultTimeRange: '30d',
-    defaultCharts: ['weekly-trend', 'department-breakdown', 'risk-analysis'],
-    chartLayout: 'grid' as 'grid' | 'list' | 'compact',
-    autoRefresh: false,
-    refreshInterval: 300, // 5 minutes
-    showConfidenceIntervals: true,
-    showTrendLines: true,
-    colorScheme: 'blue' as 'blue' | 'green' | 'purple' | 'orange',
-    dataDensity: 'normal' as 'low' | 'normal' | 'high'
-  });
-  const [showCustomizationDialog, setShowCustomizationDialog] = useState(false);
-  const [savedCustomizations, setSavedCustomizations] = useState<Array<{
-    id: string;
-    name: string;
-    preferences: typeof userPreferences;
-    createdAt: Date;
-  }>>([]);
-
-  // Comparative Analysis States
-  const [comparisonPeriod, setComparisonPeriod] = useState<'week' | 'month' | 'quarter' | 'year'>('week');
-  const [showComparisonCustomization, setShowComparisonCustomization] = useState(false);
-
-  // Goals Analysis States
-  const [goalPeriod, setGoalPeriod] = useState<'semester' | 'quarter' | 'month' | 'week'>('semester');
-  const [showGoalCustomization, setShowGoalCustomization] = useState(false);
-
-  const [activeFilterPreset, setActiveFilterPreset] = useState<string | null>(null);
-  
-  // New state variables for the refactored table components
-  const [visibleColumns, setVisibleColumns] = useState<string[]>(['select', 'studentName', 'department', 'course', 'yearLevel', 'attendanceRate', 'status', 'actions']);
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [expandedRowIds, setExpandedRowIds] = useState<string[]>([]);
-  const [editingCell, setEditingCell] = useState<{ rowId: string; columnAccessor: string } | null>(null);
-  const [sortState, setSortState] = useState<{ field: StudentSortFieldKey; order: SortOrder }>({ field: 'attendanceRate', order: 'desc' });
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
-  const [filterDialogOpen, setFilterDialogOpen] = useState(false);
-  const [sortDialogOpen, setSortDialogOpen] = useState(false);
-  const [exportDialogOpen, setExportDialogOpen] = useState(false);
-  const [viewDialogOpen, setViewDialogOpen] = useState(false);
-  const [viewStudent, setViewStudent] = useState<StudentAttendance | undefined>(undefined);
-  const [studentToDelete, setStudentToDelete] = useState<StudentAttendance | null>(null);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [exportColumns, setExportColumns] = useState<string[]>(['studentName', 'department', 'course', 'yearLevel', 'attendanceRate', 'status']);
-  const [exportFormat, setExportFormat] = useState<'csv' | 'excel' | 'pdf'>('csv');
-  const [exportDropdownOpen, setExportDropdownOpen] = useState(false);
-  const exportDropdownRef = useRef<HTMLDivElement>(null);
-  
-  // Enhanced Bulk Actions State
-  const [bulkActionsDialogOpen, setBulkActionsDialogOpen] = useState(false);
-  const [selectedStudentsForBulkAction, setSelectedStudentsForBulkAction] = useState<StudentAttendance[]>([]);
-  
-  // Enhanced System State
-  const [showRealTimeDashboard, setShowRealTimeDashboard] = useState(false);
-  const [systemView, setSystemView] = useState<'attendance' | 'dashboard' | 'notifications'>('attendance');
   
   // Role-based access control (in a real app, this would come from auth context)
   const [userRole, setUserRole] = useState<'admin' | 'teacher' | 'viewer'>('admin');
@@ -3921,6 +3835,68 @@ export default function StudentAttendancePage() {
   // Loading states for delete operations
   const [isDeletingStudent, setIsDeletingStudent] = useState(false);
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  
+  // Missing state variables for functionality
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [studentToDelete, setStudentToDelete] = useState<StudentAttendance | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
+  const [bulkActionsDialogOpen, setBulkActionsDialogOpen] = useState(false);
+  const [selectedStudentsForBulkAction, setSelectedStudentsForBulkAction] = useState<StudentAttendance[]>([]);
+  const [viewStudent, setViewStudent] = useState<StudentAttendance | null>(null);
+  const [viewDialogOpen, setViewDialogOpen] = useState(false);
+  const [expandedRowIds, setExpandedRowIds] = useState<string[]>([]);
+  const [editingCell, setEditingCell] = useState<{ rowId: string; columnAccessor: string } | null>(null);
+  const [visibleColumns, setVisibleColumns] = useState<string[]>(['select', 'studentName', 'department', 'course', 'yearLevel', 'attendanceRate', 'status', 'actions']);
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [exportColumns, setExportColumns] = useState<string[]>(['studentName', 'studentId', 'department', 'course', 'yearLevel', 'attendanceRate', 'status']);
+  const [exportFormat, setExportFormat] = useState<'csv' | 'excel' | 'pdf'>('csv');
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isAnalyticsDialogOpen, setIsAnalyticsDialogOpen] = useState(false);
+  const [analyticsSearchQuery, setAnalyticsSearchQuery] = useState('');
+  const [analyticsSortBy, setAnalyticsSortBy] = useState<'name' | 'rate' | 'total'>('rate');
+  const [drillDownPath, setDrillDownPath] = useState<string[]>([]);
+  const [drillDownHistory, setDrillDownHistory] = useState<Array<{ level: string; value: string; data: any }>>([]);
+  const [drillDownData, setDrillDownData] = useState<StudentAttendance[]>([]);
+  const [drillDownLevel, setDrillDownLevel] = useState<string | null>(null);
+  const [showDrillDownBreadcrumb, setShowDrillDownBreadcrumb] = useState(false);
+  const [customDateRange, setCustomDateRange] = useState({ start: new Date(), end: new Date() });
+  const [showCustomDatePicker, setShowCustomDatePicker] = useState(false);
+  const [showCustomizationDialog, setShowCustomizationDialog] = useState(false);
+  const [userPreferences, setUserPreferences] = useState({
+    defaultTimeRange: '7d',
+    chartLayout: 'grid',
+    colorScheme: 'blue',
+    dataDensity: 'normal',
+    showConfidenceIntervals: false,
+    showTrendLines: true,
+    autoRefresh: false
+  });
+  const [savedCustomizations, setSavedCustomizations] = useState<Array<{
+    id: string;
+    name: string;
+    preferences: any;
+    createdAt: Date;
+  }>>([]);
+  const [customTrendRange, setCustomTrendRange] = useState('7d');
+  const [comparisonPeriod, setComparisonPeriod] = useState('previous_week');
+  const [showComparisonCustomization, setShowComparisonCustomization] = useState(false);
+  const [goalPeriod, setGoalPeriod] = useState('monthly');
+  const [showGoalCustomization, setShowGoalCustomization] = useState(false);
+  const [systemView, setSystemView] = useState('attendance');
+  const [activeFilterPreset, setActiveFilterPreset] = useState<string>('');
+  const [filterPreset, setFilterPreset] = useState<string>('');
+  const [selectedItem, setSelectedItem] = useState<any>(null);
+  const [searchSuggestions, setSearchSuggestions] = useState<any[]>([]);
+  const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+  const [clientTime, setClientTime] = useState<string>('');
+  const [analyticsData, setAnalyticsData] = useState<any>({});
+  const [thresholdAlert, setThresholdAlert] = useState<number>(75);
+  const [showTrends, setShowTrends] = useState<boolean>(true);
+  const [activeAnalyticsTab, setActiveAnalyticsTab] = useState<string>('trends');
+  const [isAlertDialogOpen, setIsAlertDialogOpen] = useState<boolean>(false);
+  
+
   
   // Advanced Filter States
   const [advancedFilters, setAdvancedFilters] = useState<AdvancedFilters>({
@@ -4695,26 +4671,15 @@ export default function StudentAttendancePage() {
   type ChartType = 'line' | 'bar' | 'heatmap';
   type TimeRange = 'today' | 'week' | 'month' | 'semester' | 'custom';
   
-  // Enhanced Analytics State
-  const [analyticsData, setAnalyticsData] = useState<Record<AnalyticsTab, any[]>>({
-    department: [],
-    year: [],
-    course: [],
-    section: [],
-    subject: [],
-  });
+  // Enhanced Analytics State - REMOVED: Duplicate declaration
   
   // New UI/UX State Variables
   const [chartType, setChartType] = useState<ChartType>('line');
   const [timeRange, setTimeRange] = useState<TimeRange>('month');
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
-  const [selectedItem, setSelectedItem] = useState<any>(null);
   const [criticalAlerts, setCriticalAlerts] = useState<any[]>([]);
-  const [searchSuggestions, setSearchSuggestions] = useState<any[]>([]);
-  const [filterPreset, setFilterPreset] = useState<string>('');
   const [isLiveMode, setIsLiveMode] = useState<boolean>(true);
-  const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
   
   // Collapsible sections state
   const [isControlsCollapsed, setIsControlsCollapsed] = useState<boolean>(false);
@@ -4732,8 +4697,7 @@ export default function StudentAttendancePage() {
   const [showSubjectReportDialog, setShowSubjectReportDialog] = useState(false);
   const [isNavigationCollapsed, setIsNavigationCollapsed] = useState<boolean>(true);
   
-  // Alert dialog state
-  const [isAlertDialogOpen, setIsAlertDialogOpen] = useState<boolean>(false);
+
   
   // Advanced Filter Dialog state
   const [isAdvancedFilterDialogOpen, setIsAdvancedFilterDialogOpen] = useState<boolean>(false);
@@ -4803,10 +4767,10 @@ export default function StudentAttendancePage() {
       }));
       
       console.log(`Setting analytics data for ${tab}:`, stats);
-      setAnalyticsData(prev => ({ ...prev, [tab]: stats }));
+      setAnalyticsData((prev: any) => ({ ...prev, [tab]: stats }));
     } catch (error) {
       console.error(`Error fetching ${tab} analytics:`, error);
-      setAnalyticsError(prev => ({ 
+      setAnalyticsError((prev: any) => ({ 
         ...prev, 
         [tab]: error instanceof Error ? error.message : `Failed to load ${tab} data` 
       }));
@@ -4816,12 +4780,12 @@ export default function StudentAttendancePage() {
     }
   };
 
-  // Fetch analytics data when tab changes
+  // Fetch analytics data when tab changes - REMOVED: Dashboard functionality removed
   useEffect(() => {
     if (isAnalyticsDialogOpen) {
-      fetchAnalyticsData(activeAnalyticsTab as AnalyticsTab);
+      // fetchAnalyticsData(activeAnalyticsTab as AnalyticsTab); // Dashboard functionality removed
     }
-  }, [isAnalyticsDialogOpen, activeAnalyticsTab]);
+  }, [isAnalyticsDialogOpen]); // activeAnalyticsTab removed
 
   // Function to get filtered and sorted analytics data
   const getFilteredAnalyticsData = (tab: AnalyticsTab) => {
@@ -5349,7 +5313,7 @@ export default function StudentAttendancePage() {
           variant="ghost" 
           size="sm" 
           onClick={() => {
-            fetchAnalyticsData(activeAnalyticsTab as AnalyticsTab);
+            // fetchAnalyticsData(activeAnalyticsTab as AnalyticsTab); // Dashboard functionality removed
             setLastRefresh(new Date());
           }}
         >
@@ -5362,12 +5326,12 @@ export default function StudentAttendancePage() {
     );
   };
 
-  // Export Options
+  // Export Options - REMOVED: Dashboard functionality removed
   const ExportOptions = () => {
     const exportData = (format: string) => {
-      const data = getFilteredAnalyticsData(activeAnalyticsTab as AnalyticsTab);
+      // const data = getFilteredAnalyticsData(activeAnalyticsTab as AnalyticsTab); // Dashboard functionality removed
       // Implementation for different export formats
-      console.log(`Exporting ${format} data:`, data);
+      console.log(`Exporting ${format} data:`, []);
     };
 
     return (
@@ -5797,18 +5761,17 @@ export default function StudentAttendancePage() {
     fetchStudentsData();
   }, []);
 
-  // Fetch analytics data when dialog opens
+  // Fetch analytics data when dialog opens - REMOVED: Dashboard functionality removed
   useEffect(() => {
-    console.log(`useEffect triggered - isAnalyticsDialogOpen: ${isAnalyticsDialogOpen}, activeAnalyticsTab: ${activeAnalyticsTab}`);
+    console.log(`useEffect triggered - isAnalyticsDialogOpen: ${isAnalyticsDialogOpen}`);
     if (isAnalyticsDialogOpen) {
-      fetchAnalyticsData(activeAnalyticsTab as AnalyticsTab);
+      // fetchAnalyticsData(activeAnalyticsTab as AnalyticsTab); // Dashboard functionality removed
     }
-  }, [isAnalyticsDialogOpen, activeAnalyticsTab]);
+  }, [isAnalyticsDialogOpen]); // activeAnalyticsTab removed
 
   // Handle analytics tab change
   const handleAnalyticsTabChange = (tab: string) => {
     setActiveAnalyticsTab(tab);
-    fetchAnalyticsData(tab as AnalyticsTab);
   };
 
   // API Integration for Real Data
@@ -9626,7 +9589,7 @@ return (
                     variant="ghost"
                     size="sm"
                     className="bg-white/20 hover:bg-white/30 text-white rounded-xl"
-                    onClick={() => setDashboardExpanded(false)}
+                    onClick={() => {}}
                   >
                     <Minimize2 className="w-4 h-4" />
                   </Button>
@@ -11418,329 +11381,7 @@ return (
                   </div>
                   
       {/* Enhanced Attendance Dashboard Card with Tab Interface */}
-      <div className="mb-6">
-          <Card className="border border-blue-200 shadow-lg rounded-xl overflow-hidden h-fit xl:h-full p-0">
-          {/* Enhanced Header Section with Time Filters */}
-          <div className="bg-gradient-to-r from-[#1e40af] to-[#3b82f6] py-4">
-            <div className="flex flex-col lg:flex-row lg:items-center gap-4 px-6">
-                <div className="flex items-center gap-3">
-                <div className="w-8 h-8 flex items-center justify-center">
-                    <Activity className="w-5 h-5 text-white" />
-             </div>
-                  <div>
-                  <h3 className="text-lg font-bold text-white mb-1">Live Attendance Dashboard</h3>
-                  <p className="text-blue-100 text-sm">
-                    Real-time monitoring and status tracking 
-                  </p>
-           </div>
-                        </div>
-              
-                            <div className="flex items-center gap-3">
-                {/* Refresh Students Data Button */}
-                <button
-                    onClick={refreshStudentsData}
-                  className="bg-white/20 hover:bg-white/30 text-white p-2 rounded-xl transition-all hover:scale-105"
-                  title="Refresh student data"
-                    disabled={isRefreshing}
-                  >
-                    <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-                </button>
-                
-                {/* Minimize Dashboard Button */}
-                <button
-                    onClick={() => setDashboardExpanded(false)}
-                  className="bg-white/20 hover:bg-white/30 text-white p-2 rounded-xl transition-all hover:scale-105"
-                  title="Minimize dashboard"
-                  >
-                    <Minimize2 className="w-4 h-4" />
-                </button>
-                            </div>
-                              </div>
-                              </div>
-
-          {/* Drill-down Breadcrumbs */}
-          {drillDownState.isActive && (
-            <div className="px-6 py-3 border-b border-gray-200">
-              <DrillDownBreadcrumbs 
-                breadcrumbs={drillDownState.breadcrumbs}
-                onNavigate={handleDrillUp}
-              />
-            </div>
-          )}
-
-          {/* Tab Interface */}
-               <Tabs value={activeAnalyticsTab} onValueChange={handleAnalyticsTabChange} className="flex-1 flex flex-col">
-                 <div className="px-6 py-4 border-b border-gray-200">
-              <TabsList className="grid w-full grid-cols-5 bg-gray-100 p-1 rounded-xl">
-                     <TabsTrigger value="department" className="text-sm font-medium text-blue-400 data-[state=active]:text-blue-700 data-[state=active]:bg-white data-[state=active]:shadow-sm transition-all">
-                       <Building className="w-4 h-4 mr-2 text-blue-400 data-[state=active]:text-blue-700" />
-                       Department
-                     </TabsTrigger>
-                     <TabsTrigger value="year" className="text-sm font-medium text-blue-400 data-[state=active]:text-blue-700 data-[state=active]:bg-white data-[state=active]:shadow-sm transition-all">
-                       <GraduationCap className="w-4 h-4 mr-2 text-blue-400 data-[state=active]:text-blue-700" />
-                       Year Level
-                     </TabsTrigger>
-                     <TabsTrigger value="course" className="text-sm font-medium text-blue-400 data-[state=active]:text-blue-700 data-[state=active]:bg-white data-[state=active]:shadow-sm transition-all">
-                       <BookOpen className="w-4 h-4 mr-2 text-blue-400 data-[state=active]:text-blue-700" />
-                       Course
-                     </TabsTrigger>
-                     <TabsTrigger value="section" className="text-sm font-medium text-blue-400 data-[state=active]:text-blue-700 data-[state=active]:bg-white data-[state=active]:shadow-sm transition-all">
-                       <Users className="w-4 h-4 mr-2 text-blue-400 data-[state=active]:text-blue-700" />
-                       Section
-                     </TabsTrigger>
-                     <TabsTrigger value="subject" className="text-sm font-medium text-blue-400 data-[state=active]:text-blue-700 data-[state=active]:bg-white data-[state=active]:shadow-sm transition-all">
-                       <Target className="w-4 h-4 mr-2 text-blue-400 data-[state=active]:text-blue-700" />
-                       Subject
-                     </TabsTrigger>
-                   </TabsList>
-                 </div>
-
-                 {/* Universal Content Renderer */}
-                 {['department', 'year', 'course', 'section', 'subject'].map(tabValue => (
-                            <TabsContent key={tabValue} value={tabValue} className="flex-1 space-y-3 data-[state=active]:animate-fade-in">
-                     {getAnalyticsLoadingForTab(tabValue) ? (
-                         <div className="text-center py-12 text-gray-500">
-                           <Info className="w-12 h-12 mx-auto mb-4 text-gray-400" />
-                           <h3 className="text-lg font-semibold text-gray-700 mb-2">Loading {tabValue}s...</h3>
-                           <p className="text-sm">Fetching {tabValue} attendance data</p>
-                         </div>
-                       ) : getAnalyticsErrorForTab(tabValue) ? (
-                         <div className="text-center py-12 text-red-500">
-                           <AlertTriangle className="w-12 h-12 mx-auto mb-4 text-red-400" />
-                           <h3 className="text-lg font-semibold text-red-700 mb-2">Error loading {tabValue}s</h3>
-                           <p className="text-sm">{getAnalyticsErrorForTab(tabValue)}</p>
-                         </div>
-                       ) : getAnalyticsDataForTab(tabValue).length === 0 ? (
-                         <div className="text-center py-12 text-gray-500">
-                           <Info className="w-12 h-12 mx-auto mb-4 text-gray-400" />
-                           <h3 className="text-lg font-semibold text-gray-700 mb-2">No {tabValue}s found</h3>
-                           <p className="text-sm">No {tabValue}s match your current search criteria</p>
-                         </div>
-                       ) : (
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 p-6">
-                           {getFilteredAnalyticsData(tabValue as AnalyticsTab).map((item: any, index: number) => (
-                             <div 
-                               key={item.id} 
-                               className={`p-4 rounded-xl transition-all duration-200 cursor-pointer group hover:shadow-lg border-l-4 ${
-                                 item.rate < thresholdAlert 
-                                   ? 'border-red-400 bg-red-50 hover:bg-red-100' 
-                                   : item.rate >= 90 
-                                   ? 'border-green-400 bg-green-50 hover:bg-green-100' 
-                                   : 'border-blue-400 bg-blue-50 hover:bg-blue-100'
-                               }`}
-                               onClick={() => {
-                                 setSelectedItem(item);
-                                 // Enable drill-down functionality
-                                 handleDrillDown(tabValue as 'department' | 'course' | 'section' | 'instructor', item.name);
-                               }}
-                             >
-                               <div className="flex items-center justify-between mb-3">
-                                 <div className="flex items-center gap-3">
-                                   <h4 className="text-base font-semibold text-gray-900 group-hover:text-blue-700 transition-colors">
-                                     {item.name}
-                                   </h4>
-                                   {item.children.length > 0 && (
-                                     <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-blue-600 transition-colors" />
-                                   )}
-                                   {item.rate < thresholdAlert && (
-                                     <div className="flex items-center gap-1 bg-red-100 text-red-700 px-2 py-1 rounded-full text-xs font-medium">
-                                       <AlertTriangle className="w-3 h-3" />
-                                       Alert
-                                     </div>
-                                   )}
-                                 </div>
-                                 <div className="flex items-center gap-3">
-                                   {showTrends && <TrendIndicator trend={item.trend} />}
-                                   <span className={`text-xl font-bold ${
-                                     item.rate >= 90 ? 'text-green-600' :
-                                     item.rate >= 80 ? 'text-yellow-600' : 'text-red-600'
-                                   }`}>
-                                     {item.rate}%
-                                   </span>
-                                 </div>
-                               </div>
-                               <div className="flex items-center gap-4 mb-3">
-                                 <div className="flex-1 bg-gray-200 rounded-full h-3 relative overflow-hidden">
-                                   <div 
-                                     className={`h-3 rounded-full transition-all duration-700 ease-out relative ${
-                                       item.rate >= 85 ? 'bg-gradient-to-r from-green-400 to-green-500' :
-                                              item.rate >= 80 ? 'bg-gradient-to-r from-yellow-400 to-yellow-500' : 
-                                              'bg-gradient-to-r from-red-400 to-red-500'
-                                            }`}
-                                            style={{ width: `${item.rate}%` }}
-                                          >
-                                            <div className="absolute inset-0 bg-white/20 rounded-full animate-pulse"></div>
-                             </div>
-                                        </div>
-                                        <span className="text-sm text-gray-600 font-medium min-w-[60px]">
-                                          {item.present}/{item.total}
-                                        </span>
-                                      </div>
-                                      {showTrends && (
-                                        <div className="h-8 w-full">
-                               <MiniTrendChart 
-                                            data={getTrendData(studentsData, activeRange, 'daily').map((h: any) => ({
-                                              value: item.rate + (h.day % 3 - 1) * 2 // Real data with variation
-                                            }))}
-                                            color={item.rate >= 85 ? '#10b981' : item.rate >= 80 ? '#f59e0b' : '#ef4444'}
-                                            height={32}
-                               />
-                             </div>
-                                      )}
-                           </div>
-                         ))}
-                       </div>
-                     )}
-                   </TabsContent>
-                 ))}
-
-                 {/* Breakdown Tab */}
-                 <TabsContent value="breakdown" className="flex-1 space-y-6 data-[state=active]:animate-fade-in">
-                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 p-6">
-                     <EnhancedChartCard
-                       title="Attendance Status Breakdown"
-                       icon={PieChartIcon}
-                       chartId="attendance-breakdown"
-                       chartFilters={chartFilters['attendance-breakdown']}
-                       onChartFilterChange={handleChartFilterChange}
-                       loading={loading}
-                       error={null}
-                       onRetry={refreshStudentsData}
-                     >
-                       <ResponsiveContainer width="100%" height={200}>
-                         {(() => {
-                           const data = getFilteredChartData('attendance-breakdown', chartFilters['attendance-breakdown']);
-                           const chartType = chartFilters['attendance-breakdown'].chartType;
-                           
-                           if (chartType === 'pie') {
-                             return (
-                               <RePieChart>
-                                 <Pie
-                                   data={data}
-                                   cx="50%"
-                                   cy="50%"
-                                   labelLine={false}
-                                   label={({ name, percentage }) => `${name}: ${percentage}%`}
-                                   outerRadius={60}
-                                   fill="#8884d8"
-                                   dataKey="value"
-                                 >
-                                   {data.map((entry: any, index: number) => (
-                                     <Cell key={`cell-${index}`} fill={entry.color} />
-                                   ))}
-                                 </Pie>
-                                 <RechartsTooltip 
-                                   formatter={(value: any, name: any) => [value, name]}
-                                   labelFormatter={(label) => `${label}`}
-                                 />
-                               </RePieChart>
-                             );
-                           }
-                           
-                           if (chartType === 'doughnut') {
-                             return (
-                               <RePieChart>
-                                 <Pie
-                                   data={data}
-                                   cx="50%"
-                                   cy="50%"
-                                   labelLine={false}
-                                   label={({ name, percentage }) => `${name}: ${percentage}%`}
-                                   outerRadius={60}
-                                   innerRadius={30}
-                                   fill="#8884d8"
-                                   dataKey="value"
-                                 >
-                                   {data.map((entry: any, index: number) => (
-                                     <Cell key={`cell-${index}`} fill={entry.color} />
-                                   ))}
-                                 </Pie>
-                                 <RechartsTooltip 
-                                   formatter={(value: any, name: any) => [value, name]}
-                                   labelFormatter={(label) => `${label}`}
-                                 />
-                               </RePieChart>
-                             );
-                           }
-                           
-                           if (chartType === 'bar') {
-                             return (
-                               <ReBarChart data={data}>
-                                 <CartesianGrid strokeDasharray="3 3" />
-                                 <XAxis dataKey="name" fontSize={10} />
-                                 <YAxis domain={[0, 'dataMax + 10']} fontSize={10} />
-                                 <RechartsTooltip 
-                                   formatter={(value: any, name: any) => [value, name]}
-                                 />
-                                 <Bar dataKey="value" fill="#3b82f6">
-                                   {data.map((entry: any, index: number) => (
-                                     <Cell key={`cell-${index}`} fill={entry.color} />
-                                   ))}
-                                 </Bar>
-                               </ReBarChart>
-                             );
-                           }
-                           
-                           if (chartType === 'horizontal-bar') {
-                             return (
-                               <ReBarChart data={data} layout="horizontal">
-                                 <CartesianGrid strokeDasharray="3 3" />
-                                 <XAxis type="number" domain={[0, 'dataMax + 10']} fontSize={10} />
-                                 <YAxis dataKey="name" type="category" fontSize={10} />
-                                 <RechartsTooltip 
-                                   formatter={(value: any, name: any) => [value, name]}
-                                 />
-                                 <Bar dataKey="value" fill="#3b82f6">
-                                   {data.map((entry: any, index: number) => (
-                                     <Cell key={`cell-${index}`} fill={entry.color} />
-                                   ))}
-                                 </Bar>
-                               </ReBarChart>
-                             );
-                           }
-                           
-                           // Default fallback
-                           return (
-                             <RePieChart>
-                               <Pie
-                                 data={data}
-                                 cx="50%"
-                                 cy="50%"
-                                 labelLine={false}
-                                 label={({ name, percentage }) => `${name}: ${percentage}%`}
-                                 outerRadius={60}
-                                 fill="#8884d8"
-                                 dataKey="value"
-                               >
-                                 {data.map((entry: any, index: number) => (
-                                   <Cell key={`cell-${index}`} fill={entry.color} />
-                                 ))}
-                               </Pie>
-                               <RechartsTooltip 
-                                 formatter={(value: any, name: any) => [value, name]}
-                                 labelFormatter={(label) => `${label}`}
-                               />
-                             </RePieChart>
-                           );
-                         })()}
-                       </ResponsiveContainer>
-                     </EnhancedChartCard>
-                   </div>
-                 </TabsContent>
-               </Tabs>
-              </Card>
-          </div>
-
-          {/* Drill-down Context Panel */}
-          {drillDownState.isActive && (
-            <div className="mt-6">
-              <DrillDownContextPanel 
-                context={drillDownContext}
-                loading={drillDownLoading}
-                onAction={handleDrillDownAction}
-              />
-            </div>
-          )}
+      {/* REMOVED: Live Attendance Dashboard section */}
 
       {/* Student Attendance Management - Unified Search & Report */}
       <div className="space-y-6">

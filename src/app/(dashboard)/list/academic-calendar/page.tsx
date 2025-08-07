@@ -91,6 +91,620 @@ interface Semester {
   isActive: boolean;
 }
 
+// Filter Panel Component
+interface FilterPanelProps {
+  academicYears: AcademicYear[];
+  selectedYear: AcademicYear | null;
+  selectedSemester: Semester | null;
+  onYearChange: (year: AcademicYear | null) => void;
+  onSemesterChange: (semester: Semester | null) => void;
+  search: string;
+  onSearchChange: (search: string) => void;
+  filters: {
+    category: string;
+    priority: string;
+    status: string;
+    dateRange: string;
+  };
+  onFiltersChange: (filters: any) => void;
+}
+
+// Calendar View Component
+interface CalendarViewProps {
+  events: AcademicEvent[];
+  currentDate: Date;
+  viewMode: 'month' | 'week' | 'day' | 'timeline';
+  selectedEvents: number[];
+  onEventSelect: (eventId: number) => void;
+}
+
+function CalendarView({ events, currentDate, viewMode, selectedEvents, onEventSelect }: CalendarViewProps) {
+  const getDaysInMonth = (date: Date) => {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const startDate = new Date(firstDay);
+    startDate.setDate(startDate.getDate() - firstDay.getDay());
+    
+    const days = [];
+    const current = new Date(startDate);
+    
+    while (current <= lastDay || current.getDay() !== 0) {
+      days.push(new Date(current));
+      current.setDate(current.getDate() + 1);
+    }
+    
+    return days;
+  };
+
+  const getEventsForDate = (date: Date) => {
+    return events.filter(event => {
+      const eventStart = new Date(event.startDate);
+      const eventEnd = new Date(event.endDate);
+      const checkDate = new Date(date);
+      
+      checkDate.setHours(0, 0, 0, 0);
+      eventStart.setHours(0, 0, 0, 0);
+      eventEnd.setHours(0, 0, 0, 0);
+      
+      return checkDate >= eventStart && checkDate <= eventEnd;
+    });
+  };
+
+  const formatTime = (date: Date) => {
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
+  if (viewMode === 'month') {
+    const days = getDaysInMonth(currentDate);
+    const weekDays: string[] = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    
+    return (
+      <div className="calendar-month">
+        {/* Calendar Header */}
+        <div className="grid grid-cols-7 gap-1 mb-2">
+          {weekDays.map(day => (
+            <div key={day} className="p-2 text-center text-sm font-medium text-gray-500">
+              {day}
+            </div>
+          ))}
+        </div>
+        
+        {/* Calendar Grid */}
+        <div className="grid grid-cols-7 gap-1">
+          {days.map((day, index) => {
+            const dayEvents = getEventsForDate(day);
+            const isCurrentMonth = day.getMonth() === currentDate.getMonth();
+            const isToday = day.toDateString() === new Date().toDateString();
+            
+            return (
+              <div
+                key={index}
+                className={`min-h-[120px] p-2 border border-gray-200 ${
+                  isCurrentMonth ? 'bg-white' : 'bg-gray-50'
+                } ${isToday ? 'ring-2 ring-blue-500' : ''}`}
+              >
+                <div className={`text-sm font-medium mb-1 ${
+                  isCurrentMonth ? 'text-gray-900' : 'text-gray-400'
+                } ${isToday ? 'text-blue-600' : ''}`}>
+                  {day.getDate()}
+                </div>
+                
+                <div className="space-y-1">
+                  {dayEvents.slice(0, 3).map(event => (
+                    <div
+                      key={event.id}
+                      className={`text-xs p-1 rounded cursor-pointer ${
+                        selectedEvents.includes(event.id) 
+                          ? 'ring-2 ring-blue-500' 
+                          : ''
+                      }`}
+                      style={{ backgroundColor: event.color + '20', color: event.color }}
+                      onClick={() => onEventSelect(event.id)}
+                    >
+                      <div className="font-medium truncate">{event.title}</div>
+                      {!event.allDay && (
+                        <div className="text-xs opacity-75">
+                          {formatTime(new Date(event.startDate))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  {dayEvents.length > 3 && (
+                    <div className="text-xs text-gray-500">
+                      +{dayEvents.length - 3} more
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  if (viewMode === 'week') {
+    const weekStart = new Date(currentDate);
+    weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+    const weekDays: Date[] = [];
+    
+    for (let i = 0; i < 7; i++) {
+      const day = new Date(weekStart);
+      day.setDate(day.getDate() + i);
+      weekDays.push(day);
+    }
+
+    const timeSlots = [];
+    for (let hour = 6; hour <= 22; hour++) {
+      timeSlots.push(hour);
+    }
+
+    return (
+      <div className="calendar-week">
+        {/* Time slots */}
+        <div className="grid grid-cols-8 gap-1">
+          <div className="w-16"></div> {/* Empty corner */}
+          {weekDays.map(day => (
+            <div key={day.toDateString()} className="p-2 text-center text-sm font-medium border-b">
+              <div>{day.toLocaleDateString([], { weekday: 'short' })}</div>
+              <div className={`text-lg ${day.toDateString() === new Date().toDateString() ? 'text-blue-600' : ''}`}>
+                {day.getDate()}
+              </div>
+            </div>
+          ))}
+          
+          {timeSlots.map(hour => (
+            <div key={hour} className="contents">
+              <div className="w-16 p-1 text-xs text-gray-500 text-right border-r">
+                {hour}:00
+              </div>
+              {weekDays.map(day => {
+                const dayEvents = events.filter(event => {
+                  const eventDate = new Date(event.startDate);
+                  const eventHour = eventDate.getHours();
+                  return eventDate.toDateString() === day.toDateString() && eventHour === hour;
+                });
+
+                return (
+                  <div key={`${day.toDateString()}-${hour}`} className="min-h-[60px] border-b border-r relative">
+                    {dayEvents.map(event => (
+                      <div
+                        key={event.id}
+                        className={`absolute left-1 right-1 p-1 text-xs rounded cursor-pointer ${
+                          selectedEvents.includes(event.id) 
+                            ? 'ring-2 ring-blue-500' 
+                            : ''
+                        }`}
+                        style={{ backgroundColor: event.color + '20', color: event.color }}
+                        onClick={() => onEventSelect(event.id)}
+                      >
+                        <div className="font-medium truncate">{event.title}</div>
+                        <div className="opacity-75">
+                          {formatTime(new Date(event.startDate))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (viewMode === 'day') {
+    const dayEvents = events.filter(event => {
+      const eventDate = new Date(event.startDate);
+      const checkDate = new Date(currentDate);
+      
+      checkDate.setHours(0, 0, 0, 0);
+      eventDate.setHours(0, 0, 0, 0);
+      
+      return eventDate.toDateString() === checkDate.toDateString();
+    });
+
+    const allDayEvents = dayEvents.filter(event => event.allDay);
+    const timedEvents = dayEvents.filter(event => !event.allDay).sort((a, b) => 
+      new Date(a.startDate).getTime() - new Date(b.startDate).getTime()
+    );
+
+    const timeSlots = [];
+    for (let hour = 6; hour <= 22; hour++) {
+      timeSlots.push(hour);
+    }
+
+    return (
+      <div className="calendar-day">
+        {/* Day Header */}
+        <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+          <h3 className="text-xl font-semibold text-gray-900">
+            {currentDate.toLocaleDateString([], { 
+              weekday: 'long', 
+              year: 'numeric', 
+              month: 'long', 
+              day: 'numeric' 
+            })}
+          </h3>
+          <p className="text-sm text-gray-600 mt-1">
+            {dayEvents.length} event{dayEvents.length !== 1 ? 's' : ''} scheduled
+          </p>
+        </div>
+
+        {/* All Day Events */}
+        {allDayEvents.length > 0 && (
+          <div className="mb-6">
+            <h4 className="text-sm font-medium text-gray-700 mb-3">All Day Events</h4>
+            <div className="space-y-2">
+              {allDayEvents.map(event => (
+                <div
+                  key={event.id}
+                  className={`p-3 border-l-4 rounded-lg cursor-pointer transition-colors ${
+                    selectedEvents.includes(event.id) 
+                      ? 'ring-2 ring-blue-500 bg-blue-50' 
+                      : 'hover:bg-gray-50'
+                  }`}
+                  style={{ borderLeftColor: event.color }}
+                  onClick={() => onEventSelect(event.id)}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <h5 className="font-medium">{event.title}</h5>
+                        <Badge 
+                          className={`text-xs ${EVENT_CATEGORIES[event.category].textColor} bg-opacity-10`}
+                        >
+                          {EVENT_CATEGORIES[event.category].label}
+                        </Badge>
+                        <Badge className={`text-xs ${PRIORITY_LEVELS[event.priority].color}`}>
+                          {PRIORITY_LEVELS[event.priority].label}
+                        </Badge>
+                      </div>
+                      {event.description && (
+                        <p className="text-sm text-gray-600">{event.description}</p>
+                      )}
+                      {event.location && (
+                        <div className="flex items-center gap-1 text-sm text-gray-500 mt-1">
+                          <MapPin className="w-4 h-4" />
+                          {event.location}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button variant="ghost" size="sm">
+                        <Eye className="w-4 h-4" />
+                      </Button>
+                      <Button variant="ghost" size="sm">
+                        <Edit className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Time-based Events */}
+        <div className="relative">
+          <h4 className="text-sm font-medium text-gray-700 mb-3">Scheduled Events</h4>
+          <div className="grid grid-cols-1 gap-1">
+            {timeSlots.map(hour => {
+              const hourEvents = timedEvents.filter(event => {
+                const eventHour = new Date(event.startDate).getHours();
+                return eventHour === hour;
+              });
+
+              return (
+                <div key={hour} className="flex">
+                  <div className="w-20 p-2 text-sm text-gray-500 text-right border-r border-gray-200">
+                    {hour}:00
+                  </div>
+                  <div className="flex-1 min-h-[60px] border-b border-gray-200 relative">
+                    {hourEvents.map(event => (
+                      <div
+                        key={event.id}
+                        className={`absolute left-2 right-2 p-3 rounded-lg cursor-pointer shadow-sm ${
+                          selectedEvents.includes(event.id) 
+                            ? 'ring-2 ring-blue-500' 
+                            : 'hover:shadow-md'
+                        }`}
+                        style={{ 
+                          backgroundColor: event.color + '20', 
+                          color: event.color,
+                          top: '4px',
+                          bottom: '4px'
+                        }}
+                        onClick={() => onEventSelect(event.id)}
+                      >
+                        <div className="flex items-start justify-between h-full">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <h5 className="font-medium text-sm truncate">{event.title}</h5>
+                              <Badge 
+                                className={`text-xs ${EVENT_CATEGORIES[event.category].textColor} bg-opacity-10`}
+                              >
+                                {EVENT_CATEGORIES[event.category].label}
+                              </Badge>
+                            </div>
+                            <div className="text-xs opacity-75">
+                              {formatTime(new Date(event.startDate))} - {formatTime(new Date(event.endDate))}
+                            </div>
+                            {event.location && (
+                              <div className="flex items-center gap-1 text-xs opacity-75 mt-1">
+                                <MapPin className="w-3 h-3" />
+                                {event.location}
+                              </div>
+                            )}
+                            {event.description && (
+                              <p className="text-xs opacity-75 mt-1 line-clamp-2">{event.description}</p>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1 ml-2">
+                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                              <Eye className="w-3 h-3" />
+                            </Button>
+                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                              <Edit className="w-3 h-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* No Events Message */}
+        {dayEvents.length === 0 && (
+          <div className="text-center py-12">
+            <Calendar className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No events scheduled</h3>
+            <p className="text-gray-500">
+              {currentDate.toLocaleDateString([], { 
+                weekday: 'long', 
+                month: 'long', 
+                day: 'numeric' 
+              })} is free
+            </p>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (viewMode === 'timeline') {
+    const sortedEvents = [...events].sort((a, b) => 
+      new Date(a.startDate).getTime() - new Date(b.startDate).getTime()
+    );
+
+    return (
+      <div className="calendar-timeline">
+        <div className="space-y-4">
+          {sortedEvents.map(event => (
+            <div
+              key={event.id}
+              className={`p-4 border-l-4 rounded-r-lg cursor-pointer transition-colors ${
+                selectedEvents.includes(event.id) 
+                  ? 'ring-2 ring-blue-500 bg-blue-50' 
+                  : 'hover:bg-gray-50'
+              }`}
+              style={{ borderLeftColor: event.color }}
+              onClick={() => onEventSelect(event.id)}
+            >
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-2">
+                    <h4 className="font-medium">{event.title}</h4>
+                    <Badge 
+                      className={`text-xs ${EVENT_CATEGORIES[event.category].textColor} bg-opacity-10`}
+                    >
+                      {EVENT_CATEGORIES[event.category].label}
+                    </Badge>
+                    <Badge className={`text-xs ${PRIORITY_LEVELS[event.priority].color}`}>
+                      {PRIORITY_LEVELS[event.priority].label}
+                    </Badge>
+                  </div>
+                  
+                  <div className="flex items-center gap-4 text-sm text-gray-600">
+                    <div className="flex items-center gap-1">
+                      <Calendar className="w-4 h-4" />
+                      {event.startDate.toLocaleDateString()} - {event.endDate.toLocaleDateString()}
+                    </div>
+                    {event.location && (
+                      <div className="flex items-center gap-1">
+                        <MapPin className="w-4 h-4" />
+                        {event.location}
+                      </div>
+                    )}
+                    {!event.allDay && (
+                      <div className="flex items-center gap-1">
+                        <Clock className="w-4 h-4" />
+                        {formatTime(new Date(event.startDate))} - {formatTime(new Date(event.endDate))}
+                      </div>
+                    )}
+                  </div>
+                  
+                  {event.description && (
+                    <p className="text-sm text-gray-600 mt-2">{event.description}</p>
+                  )}
+                </div>
+                
+                <div className="flex items-center gap-2">
+                  <Button variant="ghost" size="sm">
+                    <Eye className="w-4 h-4" />
+                  </Button>
+                  <Button variant="ghost" size="sm">
+                    <Edit className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return null;
+}
+
+function FilterPanel({
+  academicYears,
+  selectedYear,
+  selectedSemester,
+  onYearChange,
+  onSemesterChange,
+  search,
+  onSearchChange,
+  filters,
+  onFiltersChange
+}: FilterPanelProps) {
+  return (
+    <Card className="mb-6">
+      <CardHeader>
+        <CardTitle className="text-lg">Filter & Search</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-4">
+          {/* Search */}
+          <div className="lg:col-span-3">
+            <Label htmlFor="search">Search Events</Label>
+            <div className="relative">
+              <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+              <Input
+                id="search"
+                placeholder="Search by title, description, or tags..."
+                value={search}
+                onChange={(e) => onSearchChange(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+          </div>
+          
+          {/* Academic Year */}
+          <div className="lg:col-span-2">
+            <Label htmlFor="academicYear">Academic Year</Label>
+            <Select 
+              value={selectedYear?.id.toString()} 
+              onValueChange={(value) => {
+                const year = academicYears.find(y => y.id.toString() === value);
+                onYearChange(year || null);
+                onSemesterChange(year?.semesters[0] || null);
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select academic year" />
+              </SelectTrigger>
+              <SelectContent>
+                {academicYears.map(year => (
+                  <SelectItem key={year.id} value={year.id.toString()}>
+                    {year.name} {year.isActive && "(Active)"}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          
+          {/* Semester */}
+          <div className="lg:col-span-2">
+            <Label htmlFor="semester">Semester</Label>
+            <Select 
+              value={selectedSemester?.id.toString()} 
+              onValueChange={(value) => {
+                const semester = selectedYear?.semesters.find(s => s.id.toString() === value);
+                onSemesterChange(semester || null);
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select semester" />
+              </SelectTrigger>
+              <SelectContent>
+                {selectedYear?.semesters.map(semester => (
+                  <SelectItem key={semester.id} value={semester.id.toString()}>
+                    {semester.name} {semester.isActive && "(Active)"}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          
+          {/* Category */}
+          <div className="lg:col-span-1">
+            <Label htmlFor="category">Category</Label>
+            <Select value={filters.category} onValueChange={(value) => onFiltersChange({ ...filters, category: value })}>
+              <SelectTrigger>
+                <SelectValue placeholder="All" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All</SelectItem>
+                {Object.entries(EVENT_CATEGORIES).map(([key, value]) => (
+                  <SelectItem key={key} value={key}>{value.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          
+          {/* Priority */}
+          <div className="lg:col-span-1">
+            <Label htmlFor="priority">Priority</Label>
+            <Select value={filters.priority} onValueChange={(value) => onFiltersChange({ ...filters, priority: value })}>
+              <SelectTrigger>
+                <SelectValue placeholder="All" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All</SelectItem>
+                {Object.entries(PRIORITY_LEVELS).map(([key, value]) => (
+                  <SelectItem key={key} value={key}>{value.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          
+          {/* Status */}
+          <div className="lg:col-span-1">
+            <Label htmlFor="status">Status</Label>
+            <Select value={filters.status} onValueChange={(value) => onFiltersChange({ ...filters, status: value })}>
+              <SelectTrigger>
+                <SelectValue placeholder="All" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All</SelectItem>
+                <SelectItem value="draft">Draft</SelectItem>
+                <SelectItem value="published">Published</SelectItem>
+                <SelectItem value="cancelled">Cancelled</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          
+          {/* Date Range */}
+          <div className="lg:col-span-2">
+            <Label htmlFor="dateRange">Date Range</Label>
+            <Select value={filters.dateRange} onValueChange={(value) => onFiltersChange({ ...filters, dateRange: value })}>
+              <SelectTrigger>
+                <SelectValue placeholder="All dates" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All dates</SelectItem>
+                <SelectItem value="today">Today</SelectItem>
+                <SelectItem value="week">This week</SelectItem>
+                <SelectItem value="month">This month</SelectItem>
+                <SelectItem value="semester">This semester</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 const EVENT_CATEGORIES = {
   academic: { label: 'Academic', color: 'bg-blue-500', textColor: 'text-blue-500' },
   administrative: { label: 'Administrative', color: 'bg-orange-500', textColor: 'text-orange-500' },
@@ -111,7 +725,7 @@ export default function AcademicCalendarPage() {
   const [academicYears, setAcademicYears] = useState<AcademicYear[]>([]);
   const [selectedYear, setSelectedYear] = useState<AcademicYear | null>(null);
   const [selectedSemester, setSelectedSemester] = useState<Semester | null>(null);
-  const [viewMode, setViewMode] = useState<'month' | 'week' | 'list' | 'timeline'>('month');
+  const [viewMode, setViewMode] = useState<'month' | 'week' | 'day' | 'list' | 'timeline'>('month');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -391,95 +1005,12 @@ export default function AcademicCalendarPage() {
         ]}
       />
 
-      {/* Header */}
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
-        <div className="flex items-center gap-3">
-          <div className="bg-purple-100 p-3 rounded-full">
-            <Calendar className="w-8 h-8 text-purple-600" />
-          </div>
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Academic Calendar</h1>
-            <p className="text-gray-600">Manage academic events, deadlines, and important dates</p>
-          </div>
-        </div>
-        
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => setShowSettings(true)}>
-            <Settings className="w-4 h-4 mr-2" />
-            Settings
-          </Button>
-          <Button variant="outline" onClick={handleImportEvents}>
-            <Upload className="w-4 h-4 mr-2" />
-            Import
-          </Button>
-          <Button variant="outline" onClick={handleExportEvents}>
-            <Download className="w-4 h-4 mr-2" />
-            Export
-          </Button>
-          <Button onClick={handleAddEvent}>
-            <Plus className="w-4 h-4 mr-2" />
-            Add Event
-          </Button>
-        </div>
-      </div>
 
-      {/* Academic Year & Semester Selector */}
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle className="text-lg">Academic Period</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="academicYear">Academic Year</Label>
-              <Select 
-                value={selectedYear?.id.toString()} 
-                onValueChange={(value) => {
-                  const year = academicYears.find(y => y.id.toString() === value);
-                  setSelectedYear(year || null);
-                  setSelectedSemester(year?.semesters[0] || null);
-                }}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select academic year" />
-                </SelectTrigger>
-                <SelectContent>
-                  {academicYears.map(year => (
-                    <SelectItem key={year.id} value={year.id.toString()}>
-                      {year.name} {year.isActive && "(Active)"}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div>
-              <Label htmlFor="semester">Semester</Label>
-              <Select 
-                value={selectedSemester?.id.toString()} 
-                onValueChange={(value) => {
-                  const semester = selectedYear?.semesters.find(s => s.id.toString() === value);
-                  setSelectedSemester(semester || null);
-                }}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select semester" />
-                </SelectTrigger>
-                <SelectContent>
-                  {selectedYear?.semesters.map(semester => (
-                    <SelectItem key={semester.id} value={semester.id.toString()}>
-                      {semester.name} {semester.isActive && "(Active)"}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+
+
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6 pt-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Events</CardTitle>
@@ -534,96 +1065,17 @@ export default function AcademicCalendarPage() {
       </div>
 
       {/* Filters & Search */}
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle className="text-lg">Filters & Search</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
-            <div>
-              <Label htmlFor="search">Search</Label>
-              <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                <Input
-                  id="search"
-                  placeholder="Search events..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-            </div>
-            
-            <div>
-              <Label htmlFor="category">Category</Label>
-              <Select value={filters.category} onValueChange={(value) => setFilters({ ...filters, category: value })}>
-                <SelectTrigger>
-                  <SelectValue placeholder="All categories" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All categories</SelectItem>
-                  {Object.entries(EVENT_CATEGORIES).map(([key, value]) => (
-                    <SelectItem key={key} value={key}>{value.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div>
-              <Label htmlFor="priority">Priority</Label>
-              <Select value={filters.priority} onValueChange={(value) => setFilters({ ...filters, priority: value })}>
-                <SelectTrigger>
-                  <SelectValue placeholder="All priorities" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All priorities</SelectItem>
-                  {Object.entries(PRIORITY_LEVELS).map(([key, value]) => (
-                    <SelectItem key={key} value={key}>{value.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div>
-              <Label htmlFor="status">Status</Label>
-              <Select value={filters.status} onValueChange={(value) => setFilters({ ...filters, status: value })}>
-                <SelectTrigger>
-                  <SelectValue placeholder="All statuses" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All statuses</SelectItem>
-                  <SelectItem value="draft">Draft</SelectItem>
-                  <SelectItem value="published">Published</SelectItem>
-                  <SelectItem value="cancelled">Cancelled</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div>
-              <Label htmlFor="dateRange">Date Range</Label>
-              <Select value={filters.dateRange} onValueChange={(value) => setFilters({ ...filters, dateRange: value })}>
-                <SelectTrigger>
-                  <SelectValue placeholder="All dates" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All dates</SelectItem>
-                  <SelectItem value="today">Today</SelectItem>
-                  <SelectItem value="week">This week</SelectItem>
-                  <SelectItem value="month">This month</SelectItem>
-                  <SelectItem value="semester">This semester</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div className="flex items-end">
-              <Button variant="outline" className="w-full">
-                <Filter className="w-4 h-4 mr-2" />
-                Apply Filters
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <FilterPanel
+        academicYears={academicYears}
+        selectedYear={selectedYear}
+        selectedSemester={selectedSemester}
+        onYearChange={setSelectedYear}
+        onSemesterChange={setSelectedSemester}
+        search={search}
+        onSearchChange={setSearch}
+        filters={filters}
+        onFiltersChange={setFilters}
+      />
 
       {/* Main Content */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
@@ -666,6 +1118,22 @@ export default function AcademicCalendarPage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
+                <Button variant="outline" size="sm" className="w-full justify-start" onClick={() => setShowSettings(true)}>
+                  <Settings className="w-4 h-4 mr-2" />
+                  Settings
+                </Button>
+                <Button variant="outline" size="sm" className="w-full justify-start" onClick={handleImportEvents}>
+                  <Upload className="w-4 h-4 mr-2" />
+                  Import
+                </Button>
+                <Button variant="outline" size="sm" className="w-full justify-start" onClick={handleExportEvents}>
+                  <Download className="w-4 h-4 mr-2" />
+                  Export
+                </Button>
+                <Button size="sm" className="w-full justify-start" onClick={handleAddEvent}>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Event
+                </Button>
                 <Button variant="outline" size="sm" className="w-full justify-start">
                   <Bell className="w-4 h-4 mr-2" />
                   Set Reminders
@@ -702,6 +1170,10 @@ export default function AcademicCalendarPage() {
                       <TabsTrigger value="week" className="flex items-center gap-2">
                         <Calendar className="w-4 h-4" />
                         Week
+                      </TabsTrigger>
+                      <TabsTrigger value="day" className="flex items-center gap-2">
+                        <Clock className="w-4 h-4" />
+                        Day
                       </TabsTrigger>
                       <TabsTrigger value="list" className="flex items-center gap-2">
                         <List className="w-4 h-4" />
@@ -755,19 +1227,51 @@ export default function AcademicCalendarPage() {
               {/* Calendar Content */}
               <div className="min-h-[600px]">
                 {viewMode === 'month' && (
-                  <div className="text-center py-20">
-                    <Calendar className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">Monthly Calendar View</h3>
-                    <p className="text-gray-500">Interactive monthly calendar with event display</p>
-                  </div>
+                  <CalendarView 
+                    events={filteredEvents}
+                    currentDate={currentDate}
+                    viewMode="month"
+                    selectedEvents={selectedEvents}
+                    onEventSelect={(eventId) => {
+                      if (selectedEvents.includes(eventId)) {
+                        setSelectedEvents(selectedEvents.filter(id => id !== eventId));
+                      } else {
+                        setSelectedEvents([...selectedEvents, eventId]);
+                      }
+                    }}
+                  />
                 )}
                 
                 {viewMode === 'week' && (
-                  <div className="text-center py-20">
-                    <Calendar className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">Weekly Calendar View</h3>
-                    <p className="text-gray-500">Detailed weekly schedule with time slots</p>
-                  </div>
+                  <CalendarView 
+                    events={filteredEvents}
+                    currentDate={currentDate}
+                    viewMode="week"
+                    selectedEvents={selectedEvents}
+                    onEventSelect={(eventId) => {
+                      if (selectedEvents.includes(eventId)) {
+                        setSelectedEvents(selectedEvents.filter(id => id !== eventId));
+                      } else {
+                        setSelectedEvents([...selectedEvents, eventId]);
+                      }
+                    }}
+                  />
+                )}
+                
+                {viewMode === 'day' && (
+                  <CalendarView 
+                    events={filteredEvents}
+                    currentDate={currentDate}
+                    viewMode="day"
+                    selectedEvents={selectedEvents}
+                    onEventSelect={(eventId) => {
+                      if (selectedEvents.includes(eventId)) {
+                        setSelectedEvents(selectedEvents.filter(id => id !== eventId));
+                      } else {
+                        setSelectedEvents([...selectedEvents, eventId]);
+                      }
+                    }}
+                  />
                 )}
                 
                 {viewMode === 'list' && (
@@ -832,11 +1336,19 @@ export default function AcademicCalendarPage() {
                 )}
                 
                 {viewMode === 'timeline' && (
-                  <div className="text-center py-20">
-                    <BarChart2 className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">Timeline View</h3>
-                    <p className="text-gray-500">Gantt-style timeline for long-term planning</p>
-                  </div>
+                  <CalendarView 
+                    events={filteredEvents}
+                    currentDate={currentDate}
+                    viewMode="timeline"
+                    selectedEvents={selectedEvents}
+                    onEventSelect={(eventId) => {
+                      if (selectedEvents.includes(eventId)) {
+                        setSelectedEvents(selectedEvents.filter(id => id !== eventId));
+                      } else {
+                        setSelectedEvents([...selectedEvents, eventId]);
+                      }
+                    }}
+                  />
                 )}
               </div>
             </CardContent>

@@ -6,7 +6,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import { Search, TrendingUp, TrendingDown, Users, Clock, AlertCircle, Filter, ChevronDown, BookOpen, Info, Printer, FileDown, FileText, ChevronUp, Mail, Phone, Send, Home, ChevronRight, Download, RefreshCw, Settings, Maximize2, Minimize2, CheckCircle, X, ChevronsLeft, ChevronLeft, ChevronsRight, Calendar, Activity, BarChart3, Shield, Zap, AlertTriangle, Target, Building, GraduationCap, Check, User, Hash, Bell, Eye, List, Grid3X3, Columns3 } from 'lucide-react';
+import { Search, TrendingUp, TrendingDown, Users, Clock, AlertCircle, Filter, ChevronDown, BookOpen, Info, Printer, FileDown, FileText, ChevronUp, Mail, Phone, Send, Home, ChevronRight, Download, RefreshCw, Settings, Maximize2, Minimize2, CheckCircle, X, ChevronsLeft, ChevronLeft, ChevronsRight, Activity, BarChart3, Shield, Zap, AlertTriangle, Target, Building, GraduationCap, Check, User, Hash, Bell, Eye, Plus, Upload, Columns3, List } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,6 +24,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { LineChart, Line, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart, Bar, CartesianGrid, Legend, PieChart, Pie, Cell } from 'recharts';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import InstructorDetailModal from '@/components/InstructorDetailModal';
 import { ICCT_CLASSES, getStatusColor, getAttendanceRateColor } from '@/lib/colors';
 import { 
@@ -35,12 +36,18 @@ import {
 import { FilterChips } from '@/components/FilterChips';
 import { FilterDialog } from '@/components/FilterDialog';
 import { AttendanceAnalytics } from '@/components/AttendanceAnalytics';
+import { AttendanceSummaryCards } from '@/components/AttendanceSummaryCards';
+
+import { processRealTimeData, type AttendanceData } from '@/lib/analytics-utils';
 import { TableList, TableListColumn } from '@/components/reusable/Table/TableList';
 import { TableCardView } from '@/components/reusable/Table/TableCardView';
 import BulkActionsBar from '@/components/reusable/BulkActionsBar';
 import { TablePagination } from '@/components/reusable/Table/TablePagination';
 import { EmptyState } from '@/components/reusable';
 import PageHeader from '@/components/PageHeader/PageHeader';
+import SummaryCard from '@/components/SummaryCard';
+import { QuickActionsPanel } from '@/components/reusable/QuickActionsPanel';
+
 
 interface Filters extends Record<string, string[]> {
   departments: string[];
@@ -143,14 +150,12 @@ export default function InstructorAttendancePage() {
   const [instructors, setInstructors] = useState<InstructorAttendance[]>([]);
   const [error, setError] = useState<string | null>(null);
   
-  // View mode and table state
-  const [viewMode, setViewMode] = useState<'list' | 'grid' | 'kanban' | 'calendar'>('list');
+  // Table state
   const [sortBy, setSortBy] = useState<{ field: string; order: 'asc' | 'desc' }>({ field: 'instructorName', order: 'asc' });
   const [expandedRowIds, setExpandedRowIds] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [showBulkActions, setShowBulkActions] = useState(false);
-  const [quickActionsExpanded, setQuickActionsExpanded] = useState(true);
   
   const debouncedSearch = useDebounce(searchQuery, 300);
   
@@ -448,6 +453,7 @@ export default function InstructorAttendancePage() {
     let filtered = instructors.filter(instructor => {
       const matchesSearch = instructor.instructorName.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
         instructor.instructorId.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+        instructor.employeeId.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
         instructor.email.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
         instructor.department.toLowerCase().includes(debouncedSearch.toLowerCase());
       
@@ -615,8 +621,9 @@ export default function InstructorAttendancePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#f8fafc] via-[#ffffff] to-[#f8fafc] p-0">
-      <div className="container mx-auto p-6 space-y-6">
+    <TooltipProvider>
+      <div className="min-h-screen bg-gradient-to-br from-[#f8fafc] via-[#ffffff] to-[#f8fafc] p-0">
+        <div className="container mx-auto p-6 space-y-6">
 
         {/* Main Navigation Header Card */}
         <PageHeader
@@ -630,133 +637,185 @@ export default function InstructorAttendancePage() {
         />
 
         {/* Instructor Attendance Management - Main Content */}
-        <div className="container mx-auto p-6 space-y-6">
-          {/* Analytics and Quick Actions Grid */}
-          <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
-            {/* Analytics Dashboard */}
-            <div className="xl:col-span-3">
-              <AttendanceAnalytics instructors={instructors} loading={loading} />
-            </div>
-            
-            {/* Quick Actions Panel */}
-            <div className="xl:col-span-1">
-            <Card className="border border-blue-200 shadow-lg rounded-xl overflow-hidden h-fit p-0">
-              {/* Quick Actions Header */}
-              <div className="bg-gradient-to-r from-[#1e40af] to-[#3b82f6] px-6 py-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 flex items-center justify-center">
-                      <Zap className="w-5 h-5 text-white" />
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-bold text-white mb-1">Quick Actions</h3>
-                      <p className="text-green-100 text-sm">Essential tools and shortcuts</p>
-                    </div>
-                  </div>
-                  
-                  {/* Minimize Quick Actions Button */}
-                  <button
-                    onClick={() => setQuickActionsExpanded(!quickActionsExpanded)}
-                    className="bg-white/20 hover:bg-white/30 text-white p-2 rounded-xl transition-all hover:scale-105"
-                    title={quickActionsExpanded ? "Minimize quick actions" : "Expand quick actions"}
-                  >
-                    {quickActionsExpanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-                  </button>
+        {/* Summary Cards */}
+        {(() => {
+          const instructorData: AttendanceData[] = instructors.map(instructor => ({
+            id: instructor.instructorId,
+            name: instructor.instructorName,
+            department: instructor.department,
+            status: (instructor.status === 'ON_LEAVE' ? 'inactive' : instructor.status.toLowerCase()) as 'active' | 'inactive',
+            riskLevel: (instructor.riskLevel || 'NONE').toLowerCase() as 'none' | 'low' | 'medium' | 'high',
+            attendanceRate: instructor.attendanceRate,
+            totalClasses: instructor.totalScheduledClasses,
+            attendedClasses: instructor.attendedClasses,
+            absentClasses: instructor.absentClasses,
+            lateClasses: instructor.lateClasses,
+            lastAttendance: instructor.lastAttendance,
+            subjects: instructor.subjects,
+            // Instructor-specific fields
+            classesTaught: instructor.attendedClasses + instructor.lateClasses,
+            classesMissed: instructor.absentClasses,
+            complianceScore: instructor.attendanceRate,
+            notificationCount: Math.floor(instructor.absentClasses * 0.8), // Mock calculation
+            lastNotification: instructor.lastAttendance,
+            teachingLoad: instructor.totalScheduledClasses,
+            substituteRequired: instructor.absentClasses > 0,
+            // Mock data for charts - could be calculated from actual attendance records
+            weeklyData: [
+              { week: 'Week 1', attendanceRate: instructor.attendanceRate * 0.95, totalClasses: Math.floor(instructor.totalScheduledClasses * 0.25), attendedClasses: Math.floor((instructor.attendedClasses + instructor.lateClasses) * 0.25), absentClasses: Math.floor(instructor.absentClasses * 0.25), lateClasses: Math.floor(instructor.lateClasses * 0.25), trend: 'up' as const, change: 2 },
+              { week: 'Week 2', attendanceRate: instructor.attendanceRate * 0.98, totalClasses: Math.floor(instructor.totalScheduledClasses * 0.25), attendedClasses: Math.floor((instructor.attendedClasses + instructor.lateClasses) * 0.25), absentClasses: Math.floor(instructor.absentClasses * 0.25), lateClasses: Math.floor(instructor.lateClasses * 0.25), trend: 'up' as const, change: 1 },
+              { week: 'Week 3', attendanceRate: instructor.attendanceRate * 1.02, totalClasses: Math.floor(instructor.totalScheduledClasses * 0.25), attendedClasses: Math.floor((instructor.attendedClasses + instructor.lateClasses) * 0.25), absentClasses: Math.floor(instructor.absentClasses * 0.25), lateClasses: Math.floor(instructor.lateClasses * 0.25), trend: 'stable' as const, change: 0 },
+              { week: 'Week 4', attendanceRate: instructor.attendanceRate * 0.99, totalClasses: Math.floor(instructor.totalScheduledClasses * 0.25), attendedClasses: Math.floor((instructor.attendedClasses + instructor.lateClasses) * 0.25), absentClasses: Math.floor(instructor.absentClasses * 0.25), lateClasses: Math.floor(instructor.lateClasses * 0.25), trend: 'down' as const, change: -1 }
+            ],
+            historicalData: [], // Mock data - could be calculated from actual attendance records
+            timeOfDayData: [], // Mock data - could be calculated from actual attendance records
+            comparativeData: [], // Mock data - could be calculated from actual attendance records
+            subjectPerformance: [], // Mock data - could be calculated from actual attendance records
+            goalTracking: [], // Mock data - could be calculated from actual attendance records
+            performanceRanking: [] // Mock data - could be calculated from actual attendance records
+          }));
+
+          const analyticsData = processRealTimeData(instructorData, 'instructor');
+          
+          return (
+            <>
+              <AttendanceSummaryCards analyticsData={analyticsData} type="instructor" />
+            </>
+          );
+        })()}
+
+                    {/* Analytics Dashboard */}
+          <Card className="bg-white rounded-xl shadow-md border-0">
+            <CardContent>
+              <AttendanceAnalytics 
+                data={instructors.map(instructor => ({
+                  id: instructor.instructorId,
+                  name: instructor.instructorName,
+                  department: instructor.department,
+                  status: (instructor.status === 'ON_LEAVE' ? 'inactive' : instructor.status.toLowerCase()) as 'active' | 'inactive',
+                  riskLevel: (instructor.riskLevel || 'NONE').toLowerCase() as 'none' | 'low' | 'medium' | 'high',
+                  attendanceRate: instructor.attendanceRate,
+                  totalClasses: instructor.totalScheduledClasses,
+                  attendedClasses: instructor.attendedClasses,
+                  absentClasses: instructor.absentClasses,
+                  lateClasses: instructor.lateClasses,
+                  lastAttendance: instructor.lastAttendance,
+                  subjects: instructor.subjects,
+                  // Instructor-specific fields
+                  classesTaught: instructor.attendedClasses + instructor.lateClasses,
+                  classesMissed: instructor.absentClasses,
+                  complianceScore: instructor.attendanceRate,
+                  notificationCount: Math.floor(instructor.absentClasses * 0.8), // Mock calculation
+                  lastNotification: instructor.lastAttendance,
+                  teachingLoad: instructor.totalScheduledClasses,
+                  substituteRequired: instructor.absentClasses > 0,
+                  // Mock data for charts - could be calculated from actual attendance records
+                  weeklyData: [
+                    { week: 'Week 1', attendanceRate: instructor.attendanceRate * 0.95, totalClasses: Math.floor(instructor.totalScheduledClasses * 0.25), attendedClasses: Math.floor((instructor.attendedClasses + instructor.lateClasses) * 0.25), absentClasses: Math.floor(instructor.absentClasses * 0.25), lateClasses: Math.floor(instructor.lateClasses * 0.25), trend: 'up' as const, change: 2 },
+                    { week: 'Week 2', attendanceRate: instructor.attendanceRate * 0.98, totalClasses: Math.floor(instructor.totalScheduledClasses * 0.25), attendedClasses: Math.floor((instructor.attendedClasses + instructor.lateClasses) * 0.25), absentClasses: Math.floor(instructor.absentClasses * 0.25), lateClasses: Math.floor(instructor.lateClasses * 0.25), trend: 'up' as const, change: 1 },
+                    { week: 'Week 3', attendanceRate: instructor.attendanceRate * 1.02, totalClasses: Math.floor(instructor.totalScheduledClasses * 0.25), attendedClasses: Math.floor((instructor.attendedClasses + instructor.lateClasses) * 0.25), absentClasses: Math.floor(instructor.absentClasses * 0.25), lateClasses: Math.floor(instructor.lateClasses * 0.25), trend: 'stable' as const, change: 0 },
+                    { week: 'Week 4', attendanceRate: instructor.attendanceRate * 0.99, totalClasses: Math.floor(instructor.totalScheduledClasses * 0.25), attendedClasses: Math.floor((instructor.attendedClasses + instructor.lateClasses) * 0.25), absentClasses: Math.floor(instructor.absentClasses * 0.25), lateClasses: Math.floor(instructor.lateClasses * 0.25), trend: 'down' as const, change: -1 }
+                  ],
+                  historicalData: [], // Mock data - could be calculated from actual attendance records
+                  timeOfDayData: [], // Mock data - could be calculated from actual attendance records
+                  comparativeData: [], // Mock data - could be calculated from actual attendance records
+                  subjectPerformance: [], // Mock data - could be calculated from actual attendance records
+                  goalTracking: [], // Mock data - could be calculated from actual attendance records
+                  performanceRanking: [] // Mock data - could be calculated from actual attendance records
+                }))} 
+                loading={loading} 
+                type="instructor"
+                enableAdvancedFeatures={true}
+                enableRealTime={false}
+                enableCrossFiltering={true}
+                enableDrillDown={true}
+                enableTimeRange={true}
+                showHeader={true}
+                onDrillDown={(filter: { type: string; value: string }) => {
+                  console.log('Drill down:', filter);
+                  // Handle drill down logic
+                }}
+                onExport={(format: 'pdf' | 'csv' | 'excel') => {
+                  console.log('Export:', format);
+                  // Handle export logic
+                }}
+              />
+            </CardContent>
+          </Card>
+          
+          {/* Quick Actions Panel */}
+          <div className="w-full max-w-full pt-4">
+            <QuickActionsPanel
+              variant="premium"
+              title="Quick Actions"
+              subtitle="Essential tools and shortcuts"
+              icon={
+                <div className="w-6 h-6 text-white">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+                  </svg>
                 </div>
-              </div>
-
-              {/* Quick Actions Content */}
-              {quickActionsExpanded && (
-                <div className="p-6">
-                  <div className="space-y-3">
-                    {/* Auto Refresh */}
-                    <button className="w-full flex items-center gap-3 p-4 bg-gradient-to-r from-blue-50 to-blue-100 hover:from-blue-100 hover:to-blue-200 rounded-xl border border-blue-200 transition-all duration-300 hover:shadow-md group">
-                      <div className="w-10 h-10 bg-blue-500 rounded-xl flex items-center justify-center group-hover:scale-105 transition-transform">
-                        <RefreshCw className="w-5 h-5 text-white" />
-                      </div>
-                      <div className="flex-1 text-left">
-                        <div className="font-semibold text-blue-900">Auto Refresh</div>
-                        <div className="text-xs text-blue-600">Toggle live updates</div>
-                      </div>
-                      <div className="w-12 h-6 bg-blue-300 rounded-full relative">
-                        <div className="w-5 h-5 bg-white rounded-full absolute top-0.5 left-0.5 transition-transform transform translate-x-6"></div>
-                      </div>
-                    </button>
-
-                    {/* Export Data */}
-                    <button className="w-full flex items-center gap-3 p-4 bg-gradient-to-r from-purple-50 to-purple-100 hover:from-purple-100 hover:to-purple-200 rounded-xl border border-purple-200 transition-all duration-300 hover:shadow-md group">
-                      <div className="w-10 h-10 bg-purple-500 rounded-xl flex items-center justify-center group-hover:scale-105 transition-transform">
-                        <Download className="w-5 h-5 text-white" />
-                      </div>
-                      <div className="flex-1 text-left">
-                        <div className="font-semibold text-purple-900">Export Data</div>
-                        <div className="text-xs text-purple-600">Download reports</div>
-                      </div>
-                      <ChevronRight className="w-4 h-4 text-purple-600" />
-                    </button>
-
-                    {/* Send Notifications */}
-                    <button className="w-full flex items-center gap-3 p-4 bg-gradient-to-r from-orange-50 to-orange-100 hover:from-orange-100 hover:to-orange-200 rounded-xl border border-orange-200 transition-all duration-300 hover:shadow-md group">
-                      <div className="w-10 h-10 bg-orange-500 rounded-xl flex items-center justify-center group-hover:scale-105 transition-transform">
-                        <Bell className="w-5 h-5 text-white" />
-                      </div>
-                      <div className="flex-1 text-left">
-                        <div className="font-semibold text-orange-900">Send Notifications</div>
-                        <div className="text-xs text-orange-600">Alert instructors</div>
-                      </div>
-                      <div className="w-2 h-2 bg-orange-500 rounded-full animate-pulse"></div>
-                    </button>
-
-                    {/* Generate Reports */}
-                    <button className="w-full flex items-center gap-3 p-4 bg-gradient-to-r from-emerald-50 to-emerald-100 hover:from-emerald-100 hover:to-emerald-200 rounded-xl border border-emerald-200 transition-all duration-300 hover:shadow-md group">
-                      <div className="w-10 h-10 bg-emerald-500 rounded-xl flex items-center justify-center group-hover:scale-105 transition-transform">
-                        <FileText className="w-5 h-5 text-white" />
-                      </div>
-                      <div className="flex-1 text-left">
-                        <div className="font-semibold text-emerald-900">Generate Reports</div>
-                        <div className="text-xs text-emerald-600">Custom analytics</div>
-                      </div>
-                      <ChevronRight className="w-4 h-4 text-emerald-600" />
-                    </button>
-
-                    {/* Mark Attendance */}
-                    <button className="w-full flex items-center gap-3 p-4 bg-gradient-to-r from-teal-50 to-teal-100 hover:from-teal-100 hover:to-teal-200 rounded-xl border border-teal-200 transition-all duration-300 hover:shadow-md group">
-                      <div className="w-10 h-10 bg-teal-500 rounded-xl flex items-center justify-center group-hover:scale-105 transition-transform">
-                        <CheckCircle className="w-5 h-5 text-white" />
-                      </div>
-                      <div className="flex-1 text-left">
-                        <div className="font-semibold text-teal-900">Mark Attendance</div>
-                        <div className="text-xs text-teal-600">Manual entry</div>
-                      </div>
-                      <ChevronRight className="w-4 h-4 text-teal-600" />
-                    </button>
-
-                    {/* System Settings */}
-                    <button className="w-full flex items-center gap-3 p-4 bg-gradient-to-r from-gray-50 to-gray-100 hover:from-gray-100 hover:to-gray-200 rounded-xl border border-gray-200 transition-all duration-300 hover:shadow-md group">
-                      <div className="w-10 h-10 bg-gray-500 rounded-xl flex items-center justify-center group-hover:scale-105 transition-transform">
-                        <Settings className="w-5 h-5 text-white" />
-                      </div>
-                      <div className="flex-1 text-left">
-                        <div className="font-semibold text-gray-900">System Settings</div>
-                        <div className="text-xs text-gray-600">Configure attendance</div>
-                      </div>
-                      <ChevronRight className="w-4 h-4 text-gray-600" />
-                    </button>
-                  </div>
-
-                  {/* Quick Stats Footer */}
-                  <div className="mt-6 pt-4 border-t border-gray-200">
-                    <div className="text-xs text-gray-500 text-center">
-                      Last action: <span className="font-semibold text-gray-700">2 minutes ago</span>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </Card>
-          </div>
+              }
+              actionCards={[
+                {
+                  id: 'add-instructor',
+                  label: 'Add Instructor',
+                  description: 'Add new instructor',
+                  icon: <Plus className="w-5 h-5 text-white" />,
+                  onClick: () => console.log('Add instructor clicked')
+                },
+                {
+                  id: 'import-data',
+                  label: 'Import Data',
+                  description: 'Import instructor data',
+                  icon: <Upload className="w-5 h-5 text-white" />,
+                  onClick: () => console.log('Import data clicked')
+                },
+                {
+                  id: 'print-page',
+                  label: 'Print Page',
+                  description: 'Print instructor list',
+                  icon: <Printer className="w-5 h-5 text-white" />,
+                  onClick: () => console.log('Print page clicked')
+                },
+                {
+                  id: 'visible-columns',
+                  label: 'Visible Columns',
+                  description: 'Manage table columns',
+                  icon: <Columns3 className="w-5 h-5 text-white" />,
+                  onClick: () => console.log('Visible columns clicked')
+                },
+                {
+                  id: 'refresh-data',
+                  label: 'Refresh Data',
+                  description: 'Reload instructor data',
+                  icon: loading ? (
+                    <RefreshCw className="w-5 h-5 text-white animate-spin" />
+                  ) : (
+                    <RefreshCw className="w-5 h-5 text-white" />
+                  ),
+                  onClick: handleRefresh,
+                  disabled: loading,
+                  loading: loading
+                },
+                {
+                  id: 'sort-options',
+                  label: 'Sort Options',
+                  description: 'Configure sorting',
+                  icon: <List className="w-5 h-5 text-white" />,
+                  onClick: () => console.log('Sort options clicked')
+                }
+              ]}
+              lastActionTime="2 minutes ago"
+              onLastActionTimeChange={() => {}}
+              collapsible={true}
+              defaultCollapsed={true}
+              onCollapseChange={(collapsed) => {
+                console.log('Quick Actions Panel collapsed:', collapsed);
+              }}
+            />
           </div>
           
-  
           <Card className="border border-blue-200 shadow-lg rounded-xl overflow-hidden p-0">
           <CardHeader className="p-0">
             {/* Blue Gradient Header - flush to card edge, no rounded corners */}
@@ -776,74 +835,76 @@ export default function InstructorAttendancePage() {
               </div>
             </div>
           </CardHeader>
-              {/* Search and Actions Section */}
-              <div className="border-b border-blue-100 p-6">
-                <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
-                  <div className="relative flex-1 max-w-md">
-                    <Search className="absolute left-3 top-3 h-4 w-4 text-blue-400" />
+              {/* Enhanced Search and Filter Section */}
+              <div className="border-b border-gray-200 shadow-sm p-3 sm:p-4 lg:p-6">
+                <div className="flex flex-col xl:flex-row gap-2 sm:gap-3 items-start xl:items-center justify-end">
+                  {/* Search Bar */}
+                  <div className="relative w-full xl:w-auto xl:min-w-[200px] xl:max-w-sm">
+                    <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                     <input
                       type="text"
                       placeholder="Search instructors..."
                       value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2 border border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      onChange={e => setSearchQuery(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:outline-none"
                     />
                   </div>
-                  <div className="flex gap-2">
-                    {/* View Mode Toggle */}
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="outline" className="border-blue-200 text-blue-700 hover:bg-blue-50">
-                          {viewMode === 'list' && <List className="w-4 h-4 mr-2" />}
-                          {viewMode === 'grid' && <Grid3X3 className="w-4 h-4 mr-2" />}
-                          {viewMode === 'kanban' && <Columns3 className="w-4 h-4 mr-2" />}
-                          {viewMode === 'calendar' && <Calendar className="w-4 h-4 mr-2" />}
-                          {viewMode.charAt(0).toUpperCase() + viewMode.slice(1)}
-                          <ChevronDown className="w-4 h-4 ml-2" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent>
-                        <DropdownMenuItem onClick={() => setViewMode('list')}>
-                          <List className="w-4 h-4 mr-2" />
-                          List View
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => setViewMode('grid')}>
-                          <Grid3X3 className="w-4 h-4 mr-2" />
-                          Grid View
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => setViewMode('kanban')}>
-                          <Columns3 className="w-4 h-4 mr-2" />
-                          Kanban View
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => setViewMode('calendar')}>
-                          <Calendar className="w-4 h-4 mr-2" />
-                          Calendar View
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                    
-                    <FilterDialog
-                      filters={filters}
-                      filterSections={filterSections}
-                      onApplyFilters={handleApplyFilters}
-                      onClearFilters={handleClearFilters}
-                    />
-                    <Button 
-                      onClick={handleRefresh} 
-                      variant="outline" 
-                      className="border-blue-200 text-blue-700 hover:bg-blue-50"
-                    >
-                      <RefreshCw className="w-4 h-4 mr-2" />
-                      Refresh
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      className="border-blue-200 text-blue-700 hover:bg-blue-50"
-                    >
-                      <Download className="w-4 h-4 mr-2" />
-                      Export
-                    </Button>
+                  {/* Quick Filter Dropdowns */}
+                  <div className="flex flex-wrap gap-2 sm:gap-3 w-full xl:w-auto">
+                    <Select value={filters.statuses[0] || 'all'} onValueChange={(value) => {
+                      if (value === 'all') {
+                        setFilters({ ...filters, statuses: [] });
+                      } else {
+                        setFilters({ ...filters, statuses: [value] });
+                      }
+                    }}>
+                      <SelectTrigger className="w-full sm:w-28 lg:w-32 xl:w-28 text-gray-700">
+                        <SelectValue placeholder="Status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Status</SelectItem>
+                        <SelectItem value="ACTIVE">Active</SelectItem>
+                        <SelectItem value="INACTIVE">Inactive</SelectItem>
+                        <SelectItem value="ON_LEAVE">On Leave</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Select value={filters.attendanceRates[0] || 'all'} onValueChange={(value) => {
+                      if (value === 'all') {
+                        setFilters({ ...filters, attendanceRates: [] });
+                      } else {
+                        setFilters({ ...filters, attendanceRates: [value] });
+                      }
+                    }}>
+                      <SelectTrigger className="w-full sm:w-28 lg:w-32 xl:w-28 text-gray-700">
+                        <SelectValue placeholder="Attendance" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Rates</SelectItem>
+                        <SelectItem value="High (≥90%)">High (≥90%)</SelectItem>
+                        <SelectItem value="Medium (75-89%)">Medium (75-89%)</SelectItem>
+                        <SelectItem value="Low (<75%)">Low (&lt;75%)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Select value={filters.riskLevels[0] || 'all'} onValueChange={(value) => {
+                      if (value === 'all') {
+                        setFilters({ ...filters, riskLevels: [] });
+                      } else {
+                        setFilters({ ...filters, riskLevels: [value] });
+                      }
+                    }}>
+                      <SelectTrigger className="w-full sm:w-28 lg:w-32 xl:w-28 text-gray-700">
+                        <SelectValue placeholder="Risk Level" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Levels</SelectItem>
+                        <SelectItem value="NONE">None</SelectItem>
+                        <SelectItem value="LOW">Low</SelectItem>
+                        <SelectItem value="MEDIUM">Medium</SelectItem>
+                        <SelectItem value="HIGH">High</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
+                  
                 </div>
               </div>
 
@@ -915,11 +976,13 @@ export default function InstructorAttendancePage() {
                 />
               )}
 
+
+
               {/* Content Section */}
-              <div className="p-6">
-                {/* View Mode Content */}
-                {viewMode === 'list' && (
-                  <div className="space-y-4">
+              {/* Desktop table layout */}
+              <div className="hidden xl:block">
+                <div className="px-4 sm:px- pt-4 pb-4">
+                  <div className="overflow-x-auto bg-white/70 shadow-none relative">
                     <TableList
                       columns={instructorColumns}
                       data={paginatedInstructors}
@@ -946,216 +1009,75 @@ export default function InstructorAttendancePage() {
                       onToggleExpand={handleToggleExpand}
                       sortState={sortBy}
                       onSort={handleSort}
-                    />
-                    
-                    {/* Pagination */}
-                    <TablePagination
-                      page={page}
-                      totalItems={filteredInstructors.length}
-                      pageSize={pageSize}
-                      onPageChange={handlePageChange}
-                      onPageSizeChange={handlePageSizeChange}
-                      pageSizeOptions={[5, 10, 20, 50]}
+                      className="border-0 shadow-none max-w-full"
                     />
                   </div>
-                )}
-
-                {viewMode === 'grid' && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {paginatedInstructors.map((instructor) => (
-                      <Card 
-                        key={instructor.instructorId} 
-                        className="border border-blue-200 hover:border-blue-300 transition-all cursor-pointer hover:shadow-lg"
-                        onClick={() => handleInstructorClick(instructor)}
-                      >
-                        <CardContent className="p-6">
-                          <div className="flex items-start gap-4">
-                            <Avatar className="w-12 h-12">
-                              <AvatarImage src={instructor.avatarUrl} />
-                              <AvatarFallback className="bg-blue-100 text-blue-600">
-                                {instructor.instructorName.split(' ').map(name => name.charAt(0)).join('').slice(0, 2)}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div className="flex-1">
-                              <h3 className="font-semibold text-gray-900">{instructor.instructorName}</h3>
-                              <p className="text-sm text-gray-500">{instructor.instructorType}</p>
-                              <p className="text-sm text-gray-500">{instructor.department}</p>
-                            </div>
-                            <Badge 
-                              variant={instructor.attendanceRate >= 90 ? 'default' : instructor.attendanceRate >= 75 ? 'secondary' : 'destructive'}
-                              className="text-xs"
-                            >
-                              {instructor.attendanceRate.toFixed(1)}%
-                            </Badge>
-                          </div>
-                          
-                          <div className="mt-4 space-y-2">
-                            <div className="flex justify-between text-sm">
-                              <span className="text-gray-500">Attended Classes:</span>
-                              <span className="font-medium">{instructor.attendedClasses}</span>
-                            </div>
-                            <div className="flex justify-between text-sm">
-                              <span className="text-gray-500">Subjects:</span>
-                              <span className="font-medium">{instructor.subjects.length}</span>
-                            </div>
-                            <div className="flex justify-between text-sm">
-                              <span className="text-gray-500">Risk Level:</span>
-                              <Badge 
-                                variant={instructor.riskLevel === RiskLevel.NONE ? 'default' : 
-                                        instructor.riskLevel === RiskLevel.LOW ? 'secondary' : 'destructive'}
-                                className="text-xs"
-                              >
-                                {instructor.riskLevel}
-                              </Badge>
-                            </div>
-                            <div className="flex justify-between text-sm">
-                              <span className="text-gray-500">Status:</span>
-                              <Badge 
-                                variant={instructor.status === InstructorStatus.ACTIVE ? 'default' : 'secondary'}
-                                className="text-xs"
-                              >
-                                {instructor.status}
-                              </Badge>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                )}
-
-                {viewMode === 'kanban' && (
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    {/* Active Instructors */}
-                    <div className="space-y-4">
-                      <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                        <h3 className="font-semibold text-gray-900">Active</h3>
-                        <Badge variant="secondary" className="ml-auto">
-                          {paginatedInstructors.filter(i => i.status === InstructorStatus.ACTIVE).length}
-                        </Badge>
-                      </div>
-                      <div className="space-y-3">
-                        {paginatedInstructors
-                          .filter(instructor => instructor.status === InstructorStatus.ACTIVE)
-                          .map(instructor => (
-                            <Card key={instructor.instructorId} className="p-4 cursor-pointer hover:shadow-md">
-                              <div className="flex items-center gap-3">
-                                <Avatar className="w-8 h-8">
-                                  <AvatarImage src={instructor.avatarUrl} />
-                                  <AvatarFallback className="text-xs">
-                                    {instructor.instructorName.split(' ').map(name => name.charAt(0)).join('').slice(0, 2)}
-                                  </AvatarFallback>
-                                </Avatar>
-                                <div className="flex-1 min-w-0">
-                                  <p className="font-medium text-sm truncate">{instructor.instructorName}</p>
-                                  <p className="text-xs text-gray-500">{instructor.department}</p>
-                                </div>
-                                <Badge className="text-xs">
-                                  {instructor.attendanceRate}%
-                                </Badge>
-                              </div>
-                            </Card>
-                          ))}
-                      </div>
-                    </div>
-
-                    {/* Inactive Instructors */}
-                    <div className="space-y-4">
-                      <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 bg-gray-500 rounded-full"></div>
-                        <h3 className="font-semibold text-gray-900">Inactive</h3>
-                        <Badge variant="secondary" className="ml-auto">
-                          {paginatedInstructors.filter(i => i.status === InstructorStatus.INACTIVE).length}
-                        </Badge>
-                      </div>
-                      <div className="space-y-3">
-                        {paginatedInstructors
-                          .filter(instructor => instructor.status === InstructorStatus.INACTIVE)
-                          .map(instructor => (
-                            <Card key={instructor.instructorId} className="p-4 cursor-pointer hover:shadow-md">
-                              <div className="flex items-center gap-3">
-                                <Avatar className="w-8 h-8">
-                                  <AvatarImage src={instructor.avatarUrl} />
-                                  <AvatarFallback className="text-xs">
-                                    {instructor.instructorName.split(' ').map(name => name.charAt(0)).join('').slice(0, 2)}
-                                  </AvatarFallback>
-                                </Avatar>
-                                <div className="flex-1 min-w-0">
-                                  <p className="font-medium text-sm truncate">{instructor.instructorName}</p>
-                                  <p className="text-xs text-gray-500">{instructor.department}</p>
-                                </div>
-                                <Badge className="text-xs">
-                                  {instructor.attendanceRate}%
-                                </Badge>
-                              </div>
-                            </Card>
-                          ))}
-                      </div>
-                    </div>
-
-                    {/* On Leave Instructors */}
-                    <div className="space-y-4">
-                      <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-                        <h3 className="font-semibold text-gray-900">On Leave</h3>
-                        <Badge variant="secondary" className="ml-auto">
-                          {paginatedInstructors.filter(i => i.status === InstructorStatus.ON_LEAVE).length}
-                        </Badge>
-                      </div>
-                      <div className="space-y-3">
-                        {paginatedInstructors
-                          .filter(instructor => instructor.status === InstructorStatus.ON_LEAVE)
-                          .map(instructor => (
-                            <Card key={instructor.instructorId} className="p-4 cursor-pointer hover:shadow-md">
-                              <div className="flex items-center gap-3">
-                                <Avatar className="w-8 h-8">
-                                  <AvatarImage src={instructor.avatarUrl} />
-                                  <AvatarFallback className="text-xs">
-                                    {instructor.instructorName.split(' ').map(name => name.charAt(0)).join('').slice(0, 2)}
-                                  </AvatarFallback>
-                                </Avatar>
-                                <div className="flex-1 min-w-0">
-                                  <p className="font-medium text-sm truncate">{instructor.instructorName}</p>
-                                  <p className="text-xs text-gray-500">{instructor.department}</p>
-                                </div>
-                                <Badge className="text-xs">
-                                  {instructor.attendanceRate}%
-                                </Badge>
-                              </div>
-                            </Card>
-                          ))}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {viewMode === 'calendar' && (
-                  <div className="text-center py-12">
-                    <Calendar className="w-12 h-12 text-blue-400 mx-auto mb-4" />
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">Calendar View</h3>
-                    <p className="text-gray-600">Calendar view for instructor attendance will be implemented here.</p>
-                  </div>
-                )}
-
-                {/* No Results */}
-                {filteredInstructors.length === 0 && !loading && (
-                  <div className="text-center py-12">
-                    <Info className="w-10 h-10 text-blue-400 mx-auto mb-4" />
-                    <div className="text-2xl font-bold text-blue-900 mb-3">No instructors found</div>
-                    <div className="text-blue-600 mb-6 max-w-md mx-auto">
-                      Try adjusting your search criteria or filters to find the instructors you're looking for.
-                    </div>
-                    <Button onClick={handleClearFilters} className="bg-blue-600 hover:bg-blue-700">
-                      Clear Filters
-                    </Button>
-                  </div>
-                )}
+                </div>
               </div>
+
+              {/* Mobile card layout */}
+              <div className="block xl:hidden p-2 sm:p-3 lg:p-4 max-w-full">
+                <div className="px-2 sm:px-4 pt-6 pb-6">
+                  {!loading && filteredInstructors.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-8 px-4">
+                      <EmptyState
+                        icon={<Users className="w-6 h-6 text-blue-400" />}
+                        title="No instructors found"
+                        description="Try adjusting your search criteria or filters to find the instructors you're looking for."
+                        action={
+                          <div className="flex flex-col gap-2 w-full">
+                            <Button
+                              variant="outline"
+                              className="border-blue-300 text-blue-700 hover:bg-blue-50 rounded-xl"
+                              onClick={handleRefresh}
+                            >
+                              <RefreshCw className="w-4 h-4 mr-2" />
+                              Refresh Data
+                            </Button>
+                          </div>
+                        }
+                      />
+                    </div>
+                  ) : (
+                    <TableCardView
+                      items={paginatedInstructors}
+                      selectedIds={Array.from(selected)}
+                      onSelect={handleSelectRow}
+                      onView={(item) => handleInstructorClick(item)}
+                      onEdit={(item) => console.log('Edit instructor:', item)}
+                      onDelete={(item) => console.log('Delete instructor:', item)}
+                      getItemId={(item) => item.instructorId}
+                      getItemName={(item) => item.instructorName}
+                      getItemCode={(item) => item.employeeId}
+                      getItemStatus={(item) => item.status === 'ACTIVE' ? 'active' : 'inactive'}
+                      getItemDescription={(item) => item.department}
+                      getItemDetails={(item) => [
+                        { label: 'Department', value: item.department },
+                        { label: 'Type', value: item.instructorType.replace('_', ' ') },
+                        { label: 'Attendance', value: `${item.attendanceRate}%` },
+                        { label: 'Risk Level', value: item.riskLevel || 'None' },
+                      ]}
+                      disabled={(item) => false}
+                      deleteTooltip={(item) => item.status === "INACTIVE" ? "Instructor is already inactive" : undefined}
+                      isLoading={loading}
+                    />
+                  )}
+                </div>
+              </div>
+              
+              {/* Pagination */}
+              <TablePagination
+                page={page}
+                totalItems={filteredInstructors.length}
+                pageSize={pageSize}
+                onPageChange={handlePageChange}
+                onPageSizeChange={handlePageSizeChange}
+                pageSizeOptions={[5, 10, 20, 50]}
+              />
             </Card>
           </div>
         </div>
-      </div>
+      </TooltipProvider>
   )
       {/* Instructor Detail Modal */}
       {selectedInstructor && (
@@ -1168,4 +1090,4 @@ export default function InstructorAttendancePage() {
           }}
         />
       )}
-}
+    }

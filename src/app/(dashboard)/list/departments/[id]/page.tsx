@@ -13,6 +13,45 @@ import { DepartmentForm } from '@/components/forms/DepartmentForm';
 import { ViewDialog } from '@/components/reusable/Dialogs/ViewDialog';
 import { ConfirmDeleteDialog } from '@/components/ConfirmDeleteDialog';
 
+// Type definitions
+interface Course {
+  id: string;
+  name: string;
+  code: string;
+  description?: string;
+  status: "active" | "inactive";
+  totalStudents: number;
+  totalSections: number;
+}
+
+interface Department {
+  id: string;
+  name: string;
+  code: string;
+  headOfDepartment: string;
+  headOfDepartmentDetails?: {
+    firstName: string;
+    lastName: string;
+    middleName?: string;
+    fullName: string;
+    email?: string;
+    phoneNumber?: string;
+    officeLocation?: string;
+    officeHours?: string;
+  };
+  description?: string;
+  courseOfferings: Course[];
+  status: "active" | "inactive";
+  totalInstructors: number;
+  totalStudents?: number;
+  logo?: string;
+  settings: {
+    autoGenerateCode: boolean;
+    allowCourseOverlap: boolean;
+    maxInstructors: number;
+  };
+}
+
 const TABS = [
   { label: "Overview", icon: Info },
   { label: "Courses", icon: BookOpen },
@@ -24,7 +63,7 @@ export default function DepartmentDetailPage() {
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [department, setDepartment] = useState<any>(null);
+  const [department, setDepartment] = useState<Department | null>(null);
   const [loading, setLoading] = useState(true);
   const params = useParams();
 
@@ -171,7 +210,7 @@ export default function DepartmentDetailPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {department.courseOfferings?.map((course: any) => (
+                    {department.courseOfferings?.map((course: Course) => (
                       <TableRow key={course.id}>
                         <TableCell>{course.name}</TableCell>
                         <TableCell>{course.code}</TableCell>
@@ -222,7 +261,7 @@ export default function DepartmentDetailPage() {
           },
           {
             title: "Course Offerings",
-            fields: department?.courseOfferings?.map(course => ({
+            fields: department?.courseOfferings?.map((course: Course) => ({
               label: course.name,
               value: course.status,
               type: 'course-with-status' as const,

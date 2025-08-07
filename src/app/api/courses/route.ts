@@ -59,6 +59,7 @@ export async function GET() {
       name: course.courseName,
       code: course.courseCode,
       department: course.Department?.departmentName || '',
+      departmentCode: course.Department?.departmentCode || '',
       description: course.description || '',
       units: course.totalUnits,
       status: course.courseStatus,
@@ -147,9 +148,6 @@ export async function POST(request: Request) {
         totalUnits: units,
         courseStatus: status,
         courseType: "MANDATORY", // Default value
-        academicYear: new Date().getFullYear().toString(),
-        semester: "FIRST_SEMESTER", // Default value
-        semesterId: 1, // You'll need to handle this properly
       },
     });
 

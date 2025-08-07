@@ -2,22 +2,25 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
-import { Eye, Pencil, Trash2, RefreshCw, Info, Plus, CreditCard, Wifi, WifiOff, AlertTriangle } from "lucide-react";
+import { Eye, Pencil, Trash2, RefreshCw, Info, Plus, CreditCard, Wifi, WifiOff, AlertTriangle, Search, Settings, Upload, List, Columns3, ChevronDown, ChevronUp, Download, Bell, Building2, RotateCcw, Archive, Clock, X, ChevronRight, Hash, Tag, Layers, FileText, BadgeInfo, Printer, Loader2, MoreHorizontal } from "lucide-react";
 import * as XLSX from "xlsx";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { z } from "zod";
 import { toast } from "sonner";
+import Fuse from "fuse.js";
+import React from "react";
 import { TableHeaderSection } from "@/components/reusable/Table/TableHeaderSection";
 import { TableCardView } from "@/components/reusable/Table/TableCardView";
 import BulkActionsBar from "@/components/reusable/BulkActionsBar";
-import { FilterDialog } from "@/components/FilterDialog";
+
 import { SortDialog } from "@/components/reusable/Dialogs/SortDialog";
 import { ExportDialog } from "@/components/reusable/Dialogs/ExportDialog";
 import { PrintLayout } from "@/components/PrintLayout";
 import { TableList, TableListColumn } from "@/components/reusable/Table/TableList";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Pagination } from "@/components/Pagination";
+import { TablePagination } from "@/components/reusable/Table/TablePagination";
 import { ViewDialog } from "@/components/reusable/Dialogs/ViewDialog";
 import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
@@ -26,54 +29,61 @@ import RFIDReaderFormDialog from "@/components/forms/RFIDReaderFormDialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CompactPagination } from "@/components/Pagination";
 import PageHeader from '@/components/PageHeader/PageHeader';
+import { Card, CardHeader } from "@/components/ui/card";
+import SummaryCard from '@/components/SummaryCard';
+import { EmptyState } from '@/components/reusable';
+import { QuickActionsPanel } from '@/components/reusable/QuickActionsPanel';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useDebounce } from '@/hooks/use-debounce';
+import { ImportDialog } from "@/components/reusable/Dialogs/ImportDialog";
+import { BulkActionsDialog } from "@/components/reusable/Dialogs/BulkActionsDialog";
+import { VisibleColumnsDialog, ColumnOption } from "@/components/reusable/Dialogs/VisibleColumnsDialog";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Checkbox as SharedCheckbox } from '@/components/ui/checkbox';
 
 const readerSchema = z.object({
-  id: z.number(),
+  readerId: z.number(),
   deviceId: z.string(),
   deviceName: z.string(),
   roomId: z.number().nullable(),
   ipAddress: z.string(),
-  status: z.enum(["ACTIVE", "INACTIVE", "MAINTENANCE"]),
+  status: z.enum(["ACTIVE", "INACTIVE", "TESTING", "CALIBRATION", "REPAIR", "OFFLINE", "ERROR"]),
   lastSeen: z.string(), // Using string for simplicity in mock data
 });
 
 type RFIDReader = z.infer<typeof readerSchema> & { hasRelatedEntities?: boolean };
 
-// Mock data
-// const initialReaders: RFIDReader[] = [
-//   {
-//     id: 1,
-//     deviceId: "RD-001",
-//     deviceName: "Main Entrance Reader",
-//     roomId: 101,
-//     ipAddress: "192.168.1.10",
-//     status: "ACTIVE",
-//     lastSeen: "2025-06-20T19:30:00.000Z",
-//     hasRelatedEntities: true,
-//   },
-//   {
-//     id: 2,
-//     deviceId: "RD-002",
-//     deviceName: "Lab 1 Reader",
-//     roomId: 202,
-//     ipAddress: "192.168.1.11",
-//     status: "INACTIVE",
-//     lastSeen: "2025-06-18T18:30:00.000Z",
-//     hasRelatedEntities: false,
-//   },
-//   {
-//     id: 3,
-//     deviceId: "RD-003",
-//     deviceName: "Library Reader",
-//     roomId: null,
-//     ipAddress: "192.168.1.12",
-//     status: "MAINTENANCE",
-//     lastSeen: "2025-06-13T17:30:00.000Z",
-//   },
-// ];
-
 type SortField = 'deviceId' | 'deviceName' | 'status' | 'lastSeen';
 type SortOrder = 'asc' | 'desc';
+
+// Add Fuse.js types for better search
+type FuseResultMatch = {
+  key: string;
+  indices: readonly [number, number][];
+};
+
+interface FuseResult<T> {
+  item: T;
+  refIndex: number;
+  matches?: Array<{
+    key: string;
+    indices: readonly [number, number][];
+  }>;
+}
+
+// Helper function to highlight search matches
+const highlightMatch = (text: string, matches: readonly [number, number][] | undefined) => {
+  if (!matches || matches.length === 0) return text;
+  let result = '';
+  let lastIndex = 0;
+  matches.forEach(([start, end], i) => {
+    result += text.slice(lastIndex, start);
+    result += `<mark class='bg-yellow-200 text-yellow-900 rounded px-1'>${text.slice(start, end + 1)}</mark>`;
+    lastIndex = end + 1;
+  });
+  result += text.slice(lastIndex);
+  return result;
+};
 
 export default function RFIDReadersPage() {
   const [readers, setReaders] = useState<RFIDReader[]>([]);
@@ -82,7 +92,9 @@ export default function RFIDReadersPage() {
   const [sortField, setSortField] = useState<SortField>('deviceId');
   const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(10);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [totalItems, setTotalItems] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [selectedReader, setSelectedReader] = useState<RFIDReader | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -93,11 +105,16 @@ export default function RFIDReadersPage() {
   const [formDialogOpen, setFormDialogOpen] = useState(false);
   const [formType, setFormType] = useState<'create' | 'update'>('create');
   const [selectedReaderForForm, setSelectedReaderForForm] = useState<RFIDReader | undefined>();
-  const [filterDialogOpen, setFilterDialogOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
   const [sortDialogOpen, setSortDialogOpen] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
-  // Update filters state to be arrays
-  const [filters, setFilters] = useState<{ status: string[]; room: string[] }>({ status: [], room: [] });
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [bulkActionsDialogOpen, setBulkActionsDialogOpen] = useState(false);
+  const [visibleColumnsDialogOpen, setVisibleColumnsDialogOpen] = useState(false);
+
+
+
   const [lastUpdated, setLastUpdated] = useState(new Date());
   const exportableColumns = [
     { key: 'deviceId', label: 'Device ID' },
@@ -110,14 +127,34 @@ export default function RFIDReadersPage() {
   const [visibleColumns, setVisibleColumns] = useState<string[]>(exportableColumns.map(c => c.key));
   const [exportColumns, setExportColumns] = useState<string[]>(exportableColumns.map(c => c.key));
   const [exportFormat, setExportFormat] = useState<'pdf' | 'excel' | 'csv' | null>(null);
+  
+  // Add new state for enhanced UI
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [roomFilter, setRoomFilter] = useState<string>("all");
+
+  // Add Fuse.js setup with proper types
+  const fuse = useMemo(() => new Fuse<RFIDReader>(readers, {
+    keys: ["deviceId", "deviceName", "ipAddress"],
+    threshold: 0.4,
+    includeMatches: true,
+  }), [readers]);
+
+  const fuzzyResults = useMemo(() => {
+    if (!searchTerm) return readers.map((r: RFIDReader, i: number) => ({ item: r, refIndex: i }));
+    return fuse.search(searchTerm) as FuseResult<RFIDReader>[];
+  }, [searchTerm, fuse, readers]);
 
   useEffect(() => {
     setIsClient(true);
   }, []);
 
-  const fetchReaders = async () => {
+  const fetchReaders = async (refresh: boolean = false) => {
     try {
-      setLoading(true);
+      if (refresh) {
+        setIsRefreshing(true);
+      } else {
+        setLoading(true);
+      }
       // Construct query params based on state
       const params = new URLSearchParams({
         page: currentPage.toString(),
@@ -125,28 +162,53 @@ export default function RFIDReadersPage() {
         search: searchTerm,
         sortBy: sortField,
         sortDir: sortOrder,
-        status: filters.status.join(','),
-        room: filters.room.join(','),
       });
       const response = await fetch(`/api/rfid/readers?${params.toString()}`);
       if (!response.ok) {
-        throw new Error('Failed to fetch RFID readers');
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
       const { data, total } = await response.json();
-      setReaders(data);
-      // Note: We might need to set total pages here if the API provides it
+      if (Array.isArray(data)) {
+        setReaders(data);
+        setTotalItems(total || data.length);
+        setTotalPages(Math.ceil((total || data.length) / itemsPerPage));
+        setError(null);
+        if (refresh) toast.success('Readers refreshed successfully');
+      } else {
+        throw new Error('Invalid data format received from server');
+      }
       setLastUpdated(new Date());
-    } catch (error) {
-      console.error('Error fetching readers:', error);
-      toast.error('Failed to fetch RFID readers.');
+    } catch (err) {
+      console.error('Error fetching readers:', err);
+      setError('Failed to load readers. Please try again later.');
+      if (refresh) toast.error('Failed to refresh readers. Please try again later.');
+      else toast.error('Failed to load readers. Please try again later.');
     } finally {
-      setLoading(false);
+      if (refresh) {
+        setIsRefreshing(false);
+      } else {
+        setLoading(false);
+      }
     }
   };
 
   useEffect(() => {
     fetchReaders();
-  }, [currentPage, itemsPerPage, searchTerm, sortField, sortOrder, filters]);
+  }, [currentPage, itemsPerPage, searchTerm, sortField, sortOrder]);
+
+  // Update pagination when items per page changes
+  useEffect(() => {
+    setCurrentPage(1); // Reset to first page when items per page changes
+  }, [itemsPerPage]);
+
+  // Recalculate total pages when items per page changes
+  useEffect(() => {
+    if (totalItems > 0) {
+      setTotalPages(Math.ceil(totalItems / itemsPerPage));
+    }
+  }, [totalItems, itemsPerPage]);
+
+
 
   const handleSelectRow = (id: string) => {
     setSelectedIds(prev => 
@@ -158,28 +220,26 @@ export default function RFIDReadersPage() {
     if (selectedIds.length === paginatedReaders.length) {
       setSelectedIds([]);
     } else {
-      setSelectedIds(paginatedReaders.map(r => r.id.toString()));
+      setSelectedIds(paginatedReaders.map(r => r.readerId.toString()));
     }
   };
 
-  // Update filteredReaders to use new filters
+  // Filter readers based on search term and filters
   const filteredReaders = useMemo(() => {
-    return readers.filter(reader => {
-      // Status filter
-      if (filters.status.length > 0 && !filters.status.includes(reader.status)) return false;
-      // Room filter
-      if (filters.room.length > 0 && (!reader.roomId || !filters.room.includes(String(reader.roomId)))) return false;
-      // Search
-      if (
-        searchTerm &&
-        !reader.deviceId.toLowerCase().includes(searchTerm.toLowerCase()) &&
-        !reader.deviceName.toLowerCase().includes(searchTerm.toLowerCase())
-      ) {
-        return false;
-      }
-      return true;
-    });
-  }, [readers, filters, searchTerm]);
+    let filtered = fuzzyResults.map((r: FuseResult<RFIDReader>) => r.item);
+
+    // Apply status filter
+    if (statusFilter !== "all") {
+      filtered = filtered.filter(reader => reader.status === statusFilter);
+    }
+
+    // Apply room filter
+    if (roomFilter !== "all") {
+      filtered = filtered.filter(reader => reader.roomId === Number(roomFilter));
+    }
+
+    return filtered;
+  }, [fuzzyResults, statusFilter, roomFilter]);
 
   const sortedReaders = useMemo(() => {
     return [...filteredReaders].sort((a, b) => {
@@ -197,40 +257,86 @@ export default function RFIDReadersPage() {
     return sortedReaders.slice(startIndex, startIndex + itemsPerPage);
   }, [sortedReaders, currentPage, itemsPerPage]);
 
-  const totalPages = Math.ceil(sortedReaders.length / itemsPerPage);
+
   
-  const getStatusBadge = (status: "ACTIVE" | "INACTIVE" | "MAINTENANCE") => {
+  const getStatusBadge = (status: "ACTIVE" | "INACTIVE" | "TESTING" | "CALIBRATION" | "REPAIR" | "OFFLINE" | "ERROR") => {
     switch (status) {
       case "ACTIVE":
-        return <Badge variant="default" className="bg-green-500 text-white">Active</Badge>;
+        return <Badge variant="success" className="text-center">Active</Badge>;
       case "INACTIVE":
-        return <Badge variant="secondary">Inactive</Badge>;
-      case "MAINTENANCE":
-        return <Badge variant="destructive">Maintenance</Badge>;
+        return <Badge variant="secondary" className="text-center">Inactive</Badge>;
+      case "TESTING":
+        return <Badge variant="warning" className="text-center">Testing</Badge>;
+      case "CALIBRATION":
+        return <Badge variant="outline" className="border-blue-500 text-blue-700 text-center">Calibration</Badge>;
+      case "REPAIR":
+        return <Badge variant="destructive" className="text-center">Repair</Badge>;
+      case "OFFLINE":
+        return <Badge variant="secondary" className="bg-gray-500 text-white text-center">Offline</Badge>;
+      case "ERROR":
+        return <Badge variant="destructive" className="text-center">Error</Badge>;
       default:
-        return <Badge>{status}</Badge>;
+        return <Badge variant="outline" className="text-center">Unknown</Badge>;
     }
   };
 
   const columns: TableListColumn<RFIDReader>[] = [
     {
       header: (
-        <div className="flex justify-center items-center">
-          <Checkbox
-            checked={selectedIds.length > 0 && selectedIds.length === paginatedReaders.length}
-            onCheckedChange={handleSelectAll}
-            aria-label="Select all readers"
-          />
-        </div>
+        <SharedCheckbox 
+          checked={selectedIds.length > 0 && selectedIds.length === paginatedReaders.length}
+          indeterminate={selectedIds.length > 0 && selectedIds.length < paginatedReaders.length}
+          onCheckedChange={handleSelectAll}
+          aria-label="Select all readers"
+        />
       ),
       accessor: 'select',
       className: 'w-12 text-center',
     },
-    { header: "Device ID", accessor: "deviceId" },
-    { header: "Device Name", accessor: "deviceName" },
+    { 
+      header: "Device ID", 
+      accessor: "deviceId",
+      render: (item) => {
+        const fuseResult = fuzzyResults.find(r => r.item.readerId === item.readerId) as FuseResult<RFIDReader> | undefined;
+        const deviceIdMatches = fuseResult?.matches?.find((m: { key: string }) => m.key === "deviceId")?.indices;
+        return (
+          <div 
+            className="text-sm font-medium text-blue-900"
+            dangerouslySetInnerHTML={{ __html: highlightMatch(item.deviceId, deviceIdMatches) }}
+          />
+        );
+      }
+    },
+    { 
+      header: "Device Name", 
+      accessor: "deviceName",
+      render: (item) => {
+        const fuseResult = fuzzyResults.find(r => r.item.readerId === item.readerId) as FuseResult<RFIDReader> | undefined;
+        const deviceNameMatches = fuseResult?.matches?.find((m: { key: string }) => m.key === "deviceName")?.indices;
+        return (
+          <div 
+            className="text-sm text-blue-900"
+            dangerouslySetInnerHTML={{ __html: highlightMatch(item.deviceName, deviceNameMatches) }}
+          />
+        );
+      }
+    },
     { header: "Status", accessor: "status", render: (item) => getStatusBadge(item.status) },
     { header: "Assigned Room", accessor: "roomId", render: (item) => item.roomId || "N/A" },
-    { header: "IP Address", accessor: "ipAddress" },
+    { 
+      header: "IP Address", 
+      accessor: "ipAddress",
+      render: (item) => {
+        const fuseResult = fuzzyResults.find(r => r.item.readerId === item.readerId) as FuseResult<RFIDReader> | undefined;
+        const ipMatches = fuseResult?.matches?.find((m: { key: string }) => m.key === "ipAddress")?.indices;
+        return (
+          <div 
+            className="text-sm text-blue-900 font-mono"
+            dangerouslySetInnerHTML={{ __html: highlightMatch(item.ipAddress, ipMatches) }}
+          />
+        );
+      }
+    },
     { header: "Last Seen", accessor: "lastSeen", render: (item) => isClient ? new Date(item.lastSeen).toLocaleString() : '...' },
     {
       header: "Actions",
@@ -272,13 +378,127 @@ export default function RFIDReadersPage() {
   ];
 
   const handleRefresh = () => {
-    fetchReaders();
+    fetchReaders(true);
   };
   
+  // Handle items per page change
+  const handleItemsPerPageChange = (newItemsPerPage: number) => {
+    setItemsPerPage(newItemsPerPage);
+    setCurrentPage(1); // Reset to first page when changing items per page
+  };
+
+  // Handler for sorting columns
+  const handleSort = (field: string) => {
+    setSortField((prevField) => {
+      const isSameField = prevField === field;
+      const newOrder = isSameField && sortOrder === 'asc' ? 'desc' : 'asc';
+      setSortOrder(newOrder as SortOrder);
+      return field as SortField;
+    });
+  };
+
+  // Enhanced bulk actions with better functionality
   const handleBulkDelete = async () => {
-    toast.info("Bulk delete functionality not yet implemented.");
-    console.log("Deleting:", selectedIds);
-  }
+    if (selectedIds.length === 0) {
+      toast.error('No readers selected for deletion');
+      return;
+    }
+    
+    try {
+      const response = await fetch("/api/rfid/readers/bulk-delete", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: selectedIds }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData?.error || "Failed to delete readers");
+      }
+
+      toast.success("Selected readers deleted successfully");
+      setSelectedIds([]);
+      await fetchReaders();
+    } catch (error: any) {
+      toast.error(error.message);
+    }
+  };
+
+  // Enhanced bulk actions handler
+  const handleOpenBulkActionsDialog = () => {
+    setBulkActionsDialogOpen(true);
+  };
+
+  const handleBulkActionComplete = (actionType: string, results: any) => {
+    toast.success(`Bulk action '${actionType}' completed.`);
+    setBulkActionsDialogOpen(false);
+    fetchReaders();
+  };
+
+  const handleBulkActionCancel = () => {
+    setBulkActionsDialogOpen(false);
+  };
+
+  const handleProcessBulkAction = async (actionType: string, config: any) => {
+    if (actionType === 'status-update') {
+      const status = config.status?.toUpperCase();
+      const updatePromises = selectedIds.map(async (readerId) => {
+        const response = await fetch(`/api/rfid/readers/${readerId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status }),
+        });
+        if (!response.ok) throw new Error(`Failed to update reader ${readerId}`);
+        return response.json();
+      });
+      await Promise.all(updatePromises);
+      return { success: true, processed: selectedIds.length };
+    }
+    if (actionType === 'export') {
+      return { success: true };
+    }
+    if (actionType === 'notification') {
+      await new Promise(resolve => setTimeout(resolve, 500));
+      return { success: true };
+    }
+    return { success: false };
+  };
+
+  // Import functionality
+  const handleImportReaders = async (data: any[]) => {
+    try {
+      const response = await fetch('/api/rfid/readers/bulk', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          records: data,
+          options: {
+            skipDuplicates: true,
+            updateExisting: false,
+          }
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      await fetchReaders();
+      toast.success('Readers imported successfully');
+      return {
+        success: result.results?.success,
+        failed: result.results?.failed,
+        errors: result.results?.errors || []
+      };
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to import readers');
+      throw error;
+    }
+  };
 
   const handleExport = async () => {
     if (!exportFormat) {
@@ -329,44 +549,73 @@ export default function RFIDReadersPage() {
     },
   ];
 
+  // Column visibility management
+  const COLUMN_OPTIONS: ColumnOption[] = exportableColumns.map(col => ({
+    accessor: col.key,
+    header: col.label,
+    description: undefined,
+    category: 'Reader Info',
+    required: col.key === 'deviceId' || col.key === 'deviceName',
+  }));
+
+  const handleColumnToggle = (columnAccessor: string, checked: boolean) => {
+    setVisibleColumns(prev => {
+      if (checked) {
+        return prev.includes(columnAccessor) ? prev : [...prev, columnAccessor];
+      } else {
+        if (COLUMN_OPTIONS.find(col => col.accessor === columnAccessor)?.required) return prev;
+        return prev.filter(col => col !== columnAccessor);
+      }
+    });
+  };
+
+  const handleResetColumns = () => {
+    setVisibleColumns(exportableColumns.map(col => col.key));
+    toast.success('Column visibility reset to default');
+  };
+
+
+
+
+
   // Analytics summary
   const summary = useMemo(() => {
     const total = filteredReaders.length;
     const online = filteredReaders.filter(r => r.status === "ACTIVE").length;
     const offline = filteredReaders.filter(r => r.status === "INACTIVE").length;
-    const maintenance = filteredReaders.filter(r => r.status === "MAINTENANCE").length;
+    const maintenance = filteredReaders.filter(r => r.status === "REPAIR" || r.status === "TESTING" || r.status === "CALIBRATION").length;
     return { total, online, offline, maintenance };
   }, [filteredReaders]);
 
-  // Build filterSections for FilterDialog
-  const filterSections = [
-    {
-      key: "status",
-      title: "Status",
-      options: [
-        { value: "ACTIVE", label: "Active", count: readers.filter(r => r.status === "ACTIVE").length },
-        { value: "INACTIVE", label: "Inactive", count: readers.filter(r => r.status === "INACTIVE").length },
-        { value: "MAINTENANCE", label: "Maintenance", count: readers.filter(r => r.status === "MAINTENANCE").length },
-      ],
-    },
-    {
-      key: "room",
-      title: "Room ID",
-      options: Array.from(new Set(readers.map(r => r.roomId).filter(Boolean))).map(roomId => ({
-        value: String(roomId),
-        label: `Room ${roomId}`,
-        count: readers.filter(r => String(r.roomId) === String(roomId)).length,
-      })),
-    },
-  ];
+
+
+  // Get unique room IDs for filter dropdown
+  const roomOptions = useMemo(() => {
+    const roomIds = readers.map(r => r.roomId).filter((id): id is number => id !== null);
+    return Array.from(new Set(roomIds)).sort((a, b) => a - b);
+  }, [readers]);
+
+  // Print handler
+  const handlePrint = () => {
+    const printColumns = exportableColumns.map(col => ({ header: col.label, accessor: col.key }));
+
+    const printFunction = PrintLayout({
+      title: 'RFID Readers List',
+      data: filteredReaders,
+      columns: printColumns,
+      totalItems: filteredReaders.length,
+    });
+
+    printFunction();
+  };
 
   return (
-    <TooltipProvider>
-      <div className="container mx-auto p-6 space-y-6">
+    <div className="min-h-screen bg-gradient-to-br from-[#f8fafc] via-[#ffffff] to-[#f8fafc] p-0 overflow-x-hidden">
+      <div className="w-full max-w-full px-4 sm:px-6 lg:px-8 space-y-8 sm:space-y-10">
         {/* Header */}
         <PageHeader
           title="RFID Readers"
-          subtitle="Manage all RFID reader devices in the system."
+          subtitle="Manage all RFID reader devices in the system"
           breadcrumbs={[
             { label: 'Home', href: '/' },
             { label: 'RFID Management', href: '/rfid' },
@@ -374,161 +623,319 @@ export default function RFIDReadersPage() {
           ]}
         />
 
-        {/* Sticky Top Bar */}
-        <div className="sticky top-0 z-20 bg-white/90 backdrop-blur border-b border-blue-100 pb-2 mb-2">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 pt-2">
-            <div className="flex items-center gap-3 text-sm text-muted-foreground" aria-live="polite">
-              <span>Last updated: {lastUpdated.toLocaleTimeString()}</span>
-              <Button onClick={handleRefresh} variant="outline" size="sm" aria-label="Refresh readers" disabled={loading} className="gap-2">
-                <RefreshCw className={loading ? "animate-spin" : ""} />
-                Refresh
-              </Button>
+        {/* Summary Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+          <SummaryCard
+            icon={<CreditCard className="text-blue-500 w-5 h-5" />}
+            label="Total Readers"
+            value={summary.total}
+            valueClassName="text-blue-900"
+            sublabel="Total number of readers"
+          />
+          <SummaryCard
+            icon={<Wifi className="text-blue-500 w-5 h-5" />}
+            label="Online Readers"
+            value={summary.online}
+            valueClassName="text-blue-900"
+            sublabel="Currently active"
+          />
+          <SummaryCard
+            icon={<WifiOff className="text-blue-500 w-5 h-5" />}
+            label="Offline Readers"
+            value={summary.offline}
+            valueClassName="text-blue-900"
+            sublabel="Inactive readers"
+          />
+          <SummaryCard
+            icon={<AlertTriangle className="text-blue-500 w-5 h-5" />}
+            label="Maintenance"
+            value={summary.maintenance}
+            valueClassName="text-blue-900"
+            sublabel="Under maintenance"
+          />
+        </div>
+
+        {/* Quick Actions Panel */}
+        <div className="w-full max-w-full pt-4">
+          <QuickActionsPanel
+            variant="premium"
+            title="Quick Actions"
+            subtitle="Essential tools and shortcuts"
+            icon={
+              <div className="w-6 h-6 text-white">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+                </svg>
+              </div>
+            }
+            actionCards={[
+              {
+                id: 'add-reader',
+                label: 'Add Reader',
+                description: 'Create new RFID reader',
+                icon: <Plus className="w-5 h-5 text-white" />,
+                onClick: () => { 
+                  setFormType('create'); 
+                  setFormDialogOpen(true); 
+                  setSelectedReaderForForm(undefined);
+                }
+              },
+              {
+                id: 'import-data',
+                label: 'Import Data',
+                description: 'Import readers from file',
+                icon: <Upload className="w-5 h-5 text-white" />,
+                onClick: () => setImportDialogOpen(true)
+              },
+              {
+                id: 'print-page',
+                label: 'Print Page',
+                description: 'Print reader list',
+                icon: <Printer className="w-5 h-5 text-white" />,
+                onClick: handlePrint
+              },
+              {
+                id: 'visible-columns',
+                label: 'Visible Columns',
+                description: 'Manage table columns',
+                icon: <Columns3 className="w-5 h-5 text-white" />,
+                onClick: () => setVisibleColumnsDialogOpen(true)
+              },
+              {
+                id: 'refresh-data',
+                label: 'Refresh Data',
+                description: 'Reload reader data',
+                icon: isRefreshing ? (
+                  <RefreshCw className="w-5 h-5 text-white animate-spin" />
+                ) : (
+                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                ),
+                onClick: () => fetchReaders(),
+                disabled: isRefreshing,
+                loading: isRefreshing
+              },
+              {
+                id: 'sort-options',
+                label: 'Sort Options',
+                description: 'Configure sorting',
+                icon: <List className="w-5 h-5 text-white" />,
+                onClick: () => setSortDialogOpen(true)
+              }
+            ]}
+            lastActionTime="2 minutes ago"
+            onLastActionTimeChange={() => {}}
+            collapsible={true}
+            defaultCollapsed={true}
+            onCollapseChange={(collapsed) => {
+              console.log('Quick Actions Panel collapsed:', collapsed);
+            }}
+          />
+        </div>
+
+        {/* Main Content Area */}
+        <div className="w-full max-w-full pt-4">
+          <Card className="shadow-lg rounded-xl overflow-hidden p-0 w-full max-w-full">
+            <CardHeader className="p-0">
+              {/* Blue Gradient Header - flush to card edge, no rounded corners */}
+              <div className="bg-gradient-to-r from-[#1e40af] to-[#3b82f6] p-0">
+                <div className="py-4 sm:py-6">
+                  <div className="flex items-center gap-3 px-4 sm:px-6">
+                    <div className="w-8 h-8 flex items-center justify-center">
+                      <Search className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-white">Reader List</h3>
+                      <p className="text-blue-100 text-sm">Search and filter RFID reader information</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </CardHeader>
+            
+            {/* Search and Filter Section */}
+            <div className="border-b border-gray-200 shadow-sm p-3 sm:p-4 lg:p-6">
+              <div className="flex flex-col xl:flex-row gap-2 sm:gap-3 items-start xl:items-center justify-end">
+                {/* Search Bar */}
+                <div className="relative w-full xl:w-auto xl:min-w-[200px] xl:max-w-sm">
+                  <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Search readers..."
+                    value={searchTerm}
+                    onChange={e => setSearchTerm(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:outline-none"
+                  />
+                </div>
+                {/* Quick Filter Dropdowns */}
+                <div className="flex flex-wrap gap-2 sm:gap-3 w-full xl:w-auto">
+                  <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <SelectTrigger className="w-full sm:w-28 lg:w-32 xl:w-28 text-gray-700">
+                      <SelectValue placeholder="Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Status</SelectItem>
+                      <SelectItem value="ACTIVE">
+                        <span className="flex items-center gap-2">
+                          <span className="text-green-600"><Wifi className="w-4 h-4" /></span> Active
+                        </span>
+                      </SelectItem>
+                      <SelectItem value="INACTIVE">
+                        <span className="flex items-center gap-2">
+                          <span className="text-red-500"><WifiOff className="w-4 h-4" /></span> Inactive
+                        </span>
+                      </SelectItem>
+                      <SelectItem value="TESTING">
+                        <span className="flex items-center gap-2">
+                          <span className="text-yellow-500"><AlertTriangle className="w-4 h-4" /></span> Testing
+                        </span>
+                      </SelectItem>
+                      <SelectItem value="CALIBRATION">
+                        <span className="flex items-center gap-2">
+                          <span className="text-blue-500"><Settings className="w-4 h-4" /></span> Calibration
+                        </span>
+                      </SelectItem>
+                      <SelectItem value="REPAIR">
+                        <span className="flex items-center gap-2">
+                          <span className="text-red-500"><AlertTriangle className="w-4 h-4" /></span> Repair
+                        </span>
+                      </SelectItem>
+                      <SelectItem value="OFFLINE">
+                        <span className="flex items-center gap-2">
+                          <span className="text-gray-500"><WifiOff className="w-4 h-4" /></span> Offline
+                        </span>
+                      </SelectItem>
+                      <SelectItem value="ERROR">
+                        <span className="flex items-center gap-2">
+                          <span className="text-red-500"><AlertTriangle className="w-4 h-4" /></span> Error
+                        </span>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select value={roomFilter} onValueChange={setRoomFilter}>
+                    <SelectTrigger className="w-full sm:w-32 lg:w-40 xl:w-40 text-gray-700">
+                      <SelectValue placeholder="Room" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Rooms</SelectItem>
+                      {roomOptions.map((roomId) => (
+                        <SelectItem key={roomId} value={String(roomId)}>Room {roomId}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
             </div>
-            <Button onClick={() => { setFormType('create'); setFormDialogOpen(true); setSelectedReaderForForm(undefined); }} size="sm" className="gap-2" aria-label="Add new reader">
-              <Plus className="h-4 w-4" />
-              Add Reader
-            </Button>
-          </div>
-        </div>
 
-        {/* Analytics Summary Bar */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-          <div className="flex items-center gap-2 bg-blue-50 rounded-lg p-4">
-            <CreditCard className="h-6 w-6 text-blue-500" aria-label="Total Readers" />
-            <span className="font-semibold text-blue-900">{summary.total}</span>
-            <span className="text-sm text-blue-700">Total</span>
-          </div>
-          <div className="flex items-center gap-2 bg-green-50 rounded-lg p-4">
-            <Wifi className="h-6 w-6 text-green-500" aria-label="Online Readers" />
-            <span className="font-semibold text-green-900">{summary.online}</span>
-            <span className="text-sm text-green-700">Online</span>
-          </div>
-          <div className="flex items-center gap-2 bg-gray-50 rounded-lg p-4">
-            <WifiOff className="h-6 w-6 text-gray-500" aria-label="Offline Readers" />
-            <span className="font-semibold text-gray-900">{summary.offline}</span>
-            <span className="text-sm text-gray-700">Offline</span>
-          </div>
-          <div className="flex items-center gap-2 bg-yellow-50 rounded-lg p-4">
-            <AlertTriangle className="h-6 w-6 text-yellow-500" aria-label="Maintenance Readers" />
-            <span className="font-semibold text-yellow-900">{summary.maintenance}</span>
-            <span className="text-sm text-yellow-700">Maintenance</span>
-          </div>
-        </div>
-
-        {/* Table/List Section with divider */}
-        <div className="bg-white rounded-xl shadow border border-border overflow-hidden">
-          {/* Desktop Table */}
-          <div className="hidden xl:block">
-            {loading ? (
-              <div className="p-8">
-                <Skeleton className="h-8 w-full mb-4" />
-                <Skeleton className="h-8 w-full mb-4" />
-                <Skeleton className="h-8 w-full mb-4" />
-                <Skeleton className="h-8 w-full mb-4" />
+            {/* Bulk Actions Bar */}
+            {selectedIds.length > 0 && (
+              <div className="mt-2 sm:mt-3 px-2 sm:px-3 lg:px-6 max-w-full">
+                <BulkActionsBar
+                  selectedCount={selectedIds.length}
+                  entityLabel="reader"
+                  actions={[
+                    {
+                      key: "bulk-actions",
+                      label: "Bulk Actions",
+                      icon: <Settings className="w-4 h-4 mr-2" />,
+                      onClick: handleOpenBulkActionsDialog,
+                      tooltip: "Open enhanced bulk actions dialog with status updates, notifications, and exports",
+                      variant: "default"
+                    },
+                    {
+                      key: "export",
+                      label: "Quick Export",
+                      icon: <Download className="w-4 h-4 mr-2" />,
+                      onClick: () => handleExport(),
+                      tooltip: "Quick export selected readers to CSV"
+                    },
+                    {
+                      key: "delete",
+                      label: "Delete Selected",
+                      icon: loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Trash2 className="w-4 h-4 mr-2" />,
+                      onClick: handleBulkDelete,
+                      loading: loading,
+                      disabled: loading,
+                      tooltip: "Delete selected readers",
+                      variant: "destructive"
+                    }
+                  ]}
+                  onClear={() => setSelectedIds([])}
+                />
               </div>
-            ) : paginatedReaders.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-16">
-                <CreditCard className="h-12 w-12 text-blue-200 mb-4" />
-                <div className="font-semibold text-lg text-blue-700 mb-2">No RFID Readers Found</div>
-                <div className="text-sm text-muted-foreground mb-4">Get started by adding your first reader.</div>
-                <Button onClick={() => { setFormType('create'); setFormDialogOpen(true); setSelectedReaderForForm(undefined); }} size="sm" className="gap-2" aria-label="Add new reader">
-                  <Plus className="h-4 w-4" />
-                  Add Reader
-                </Button>
-              </div>
-            ) : (
-              <TableList
-                columns={columns}
-                data={paginatedReaders.filter(r => r && r.id !== undefined)}
-                loading={loading}
-                selectedIds={selectedIds}
-                onSelectRow={handleSelectRow}
-                onSelectAll={handleSelectAll}
-                isAllSelected={selectedIds.length === paginatedReaders.length && paginatedReaders.length > 0}
-                isIndeterminate={selectedIds.length > 0 && selectedIds.length < paginatedReaders.length}
-                getItemId={(row: RFIDReader) => (row && row.id !== undefined ? row.id.toString() : "")}
-                className="transition-all duration-150 [&_tr:hover]:bg-blue-50 [&_tr.selected]:bg-blue-100"
-              />
             )}
-          </div>
-          {/* Mobile Card View */}
-          <div className="block xl:hidden">
-            {loading ? (
-              <div className="p-8">
-                <Skeleton className="h-8 w-full mb-4" />
-                <Skeleton className="h-8 w-full mb-4" />
-                <Skeleton className="h-8 w-full mb-4" />
-                <Skeleton className="h-8 w-full mb-4" />
-              </div>
-            ) : paginatedReaders.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-16">
-                <CreditCard className="h-12 w-12 text-blue-200 mb-4" />
-                <div className="font-semibold text-lg text-blue-700 mb-2">No RFID Readers Found</div>
-                <div className="text-sm text-muted-foreground mb-4">Get started by adding your first reader.</div>
-                <Button onClick={() => { setFormType('create'); setFormDialogOpen(true); setSelectedReaderForForm(undefined); }} size="sm" className="gap-2" aria-label="Add new reader">
-                  <Plus className="h-4 w-4" />
-                  Add Reader
-                </Button>
-              </div>
-            ) : (
-              <TableCardView
-                items={paginatedReaders.filter(r => r && r.id !== undefined)}
-                selectedIds={selectedIds}
-                onSelect={handleSelectRow}
-                onView={(item) => {
-                  setSelectedReader(item);
-                  setViewDialogOpen(true);
-                }}
-                onEdit={(item) => {
-                  setFormType('update');
-                  setSelectedReaderForForm(item);
-                  setFormDialogOpen(true);
-                }}
-                onDelete={(item) => {
-                  setReaderToDelete(item);
-                  setDeleteDialogOpen(true);
-                }}
-                getItemId={(item: RFIDReader) => (item && item.id !== undefined ? item.id.toString() : "")}
-                getItemName={(item) => item.deviceName}
-                getItemCode={(item) => item.deviceId}
-                getItemStatus={(item) => item.status === 'ACTIVE' ? 'active' : 'inactive'}
-                getItemDetails={(item) => [
-                  { label: 'IP Address', value: item.ipAddress },
-                  { label: 'Room ID', value: item.roomId || 'N/A' },
-                  { label: 'Last Seen', value: isClient ? new Date(item.lastSeen).toLocaleString() : '...' },
-                ]}
-                isLoading={loading}
-                deleteTooltip={(item) => item.hasRelatedEntities ? "Cannot delete reader with assigned entities." : "Delete reader"}
-              />
-            )}
-            {/* Compact Pagination for mobile */}
-            <CompactPagination
-              currentPage={currentPage}
-              totalPages={totalPages}
-              onPageChange={setCurrentPage}
-            />
-          </div>
-        </div>
 
-        {/* Bulk Actions Bar */}
-        {selectedIds.length > 0 && (
-          <BulkActionsBar
-            selectedCount={selectedIds.length}
-            actions={bulkActions}
-            onClear={() => setSelectedIds([])}
-            entityLabel="reader"
-          />
-        )}
+            {/* Table Content */}
+            <div className="relative px-2 sm:px-3 lg:px-6 mt-3 sm:mt-4 lg:mt-6">
+              <div className="overflow-x-auto bg-white/70 shadow-none relative">
+                {/* Loader overlay when refreshing */}
+                {isRefreshing && (
+                  <div className="absolute inset-0 bg-white/70 flex items-center justify-center z-20">
+                    <Loader2 className="h-12 w-12 text-blue-600 animate-spin" />
+                  </div>
+                )}
+                <div className="print-content">
+                  {!loading && paginatedReaders.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-8 px-4">
+                      <EmptyState
+                        icon={<CreditCard className="w-6 h-6 text-blue-400" />}
+                        title="No RFID readers found"
+                        description="Try adjusting your search criteria or filters to find the readers you're looking for."
+                        action={
+                          <div className="flex flex-col gap-2 w-full">
+                            <Button
+                              variant="outline"
+                              className="border-blue-300 text-blue-700 hover:bg-blue-50 rounded-xl"
+                              onClick={() => fetchReaders()}
+                            >
+                              <RefreshCw className="w-4 h-4 mr-2" />
+                              Refresh Data
+                            </Button>
+                            <Button
+                              onClick={() => { 
+                                setFormType('create'); 
+                                setFormDialogOpen(true); 
+                                setSelectedReaderForForm(undefined);
+                              }}
+                              className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl"
+                            >
+                              <Plus className="w-4 h-4 mr-2" />
+                              Add Reader
+                            </Button>
+                          </div>
+                        }
+                      />
+                    </div>
+                  ) : (
+                    <TableList
+                      columns={columns}
+                      data={paginatedReaders.filter(r => r && r.readerId !== undefined)}
+                      loading={loading}
+                      selectedIds={selectedIds}
+                      onSelectRow={handleSelectRow}
+                      onSelectAll={handleSelectAll}
+                      isAllSelected={selectedIds.length === paginatedReaders.length && paginatedReaders.length > 0}
+                      isIndeterminate={selectedIds.length > 0 && selectedIds.length < paginatedReaders.length}
+                      getItemId={(row: RFIDReader) => (row && row.readerId !== undefined ? row.readerId.toString() : "")}
+                      className="border-0 shadow-none max-w-full transition-all duration-150 [&_tr:hover]:bg-blue-50 [&_tr.selected]:bg-blue-100"
 
-        {/* Pagination for desktop */}
-        <div className="hidden xl:block">
-          <Pagination
-            currentPage={currentPage}
-            totalPages={totalPages}
-            totalItems={filteredReaders.length}
-            itemsPerPage={itemsPerPage}
-            onPageChange={setCurrentPage}
-          />
+                    />
+                  )}
+                </div>
+              </div>
+              {/* Pagination */}
+
+                <TablePagination
+                  page={currentPage}
+                  pageSize={itemsPerPage}
+                  totalItems={totalItems}
+                  onPageChange={setCurrentPage}
+                  onPageSizeChange={handleItemsPerPageChange}
+                  entityLabel="reader"
+                />
+            </div>
+          </Card>
         </div>
 
         {/* View Dialog */}
@@ -574,24 +981,18 @@ export default function RFIDReadersPage() {
           onOpenChange={setFormDialogOpen}
           type={formType}
           data={selectedReaderForForm}
-          id={selectedReaderForForm?.id}
+          id={selectedReaderForForm?.readerId}
           onSuccess={(newReader) => {
             if (formType === 'create') {
               setReaders(prev => [...prev, newReader as RFIDReader]);
             } else {
-              setReaders(prev => prev.map(r => r.id === (newReader as RFIDReader).id ? (newReader as RFIDReader) : r));
+              setReaders(prev => prev.map(r => r.readerId === (newReader as RFIDReader).readerId ? (newReader as RFIDReader) : r));
             }
             fetchReaders(); // to get the latest data
           }}
         />
 
-        {/* Filter Dialog */}
-        <FilterDialog
-          filters={filters}
-          filterSections={filterSections}
-          onApplyFilters={(newFilters) => setFilters({ status: newFilters.status ?? [], room: newFilters.room ?? [] })}
-          onClearFilters={() => setFilters({ status: [], room: [] })}
-        />
+
 
         {/* Sort Dialog */}
         <SortDialog
@@ -628,7 +1029,61 @@ export default function RFIDReadersPage() {
           title="Export RFID Readers"
           tooltip="Export the current list of readers."
         />
+
+                 {/* Import Dialog */}
+         <ImportDialog
+           open={importDialogOpen}
+           onOpenChange={setImportDialogOpen}
+           onImport={handleImportReaders}
+           entityName="RFIDReader"
+           templateUrl={undefined}
+           acceptedFileTypes={[".csv", ".xlsx", ".xls"]}
+           maxFileSize={5}
+         />
+
+         {/* Visible Columns Dialog */}
+         <VisibleColumnsDialog
+           open={visibleColumnsDialogOpen}
+           onOpenChange={setVisibleColumnsDialogOpen}
+           columns={COLUMN_OPTIONS}
+           visibleColumns={visibleColumns}
+           onColumnToggle={handleColumnToggle}
+           onReset={handleResetColumns}
+           title="Manage Reader Columns"
+           description="Choose which columns to display in the RFID reader table"
+           searchPlaceholder="Search reader columns..."
+           enableManualSelection={true}
+         />
+
+         {/* Bulk Actions Dialog */}
+         <BulkActionsDialog
+           open={bulkActionsDialogOpen}
+           onOpenChange={setBulkActionsDialogOpen}
+           selectedItems={selectedIds.map(id => readers.find(r => r.readerId.toString() === id)).filter(Boolean) as RFIDReader[]}
+           entityType="course"
+           entityLabel="reader"
+           availableActions={[
+             { type: 'status-update', title: 'Update Status', description: 'Update status of selected readers', icon: <Settings className="w-4 h-4" /> },
+             { type: 'notification', title: 'Send Notification', description: 'Send notification to administrators', icon: <Bell className="w-4 h-4" /> },
+             { type: 'export', title: 'Export Data', description: 'Export selected readers data', icon: <Download className="w-4 h-4" /> },
+           ]}
+           exportColumns={exportableColumns.map(col => ({ id: col.key, label: col.label, default: true }))}
+           notificationTemplates={[]}
+           stats={{
+             total: selectedIds.length,
+             active: selectedIds.filter(id => readers.find(r => r.readerId.toString() === id)?.status === 'ACTIVE').length,
+             inactive: selectedIds.filter(id => {
+               const reader = readers.find(r => r.readerId.toString() === id);
+               return reader && reader.status !== 'ACTIVE';
+             }).length
+           }}
+           onActionComplete={handleBulkActionComplete}
+           onCancel={handleBulkActionCancel}
+           onProcessAction={handleProcessBulkAction}
+           getItemDisplayName={item => item.deviceName}
+           getItemStatus={item => item.status}
+         />
       </div>
-    </TooltipProvider>
+    </div>
   );
 } 

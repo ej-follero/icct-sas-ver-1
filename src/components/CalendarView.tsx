@@ -476,15 +476,14 @@ const CalendarView = ({
             >
               <X className="w-5 h-5" />
             </button>
-            <div className="flex flex-col items-center gap-2">
+            <div className="flex flex-col items-start gap-2">
               <span className="inline-flex items-center px-3 py-1 rounded-full bg-blue-600 text-white font-semibold text-sm mb-2">
                 {dialogEvent.sectionCode || '-'}
               </span>
-              <div className="text-blue-800 font-semibold text-lg mb-1">{dialogEvent.subject || '-'}</div>
-              <div className="text-gray-700 text-sm mb-1">Instructor: <span className="font-medium text-blue-700">{dialogEvent.instructor || '-'}</span></div>
-              <div className="text-gray-700 text-sm mb-1">Day: <span className="font-medium text-blue-700">{dialogEvent.day || '-'}</span></div>
-              <div className="text-gray-700 text-sm mb-1">Time: <span className="font-medium text-blue-700">{dialogEvent.time || '-'}</span></div>
-              {dialogEvent.description && <div className="text-gray-600 text-center mt-2">{dialogEvent.description}</div>}
+              <div className="text-blue-800 font-semibold text-lg mb-1 text-left">{dialogEvent.subject || '-'}</div>
+              <div className="text-gray-700 text-sm mb-1 text-left">Instructor: <span className="font-medium text-blue-700">{dialogEvent.instructor || '-'}</span></div>
+              <div className="text-gray-700 text-sm mb-1 text-left">Day: <span className="font-medium text-blue-700">{dialogEvent.day || '-'}</span></div>
+              <div className="text-gray-700 text-sm mb-1 text-left">Time: <span className="font-medium text-blue-700">{dialogEvent.time || '-'}</span></div>
             </div>
           </div>
         </div>

@@ -18,7 +18,7 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuIte
 import { Dialog, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Plus, Search, Filter, SortAsc, FileDown, Printer, Eye, Pencil, Trash2, User, Mail, Phone, MapPin, School, GraduationCap, Calendar, Users, CreditCard, Activity, TrendingUp, AlertCircle, CheckCircle, Clock, UserCheck, UserX, Home, Building, BookOpen, Shield, QrCode, Database, FileText, BarChart3, PieChart, LineChart } from "lucide-react";
+import { Plus, Search, Filter, SortAsc, FileDown, Printer, Eye, Pencil, Trash2, User, Mail, Phone, MapPin, School, GraduationCap, Calendar, Users, CreditCard, Activity, TrendingUp, AlertCircle, CheckCircle, Clock, UserCheck, UserX, Home, Building, BookOpen, Shield, QrCode, Database, FileText, BarChart3, PieChart, LineChart, Settings } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { QuickActionsPanel, DataOperationsGroup, MoreOptionsGroup } from "@/components/reusable/QuickActionsPanel";
 

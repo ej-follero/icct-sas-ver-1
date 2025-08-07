@@ -13,7 +13,7 @@ import autoTable from "jspdf-autotable";
 import { toast } from "sonner";
 import Fuse from "fuse.js";
 import React from "react";
-import { Settings, Plus, Trash2, Printer, Loader2, MoreHorizontal, Upload, List, Columns3, ChevronDown, ChevronUp, UserCheck, UserX, Users, UserPlus, RefreshCw, Download, Search, Bell, Building2, RotateCcw, Eye, Pencil, MapPin, Home, Calendar, Clock, Info } from "lucide-react";
+import { Settings, Plus, Trash2, Printer, Loader2, MoreHorizontal, Upload, List, Columns3, ChevronDown, ChevronUp, UserCheck, UserX, Users, UserPlus, RefreshCw, Download, Search, Bell, Building2, RotateCcw, Eye, Pencil, MapPin, Home, Calendar, Clock, Info, CheckCircle } from "lucide-react";
 import { ImportDialog } from "@/components/reusable/Dialogs/ImportDialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ExportDialog } from '@/components/reusable/Dialogs/ExportDialog';
@@ -311,13 +311,13 @@ export default function RoomsPage() {
 
   // Table columns
   const adminRoomColumns = [
-    { key: 'roomNo', label: 'Room Number', accessor: 'roomNo', className: 'font-medium', sortable: true, required: true },
-    { key: 'roomType', label: 'Type', accessor: 'roomType', className: 'capitalize', headerClassName: 'text-center', sortable: true, required: true },
+    { key: 'roomNo', label: 'Room Number', accessor: 'roomNo', className: 'font-medium text-center', sortable: true, required: true },
+    { key: 'roomType', label: 'Type', accessor: 'roomType', className: 'capitalize text-center', sortable: true, required: true },
     { key: 'roomCapacity', label: 'Capacity', accessor: 'roomCapacity', className: 'text-center', sortable: true },
-    { key: 'roomBuildingLoc', label: 'Building', accessor: 'roomBuildingLoc', sortable: true, required: true },
-    { key: 'roomFloorLoc', label: 'Floor', accessor: 'roomFloorLoc', sortable: true },
-    { key: 'readerId', label: 'RFID Reader', accessor: 'readerId', sortable: true },
-    { key: 'status', label: 'Status', accessor: 'status', className: 'capitalize text-center', headerClassName: 'text-center',sortable: true, required: true },
+    { key: 'roomBuildingLoc', label: 'Building', accessor: 'roomBuildingLoc', className: 'text-center', sortable: true, required: true },
+    { key: 'roomFloorLoc', label: 'Floor', accessor: 'roomFloorLoc', className: 'text-center', sortable: true },
+    { key: 'readerId', label: 'RFID Reader', accessor: 'readerId', className: 'text-center', sortable: true },
+    { key: 'status', label: 'Status', accessor: 'status', className: 'capitalize text-center', sortable: true, required: true },
     { key: 'isActive', label: 'Active', accessor: 'isActive', className: 'text-center', sortable: true },
   ];
 
@@ -364,9 +364,9 @@ export default function RoomsPage() {
     {
       header: '',
       accessor: 'expander',
-      className: 'w-12 text-center',
+      className: 'w-12 px-1 py-1',
       expandedContent: (item: Room) => {
-        const [rowViewMode, setRowViewMode] = React.useState<'table' | 'calendar'>("table");
+        const rowViewMode = expandedRowViewModes[item.id] || "table";
         // Map SubjectSchedule to calendar events
         const dayToIndex = {
           MONDAY: 1,
@@ -393,78 +393,82 @@ export default function RoomsPage() {
             end.setHours(endHour, endMinute, 0, 0);
             return {
               id: sched.subjectSchedId || idx,
-              title: `${sched.subject?.subjectName || ""} (${sched.section?.sectionName || ""})\n${sched.instructor ? `${sched.instructor.firstName || ''} ${sched.instructor.lastName || ''}`.trim() : ''}`.trim(),
+              title: `${sched.subject?.subjectName || ""} (${sched.section?.sectionName || ""})`.trim(),
               start,
               end,
               description: `Section: ${sched.section?.sectionName || "-"}, Instructor: ${(sched.instructor ? `${sched.instructor.firstName || ''} ${sched.instructor.lastName || ''}`.trim() : '-')}`,
               time: `${sched.startTime} - ${sched.endTime}`,
+              sectionCode: sched.section?.sectionName || "-",
+              subject: sched.subject?.subjectName || "-",
+              instructor: sched.instructor ? `${sched.instructor.firstName || ''} ${sched.instructor.lastName || ''}`.trim() : "-",
+              day: sched.day || "-",
             };
           });
         return (
           <td colSpan={columnCount} className="bg-blue-50 rounded-b-xl p-4">
-             {/* Segmented Toggle for Table/Calendar View (per expanded row, right-aligned, smaller) */}
-             <div className="flex justify-end items-center mb-2">
-               <div className="flex bg-blue-600 rounded-full p-0.5 w-fit">
-                 <button
-                   className={`px-3 py-1.5 text-sm rounded-full transition-colors duration-200 ${rowViewMode === 'table' ? 'bg-white text-blue-600 font-bold' : 'bg-blue-600 text-white font-normal'}`}
-                   onClick={() => setRowViewMode('table')}
-                 >
-                   Table View
-                 </button>
-                 <button
-                   className={`px-3 py-1.5 text-sm rounded-full transition-colors duration-200 ${rowViewMode === 'calendar' ? 'bg-white text-blue-600 font-bold' : 'bg-blue-600 text-white font-normal'}`}
-                   onClick={() => setRowViewMode('calendar')}
-                 >
-                   Calendar View
-                 </button>
-               </div>
-             </div>
-            {rowViewMode === 'table' ? (
-              <div className="overflow-x-auto min-w-0 w-full">
-                <h4 className="text-xl font-bold text-blue-900 mb-6 text-center">Schedules</h4>
-                {item.SubjectSchedule && item.SubjectSchedule.length > 0 ? (
-                  <table className="w-full text-sm bg-white min-w-0">
-                    <thead>
-                      <tr>
-                        <th className="px-4 py-3 text-center font-bold text-blue-900 bg-white">Sched ID</th>
-                        <th className="px-4 py-3 text-center font-bold text-blue-900 bg-white">Section</th>
-                        <th className="px-4 py-3 text-center font-bold text-blue-900 bg-white">Subject</th>
-                        <th className="px-4 py-3 text-center font-bold text-blue-900 bg-white">Instructor</th>
-                        <th className="px-4 py-3 text-center font-bold text-blue-900 bg-white">Day</th>
-                        <th className="px-4 py-3 text-center font-bold text-blue-900 bg-white">Time</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {item.SubjectSchedule.map((sched: any, idx: number) => (
-                        <tr key={sched.subjectSchedId || idx} className={
-                          `${idx % 2 === 1 ? 'bg-gray-100' : 'bg-white'} border-b border-gray-200`
-                        }>
-                          <td className="px-4 py-2 text-center">{sched.subjectSchedId}</td>
-                          <td className="px-4 py-2 text-center">{sched.section?.sectionName || '-'}</td>
-                          <td className="px-4 py-2 text-center">{sched.subject?.subjectName || '-'}</td>
-                          <td className="px-4 py-2 text-center">{(sched.instructor ? `${sched.instructor.firstName || ''} ${sched.instructor.lastName || ''}`.trim() : '-')}</td>
-                          <td className="px-4 py-2 text-center">{sched.day}</td>
-                          <td className="px-4 py-2 text-center">{sched.startTime} - {sched.endTime}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                ) : (
-                  <div className="text-gray-500 text-left">No schedules assigned to this room.</div>
-                )}
+            {/* Segmented Toggle for Table/Calendar View (per expanded row, right-aligned, smaller) */}
+            <div className="flex justify-end items-center mb-2">
+              <div className="flex bg-blue-600 rounded-full p-0.5 w-fit">
+                <button
+                  className={`px-3 py-1.5 text-sm rounded-full transition-colors duration-200 ${rowViewMode === 'table' ? 'bg-white text-blue-600 font-bold' : 'bg-blue-600 text-white font-normal'}`}
+                  onClick={() => setRowViewMode(String(item.id), 'table')}
+                >
+                  Table View
+                </button>
+                <button
+                  className={`px-3 py-1.5 text-sm rounded-full transition-colors duration-200 ${rowViewMode === 'calendar' ? 'bg-white text-blue-600 font-bold' : 'bg-blue-600 text-white font-normal'}`}
+                  onClick={() => setRowViewMode(String(item.id), 'calendar')}
+                >
+                  Calendar View
+                </button>
               </div>
-            ) : (
-              <>
-                <h4 className="font-bold text-lg text-blue-800 mb-2 text-center">Room Schedule Calendar</h4>
-                <CalendarView
-                  events={events}
-                  mode="work-week"
-                  showEventCards={true}
-                  className="mt-2"
-                />
-              </>
-            )}
-          </td>
+            </div>
+           {rowViewMode === 'table' ? (
+             <div className="overflow-x-auto min-w-0 w-full">
+               <h4 className="text-xl font-bold text-blue-900 mb-6 text-center">Schedules</h4>
+               {item.SubjectSchedule && item.SubjectSchedule.length > 0 ? (
+                 <table className="w-full text-sm bg-white min-w-0">
+                   <thead>
+                     <tr>
+                       <th className="px-4 py-3 text-center font-bold text-blue-900 bg-blue-100">Sched ID</th>
+                       <th className="px-4 py-3 text-center font-bold text-blue-900 bg-blue-100">Section</th>
+                       <th className="px-4 py-3 text-center font-bold text-blue-900 bg-blue-100">Subject</th>
+                       <th className="px-4 py-3 text-center font-bold text-blue-900 bg-blue-100">Instructor</th>
+                       <th className="px-4 py-3 text-center font-bold text-blue-900 bg-blue-100">Day</th>
+                       <th className="px-4 py-3 text-center font-bold text-blue-900 bg-blue-100">Time</th>
+                     </tr>
+                   </thead>
+                   <tbody>
+                     {item.SubjectSchedule.map((sched: any, idx: number) => (
+                       <tr key={sched.subjectSchedId || idx} className={
+                         `${idx % 2 === 1 ? 'bg-gray-100' : 'bg-white'} border-b border-gray-200`
+                       }>
+                         <td className="px-4 py-2 text-center">{sched.subjectSchedId}</td>
+                         <td className="px-4 py-2 text-center">{sched.section?.sectionName || '-'}</td>
+                         <td className="px-4 py-2 text-center">{sched.subject?.subjectName || '-'}</td>
+                         <td className="px-4 py-2 text-center">{(sched.instructor ? `${sched.instructor.firstName || ''} ${sched.instructor.lastName || ''}`.trim() : '-')}</td>
+                         <td className="px-4 py-2 text-center">{sched.day}</td>
+                         <td className="px-4 py-2 text-center">{sched.startTime} - {sched.endTime}</td>
+                       </tr>
+                     ))}
+                   </tbody>
+                 </table>
+               ) : (
+                 <div className="text-gray-500 text-left">No schedules assigned to this room.</div>
+               )}
+             </div>
+           ) : (
+             <>
+               <h4 className="font-bold text-lg text-blue-800 mb-2 text-center">Room Schedule Calendar</h4>
+               <CalendarView
+                 events={events}
+                 mode="work-week"
+                 showEventCards={false}
+                 className="mt-2"
+               />
+             </>
+           )}
+         </td>
         );
       },
     },
@@ -478,7 +482,7 @@ export default function RoomsPage() {
         />
       ),
       accessor: 'select',
-      className: 'w-12 text-center',
+      className: 'w-12 px-1 py-1',
     },
     ...adminRoomColumns.map(col => {
       // Spread all properties so headerClassName is included
@@ -539,39 +543,19 @@ export default function RoomsPage() {
     {
       header: "Actions",
       accessor: "actions",
-      className: "text-center",
+      className: "px-1 py-1",
       render: (item: Room) => (
-        <div className="flex gap-2 justify-center">
-          <Button variant="ghost" size="icon" onClick={() => {
-            setSelectedRoom(item);
-            setViewModalOpen(true);
-          }}>
-            <Eye className="h-4 w-4 text-blue-600" />
-          </Button>
-          <Button variant="ghost" size="icon" onClick={() => {
-            setSelectedRoom(item);
-            setEditModalOpen(true);
-          }}>
-            <Pencil className="h-4 w-4 text-green-600" />
-          </Button>
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span>
-                  <Button variant="ghost" size="icon" onClick={() => {
-                    setSelectedRoom(item);
-                    setDeleteModalOpen(true);
-                  }} disabled={!!item.hasRelatedEntities}>
-                    <Trash2 className="h-4 w-4 text-red-600" />
-                  </Button>
-                </span>
-              </TooltipTrigger>
-              <TooltipContent>
-                {item.hasRelatedEntities ? "Cannot delete: Room has related schedules or assignments" : "Delete room"}
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        </div>
+        <TableRowActions
+          onView={() => { setSelectedRoom(item); setViewModalOpen(true); }}
+          onEdit={() => { setSelectedRoom(item); setEditModalOpen(true); }}
+          onDelete={() => { setSelectedRoom(item); setDeleteModalOpen(true); }}
+          itemName={item.roomNo}
+          disabled={!!item.hasRelatedEntities}
+          deleteTooltip={item.hasRelatedEntities ? "Cannot delete: Room has related schedules or assignments" : "Delete room"}
+          viewAriaLabel={`View room ${item.roomNo}`}
+          editAriaLabel={`Edit room ${item.roomNo}`}
+          deleteAriaLabel={`Delete room ${item.roomNo}`}
+        />
       ),
     },
   ], [adminRoomColumns, isAllSelected, isIndeterminate, handleSelectAll, fuzzyResults, highlightMatch, columnCount]);
@@ -964,6 +948,14 @@ export default function RoomsPage() {
     setIsBulkAssigning(false);
   };
 
+  // Add this new state at the top level of RoomsPage
+  const [expandedRowViewModes, setExpandedRowViewModes] = useState<Record<string, 'table' | 'calendar'>>({});
+
+  // Handler to set view mode for a specific row
+  const setRowViewMode = (rowId: string, mode: 'table' | 'calendar') => {
+    setExpandedRowViewModes(prev => ({ ...prev, [rowId]: mode }));
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#f8fafc] via-[#ffffff] to-[#f8fafc] p-0 overflow-x-hidden">
         <div className="w-full max-w-full px-4 sm:px-6 lg:px-8 space-y-8 sm:space-y-10">
@@ -991,15 +983,15 @@ export default function RoomsPage() {
             </div>
             <div className="min-w-0 w-full">
             <SummaryCard
-  icon={<RefreshCw className="w-4 h-4 sm:w-5 sm:h-5 text-blue-500/80" />} 
-  label="Active Schedules"
-  value={rooms.filter(room => room.isActive).length}
-  valueClassName="text-blue-900"
-  sublabel="Currently active"
-/>     
+      icon={<CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-blue-500/80" />} 
+      label="Active Schedules"
+      value={rooms.filter(room => room.isActive).length}
+      valueClassName="text-blue-900"
+      sublabel="Currently active"
+    />     
 </div>
 <SummaryCard
-  icon={<RefreshCw className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />} 
+  icon={<Building2 className="w-4 h-4 sm:w-5 sm:h-5 text-blue-500/80" />} 
   label="Total Rooms"
   value={rooms.length}
   valueClassName="text-blue-900"
@@ -1007,7 +999,7 @@ export default function RoomsPage() {
 />
             <div className="min-w-0 w-full">
             <SummaryCard
-  icon={<MapPin className="w-4 h-4 sm:w-5 sm:h-5 text-blue-500/80" />} 
+  icon={<Home className="w-4 h-4 sm:w-5 sm:h-5 text-blue-500/80" />} 
   label="Active Rooms"
   value={rooms.filter(room => room.isActive).length}
   valueClassName="text-blue-900"
@@ -1095,8 +1087,7 @@ export default function RoomsPage() {
         </div>
 
         {/* Main Content Area */}
-        <div className="w-full max-w-full pt-4">
-          <Card className="shadow-lg rounded-xl overflow-hidden p-0 w-full max-w-full">
+        <Card className="shadow-lg rounded-xl overflow-hidden p-0 w-full max-w-full">
           <CardHeader className="p-0">
             {/* Blue Gradient Header - flush to card edge, no rounded corners */}
             <div className="bg-gradient-to-r from-[#1e40af] to-[#3b82f6] p-0">
@@ -1127,7 +1118,6 @@ export default function RoomsPage() {
                   className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:outline-none"
                 />
               </div>
-              
               {/* Quick Filter Dropdowns */}
               <div className="flex flex-wrap gap-2 sm:gap-3 w-full xl:w-auto">
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
@@ -1143,7 +1133,6 @@ export default function RoomsPage() {
                     <SelectItem value="INACTIVE">Inactive</SelectItem>
                   </SelectContent>
                 </Select>
-
                 <Select value={typeFilter} onValueChange={setTypeFilter}>
                   <SelectTrigger className="w-full sm:w-28 lg:w-32 xl:w-28 text-gray-700 rounded">
                     <SelectValue placeholder="Type" />
@@ -1157,8 +1146,6 @@ export default function RoomsPage() {
                     <SelectItem value="OTHER">Other</SelectItem>
                   </SelectContent>
                 </Select>
-
-                {/* Building Filter */}
                 <Select value={buildingFilter} onValueChange={setBuildingFilter}>
                   <SelectTrigger className="w-full sm:w-40 lg:w-48 xl:w-44 text-gray-700 rounded">
                     <SelectValue placeholder="Building" />
@@ -1172,8 +1159,6 @@ export default function RoomsPage() {
                     <SelectItem value="BuildingE">Building E</SelectItem>
                   </SelectContent>
                 </Select>
-
-                {/* Floor Filter */}
                 <Select value={floorFilter} onValueChange={setFloorFilter}>
                   <SelectTrigger className="w-full sm:w-28 lg:w-32 xl:w-28 text-gray-700 rounded">
                     <SelectValue placeholder="Floor" />
@@ -1188,8 +1173,6 @@ export default function RoomsPage() {
                     <SelectItem value="F6">6F</SelectItem>
                   </SelectContent>
                 </Select>
-
-                {/* Occupancy Status Filter */}
                 <Select value={occupancyFilter} onValueChange={setOccupancyFilter}>
                   <SelectTrigger className="w-full sm:w-32 lg:w-36 xl:w-32 text-gray-700 rounded">
                     <SelectValue placeholder="Room Status" />
@@ -1252,95 +1235,128 @@ export default function RoomsPage() {
               />
             </div>
           )}
-          {/* Table/Calendar Content */}
-          <div className="relative px-2 sm:px-3 lg:px-6 mt-3 sm:mt-4 lg:mt-6">
-            {/* Table layout for xl+ only */}
-            <div className="hidden xl:block overflow-x-auto w-full">
-                  <TableList
-                    columns={columns}
-                    data={sortedRooms.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)}
-                    loading={loading}
-                    selectedIds={selectedIds}
-                    emptyMessage={null}
-                    onSelectRow={handleSelectRow}
-                    onSelectAll={handleSelectAll}
-                    isAllSelected={isAllSelected}
-                    isIndeterminate={isIndeterminate}
-                    getItemId={(item) => String(item.id)}
-                    expandedRowIds={expandedRowIds}
-                    onToggleExpand={handleToggleExpand}
-                    sortState={sortBy}
-                    onSort={handleSort}
-                    className="border-0 shadow-none w-full max-w-full"
-                  />
-                </div>
-              {/* Card layout for small screens */}
-              <div className="block xl:hidden p-2 sm:p-3 lg:p-4 max-w-full">
-                {!loading && filteredRooms.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-8 px-4">
-                    <EmptyState
-                      icon={<Home className="w-6 h-6 text-blue-400" />}
-                      title="No rooms found"
-                      description="Try adjusting your search criteria or filters to find the rooms you're looking for."
-                      action={
-                        <div className="flex flex-col gap-2 w-full">
-                          <Button
-                            variant="outline"
-                            className="border-blue-300 text-blue-700 hover:bg-blue-50 rounded-xl"
-                            onClick={() => fetchRooms(true)}
-                          >
-                            <RefreshCw className="w-4 h-4 mr-2" />
-                            Refresh Data
-                          </Button>
-                        </div>
-                      }
-                    />
+          {/* Table layout for xl+ only */}
+          <div className="hidden xl:block">
+            <div className="px-4 sm:px-6 pt-6 pb-6"> {/* Add top and bottom padding around the table */}
+              <div className="overflow-x-auto bg-white/70 shadow-none relative"> {/* border and border-blue-100 removed */}
+                {/* Loader overlay when refreshing */}
+                {isRefreshing && (
+                  <div className="absolute inset-0 bg-white/70 flex items-center justify-center z-20">
+                    <Loader2 className="h-12 w-12 text-blue-600 animate-spin" />
                   </div>
-                ) : (
-                  <TableCardView
-                    items={paginatedRooms}
-                    selectedIds={selectedIds}
-                    onSelect={handleSelectRow}
-                    onView={(item) => {
-                      setSelectedRoom(item);
-                      setViewModalOpen(true);
-                    }}
-                    onEdit={(item) => {
-                      setSelectedRoom(item);
-                      setEditModalOpen(true);
-                    }}
-                    onDelete={(item) => {
-                      setSelectedRoom(item);
-                      setDeleteModalOpen(true);
-                    }}
-                    getItemId={(item) => String(item.id)}
-                    getItemName={(item) => item.roomNo}
-                    getItemCode={(item) => item.roomType}
-                    getItemStatus={(item) =>
-                      item.status === "AVAILABLE" ? "active" :
-                      item.status === "INACTIVE" ? "inactive" :
-                      item.status === "OCCUPIED" ? "inactive" :
-                      item.status === "MAINTENANCE" ? "inactive" :
-                      item.status === "RESERVED" ? "inactive" : "inactive"
-                    }
-                    getItemDescription={(item) => item.roomBuildingLoc}
-                    getItemDetails={(item) => [
-                      { label: 'Capacity', value: item.roomCapacity },
-                      { label: 'Building', value: item.roomBuildingLoc },
-                      { label: 'Floor', value: item.roomFloorLoc },
-                      { label: 'RFID Reader', value: item.readerId },
-                    ]}
-                    disabled={(item) => item.hasRelatedEntities || false}
-                    deleteTooltip={(item) =>
-                      item.hasRelatedEntities
-                        ? "Cannot delete: Room has related schedules or assignments"
-                        : undefined
-                    }
-                    isLoading={loading}
-                  />
                 )}
+                <div className="print-content">
+                  {filteredRooms.length === 0 && !loading ? (
+                    <div className="flex flex-col items-center justify-center py-8 px-4">
+                      <EmptyState
+                        icon={<Home className="w-6 h-6 text-blue-400" />}
+                        title="No rooms found"
+                        description="Try adjusting your search criteria or filters to find the rooms you're looking for."
+                        action={
+                          <div className="flex flex-col gap-2 w-full">
+                            <Button
+                              variant="outline"
+                              className="border-blue-300 text-blue-700 hover:bg-blue-50 rounded-xl"
+                              onClick={() => fetchRooms(true)}
+                            >
+                              <RefreshCw className="w-4 h-4 mr-2" />
+                              Refresh Data
+                            </Button>
+                          </div>
+                        }
+                      />
+                    </div>
+                  ) : (
+                    <TableList
+                      columns={columns}
+                      data={sortedRooms.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)}
+                      loading={loading}
+                      selectedIds={selectedIds}
+                      emptyMessage={null}
+                      onSelectRow={handleSelectRow}
+                      onSelectAll={handleSelectAll}
+                      isAllSelected={isAllSelected}
+                      isIndeterminate={isIndeterminate}
+                      getItemId={(item) => String(item.id)}
+                      expandedRowIds={expandedRowIds}
+                      onToggleExpand={handleToggleExpand}
+                      sortState={sortBy}
+                      onSort={handleSort}
+                      className="border-0 shadow-none w-full max-w-full"
+                    />
+                  )}
+                </div>
               </div>
             </div>
+          </div>
+          {/* Card layout for small screens */}
+          <div className="block xl:hidden p-2 sm:p-3 lg:p-4 max-w-full">
+            <div className="px-2 sm:px-4 pt-6 pb-6"> {/* Add top and bottom padding for mobile card view */}
+              {!loading && filteredRooms.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-8 px-4">
+                  <EmptyState
+                    icon={<Home className="w-6 h-6 text-blue-400" />}
+                    title="No rooms found"
+                    description="Try adjusting your search criteria or filters to find the rooms you're looking for."
+                    action={
+                      <div className="flex flex-col gap-2 w-full">
+                        <Button
+                          variant="outline"
+                          className="border-blue-300 text-blue-700 hover:bg-blue-50 rounded-xl"
+                          onClick={() => fetchRooms(true)}
+                        >
+                          <RefreshCw className="w-4 h-4 mr-2" />
+                          Refresh Data
+                        </Button>
+                      </div>
+                    }
+                  />
+                </div>
+              ) : (
+                <TableCardView
+                  items={paginatedRooms}
+                  selectedIds={selectedIds}
+                  onSelect={handleSelectRow}
+                  onView={(item) => {
+                    setSelectedRoom(item);
+                    setViewModalOpen(true);
+                  }}
+                  onEdit={(item) => {
+                    setSelectedRoom(item);
+                    setEditModalOpen(true);
+                  }}
+                  onDelete={(item) => {
+                    setSelectedRoom(item);
+                    setDeleteModalOpen(true);
+                  }}
+                  getItemId={(item) => String(item.id)}
+                  getItemName={(item) => item.roomNo}
+                  getItemCode={(item) => item.roomType}
+                  getItemStatus={(item) =>
+                    item.status === "AVAILABLE" ? "active" :
+                    item.status === "INACTIVE" ? "inactive" :
+                    item.status === "OCCUPIED" ? "inactive" :
+                    item.status === "MAINTENANCE" ? "inactive" :
+                    item.status === "RESERVED" ? "inactive" : "inactive"
+                  }
+                  getItemDescription={(item) => item.roomBuildingLoc}
+                  getItemDetails={(item) => [
+                    { label: 'Capacity', value: item.roomCapacity },
+                    { label: 'Building', value: item.roomBuildingLoc },
+                    { label: 'Floor', value: item.roomFloorLoc },
+                    { label: 'RFID Reader', value: item.readerId },
+                  ]}
+                  disabled={(item) => item.hasRelatedEntities || false}
+                  deleteTooltip={(item) =>
+                    item.hasRelatedEntities
+                      ? "Cannot delete: Room has related schedules or assignments"
+                      : undefined
+                  }
+                  isLoading={loading}
+                />
+              )}
+            </div>
+          </div>
           {/* Pagination */}
           <TablePagination
             page={currentPage}
@@ -1353,8 +1369,7 @@ export default function RoomsPage() {
           />
         </Card>
         </div>
-      </div>
-
+                
       {/* Dialogs */}
       <RoomForm
         open={addModalOpen}

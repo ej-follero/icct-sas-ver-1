@@ -13,7 +13,7 @@ import autoTable from "jspdf-autotable";
 import { toast } from "sonner";
 import Fuse from "fuse.js";
 import React from "react";
-import { Settings, Plus, Trash2, Printer, Loader2, MoreHorizontal, Upload, List, Columns3, ChevronDown, ChevronUp, UserCheck, UserX, Users, UserPlus, RefreshCw, Download, Search, Bell, Building2, RotateCcw, Eye, Pencil, Calendar, MapPin } from "lucide-react";
+import { Settings, Plus, Trash2, Printer, Loader2, MoreHorizontal, Upload, List, Columns3, ChevronDown, ChevronUp, UserCheck, UserX, Users, UserPlus, RefreshCw, Download, Search, Bell, Building2, RotateCcw, Eye, Pencil, Calendar, MapPin, BookOpen } from "lucide-react";
 import { ImportDialog } from "@/components/reusable/Dialogs/ImportDialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ExportDialog } from '@/components/reusable/Dialogs/ExportDialog';
@@ -70,11 +70,6 @@ interface Department {
   status: "active" | "inactive";
   totalInstructors: number;
   logo?: string;
-  settings: {
-    autoGenerateCode: boolean;
-    allowCourseOverlap: boolean;
-    maxInstructors: number;
-  };
 }
 
 type SortFieldKey = 'name' | 'code' | 'totalInstructors' | 'totalCourses' | 'status' | 'head';
@@ -117,19 +112,19 @@ const DEPARTMENT_COLUMNS: TableListColumn<Department>[] = [
     { 
       header: "Department Name", 
       accessor: "name", 
-      className: "text-blue-900 align-middle cursor-pointer hover:bg-blue-100 transition-colors min-w-[120px] max-w-[200px] truncate", 
+      className: "text-center align-middle min-w-[120px] max-w-[200px] whitespace-normal font-medium text-blue-900", 
       sortable: true 
     },
     { 
       header: "Code", 
       accessor: "code", 
-      className: "text-blue-900 align-middle cursor-pointer hover:bg-blue-100 transition-colors min-w-[80px] max-w-[100px] truncate", 
+      className: "text-center align-middle min-w-[80px] max-w-[100px] whitespace-nowrap text-blue-900", 
       sortable: true 
     },
   { 
     header: "Head of Department", 
     accessor: "headOfDepartment", 
-      className: "text-blue-900 text-center align-middle cursor-pointer hover:bg-blue-100 transition-colors min-w-[120px] max-w-[180px] truncate", 
+    className: "text-center align-middle min-w-[120px] max-w-[180px] whitespace-normal text-blue-900", 
     render: (item: Department) => (
       <div className="text-center">
         <div className="font-medium text-blue-900">
@@ -147,26 +142,26 @@ const DEPARTMENT_COLUMNS: TableListColumn<Department>[] = [
     ),
     sortable: true 
   },
-  { header: "Description", accessor: "description", className: "text-blue-900 text-center align-middle min-w-[100px] max-w-[150px] truncate" },
+  { header: "Description", accessor: "description", className: "text-center align-middle min-w-[100px] max-w-[150px] whitespace-normal text-blue-900", sortable: true },
   { 
     header: "Total Courses", 
     accessor: "totalCourses", 
-      className: "text-blue-900 text-center align-middle cursor-pointer hover:bg-blue-100 transition-colors min-w-[80px] max-w-[100px]", 
+    className: "text-center align-middle min-w-[80px] max-w-[100px] whitespace-normal text-blue-900", 
     render: (item: Department) => item.courseOfferings?.length || 0,
     sortable: true
   },
     { 
       header: "Total Instructors", 
       accessor: "totalInstructors", 
-      className: "text-blue-900 text-center align-middle cursor-pointer hover:bg-blue-100 transition-colors min-w-[80px] max-w-[100px]", 
+      className: "text-center align-middle min-w-[80px] max-w-[100px] whitespace-normal text-blue-900", 
       sortable: true 
     },
   { 
     header: "Status", 
     accessor: "status", 
-      className: "text-center align-middle cursor-pointer hover:bg-blue-100 transition-colors min-w-[80px] max-w-[100px]", 
+    className: "text-center align-middle min-w-[80px] max-w-[100px] whitespace-nowrap", 
     render: (item: Department) => (
-      <Badge variant={item.status === "active" ? "success" : "destructive"} className="text-xs px-2 py-1 rounded-full">
+      <Badge variant={item.status === "active" ? "success" : "destructive"} className="text-xs px-2 py-1 rounded-full flex justify-center">
         {item.status.toUpperCase()}
       </Badge>
     ),
@@ -473,27 +468,73 @@ export default function DepartmentListPage() {
     {
       header: '',
       accessor: 'expander',
-      className: 'w-12 text-center',
+      className: 'w-10 text-center px-1 py-1',
       expandedContent: (item: Department) => (
-        <TableExpandedRow
-          colSpan={columns.length + 1}
-          title="Courses Offered"
-          headers={["Course Name", "Code", "Status", "Students"]}
-          rows={item.courseOfferings}
-          renderRow={course => (
-            <TableRow key={course.id} className="hover:bg-blue-50 transition-colors duration-150 cursor-pointer">
-              <TableCell>{course.name}</TableCell>
-              <TableCell>{course.code}</TableCell>
-              <TableCell>
-                <Badge variant={course.status === 'active' ? 'success' : 'destructive'}>
-                  {course.status}
-                </Badge>
-              </TableCell>
-              <TableCell className="text-center">{course.totalStudents}</TableCell>
-            </TableRow>
-          )}
-          emptyMessage="No courses offered by this department."
-        />
+        <td colSpan={columns.length} className="bg-transparent px-0 py-0">
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-t border-blue-100 p-6">
+            {/* Course Offerings Section */}
+            <div className="bg-white rounded-xl shadow-sm border border-blue-100 overflow-hidden">
+              <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-4 py-3">
+                <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                  <BookOpen className="w-5 h-5" />
+                  Course Offerings ({item.courseOfferings?.length || 0})
+                </h3>
+              </div>
+              <div className="p-4">
+                {item.courseOfferings && item.courseOfferings.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b border-gray-200">
+                          <th className="text-left py-2 px-3 text-sm font-semibold text-gray-700">Course Name</th>
+                          <th className="text-left py-2 px-3 text-sm font-semibold text-gray-700">Code</th>
+                          <th className="text-center py-2 px-3 text-sm font-semibold text-gray-700">Status</th>
+                          <th className="text-center py-2 px-3 text-sm font-semibold text-gray-700">Students</th>
+                          <th className="text-center py-2 px-3 text-sm font-semibold text-gray-700">Sections</th>
+                          <th className="text-left py-2 px-3 text-sm font-semibold text-gray-700">Description</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(item.courseOfferings || []).map((course) => (
+                          <tr key={course.id} className="border-b border-gray-100 hover:bg-blue-50 transition-colors duration-150">
+                            <td className="py-3 px-3">
+                              <div className="font-medium text-blue-900">{course.name}</div>
+                            </td>
+                            <td className="py-3 px-3">
+                              <code className="bg-gray-100 px-2 py-1 rounded text-sm font-mono text-gray-700">{course.code}</code>
+                            </td>
+                            <td className="py-3 px-3 text-center">
+                              <Badge variant={course.status === 'active' ? 'success' : 'destructive'} className="text-xs">
+                                {course.status}
+                              </Badge>
+                            </td>
+                            <td className="py-3 px-3 text-center">
+                              <span className="font-semibold text-blue-900">{course.totalStudents || 0}</span>
+                            </td>
+                            <td className="py-3 px-3 text-center">
+                              <span className="font-semibold text-blue-900">{course.totalSections || 0}</span>
+                            </td>
+                            <td className="py-3 px-3">
+                              <span className="text-sm text-gray-600">
+                                {course.description || 'No description available'}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <BookOpen className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                    <p className="text-gray-500 text-sm">No courses offered by this department</p>
+                    <p className="text-gray-400 text-xs mt-1">Courses can be added through the course management system</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </td>
       ),
     },
     {
@@ -503,15 +544,15 @@ export default function DepartmentListPage() {
         </div>
       ),
       accessor: 'select',
-      className: 'w-12 text-center',
+      className: 'w-10 text-center px-1 py-1', // reduced padding
     },
     ...DEPARTMENT_COLUMNS.filter(col => visibleColumns.includes(col.accessor)),
     { 
       header: "Actions", 
       accessor: "actions", 
-      className: "text-center align-middle", 
+      className: "text-center align-middle px-1 py-1", // reduced padding
       render: (item: Department) => (
-        <div className="flex gap-2 justify-center">
+        <div className="flex gap-1 justify-center">
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -622,6 +663,32 @@ export default function DepartmentListPage() {
   // Add state for bulk deactivate dialog
   const [bulkDeactivateDialogOpen, setBulkDeactivateDialogOpen] = useState(false);
   const [bulkReactivateDialogOpen, setBulkReactivateDialogOpen] = useState(false);
+
+  // Add at the top of the component (inside DepartmentListPage)
+  const [bulkActions, setBulkActions] = useState({
+    assignInstructors: false,
+    archiveRestore: false,
+    assignCourses: false,
+  });
+
+  const handleBulkActionChange = (action: keyof typeof bulkActions) => {
+    setBulkActions(prev => ({ ...prev, [action]: !prev[action] }));
+  };
+
+  const handleBulkActionExecute = async () => {
+    if (bulkActions.assignInstructors) {
+      toast.info('Assign Instructors (stub)');
+      // Implement actual logic here
+    }
+    if (bulkActions.archiveRestore) {
+      toast.info('Archive/Restore Departments (stub)');
+      // Implement actual logic here
+    }
+    if (bulkActions.assignCourses) {
+      toast.info('Assign Courses (stub)');
+      // Implement actual logic here
+    }
+  };
 
   // Helper function to make an image rounded
   const makeImageRounded = async (imageData: string): Promise<string> => {
@@ -1877,7 +1944,7 @@ export default function DepartmentListPage() {
             loading={pageState.loading}
           />
           <SummaryCard
-            icon={<UserCheck className="text-green-600 w-5 h-5" />}
+            icon={<UserCheck className="text-blue-700 w-5 h-5" />}
             label="Active Departments"
             value={departments.filter(d => d.status === 'active').length}
             valueClassName="text-blue-900"
@@ -1885,7 +1952,7 @@ export default function DepartmentListPage() {
             loading={pageState.loading}
           />
           <SummaryCard
-            icon={<UserX className="text-yellow-600 w-5 h-5" />}
+            icon={<UserX className="text-blue-700 w-5 h-5" />}
             label="Inactive Departments"
             value={departments.filter(d => d.status === 'inactive').length}
             valueClassName="text-blue-900"
@@ -1893,7 +1960,7 @@ export default function DepartmentListPage() {
             loading={pageState.loading}
           />
           <SummaryCard
-            icon={<UserPlus className="text-purple-600 w-5 h-5" />}
+            icon={<UserPlus className="text-blue-700 w-5 h-5" />}
             label="Total Instructors"
             value={departments.reduce((sum, d) => sum + (d.totalInstructors || 0), 0)}
             valueClassName="text-blue-900"
@@ -2014,11 +2081,10 @@ export default function DepartmentListPage() {
                   className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:outline-none"
                 />
               </div>
-              
               {/* Quick Filter Dropdowns */}
               <div className="flex flex-wrap gap-2 sm:gap-3 w-full xl:w-auto">
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="w-full sm:w-28 lg:w-32 xl:w-28 text-gray-700">
+                  <SelectTrigger className="w-full sm:w-28 lg:w-32 xl:w-28 text-gray-400 rounded border-gray-300 hover:border-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent">
                     <SelectValue placeholder="Status" />
                   </SelectTrigger>
                   <SelectContent>
@@ -2027,9 +2093,8 @@ export default function DepartmentListPage() {
                     <SelectItem value="inactive">Inactive</SelectItem>
                   </SelectContent>
                 </Select>
-
                 <Select value={headFilter} onValueChange={setHeadFilter}>
-                  <SelectTrigger className="w-full sm:w-28 lg:w-32 xl:w-28 text-gray-700">
+                  <SelectTrigger className="w-full sm:w-28 lg:w-32 xl:w-28 text-gray-400 rounded border-gray-300 hover:border-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent">
                     <SelectValue placeholder="Head" />
                   </SelectTrigger>
                   <SelectContent>
@@ -2090,46 +2155,49 @@ export default function DepartmentListPage() {
               />
             </div>
           )}
-          {/* Table Content */}
-          <div className="relative px-2 sm:px-3 lg:px-6 mt-3 sm:mt-4 lg:mt-6">
-            {/* Table layout for xl+ only */}
-            <div className="hidden xl:block overflow-x-auto max-w-full">
-              <TableList
-                columns={columns}
-                data={paginatedDepartments}
-                loading={pageState.loading}
-                selectedIds={selectedIds}
-                emptyMessage={null}
-                onSelectRow={handleSelectRow}
-                onSelectAll={handleSelectAll}
-                isAllSelected={isAllSelected}
-                isIndeterminate={isIndeterminate}
-                getItemId={(item) => item.id}
-                expandedRowIds={expandedRowIds}
-                onToggleExpand={(itemId) => {
-                  setExpandedRowIds(current =>
-                    current.includes(itemId)
-                      ? current.filter(id => id !== itemId)
-                      : [...current, itemId]
-                  );
-                }}
-                editingCell={editingCell}
-                onCellClick={(item, columnAccessor) => {
-                  if (["name", "code", "headOfDepartment"].includes(columnAccessor)) {
-                    setEditingCell({ rowId: item.id, columnAccessor });
-                  }
-                }}
-                onCellChange={async (rowId, columnAccessor, value) => {
-                  setEditingCell(null);
-                  // Handle cell change logic here
-                }}
-                sortState={{ field: sortState.field, order: sortState.order }}
-                onSort={handleSort}
-                className="border-0 shadow-none max-w-full"
-              />
+          {/* Table layout for xl+ only */}
+          <div className="hidden xl:block">
+            <div className="px-4 sm:px-6 pt-6 pb-6"> {/* Add top and bottom padding around the table */}
+              <div className="overflow-x-auto bg-white/70 shadow-none relative"> {/* border and border-blue-100 removed */}
+                <TableList
+                  columns={columns}
+                  data={paginatedDepartments}
+                  loading={pageState.loading}
+                  selectedIds={selectedIds}
+                  emptyMessage={null}
+                  onSelectRow={handleSelectRow}
+                  onSelectAll={handleSelectAll}
+                  isAllSelected={isAllSelected}
+                  isIndeterminate={isIndeterminate}
+                  getItemId={(item) => item.id}
+                  expandedRowIds={expandedRowIds}
+                  onToggleExpand={(itemId) => {
+                    setExpandedRowIds(current =>
+                      current.includes(itemId)
+                        ? current.filter(id => id !== itemId)
+                        : [...current, itemId]
+                    );
+                  }}
+                  editingCell={editingCell}
+                  onCellClick={(item, columnAccessor) => {
+                    if (["name", "code", "headOfDepartment"].includes(columnAccessor)) {
+                      setEditingCell({ rowId: item.id, columnAccessor });
+                    }
+                  }}
+                  onCellChange={async (rowId, columnAccessor, value) => {
+                    setEditingCell(null);
+                    // Handle cell change logic here
+                  }}
+                  sortState={{ field: sortState.field, order: sortState.order }}
+                  onSort={handleSort}
+                  className="border-0 shadow-none max-w-full"
+                />
+              </div>
             </div>
-            {/* Card layout for small screens */}
-            <div className="block xl:hidden p-2 sm:p-3 lg:p-4 max-w-full">
+          </div>
+          {/* Card layout for small screens */}
+          <div className="block xl:hidden p-2 sm:p-3 lg:p-4 max-w-full">
+            <div className="px-2 sm:px-4 pt-6 pb-6"> {/* Add top and bottom padding for mobile card view */}
               {!pageState.loading && filteredDepartments.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-8 px-4">
                   <EmptyState
@@ -2168,7 +2236,6 @@ export default function DepartmentListPage() {
                   getItemCode={(item) => item.code}
                   getItemStatus={(item) => item.status}
                   getItemDescription={(item) => item.description}
-
                   getItemDetails={(item) => [
                     { label: 'Head', value: item.headOfDepartment || 'Not Assigned' },
                     { label: 'Courses', value: item.courseOfferings?.length || 0 },
@@ -2295,18 +2362,25 @@ export default function DepartmentListPage() {
           {
             title: "Department Information",
             fields: [
+              { label: 'Department Code', value: viewDepartment?.code || 'N/A', type: 'text' },
+              { label: 'Status', value: viewDepartment?.status || 'N/A', type: 'badge', badgeVariant: viewDepartment?.status === 'active' ? 'success' : 'destructive' },
               { label: 'Total Courses', value: viewDepartment?.courseOfferings?.length || 0, type: 'number' },
-              { label: 'Total Instructors', value: viewDepartment?.totalInstructors || 0, type: 'number' }
+              { label: 'Total Instructors', value: viewDepartment?.totalInstructors || 0, type: 'number' },
+              { label: 'Description', value: viewDepartment?.description || 'No description available', type: 'text' }
             ]
           },
+
           {
             title: "Course Offerings",
             fields: viewDepartment?.courseOfferings?.map(course => ({
-              label: course.name,
-              value: course.status,
+              label: `${course.name} (${course.code})`,
+              value: `${course.totalStudents || 0} students, ${course.totalSections || 0} sections`,
               type: 'course-with-status' as const,
-              badgeVariant: course.status === 'active' ? 'success' : 'destructive'
-            })) || []
+              badgeVariant: course.status === 'active' ? 'success' : 'destructive',
+              description: course.description || 'No description available'
+            })) || [
+              { label: 'No Courses', value: 'No courses offered by this department', type: 'text' }
+            ]
           }
         ]}
         departmentHead={viewDepartment?.headOfDepartmentDetails ? {
@@ -2323,7 +2397,7 @@ export default function DepartmentListPage() {
           department: viewDepartment.name
         } : undefined)}
         description={viewDepartment?.description}
-        tooltipText="View detailed department information"
+        tooltipText="View comprehensive department information including settings, courses, and contact details"
       />
 
       <BulkActionsDialog
@@ -2443,6 +2517,43 @@ export default function DepartmentListPage() {
         description={`Are you sure you want to reactivate ${selectedDepartments.filter(d => d.status === "inactive").length} selected inactive department(s)?`}
         confirmLabel="Reactivate"
       />
+
+      {selectedIds.length > 0 && (
+        <div className="bg-blue-50 border border-blue-100 rounded-2xl p-6 mb-6 max-w-3xl mx-auto">
+          <h2 className="text-2xl font-bold text-blue-900 mb-2">Bulk Actions</h2>
+          <hr className="mb-4 border-blue-100" />
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-2 text-blue-900 text-lg font-medium cursor-pointer">
+              <Checkbox checked={bulkActions.assignInstructors} onCheckedChange={() => handleBulkActionChange('assignInstructors')} />
+              <span>Assign Instructors</span>
+            </div>
+            <div className="flex items-center gap-2 text-blue-900 text-lg font-medium cursor-pointer">
+              <Checkbox checked={bulkActions.archiveRestore} onCheckedChange={() => handleBulkActionChange('archiveRestore')} />
+              <span>Archive/Restore Departments</span>
+            </div>
+            <div className="flex items-center gap-2 text-blue-900 text-lg font-medium cursor-pointer">
+              <Checkbox checked={bulkActions.assignCourses} onCheckedChange={() => handleBulkActionChange('assignCourses')} />
+              <span>Assign Courses</span>
+            </div>
+          </div>
+          <div className="mt-6 flex gap-3">
+            <Button
+              onClick={handleBulkActionExecute}
+              disabled={!(bulkActions.assignInstructors || bulkActions.archiveRestore || bulkActions.assignCourses)}
+              className="bg-blue-700 text-white rounded-xl px-6 py-2 font-semibold hover:bg-blue-800"
+            >
+              Execute Selected Actions
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setBulkActions({ assignInstructors: false, archiveRestore: false, assignCourses: false })}
+              className="rounded-xl px-6 py-2 font-semibold border-blue-300 text-blue-700 hover:bg-blue-50"
+            >
+              Clear
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

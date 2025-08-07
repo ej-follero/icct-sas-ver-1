@@ -2,10 +2,9 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
-import { TableRow, TableCell } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { TablePagination } from "@/components/reusable/Table/TablePagination";
-import CourseFormDialog from '@/components/forms/CourseFormDialog';
+import CourseForm from '@/components/forms/CourseForm';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuLabel } from "@/components/ui/dropdown-menu";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
@@ -13,7 +12,7 @@ import autoTable from "jspdf-autotable";
 import { toast } from "sonner";
 import Fuse from "fuse.js";
 import React from "react";
-import { Settings, Plus, Trash2, Printer, Loader2, MoreHorizontal, Upload, List, Columns3, ChevronDown, ChevronUp, UserCheck, UserX, Users, UserPlus, RefreshCw, Download, Search, Bell, Building2, RotateCcw, Eye, Pencil, BookOpen, GraduationCap } from "lucide-react";
+import { Settings, Plus, Trash2, Printer, Loader2, MoreHorizontal, Upload, List, Columns3, ChevronDown, ChevronUp, UserCheck, UserX, Users, UserPlus, RefreshCw, Download, Search, Bell, Building2, RotateCcw, Eye, Pencil, BookOpen, GraduationCap, BadgeInfo, X, ChevronRight, Hash, Tag, Layers, FileText, Clock, Info, UserCheck as UserCheckIcon, Archive } from "lucide-react";
 import { ImportDialog } from "@/components/reusable/Dialogs/ImportDialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ExportDialog } from '@/components/reusable/Dialogs/ExportDialog';
@@ -40,11 +39,13 @@ import { VisibleColumnsDialog, ColumnOption } from '@/components/reusable/Dialog
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { BadgeInfo, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Checkbox as SharedCheckbox } from '@/components/ui/checkbox';
 import { Pagination } from "@/components/Pagination";
 import { TableHeaderSection } from '@/components/reusable/Table/TableHeaderSection';
+import { subjectsApi } from '@/services/api/subjects';
+import { useRef } from "react";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 type CourseStatus = "ACTIVE" | "INACTIVE" | "ARCHIVED" | "PENDING_REVIEW";
 
@@ -53,6 +54,7 @@ interface Course {
   name: string;
   code: string;
   department: string;
+  departmentCode?: string;
   units: number;
   description?: string;
   status: CourseStatus;
@@ -61,6 +63,7 @@ interface Course {
   createdAt: string;
   updatedAt: string;
   courseType: "MANDATORY" | "ELECTIVE";
+  major: string;
   [key: string]: string | number | undefined;
 }
 
@@ -91,9 +94,9 @@ interface FuseResult<T> {
 
 const courseSortFieldOptions: SortFieldOption<string>[] = [
   { value: 'name', label: 'Course Name' },
-  { value: 'code', label: 'Code' },
+  { value: 'code', label: 'Course Code' },
   { value: 'department', label: 'Department' },
-  { value: 'units', label: 'Units' },
+  { value: 'units', label: 'Total Units' },
   { value: 'totalInstructors', label: 'Instructors' },
   { value: 'totalStudents', label: 'Students' },
   { value: 'status', label: 'Status' },
@@ -204,19 +207,28 @@ const ColumnFilterDialog: React.FC<{
 
 // Centralized course columns definition
 const courseColumns = [
-  { key: 'name', label: 'Course Name', accessor: 'name', className: 'text-blue-900' },
-  { key: 'code', label: 'Code', accessor: 'code', className: 'text-blue-900' },
-  { key: 'department', label: 'Department', accessor: 'department', className: 'text-blue-900' },
-  { key: 'units', label: 'Units', accessor: 'units', className: 'text-center text-blue-900' },
-  { key: 'totalInstructors', label: 'Instructors', accessor: 'totalInstructors', className: 'text-center text-blue-900' },
-  { key: 'totalStudents', label: 'Students', accessor: 'totalStudents', className: 'text-center text-blue-900' },
-  { key: 'status', label: 'Status', accessor: 'status', className: 'text-center' },
+  { key: 'name', label: 'Course Name', accessor: 'name', className: 'text-blue-900', sortable: true },
+  { key: 'code', label: 'Course Code', accessor: 'code', className: 'text-blue-900', sortable: true },
+  { key: 'department', label: 'Department', accessor: 'department', className: 'text-blue-900', sortable: true },
+  { key: 'units', label: 'Total Units', accessor: 'units', className: 'text-center text-blue-900', sortable: true },
+  { key: 'courseType', label: 'Course Type', accessor: 'courseType', className: 'text-center text-blue-900', sortable: true },
+  { key: 'major', label: 'Major', accessor: 'major', className: 'text-blue-900', sortable: true },
+  { key: 'status', label: 'Status', accessor: 'status', className: 'text-center', sortable: true },
 ];
 
 // Use accessor/label for TableHeaderSection compatibility
 const exportableColumns: { accessor: string; label: string }[] = courseColumns.map((col) => ({ accessor: col.key, label: col.label }));
 // For export dialogs, use the old { key, label } version
 const exportableColumnsForExport: { key: string; label: string }[] = courseColumns.map((col) => ({ key: col.key, label: col.label }));
+
+// Define column options for visible columns dialog
+const COLUMN_OPTIONS: ColumnOption[] = courseColumns.map(col => ({
+  accessor: typeof col.accessor === 'string' ? col.accessor : col.key,
+  header: col.label,
+  description: undefined,
+  category: 'Course Info',
+  required: col.key === 'name' || col.key === 'code', // Always show name and code
+}));
 
 export default function CourseListPage() {
   const router = useRouter();
@@ -252,13 +264,33 @@ export default function CourseListPage() {
     minInstructors: '',
     maxInstructors: ''
   });
-
-  // Add loading states for different actions
   const [isDeleting, setIsDeleting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [isPrinting, setIsPrinting] = useState(false);
   const [isFiltering, setIsFiltering] = useState(false);
   const [isSorting, setIsSorting] = useState(false);
+  // Move visibleColumns state here, before any usage
+  const [visibleColumns, setVisibleColumns] = useState<string[]>(courseColumns.map(col => col.key));
+  const [visibleColumnsDialogOpen, setVisibleColumnsDialogOpen] = useState(false);
+  const [courseTypeFilter, setCourseTypeFilter] = useState('all');
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [bulkActionsDialogOpen, setBulkActionsDialogOpen] = useState(false);
+  const [bulkActionType, setBulkActionType] = useState<string | null>(null);
+  const [selectedCoursesForBulkAction, setSelectedCoursesForBulkAction] = useState<Course[]>([]);
+  const [expandedRowIds, setExpandedRowIds] = useState<string[]>([]);
+  // Add import dialog state if not present
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  // Add state for subjects per course and loading
+  const [courseSubjects, setCourseSubjects] = useState<Record<string, any[]>>({});
+  const [subjectsLoading, setSubjectsLoading] = useState<Record<string, boolean>>({});
+  // Add state for tab view, sections, and students per course
+  const [expandedTabs, setExpandedTabs] = useState<Record<string, 'section' | 'students' | 'subjects'>>({});
+  const [courseSections, setCourseSections] = useState<Record<string, any[]>>({});
+  const [sectionsLoading, setSectionsLoading] = useState<Record<string, boolean>>({});
+  const [courseStudents, setCourseStudents] = useState<Record<string, any[]>>({});
+  const [studentsLoading, setStudentsLoading] = useState<Record<string, boolean>>({});
+  const [departmentFilter, setDepartmentFilter] = useState('all');
 
   // Add status mapping function
   const mapStatusToLowerCase = (status: CourseStatus): "active" | "inactive" => {
@@ -300,6 +332,16 @@ export default function CourseListPage() {
       filtered = filtered.filter(course => course.status === statusFilter);
     }
 
+    // Apply course type filter
+    if (courseTypeFilter !== "all") {
+      filtered = filtered.filter(course => course.courseType === courseTypeFilter);
+    }
+
+    // Apply department filter (by code)
+    if (departmentFilter !== "all") {
+      filtered = filtered.filter(course => course.departmentCode === departmentFilter);
+    }
+
     // Apply column filters
     if (columnFilters.length > 0) {
       filtered = filtered.filter(course => {
@@ -327,16 +369,16 @@ export default function CourseListPage() {
     }
 
     return filtered;
-  }, [fuzzyResults, columnFilters, statusFilter, sortFields]);
+  }, [fuzzyResults, columnFilters, statusFilter, courseTypeFilter, departmentFilter, sortFields]);
 
   // Add pagination
   const paginatedCourses = useMemo(() => {
-    const start = (currentPage - 1) * ITEMS_PER_PAGE;
-    const end = start + ITEMS_PER_PAGE;
+    const start = (currentPage - 1) * itemsPerPage;
+    const end = start + itemsPerPage;
     return filteredCourses.slice(start, end);
-  }, [filteredCourses, currentPage]);
+  }, [filteredCourses, currentPage, itemsPerPage]);
 
-  const totalPages = Math.ceil(filteredCourses.length / ITEMS_PER_PAGE);
+  const totalPages = Math.ceil(filteredCourses.length / itemsPerPage);
 
   const isAllSelected = paginatedCourses.length > 0 && paginatedCourses.every(c => selectedIds.includes(c.id));
   const isIndeterminate = selectedIds.length > 0 && !isAllSelected;
@@ -351,8 +393,169 @@ export default function CourseListPage() {
     setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
   };
 
-  // Table columns
+  // Handler for toggling column visibility
+  const handleColumnToggle = (columnAccessor: string, checked: boolean) => {
+    setVisibleColumns(prev => {
+      if (checked) {
+        return prev.includes(columnAccessor) ? prev : [...prev, columnAccessor];
+      } else {
+        // Don't allow hiding required columns
+        if (COLUMN_OPTIONS.find(col => col.accessor === columnAccessor)?.required) return prev;
+        return prev.filter(col => col !== columnAccessor);
+      }
+    });
+  };
+  // Handler for resetting columns to default
+  const handleResetColumns = () => {
+    setVisibleColumns(courseColumns.map(col => col.key));
+    toast.success('Column visibility reset to default');
+  };
+
+  // Move fetchSections and fetchStudents above expandedContent
+  const fetchSections = async (courseId: string) => {
+    setSectionsLoading(prev => ({ ...prev, [courseId]: true }));
+    try {
+      const res = await fetch('/api/sections');
+      const data = await res.json();
+      setCourseSections(prev => ({ ...prev, [courseId]: data.filter((s: any) => String(s.courseId) === String(courseId)) }));
+    } catch (e) {
+      toast.error('Failed to load sections for this course');
+      setCourseSections(prev => ({ ...prev, [courseId]: [] }));
+    } finally {
+      setSectionsLoading(prev => ({ ...prev, [courseId]: false }));
+    }
+  };
+  const fetchStudents = async (courseId: string) => {
+    setStudentsLoading(prev => ({ ...prev, [courseId]: true }));
+    try {
+      const res = await fetch(`/api/attendance/students?courseId=${courseId}`);
+      const data = await res.json();
+      setCourseStudents(prev => ({ ...prev, [courseId]: data.students || data }));
+    } catch (e) {
+      toast.error('Failed to load students for this course');
+      setCourseStudents(prev => ({ ...prev, [courseId]: [] }));
+    } finally {
+      setStudentsLoading(prev => ({ ...prev, [courseId]: false }));
+    }
+  };
+
+  // Table columns (filtered by visibleColumns)
   const columns: TableListColumn<Course>[] = [
+    {
+      header: '',
+      accessor: 'expander',
+      className: 'w-10 text-center px-1 py-1',
+      render: (item: Course) => (
+        <button
+          onClick={() => onToggleExpand(item.id)}
+          className="px-2 py-1 rounded-full hover:bg-gray-200 text-center"
+          aria-label={expandedRowIds.includes(item.id) ? 'Collapse row' : 'Expand row'}
+        >
+          {expandedRowIds.includes(item.id) ? <ChevronDown size={16} className="text-blue-500" /> : <ChevronRight size={16} className="text-blue-500" />}
+        </button>
+      ),
+      expandedContent: (item: Course) => {
+        const tab = expandedTabs[item.id] || 'subjects';
+        let dataRows = [];
+        let headers = [];
+        if (tab === 'section') {
+          headers = ["Section Name", "Capacity", "Status", "Year Level"];
+          dataRows = sectionsLoading[item.id]
+            ? [[<TableCell key="loading" colSpan={4}>Loading sections...</TableCell>]]
+            : (courseSections[item.id]?.length
+                ? courseSections[item.id].map((section) => [
+                    <TableCell key="name">{section.sectionName}</TableCell>,
+                    <TableCell key="capacity">{section.sectionCapacity}</TableCell>,
+                    <TableCell key="status">{section.sectionStatus}</TableCell>,
+                    <TableCell key="year">{section.yearLevel}</TableCell>,
+                  ])
+                : [[<TableCell key="empty" colSpan={4}>No sections found for this course.</TableCell>]]
+              );
+        } else if (tab === 'students') {
+          headers = ["Student Name", "ID Number", "Year Level", "Status", "Email"];
+          dataRows = studentsLoading[item.id]
+            ? [[<TableCell key="loading" colSpan={5}>Loading students...</TableCell>]]
+            : (courseStudents[item.id]?.length
+                ? courseStudents[item.id].map((student) => [
+                    <TableCell key="name">{student.studentName || `${student.firstName} ${student.lastName}`}</TableCell>,
+                    <TableCell key="id">{student.studentId || student.studentIdNumber}</TableCell>,
+                    <TableCell key="year">{student.yearLevel}</TableCell>,
+                    <TableCell key="status">{student.status}</TableCell>,
+                    <TableCell key="email">{student.email}</TableCell>,
+                  ])
+                : [[<TableCell key="empty" colSpan={5}>No students found for this course.</TableCell>]]
+              );
+        } else {
+          headers = ["Code", "Name", "Units", "Type", "Status"];
+          dataRows = subjectsLoading[item.id]
+            ? [[<TableCell key="loading" colSpan={5}>Loading subjects...</TableCell>]]
+            : (courseSubjects[item.id]?.length
+                ? courseSubjects[item.id].map((subject: any) => [
+                    <TableCell key="code" className="font-mono text-xs w-20">{subject.code || subject.subjectCode}</TableCell>,
+                    <TableCell key="name" className="w-48">{subject.name || subject.subjectName}</TableCell>,
+                    <TableCell key="units" className="w-12 text-center">{subject.units || subject.creditUnits}</TableCell>,
+                    <TableCell key="type" className="w-20 text-center capitalize">{subject.type || subject.subjectType}</TableCell>,
+                    <TableCell key="status" className="w-16 text-center capitalize">{subject.status || subject.subjectStatus}</TableCell>,
+                  ])
+                : [[<TableCell key="empty" colSpan={5}>No subjects found for this course.</TableCell>]]
+              );
+        }
+        return (
+          <td colSpan={columns.length} className="p-0">
+            <div className="bg-blue-50 p-4">
+              {/* Tabs and Title */}
+              <div className="flex gap-2 justify-end mb-4">
+                <button
+                  className={`px-5 py-2 rounded-t-lg font-semibold transition-all duration-150
+                    ${tab === 'section'
+                      ? 'bg-white shadow text-blue-900 border-b-2 border-blue-600'
+                      : 'bg-blue-50 text-blue-700 hover:bg-blue-100'}`}
+                  onClick={() => setExpandedTabs(prev => ({ ...prev, [item.id]: 'section' }))}
+                >Section</button>
+                <button
+                  className={`px-5 py-2 rounded-t-lg font-semibold transition-all duration-150
+                    ${tab === 'students'
+                      ? 'bg-white shadow text-blue-900 border-b-2 border-blue-600'
+                      : 'bg-blue-50 text-blue-700 hover:bg-blue-100'}`}
+                  onClick={() => setExpandedTabs(prev => ({ ...prev, [item.id]: 'students' }))}
+                >Students</button>
+                <button
+                  className={`px-5 py-2 rounded-t-lg font-semibold transition-all duration-150
+                    ${tab === 'subjects'
+                      ? 'bg-white shadow text-blue-900 border-b-2 border-blue-600'
+                      : 'bg-blue-50 text-blue-700 hover:bg-blue-100'}`}
+                  onClick={() => setExpandedTabs(prev => ({ ...prev, [item.id]: 'subjects' }))}
+                >Subjects</button>
+              </div>
+              {/* Table */}
+              <Table className="bg-white rounded-md">
+                <TableHeader>
+                  <TableRow>
+                    {headers.map((header, idx) => (
+                      <TableHead key={idx} className="bg-blue-100 text-blue-900 font-semibold text-center">{header}</TableHead>
+                    ))}
+                  </TableRow>
+                </TableHeader>
+                <TableBody className="[&>tr>td]:text-blue-900 text-center">
+                  {dataRows.map((cells, idx) => (
+                    <TableRow key={idx}>
+                      {cells.map((cell, cidx) => {
+                        // If cell is a TableCell, clone and add text-center
+                        if (cell && cell.type && cell.type.displayName === 'TableCell') {
+                          return React.cloneElement(cell, { className: (cell.props.className || '') + ' text-center' });
+                        }
+                        // Otherwise, wrap in a centered td
+                        return <td key={cidx} className="text-center">{cell}</td>;
+                      })}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </td>
+        );
+      }
+    },
     {
       header: (
         <SharedCheckbox 
@@ -365,109 +568,229 @@ export default function CourseListPage() {
       accessor: 'select',
       className: 'w-12 text-center',
     },
-    ...courseColumns.map(col => {
-      if (col.key === 'name') {
+    ...courseColumns
+      .filter(col => visibleColumns.includes(col.key))
+      .map(col => {
+        if (col.key === 'name') {
+          return {
+            header: col.label,
+            accessor: col.accessor,
+            className: 'text-center',
+            sortable: col.sortable,
+            render: (item: Course) => {
+              const fuseResult = fuzzyResults.find(r => r.item.id === item.id) as FuseResult<Course> | undefined;
+              const nameMatches = fuseResult?.matches?.find((m: { key: string }) => m.key === "name")?.indices;
+              return (
+                <div 
+                  className="text-sm font-medium text-blue-900 text-center"
+                  dangerouslySetInnerHTML={{ __html: highlightMatch(item.name, nameMatches) }}
+                />
+              );
+            }
+          };
+        }
+        if (col.key === 'code') {
+          return {
+            header: col.label,
+            accessor: col.accessor,
+            className: 'text-center',
+            sortable: col.sortable,
+            render: (item: Course) => {
+              const fuseResult = fuzzyResults.find(r => r.item.id === item.id) as FuseResult<Course> | undefined;
+              const codeMatches = fuseResult?.matches?.find((m: { key: string }) => m.key === "code")?.indices;
+              return (
+                <div 
+                  className="text-sm text-blue-900 text-center"
+                  dangerouslySetInnerHTML={{ __html: highlightMatch(item.code, codeMatches) }}
+                />
+              );
+            }
+          };
+        }
+        if (col.key === 'department') {
+          return {
+            header: col.label,
+            accessor: col.accessor,
+            className: 'text-center',
+            sortable: col.sortable,
+            render: (item: Course) => (
+              <span className="text-sm text-blue-900 text-center">{item.department || 'Not Applicable'}</span>
+            )
+          };
+        }
+        if (col.key === 'courseType') {
+          return {
+            header: col.label,
+            accessor: col.accessor,
+            className: 'text-center',
+            sortable: col.sortable,
+            render: (item: Course) => (
+              <Badge variant={item.courseType === "MANDATORY" ? "success" : "secondary"} className="text-center">
+                {item.courseType.toUpperCase()}
+              </Badge>
+            )
+          };
+        }
+        if (col.key === 'major') {
+          return {
+            header: col.label,
+            accessor: col.accessor,
+            className: 'text-center',
+            sortable: col.sortable,
+            render: (item: Course) => (
+              <span className="text-sm text-blue-900 text-center">{item.major ? item.major : 'Not Applicable'}</span>
+            )
+          };
+        }
+        if (col.key === 'status') {
+          return {
+            header: col.label,
+            accessor: col.accessor,
+            className: 'text-center',
+            sortable: col.sortable,
+            render: (item: Course) => (
+              <Badge variant={item.status === "ACTIVE" ? "success" : item.status === "INACTIVE" ? "destructive" : item.status === "ARCHIVED" ? "secondary" : "warning"} className="text-center">
+                {item.status.toUpperCase()}
+              </Badge>
+            )
+          };
+        }
         return {
           header: col.label,
           accessor: col.accessor,
-          className: col.className,
-          render: (item: Course) => {
-            const fuseResult = fuzzyResults.find(r => r.item.id === item.id) as FuseResult<Course> | undefined;
-            const nameMatches = fuseResult?.matches?.find((m: { key: string }) => m.key === "name")?.indices;
-            return (
-              <div 
-                className="text-sm font-medium text-blue-900"
-                dangerouslySetInnerHTML={{ __html: highlightMatch(item.name, nameMatches) }}
-              />
-            );
-          }
+          className: 'text-center',
+          sortable: col.sortable
         };
-      }
-      if (col.key === 'code') {
-        return {
-          header: col.label,
-          accessor: col.accessor,
-          className: col.className,
-          render: (item: Course) => {
-            const fuseResult = fuzzyResults.find(r => r.item.id === item.id) as FuseResult<Course> | undefined;
-            const codeMatches = fuseResult?.matches?.find((m: { key: string }) => m.key === "code")?.indices;
-            return (
-              <div 
-                className="text-sm text-blue-900"
-                dangerouslySetInnerHTML={{ __html: highlightMatch(item.code, codeMatches) }}
-              />
-            );
-          }
-        };
-      }
-      if (col.key === 'department') {
-        return {
-          header: col.label,
-          accessor: col.accessor,
-          className: col.className,
-          render: (item: Course) => {
-            const fuseResult = fuzzyResults.find(r => r.item.id === item.id) as FuseResult<Course> | undefined;
-            const departmentMatches = fuseResult?.matches?.find((m: { key: string }) => m.key === "department")?.indices;
-            return (
-              <div 
-                className="text-sm text-blue-900"
-                dangerouslySetInnerHTML={{ __html: highlightMatch(item.department, departmentMatches) }}
-              />
-            );
-          }
-        };
-      }
-      if (col.key === 'status') {
-        return {
-          header: col.label,
-          accessor: col.accessor,
-          className: col.className,
-          render: (item: Course) => (
-            <Badge variant={item.status === "ACTIVE" ? "success" : item.status === "INACTIVE" ? "destructive" : item.status === "ARCHIVED" ? "secondary" : "warning"}>
-              {item.status.toUpperCase()}
-            </Badge>
-          )
-        };
-      }
-      return {
-        header: col.label,
-        accessor: col.accessor,
-        className: col.className
-      };
-    }),
+      }),
     {
       header: "Actions",
       accessor: "actions",
       className: "text-center",
       render: (item: Course) => (
-        <TableRowActions
-          onView={() => {
-            setSelectedCourse(item);
-            setViewModalOpen(true);
-          }}
-          onEdit={() => {
-            setSelectedCourse(item);
-            setEditModalOpen(true);
-          }}
-          onDelete={() => {
-            setSelectedCourse(item);
-            setDeleteModalOpen(true);
-          }}
-          itemName={item.name}
-          disabled={item.status === "ACTIVE" || item.totalStudents > 0 || item.totalInstructors > 0}
-          deleteTooltip={
-            item.status === "ACTIVE" 
-              ? "Cannot delete an active course" 
-              : item.totalStudents > 0 
-                ? "Cannot delete course with enrolled students"
-                : item.totalInstructors > 0 
-                  ? "Cannot delete course with assigned instructors"
-                  : undefined
-          }
-        />
+        <div className="flex gap-1 justify-center">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label="View Course"
+                  className="hover:bg-blue-50"
+                  onClick={() => {
+                    setSelectedCourse(item);
+                    setViewModalOpen(true);
+                  }}
+                >
+                  <Eye className="h-4 w-4 text-blue-600" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top" align="center" className="bg-blue-900 text-white">
+                View details
+              </TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Edit Course"
+                  className="hover:bg-green-50"
+                  onClick={() => {
+                    setSelectedCourse(item);
+                    setEditModalOpen(true);
+                  }}
+                >
+                  <Pencil className="h-4 w-4 text-green-600" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top" align="center" className="bg-blue-900 text-white">
+                Edit
+              </TooltipContent>
+            </Tooltip>
+            {item.status === "ARCHIVED" ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Restore Course"
+                    className="hover:bg-green-50"
+                    onClick={() => handleRestore(item)}
+                  >
+                    <RotateCcw className="h-4 w-4 text-green-600" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top" align="center" className="bg-blue-900 text-white">
+                  Restore course
+                </TooltipContent>
+              </Tooltip>
+            ) : (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-block">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label="Archive Course"
+                      className="hover:bg-red-50"
+                      onClick={() => {
+                        setSelectedCourse(item);
+                        setDeleteModalOpen(true);
+                      }}
+                      disabled={false}
+                    >
+                      <Trash2 className="h-4 w-4 text-red-600" />
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="top" align="center" className="bg-blue-900 text-white">
+                  {item.status === "ACTIVE"
+                    ? "Cannot delete an active course"
+                    : item.totalStudents > 0
+                    ? "Cannot delete course with enrolled students"
+                    : item.totalInstructors > 0
+                    ? "Cannot delete course with assigned instructors"
+                    : "Archive"}
+                </TooltipContent>
+              </Tooltip>
+            )}
+          </TooltipProvider>
+        </div>
       )
     }
   ];
+
+  // Handler for toggling expanded rows (fetch subjects if not loaded)
+  const onToggleExpand = async (itemId: string) => {
+    setExpandedRowIds((current) =>
+      current.includes(itemId)
+        ? current.filter((id) => id !== itemId)
+        : [...current, itemId]
+    );
+    if (!courseSubjects[itemId]) {
+      setSubjectsLoading((prev) => ({ ...prev, [itemId]: true }));
+      try {
+        const data = await subjectsApi.fetchSubjects({ page: 1, pageSize: 100, courseId: itemId });
+        setCourseSubjects((prev) => ({ ...prev, [itemId]: data.subjects }));
+      } catch (e) {
+        toast.error('Failed to load subjects for this course');
+        setCourseSubjects((prev) => ({ ...prev, [itemId]: [] }));
+      } finally {
+        setSubjectsLoading((prev) => ({ ...prev, [itemId]: false }));
+      }
+    }
+  };
+
+  // Handler for sorting columns
+  const handleSort = (field: string) => {
+    setSortField((prevField) => {
+      const isSameField = prevField === field;
+      const newOrder = isSameField && sortOrder === 'asc' ? 'desc' : 'asc';
+      setSortOrder(newOrder as CourseSortOrder);
+      setSortFields([{ field: field as CourseSortField, order: newOrder as CourseSortOrder }]);
+      return field as CourseSortField;
+    });
+  };
 
   // Export to CSV handler
   const handleExport = async () => {
@@ -694,14 +1017,136 @@ export default function CourseListPage() {
     }
   };
 
+  // Handler for importing courses
+  const handleImportCourses = async (data: any[]) => {
+    try {
+      const response = await fetch('/api/courses/bulk', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          records: data,
+          options: {
+            skipDuplicates: true,
+            updateExisting: false,
+          }
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      // Refresh the courses list after successful import
+      await fetchCourses(true);
+      toast.success('Courses imported successfully');
+      return {
+        success: result.results?.success,
+        failed: result.results?.failed,
+        errors: result.results?.errors || []
+      };
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to import courses');
+      throw error;
+    }
+  };
+
+  // Handler to restore (reactivate) an archived course
+  const [restoringId, setRestoringId] = useState<string | null>(null);
+  const handleRestore = async (course: Course) => {
+    setRestoringId(course.id);
+    try {
+      const res = await fetch(`/api/courses/${course.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'ACTIVE' }),
+      });
+      let data = null;
+      try {
+        data = await res.json();
+      } catch (e) {
+        // If response is empty or invalid JSON
+        data = null;
+      }
+      if (!res.ok || !data || data.error) {
+        toast.error(data?.error || 'Failed to restore course.');
+        setRestoringId(null);
+        return;
+      }
+      toast.success('Course restored successfully!');
+      fetchCourses();
+    } catch (err) {
+      toast.error('Failed to restore course.');
+    } finally {
+      setRestoringId(null);
+    }
+  };
+
   // Initial data fetch
   useEffect(() => {
     fetchCourses();
   }, []);
 
+  React.useEffect(() => {
+    expandedRowIds.forEach((courseId) => {
+      const tab = expandedTabs[courseId] || 'subjects';
+      if (tab === 'section' && courseSections[courseId] === undefined && !sectionsLoading[courseId]) {
+        fetchSections(courseId);
+      }
+      if (tab === 'students' && courseStudents[courseId] === undefined && !studentsLoading[courseId]) {
+        fetchStudents(courseId);
+      }
+      // You can add similar logic for 'subjects' if needed
+    });
+  }, [expandedRowIds, expandedTabs]);
+
+  // Handler for opening the bulk actions dialog
   const handleOpenBulkActionsDialog = () => {
-    // Implementation for bulk actions dialog
-    console.log('Opening bulk actions dialog');
+    setSelectedCoursesForBulkAction(selectedCourses);
+    setBulkActionsDialogOpen(true);
+  };
+  // Handler for dialog action complete
+  const handleBulkActionComplete = (actionType: string, results: any) => {
+    toast.success(`Bulk action '${actionType}' completed.`);
+    setBulkActionsDialogOpen(false);
+    setSelectedCoursesForBulkAction([]);
+    fetchCourses(true);
+  };
+  // Handler for dialog cancel
+  const handleBulkActionCancel = () => {
+    setBulkActionsDialogOpen(false);
+    setSelectedCoursesForBulkAction([]);
+  };
+  // Handler for processing bulk actions
+  const handleProcessBulkAction = async (actionType: string, config: any) => {
+    if (actionType === 'status-update') {
+      // Archive or restore selected courses
+      const status = config.status?.toUpperCase();
+      const updatePromises = selectedCoursesForBulkAction.map(async (course) => {
+        const response = await fetch(`/api/courses/${course.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status }),
+        });
+        if (!response.ok) throw new Error(`Failed to update course ${course.name}`);
+        return response.json();
+      });
+      await Promise.all(updatePromises);
+      return { success: true, processed: selectedCoursesForBulkAction.length };
+    }
+    if (actionType === 'export') {
+      // Export handled in dialog
+      return { success: true };
+    }
+    if (actionType === 'notification') {
+      // Simulate notification
+      await new Promise(resolve => setTimeout(resolve, 500));
+      return { success: true };
+    }
+    return { success: false };
   };
 
   const handleExportSelectedCourses = (selectedCourses: Course[]) => {
@@ -715,12 +1160,12 @@ export default function CourseListPage() {
   const selectedCourses = courses.filter(course => selectedIds.includes(course.id));
 
   const [exportColumns, setExportColumns] = useState<string[]>(exportableColumns.map(col => col.accessor));
-  const [importDialogOpen, setImportDialogOpen] = useState(false);
-  const [visibleColumnsDialogOpen, setVisibleColumnsDialogOpen] = useState(false);
-  const [departmentFilter, setDepartmentFilter] = useState('all');
-  const [itemsPerPage, setItemsPerPage] = useState(10);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [bulkActionsDialogOpen, setBulkActionsDialogOpen] = useState(false);
+
+  // Get unique department codes for filter dropdown
+  const departmentOptions = useMemo(() => {
+    const codes = courses.map(c => c.departmentCode).filter((code): code is string => typeof code === 'string' && !!code);
+    return Array.from(new Set(codes)).sort();
+  }, [courses]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#f8fafc] via-[#ffffff] to-[#f8fafc] p-0 overflow-x-hidden">
@@ -738,30 +1183,34 @@ export default function CourseListPage() {
         {/* Summary Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
           <SummaryCard
-            icon={<BookOpen className="text-white w-4 h-4 sm:w-5 sm:h-5" />}
+            icon={<BookOpen className="text-blue-500 w-5 h-5" />}
             label="Total Courses"
             value={courses.length}
-            valueClassName="text-green-600"
+            valueClassName="text-blue-900"
+            sublabel="Total number of courses"
           />
           <SummaryCard
-            icon={<UserCheck className="text-white w-4 h-4 sm:w-5 sm:h-5" />}
+            icon={<UserCheck className="text-blue-500 w-5 h-5" />}
             label="Active Courses"
             value={courses.filter(c => c.status === 'ACTIVE').length}
-            valueClassName="text-blue-600"
+            valueClassName="text-blue-900"
+            sublabel="Currently active"
           />
           <SummaryCard
-            icon={<UserX className="text-white w-4 h-4 sm:w-5 sm:h-5" />}
+            icon={<UserX className="text-blue-500 w-5 h-5" />}
             label="Inactive Courses"
             value={courses.filter(c => c.status === 'INACTIVE').length}
-            valueClassName="text-yellow-600"
+            valueClassName="text-blue-900"
+            sublabel="Inactive or archived"
           />
           <SummaryCard
-            icon={<GraduationCap className="text-white w-4 h-4 sm:w-5 sm:h-5" />}
+            icon={<GraduationCap className="text-blue-500 w-5 h-5" />}
             label="Total Students"
             value={courses.reduce((sum, c) => sum + (c.totalStudents || 0), 0)}
-            valueClassName="text-purple-600"
-        />
-      </div>
+            valueClassName="text-blue-900"
+            sublabel="Total enrolled students"
+          />
+        </div>
 
         {/* Quick Actions Panel */}
         <div className="w-full max-w-full pt-4">
@@ -844,200 +1293,205 @@ export default function CourseListPage() {
         {/* Main Content Area */}
         <div className="w-full max-w-full pt-4">
           <Card className="shadow-lg rounded-xl overflow-hidden p-0 w-full max-w-full">
-          <CardHeader className="p-0">
-            {/* Blue Gradient Header - flush to card edge, no rounded corners */}
-            <div className="bg-gradient-to-r from-[#1e40af] to-[#3b82f6] p-0">
-              <div className="py-4 sm:py-6">
-                <div className="flex items-center gap-3 px-4 sm:px-6">
-                  <div className="w-8 h-8 flex items-center justify-center">
-                    <Search className="w-5 h-5 text-white" />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-bold text-white">Course List</h3>
-                    <p className="text-blue-100 text-sm">Search and filter course information</p>
+            <CardHeader className="p-0">
+              {/* Blue Gradient Header - flush to card edge, no rounded corners */}
+              <div className="bg-gradient-to-r from-[#1e40af] to-[#3b82f6] p-0">
+                <div className="py-4 sm:py-6">
+                  <div className="flex items-center gap-3 px-4 sm:px-6">
+                    <div className="w-8 h-8 flex items-center justify-center">
+                      <Search className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-white">Course List</h3>
+                      <p className="text-blue-100 text-sm">Search and filter course information</p>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          </CardHeader>
-          {/* Search and Filter Section */}
-          <div className="border-b border-gray-200 shadow-sm p-3 sm:p-4 lg:p-6">
-            <div className="flex flex-col xl:flex-row gap-2 sm:gap-3 items-start xl:items-center justify-end">
-              {/* Search Bar */}
-              <div className="relative w-full xl:w-auto xl:min-w-[200px] xl:max-w-sm">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Search courses..."
-                  value={searchInput}
-                  onChange={e => setSearchInput(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:outline-none"
-                />
-              </div>
-              
-              {/* Quick Filter Dropdowns */}
-              <div className="flex flex-wrap gap-2 sm:gap-3 w-full xl:w-auto">
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="w-full sm:w-28 lg:w-32 xl:w-28 text-gray-700">
-                    <SelectValue placeholder="Status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Status</SelectItem> 
-                    <SelectItem value="ACTIVE">Active</SelectItem>
-                    <SelectItem value="INACTIVE">Inactive</SelectItem>
-                  </SelectContent>
-                </Select>
-
-                <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
-                  <SelectTrigger className="w-full sm:w-28 lg:w-32 xl:w-28 text-gray-700">
-                    <SelectValue placeholder="Department" />
-                </SelectTrigger>
-                <SelectContent>
-                    <SelectItem value="all">All Departments</SelectItem>
-                    <SelectItem value="Computer Science">Computer Science</SelectItem>
-                    <SelectItem value="Engineering">Engineering</SelectItem>
-                    <SelectItem value="Business">Business</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-        </div>
-          </div>
-          {/* Bulk Actions Bar */}
-          {selectedIds.length > 0 && (
-            <div className="mt-2 sm:mt-3 px-2 sm:px-3 lg:px-6 max-w-full">
-              <BulkActionsBar
-                selectedCount={selectedIds.length}
-                entityLabel="course"
-                actions={[
-                  {
-                    key: "bulk-actions",
-                    label: "Enhanced Bulk Actions",
-                    icon: <Settings className="w-4 h-4 mr-2" />,
-                    onClick: handleOpenBulkActionsDialog,
-                    tooltip: "Open enhanced bulk actions dialog with status updates, notifications, and exports",
-                    variant: "default"
-                  },
-                  {
-                    key: "export",
-                    label: "Quick Export",
-                    icon: <Download className="w-4 h-4 mr-2" />,
-                    onClick: () => handleExportSelectedCourses(selectedCourses),
-                    tooltip: "Quick export selected courses to CSV"
-                  },
-                  {
-                    key: "delete",
-                    label: "Delete Selected",
-                    icon: loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Trash2 className="w-4 h-4 mr-2" />,
-                    onClick: handleBulkDelete,
-                    loading: loading,
-                    disabled: loading,
-                    tooltip: "Delete selected courses (cannot be undone)",
-                    variant: "destructive"
-                  }
-                ]}
-                onClear={() => setSelectedIds([])}
-              />
-              </div>
-            )}
-          {/* Table Content */}
-          <div className="relative px-2 sm:px-3 lg:px-6 mt-3 sm:mt-4 lg:mt-6">
-            {/* Table layout for xl+ only */}
-            <div className="hidden xl:block overflow-x-auto max-w-full">
-            <TableList
-              columns={columns}
-              data={paginatedCourses}
-              loading={loading}
-              selectedIds={selectedIds}
-                emptyMessage={null}
-              onSelectRow={handleSelectRow}
-              onSelectAll={handleSelectAll}
-              isAllSelected={isAllSelected}
-              isIndeterminate={isIndeterminate}
-              getItemId={(item) => item.id}
-                className="border-0 shadow-none max-w-full"
-            />
-        </div>
-        {/* Card layout for small screens */}
-            <div className="block xl:hidden p-2 sm:p-3 lg:p-4 max-w-full">
-              {!loading && filteredCourses.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-8 px-4">
-                  <EmptyState
-                    icon={<BookOpen className="w-6 h-6 text-blue-400" />}
-                    title="No courses found"
-                    description="Try adjusting your search criteria or filters to find the courses you're looking for."
-                    action={
-                      <div className="flex flex-col gap-2 w-full">
-                        <Button
-                          variant="outline"
-                          className="border-blue-300 text-blue-700 hover:bg-blue-50 rounded-xl"
-                          onClick={() => fetchCourses(true)}
-                        >
-                          <RefreshCw className="w-4 h-4 mr-2" />
-                          Refresh Data
-                        </Button>
-                      </div>
-                    }
+            </CardHeader>
+            {/* Search and Filter Section */}
+            <div className="border-b border-gray-200 shadow-sm p-3 sm:p-4 lg:p-6">
+              <div className="flex flex-col xl:flex-row gap-2 sm:gap-3 items-start xl:items-center justify-end">
+                {/* Search Bar */}
+                <div className="relative w-full xl:w-auto xl:min-w-[200px] xl:max-w-sm">
+                  <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Search courses..."
+                    value={searchInput}
+                    onChange={e => setSearchInput(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:outline-none"
                   />
                 </div>
-              ) : (
-          <TableCardView
-            items={paginatedCourses}
-            selectedIds={selectedIds}
-            onSelect={handleSelectRow}
-            onView={(item) => {
-              setSelectedCourse(item);
-                    setViewModalOpen(true);
-            }}
-            onEdit={(item) => {
-              setSelectedCourse(item);
-              setEditModalOpen(true);
-            }}
-            onDelete={(item) => {
-              setSelectedCourse(item);
-              setDeleteModalOpen(true);
-            }}
-            getItemId={(item) => item.id}
-            getItemName={(item) => item.name}
-            getItemCode={(item) => item.code}
-            getItemStatus={(item) => mapStatusToLowerCase(item.status)}
-            getItemDescription={(item) => item.description}
-            getItemDetails={(item) => [
-              { label: 'Department', value: item.department },
-              { label: 'Units', value: item.units },
-              { label: 'Instructors', value: item.totalInstructors },
-              { label: 'Students', value: item.totalStudents },
-            ]}
-            disabled={(item) => item.status === "ACTIVE" || item.totalStudents > 0 || item.totalInstructors > 0}
-            deleteTooltip={(item) => 
-              item.status === "ACTIVE" 
-                ? "Cannot delete an active course" 
-                : item.totalStudents > 0 
-                  ? "Cannot delete course with enrolled students"
-                  : item.totalInstructors > 0 
-                    ? "Cannot delete course with assigned instructors"
-                    : undefined
-            }
-            isLoading={loading}
-          />
-              )}
+                {/* Quick Filter Dropdowns */}
+                <div className="flex flex-wrap gap-2 sm:gap-3 w-full xl:w-auto">
+                  <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <SelectTrigger className="w-full sm:w-28 lg:w-32 xl:w-28 text-gray-700">
+                      <SelectValue placeholder="Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Status</SelectItem>
+                      <SelectItem value="ACTIVE">
+                        <span className="flex items-center gap-2">
+                          <span className="text-green-600"><RotateCcw className="w-4 h-4" /></span> Active
+                        </span>
+                      </SelectItem>
+                      <SelectItem value="INACTIVE">
+                        <span className="flex items-center gap-2">
+                          <span className="text-red-500"><X className="w-4 h-4" /></span> Inactive
+                        </span>
+                      </SelectItem>
+                      <SelectItem value="ARCHIVED">
+                        <span className="flex items-center gap-2">
+                          <span className="text-gray-500"><Archive className="w-4 h-4" /></span> Archived
+                        </span>
+                      </SelectItem>
+                      <SelectItem value="COMPLETED">
+                        <span className="flex items-center gap-2">
+                          <span className="text-blue-500"><Clock className="w-4 h-4" /></span> Completed
+                        </span>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select value={courseTypeFilter} onValueChange={setCourseTypeFilter}>
+                    <SelectTrigger className="w-full sm:w-28 lg:w-32 xl:w-28 text-gray-700">
+                      <SelectValue placeholder="Course Type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Types</SelectItem>
+                      <SelectItem value="MANDATORY">Mandatory</SelectItem>
+                      <SelectItem value="ELECTIVE">Elective</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
+                    <SelectTrigger className="w-full sm:w-32 lg:w-40 xl:w-40 text-gray-700">
+                      <SelectValue placeholder="Department Code" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Departments</SelectItem>
+                      {departmentOptions.map((code) => (
+                        <SelectItem key={code} value={code}>{code}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+            {/* Bulk Actions Bar */}
+            {selectedIds.length > 0 && (
+              <div className="mt-2 sm:mt-3 px-2 sm:px-3 lg:px-6 max-w-full">
+                <BulkActionsBar
+                  selectedCount={selectedIds.length}
+                  entityLabel="course"
+                  actions={[
+                    {
+                      key: "bulk-actions",
+                      label: "Bulk Actions",
+                      icon: <Settings className="w-4 h-4 mr-2" />,
+                      onClick: handleOpenBulkActionsDialog,
+                      tooltip: "Open enhanced bulk actions dialog with status updates, notifications, and exports",
+                      variant: "default"
+                    },
+                    {
+                      key: "export",
+                      label: "Quick Export",
+                      icon: <Download className="w-4 h-4 mr-2" />,
+                      onClick: () => handleExportSelectedCourses(selectedCourses),
+                      tooltip: "Quick export selected courses to CSV"
+                    },
+                    {
+                      key: "archive",
+                      label: "Archive Selected",
+                      icon: loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Trash2 className="w-4 h-4 mr-2" />,
+                      onClick: () => setBulkActionsDialogOpen(true),
+                      loading: loading,
+                      disabled: loading || selectedCourses.every(c => c.status === "ARCHIVED"),
+                      tooltip: "Archive selected courses (can be restored later)",
+                      variant: "destructive",
+                      hidden: selectedCourses.length === 0 || selectedCourses.every(c => c.status === "ARCHIVED")
+                    },
+                    {
+                      key: "restore",
+                      label: "Restore Selected",
+                      icon: loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RotateCcw className="w-4 h-4 mr-2" />,
+                      onClick: () => setBulkActionsDialogOpen(true),
+                      loading: loading,
+                      disabled: loading || selectedCourses.every(c => c.status !== "ARCHIVED"),
+                      tooltip: "Restore selected archived courses",
+                      variant: "default",
+                      hidden: selectedCourses.length === 0 || selectedCourses.every(c => c.status !== "ARCHIVED")
+                    }
+                  ]}
+                  onClear={() => setSelectedIds([])}
+                />
+              </div>
+            )}
+            {/* Table Content */}
+            <div className="relative px-2 sm:px-3 lg:px-6 mt-3 sm:mt-4 lg:mt-6">
+              <div className="overflow-x-auto bg-white/70 shadow-none relative"> {/* border and border-blue-100 removed */}
+                {/* Loader overlay when refreshing */}
+                {isRefreshing && (
+                  <div className="absolute inset-0 bg-white/70 flex items-center justify-center z-20">
+                    <Loader2 className="h-12 w-12 text-blue-600 animate-spin" />
+                  </div>
+                )}
+                <div className="print-content">
+                  {!loading && filteredCourses.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-8 px-4">
+                      <EmptyState
+                        icon={<BookOpen className="w-6 h-6 text-blue-400" />}
+                        title="No courses found"
+                        description="Try adjusting your search criteria or filters to find the courses you're looking for."
+                        action={
+                          <div className="flex flex-col gap-2 w-full">
+                            <Button
+                              variant="outline"
+                              className="border-blue-300 text-blue-700 hover:bg-blue-50 rounded-xl"
+                              onClick={() => fetchCourses(true)}
+                            >
+                              <RefreshCw className="w-4 h-4 mr-2" />
+                              Refresh Data
+                            </Button>
+                          </div>
+                        }
+                      />
+                    </div>
+                  ) : (
+                    <TableList
+                      columns={columns}
+                      data={paginatedCourses}
+                      loading={loading}
+                      selectedIds={selectedIds}
+                      emptyMessage={null}
+                      onSelectRow={handleSelectRow}
+                      onSelectAll={handleSelectAll}
+                      isAllSelected={isAllSelected}
+                      isIndeterminate={isIndeterminate}
+                      getItemId={(item) => item.id}
+                      className="border-0 shadow-none max-w-full"
+                      expandedRowIds={expandedRowIds}
+                      onToggleExpand={onToggleExpand}
+                      sortState={{ field: sortField, order: sortOrder }}
+                      onSort={handleSort}
+                    />
+                  )}
+                </div>
+              </div>
+              {/* Pagination */}
+                <TablePagination
+                  page={currentPage}
+                  pageSize={itemsPerPage}
+                  totalItems={filteredCourses.length}
+                  onPageChange={setCurrentPage}
+                  onPageSizeChange={setItemsPerPage}
+                  entityLabel="course"
+                />
+              </div>
+          </Card>
         </div>
-      </div>
-          {/* Pagination */}
-          <TablePagination
-            page={currentPage}
-            pageSize={ITEMS_PER_PAGE}
-          totalItems={filteredCourses.length}
-          onPageChange={setCurrentPage}
-            onPageSizeChange={setItemsPerPage}
-            pageSizeOptions={[10, 25, 50, 100]}
-            loading={loading}
-        />
-        </Card>
-        </div>
-      </div>
 
       {/* Add Course Dialog */}
-      <CourseFormDialog
+      <CourseForm
         open={addModalOpen}
         onOpenChange={setAddModalOpen}
         type="create"
@@ -1062,7 +1516,7 @@ export default function CourseListPage() {
         description={selectedCourse ? `Are you sure you want to delete the course "${selectedCourse.name}"? This action cannot be undone.` : undefined}
       />
 
-      <CourseFormDialog
+      <CourseForm
         open={editModalOpen}
         onOpenChange={setEditModalOpen}
         type="update"
@@ -1086,11 +1540,13 @@ export default function CourseListPage() {
         sortFieldOptions={courseSortFieldOptions}
         onApply={() => {
           setSortFields([{ field: sortField as SortField, order: sortOrder }]);
+          setSortDialogOpen(false);
         }}
         onReset={() => {
           setSortField('name');
           setSortOrder('asc');
           setSortFields([{ field: 'name' as SortField, order: 'asc' }]);
+          setSortDialogOpen(false);
         }}
         title="Sort Courses"
         tooltip="Sort courses by different fields. Choose the field and order to organize your list."
@@ -1120,7 +1576,7 @@ export default function CourseListPage() {
       <ViewDialog
         open={viewModalOpen}
         onOpenChange={setViewModalOpen}
-        title={selectedCourse?.name || ''}
+        title={selectedCourse ? `${selectedCourse.name}` : "Course Details"}
         subtitle={selectedCourse?.code}
         status={selectedCourse ? {
           value: selectedCourse.status,
@@ -1128,25 +1584,95 @@ export default function CourseListPage() {
                   selectedCourse.status === "INACTIVE" ? "destructive" : 
                   selectedCourse.status === "ARCHIVED" ? "secondary" : "warning"
         } : undefined}
-        sections={[
+        headerVariant="default"
+        sections={selectedCourse ? ([
           {
+            title: "Course Information",
             fields: [
-              { label: 'Department', value: selectedCourse?.department || '' },
-              { label: 'Units', value: selectedCourse?.units || 0, type: 'number' },
-              { label: 'Course Type', value: selectedCourse?.courseType || '' }
+              { label: 'Course ID', value: String(selectedCourse.id), icon: <Hash className="w-4 h-4 text-blue-600" /> },
+              { label: 'Course Name', value: selectedCourse.name, icon: <BookOpen className="w-4 h-4 text-blue-600" /> },
+              { label: 'Course Code', value: selectedCourse.code, icon: <Tag className="w-4 h-4 text-blue-600" /> },
+              { label: 'Department', value: selectedCourse.department, icon: <Building2 className="w-4 h-4 text-blue-600" /> },
+              { label: 'Department Code', value: selectedCourse.departmentCode || '', icon: <BadgeInfo className="w-4 h-4 text-blue-600" /> },
+              { label: 'Units', value: String(selectedCourse.units), icon: <Layers className="w-4 h-4 text-blue-600" /> },
+              { label: 'Course Type', value: selectedCourse.courseType, icon: <FileText className="w-4 h-4 text-blue-600" /> },
+              { label: 'Major', value: selectedCourse.major, icon: <GraduationCap className="w-4 h-4 text-blue-600" /> },
+              { label: 'Status', value: selectedCourse.status, icon: <Info className="w-4 h-4 text-blue-600" /> },
             ]
           },
           {
+            title: "Enrollment & Instructors",
             fields: [
-              { label: 'Total Students', value: selectedCourse?.totalStudents || 0, type: 'number' },
-              { label: 'Total Instructors', value: selectedCourse?.totalInstructors || 0, type: 'number' },
-              { label: 'Last Updated', value: selectedCourse?.updatedAt || '', type: 'date' }
+              { label: 'Total Students', value: String(selectedCourse.totalStudents), icon: <Users className="w-4 h-4 text-blue-600" /> },
+              { label: 'Total Instructors', value: String(selectedCourse.totalInstructors), icon: <UserCheckIcon className="w-4 h-4 text-blue-600" /> },
             ]
-          }
-        ]}
-        description={selectedCourse?.description}
+          },
+          {
+            title: "Timestamps",
+            fields: [
+              { label: 'Created At', value: selectedCourse.createdAt, type: 'date', icon: <Clock className="w-4 h-4 text-blue-600" /> },
+              { label: 'Last Updated', value: selectedCourse.updatedAt, type: 'date', icon: <RefreshCw className="w-4 h-4 text-blue-600" /> },
+            ]
+          },
+          selectedCourse.description ? {
+            title: "Description",
+            fields: [
+              { label: 'Description', value: selectedCourse.description, icon: <FileText className="w-4 h-4 text-blue-600" /> },
+            ]
+          } : undefined
+        ].filter(Boolean) as import('@/components/reusable/Dialogs/ViewDialog').ViewDialogSection[]) : []}
+        description={selectedCourse?.department && selectedCourse?.departmentCode ? `Department: ${selectedCourse.department} (${selectedCourse.departmentCode})` : undefined}
         tooltipText="View detailed course information"
       />
+
+      <VisibleColumnsDialog
+        open={visibleColumnsDialogOpen}
+        onOpenChange={setVisibleColumnsDialogOpen}
+        columns={COLUMN_OPTIONS}
+        visibleColumns={visibleColumns}
+        onColumnToggle={handleColumnToggle}
+        onReset={handleResetColumns}
+        title="Manage Course Columns"
+        description="Choose which columns to display in the course table"
+        searchPlaceholder="Search course columns..."
+        enableManualSelection={true}
+      />
+
+      <ImportDialog
+        open={importDialogOpen}
+        onOpenChange={setImportDialogOpen}
+        onImport={handleImportCourses}
+        entityName="CourseOffering"
+        templateUrl={undefined}
+        acceptedFileTypes={[".csv", ".xlsx", ".xls"]}
+        maxFileSize={5}
+      />
+
+      <BulkActionsDialog
+        open={bulkActionsDialogOpen}
+        onOpenChange={setBulkActionsDialogOpen}
+        selectedItems={selectedCoursesForBulkAction}
+        entityType="course"
+        entityLabel="course"
+        availableActions={[
+          { type: 'status-update', title: 'Update Status', description: 'Update status of selected courses', icon: <Settings className="w-4 h-4" /> },
+          { type: 'notification', title: 'Send Notification', description: 'Send notification to instructors', icon: <Bell className="w-4 h-4" /> },
+          { type: 'export', title: 'Export Data', description: 'Export selected courses data', icon: <Download className="w-4 h-4" /> },
+        ]}
+        exportColumns={courseColumns.map(col => ({ id: col.key, label: col.label, default: true }))}
+        notificationTemplates={[]}
+        stats={{
+          total: selectedCoursesForBulkAction.length,
+          active: selectedCoursesForBulkAction.filter(c => c.status === 'ACTIVE').length,
+          inactive: selectedCoursesForBulkAction.filter(c => c.status === 'INACTIVE' || c.status === 'ARCHIVED').length
+        }}
+        onActionComplete={handleBulkActionComplete}
+        onCancel={handleBulkActionCancel}
+        onProcessAction={handleProcessBulkAction}
+        getItemDisplayName={item => item.name}
+        getItemStatus={item => item.status}
+      />
     </div>
+  </div>
   );
 } 

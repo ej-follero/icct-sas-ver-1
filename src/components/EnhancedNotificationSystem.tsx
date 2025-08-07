@@ -12,7 +12,6 @@ import { Progress } from '@/components/ui/progress';
 import { 
   Bell, 
   Mail, 
-  MessageSquare, 
   Clock, 
   Users, 
   Send, 
@@ -38,7 +37,7 @@ export interface NotificationTemplate {
   id: string;
   name: string;
   description: string;
-  type: 'email' | 'sms' | 'both';
+  type: 'email';
   subject: string;
   message: string;
   variables: string[];
@@ -65,7 +64,7 @@ export interface NotificationCampaign {
 
 export interface NotificationSettings {
   enableEmail: boolean;
-  enableSMS: boolean;
+  
   enablePush: boolean;
   defaultPriority: 'low' | 'medium' | 'high';
   autoSendAttendanceAlerts: boolean;
@@ -106,7 +105,7 @@ const DEFAULT_TEMPLATES: NotificationTemplate[] = [
     id: 'low_attendance_warning',
     name: 'Low Attendance Warning',
     description: 'Warning for students with low attendance',
-    type: 'both',
+    type: 'email',
     subject: 'Low Attendance Warning - {student_name}',
     message: 'Dear {student_name},\n\nWe have noticed that your attendance rate is below the required threshold.\n\nCurrent attendance rate: {attendance_rate}%\nRequired minimum: 75%\n\nPlease contact your advisor immediately to discuss this matter.\n\nBest regards,\nICCT Administration',
     variables: ['student_name', 'attendance_rate'],
@@ -128,7 +127,7 @@ const DEFAULT_TEMPLATES: NotificationTemplate[] = [
     id: 'emergency_alert',
     name: 'Emergency Alert',
     description: 'For urgent notifications',
-    type: 'both',
+    type: 'email',
     subject: 'URGENT: {subject}',
     message: 'URGENT NOTIFICATION\n\n{message}\n\nPlease take immediate action.\n\nBest regards,\nICCT Administration',
     variables: ['subject', 'message'],
@@ -149,7 +148,7 @@ export function EnhancedNotificationSystem({
   const [campaigns, setCampaigns] = useState<NotificationCampaign[]>([]);
   const [settings, setSettings] = useState<NotificationSettings>({
     enableEmail: true,
-    enableSMS: true,
+    
     enablePush: false,
     defaultPriority: 'medium',
     autoSendAttendanceAlerts: true,
@@ -169,7 +168,7 @@ export function EnhancedNotificationSystem({
   // Compose state
   const [composeData, setComposeData] = useState({
     templateId: '',
-    type: 'email' as 'email' | 'sms' | 'both',
+    type: 'email',
     subject: '',
     message: '',
     priority: 'medium' as 'low' | 'medium' | 'high',
@@ -370,8 +369,8 @@ export function EnhancedNotificationSystem({
                             <SelectItem key={template.id} value={template.id}>
                               <div className="flex items-center gap-2">
                                 {template.type === 'email' && <Mail className="w-4 h-4" />}
-                                {template.type === 'sms' && <MessageSquare className="w-4 h-4" />}
-                                {template.type === 'both' && <Bell className="w-4 h-4" />}
+                                
+                                
                                 {template.name}
                               </div>
                             </SelectItem>
@@ -392,18 +391,8 @@ export function EnhancedNotificationSystem({
                               Email
                             </div>
                           </SelectItem>
-                          <SelectItem value="sms">
-                            <div className="flex items-center gap-2">
-                              <MessageSquare className="w-4 h-4" />
-                              SMS
-                            </div>
-                          </SelectItem>
-                          <SelectItem value="both">
-                            <div className="flex items-center gap-2">
-                              <Bell className="w-4 h-4" />
-                              Both
-                            </div>
-                          </SelectItem>
+
+
                         </SelectContent>
                       </Select>
                     </div>
@@ -608,8 +597,8 @@ export function EnhancedNotificationSystem({
                     <CardTitle className="text-base">{template.name}</CardTitle>
                     <div className="flex items-center gap-1">
                       {template.type === 'email' && <Mail className="w-4 h-4 text-blue-500" />}
-                      {template.type === 'sms' && <MessageSquare className="w-4 h-4 text-green-500" />}
-                      {template.type === 'both' && <Bell className="w-4 h-4 text-purple-500" />}
+                      
+                      
                       {template.isDefault && <Badge variant="outline" className="text-xs">Default</Badge>}
                     </div>
                   </div>
@@ -768,17 +757,7 @@ export function EnhancedNotificationSystem({
                       onCheckedChange={(checked) => setSettings(prev => ({ ...prev, enableEmail: checked }))}
                     />
                   </div>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label htmlFor="enable-sms">SMS Notifications</Label>
-                      <p className="text-sm text-gray-500">Send notifications via SMS</p>
-                    </div>
-                    <Switch
-                      id="enable-sms"
-                      checked={settings.enableSMS}
-                      onCheckedChange={(checked) => setSettings(prev => ({ ...prev, enableSMS: checked }))}
-                    />
-                  </div>
+
                   <div className="flex items-center justify-between">
                     <div>
                       <Label htmlFor="enable-push">Push Notifications</Label>

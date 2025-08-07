@@ -211,5 +211,5 @@ export interface NotificationData {
   type: 'absence' | 'tardiness' | 'improvement' | 'concern';
   message: string;
   recipient: 'parent' | 'student' | 'both';
-  method: 'email' | 'sms' | 'both';
+  method: 'email';
 } 

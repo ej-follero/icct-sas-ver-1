@@ -93,9 +93,6 @@ export async function PUT(
       where: {
         courseId: parseInt(params.id),
       },
-      include: {
-        Semester: true,
-      },
     });
 
     // If not found by ID, try to find by code
@@ -103,9 +100,6 @@ export async function PUT(
       existingCourse = await prisma.courseOffering.findUnique({
         where: {
           courseCode: params.id,
-        },
-        include: {
-          Semester: true,
         },
       });
     }
@@ -148,11 +142,8 @@ export async function PUT(
         description: description || "",
         totalUnits: units,
         courseStatus: status.toUpperCase(),
-        // Keep existing values for required fields
-        academicYear: existingCourse.academicYear,
-        semester: existingCourse.semester,
-        semesterId: existingCourse.semesterId,
         courseType: existingCourse.courseType,
+        major: existingCourse.major,
       },
       include: {
         Department: true,
@@ -188,7 +179,7 @@ export async function PUT(
   }
 }
 
-// DELETE /api/courses/[id] - Delete a course
+// DELETE /api/courses/[id] - Soft delete (archive) a course
 export async function DELETE(
   request: Request,
   { params }: { params: { id: string } }
@@ -217,21 +208,100 @@ export async function DELETE(
       );
     }
 
-    // Delete course
-    await prisma.courseOffering.delete({
+    // Soft delete: set courseStatus to 'ARCHIVED'
+    await prisma.courseOffering.update({
       where: {
         courseId: existingCourse.courseId,
+      },
+      data: {
+        courseStatus: 'ARCHIVED',
       },
     });
 
     return NextResponse.json(
-      { message: "Course deleted successfully" },
+      { message: "Course archived (soft deleted) successfully" },
       { status: 200 }
     );
   } catch (error) {
-    console.error("Error deleting course:", error);
+    console.error("Error archiving course:", error);
     return NextResponse.json(
-      { error: "Failed to delete course" },
+      { error: "Failed to archive course" },
+      { status: 500 }
+    );
+  }
+}
+
+// PATCH /api/courses/[id] - Update course status (e.g., restore from archived)
+export async function PATCH(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const body = await request.json();
+    const { status } = body;
+    if (!status) {
+      return NextResponse.json(
+        { error: "Missing status field" },
+        { status: 400 }
+      );
+    }
+    // Try to find by ID first
+    let existingCourse = await prisma.courseOffering.findUnique({
+      where: {
+        courseId: parseInt(params.id),
+      },
+    });
+    // If not found by ID, try to find by code
+    if (!existingCourse) {
+      existingCourse = await prisma.courseOffering.findUnique({
+        where: {
+          courseCode: params.id,
+        },
+      });
+    }
+    if (!existingCourse) {
+      return NextResponse.json(
+        { error: "Course not found" },
+        { status: 404 }
+      );
+    }
+    // Update only the courseStatus
+    const updatedCourse = await prisma.courseOffering.update({
+      where: {
+        courseId: existingCourse.courseId,
+      },
+      data: {
+        courseStatus: status,
+      },
+      include: {
+        Department: true,
+        _count: {
+          select: {
+            Student: true,
+            Section: true,
+          },
+        },
+      },
+    });
+    return NextResponse.json({
+      id: updatedCourse.courseId.toString(),
+      name: updatedCourse.courseName,
+      code: updatedCourse.courseCode,
+      department: updatedCourse.Department?.departmentName || '',
+      departmentCode: updatedCourse.Department?.departmentCode || '',
+      description: updatedCourse.description || '',
+      units: updatedCourse.totalUnits,
+      status: updatedCourse.courseStatus,
+      totalStudents: updatedCourse._count.Student,
+      totalInstructors: updatedCourse._count.Section,
+      createdAt: updatedCourse.createdAt.toISOString(),
+      updatedAt: updatedCourse.updatedAt.toISOString(),
+      courseType: updatedCourse.courseType,
+      major: updatedCourse.major || '',
+    });
+  } catch (error) {
+    return NextResponse.json(
+      { error: (error as Error).message || "Failed to update course status" },
       { status: 500 }
     );
   }

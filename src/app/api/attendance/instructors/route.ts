@@ -41,6 +41,7 @@ export async function GET(request: Request) {
           OR: [
             { firstName: { contains: search, mode: 'insensitive' } },
             { lastName: { contains: search, mode: 'insensitive' } },
+            { employeeId: { contains: search, mode: 'insensitive' } },
             { email: { contains: search, mode: 'insensitive' } },
             { Department: { departmentName: { contains: search, mode: 'insensitive' } } }
           ]
@@ -125,7 +126,7 @@ export async function GET(request: Request) {
       return {
         instructorId: instructor.instructorId.toString(),
         instructorName: `${instructor.firstName} ${instructor.lastName}`,
-        employeeId: `EMP-${instructor.instructorId}`,
+        employeeId: instructor.employeeId,
         department: instructor.Department.departmentName,
         instructorType: instructor.instructorType,
         specialization: instructor.specialization,

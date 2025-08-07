@@ -267,7 +267,7 @@ async function sendBulkNotifications(
   options: any
 ): Promise<void> {
   try {
-    // In a real implementation, send notifications via email/SMS
+    // In a real implementation, send notifications via email
     console.log(`Notifications sent for ${action} to ${users.length} users`);
     
     // Example notification logic:

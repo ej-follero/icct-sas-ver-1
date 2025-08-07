@@ -332,3 +332,34 @@ input[type="password"]::-webkit-input-password-reveal-button {
 .rbc-time-gutter, .rbc-time-gutter .rbc-timeslot-group, .rbc-time-gutter .rbc-label {
   color: #64748b !important; /* Tailwind's slate-500 */
 }
+
+/* Responsive TableList styles to prevent overflow */
+.table-list-container {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+
+.table-list-container table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: auto;
+}
+
+.table-list-container th,
+.table-list-container td {
+  /* Removed text-align: center and white-space: nowrap to allow per-column control */
+  padding: 8px 12px;
+  vertical-align: middle;
+}
+
+@media (max-width: 800px) {
+  .table-list-container th:nth-child(5),
+  .table-list-container td:nth-child(5),
+  .table-list-container th:nth-child(6),
+  .table-list-container td:nth-child(6) {
+    display: none;
+  }
+}

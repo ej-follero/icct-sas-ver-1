@@ -14,6 +14,11 @@ const nextConfig = {
   compress: true,
   // Optimize bundle size
   swcMinify: true,
+  // Suppress development server startup messages
+  onDemandEntries: {
+    maxInactiveAge: 25 * 1000,
+    pagesBufferLength: 2,
+  },
   // Add headers for better caching
   async headers() {
     return [

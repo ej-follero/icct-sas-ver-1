@@ -2,11 +2,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
-import { X, Loader2, AlertCircle, Info, Copy, ExternalLink, ChevronRight, Eye, Mail, Phone, MapPin, Clock, GraduationCap, User, Home, Building2 } from "lucide-react";
+import { X, Loader2, AlertCircle, Info, Copy, ExternalLink, ChevronRight, Eye, Mail, Phone, MapPin, Clock, GraduationCap, User, Home, Building2, Printer } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
+import { PrintLayout } from "@/components/PrintLayout";
 
 export interface ViewDialogField {
   label: string;
@@ -196,7 +197,77 @@ export function ViewDialog({
   };
 
   const handlePrint = () => {
-    window.print();
+    // Create print-friendly data from the dialog content
+    const printColumns = [
+      { header: 'Field', accessor: 'field' },
+      { header: 'Value', accessor: 'value' }
+    ];
+
+    const printData: { field: string; value: string }[] = [];
+
+    // Add title and subtitle
+    printData.push({ field: 'Title', value: title });
+    if (subtitle) {
+      printData.push({ field: 'Subtitle', value: subtitle });
+    }
+    if (status) {
+      printData.push({ field: 'Status', value: status.value });
+    }
+
+    // Add description if available
+    if (description) {
+      printData.push({ field: 'Description', value: description });
+    }
+
+    // Add department head information if available
+    if (departmentHead) {
+      printData.push({ field: 'Department Head', value: departmentHead.name });
+      printData.push({ field: 'Position', value: departmentHead.position });
+      printData.push({ field: 'Department', value: departmentHead.department });
+      if (departmentHead.email) {
+        printData.push({ field: 'Email', value: departmentHead.email });
+      }
+      if (departmentHead.phone) {
+        printData.push({ field: 'Phone', value: departmentHead.phone });
+      }
+      if (departmentHead.officeLocation) {
+        printData.push({ field: 'Office Location', value: departmentHead.officeLocation });
+      }
+      if (departmentHead.officeHours) {
+        printData.push({ field: 'Office Hours', value: departmentHead.officeHours });
+      }
+    }
+
+    // Add all sections data
+    sections.forEach(section => {
+      if (section.title) {
+        printData.push({ field: `--- ${section.title} ---`, value: '' });
+      }
+      section.fields.forEach(field => {
+        let value = field.value.toString();
+        
+        // Format special field types
+        if (field.type === 'date' && typeof field.value === 'string') {
+          value = new Date(field.value).toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+          });
+        }
+        
+        printData.push({ field: field.label, value });
+      });
+    });
+
+    const printFunction = PrintLayout({
+      title: `${title} - Details`,
+      data: printData,
+      columns: printColumns,
+      totalItems: printData.length,
+    });
+
+    printFunction();
+    toast.success('Print dialog opened');
   };
 
   const handleExport = () => {
@@ -260,6 +331,17 @@ export function ViewDialog({
                 >
                   <Copy className="w-4 h-4" />
                   Copy
+                </Button>
+              )}
+              {showPrintButton && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-white hover:bg-white/20 hover:text-white rounded flex items-center gap-1"
+                  onClick={handlePrint}
+                >
+                  <Printer className="w-4 h-4" />
+                  Print
                 </Button>
               )}
               <Button
@@ -334,7 +416,7 @@ export function ViewDialog({
                   className="text-white hover:bg-white/20 rounded"
                   onClick={handlePrint}
                 >
-                  <ExternalLink className="w-4 h-4 mr-1" />
+                  <Printer className="w-4 h-4 mr-1" />
                   Print
                 </Button>
               )}

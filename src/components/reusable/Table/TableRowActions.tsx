@@ -34,7 +34,7 @@ export function TableRowActions({
 }) {
   return (
     <TooltipProvider>
-      <div className={`flex gap-2 justify-center ${className}`}>
+      <div className={`flex gap-1 justify-center ${className}`}>
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
