@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import jwt from 'jsonwebtoken';
+import { env } from '@/lib/env-validation';
+import { csrfProtection } from '@/lib/csrf-protection';
+import { getRateLimiterForPath } from '@/lib/rate-limiter';
 
 // Define protected routes and their required roles
 const protectedRoutes = {
@@ -41,9 +44,33 @@ interface JWTPayload {
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  // Apply rate limiting first
+  const rateLimiter = getRateLimiterForPath(pathname);
+  if (rateLimiter) {
+    const rateLimitResponse = await rateLimiter.middleware()(request);
+    if (rateLimitResponse) {
+      return rateLimitResponse;
+    }
+  }
+
+  // Check CSRF protection (for API routes)
+  if (pathname.startsWith('/api/')) {
+    const csrfResponse = csrfProtection.middleware(request);
+    if (csrfResponse) {
+      return csrfResponse;
+    }
+  }
+
   // Allow public routes
   if (publicRoutes.some(route => pathname.startsWith(route))) {
-    return NextResponse.next();
+    const response = NextResponse.next();
+    
+    // Set CSRF token for public routes that might need it
+    if (pathname === '/login' || pathname === '/api/csrf-token') {
+      csrfProtection.setupCSRFToken(response);
+    }
+    
+    return response;
   }
 
   // Check if route requires authentication
@@ -66,10 +93,10 @@ export async function middleware(request: NextRequest) {
   }
 
   try {
-    // Verify JWT token
+    // Verify JWT token using validated environment variable
     const decoded = jwt.verify(
       token, 
-      process.env.JWT_SECRET || 'your-secret-key'
+      env.JWT_SECRET
     ) as JWTPayload;
 
     // Check role-based access

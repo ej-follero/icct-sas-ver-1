@@ -23,8 +23,7 @@ import {
   AttendanceStatus,
   RiskLevel 
 } from '@/types/student-attendance';
-// Remove or comment out the broken import for StudentAttendanceDetailTable
-// import { StudentAttendanceDetailTable } from '../app/(dashboard)/list/attendance/students/page';
+
 
 export default function StudentDetailModal({ student, isOpen, onClose, onUpdate, onSendNotification }: StudentDetailModalProps) {
   const [activeTab, setActiveTab] = useState('overview');
@@ -177,8 +176,6 @@ export default function StudentDetailModal({ student, isOpen, onClose, onUpdate,
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {/* The StudentAttendanceDetailTable component was removed from imports, so this will cause an error. */}
-                  {/* <StudentAttendanceDetailTable records={student.recentAttendanceRecords || []} /> */}
                   <div className="text-gray-500">Recent attendance records are not available.</div>
                 </CardContent>
               </Card>

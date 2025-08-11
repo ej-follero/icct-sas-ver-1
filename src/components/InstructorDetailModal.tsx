@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,8 +11,9 @@ import { Calendar } from '@/components/ui/calendar';
 import { 
   User, Mail, Phone, MapPin, Clock, BookOpen, TrendingUp, TrendingDown, 
   Calendar as CalendarIcon, Activity, Shield, AlertTriangle, CheckCircle,
-  X, Building, GraduationCap, Target, Zap, Users, BarChart3
+  X, Building, GraduationCap, Target, Zap, Users, BarChart3, Copy, Printer, Eye
 } from 'lucide-react';
+import { toast } from "sonner";
 import { InstructorAttendance, ScheduleAttendance, WeeklyAttendancePattern } from '@/types/instructor-attendance';
 import { getAttendanceRateColor } from '@/lib/colors';
 
@@ -34,6 +35,20 @@ const InstructorDetailModal: React.FC<InstructorDetailModalProps> = ({
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
 
   if (!instructor) return null;
+
+  // Helper functions
+  const copyToClipboard = async (text: string, fieldLabel: string) => {
+    try {
+      await navigator.clipboard.writeText(text.toString());
+      toast.success(`${fieldLabel} copied to clipboard`);
+    } catch (err) {
+      toast.error('Failed to copy to clipboard');
+    }
+  };
+
+  const handlePrint = () => {
+    toast.success('Print dialog opened');
+  };
 
   const getRiskBadgeColor = (risk: string) => {
     switch (risk) {
@@ -103,24 +118,59 @@ const InstructorDetailModal: React.FC<InstructorDetailModalProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <div className="flex items-center justify-between">
-            <DialogTitle className="text-xl font-bold text-blue-900">
-              Instructor Details
-            </DialogTitle>
+      <DialogContent className="max-w-full w-full max-h-[90vh] overflow-hidden bg-white/95 backdrop-blur-sm border border-blue-200 shadow-2xl rounded-2xl p-0 mx-2 my-1 sm:max-w-[800px] sm:mx-4 sm:my-1 md:max-w-[1000px] md:mx-6 md:my-1 lg:max-w-[1200px] lg:mx-8 lg:my-1 flex flex-col h-full">
+        {/* Header with gradient background - ViewDialog style */}
+        <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-blue-800 rounded-t-2xl p-6 relative flex-shrink-0">
+          <div className="flex items-start gap-4 pr-24">
+            <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center overflow-hidden">
+              <Eye className="w-6 h-6 text-white" />
+            </div>
+            <div className="flex-1">
+              <DialogTitle className="text-white text-2xl font-bold flex items-center gap-3">
+                Instructor Details
+                <Badge className="bg-white/20 text-white border-white/30">
+                  {instructor.status}
+                </Badge>
+              </DialogTitle>
+              <p className="text-blue-100 text-sm mt-1 font-medium">{instructor.instructorName} • {instructor.employeeId} • {instructor.department}</p>
+            </div>
+          </div>
+          
+          {/* Action buttons in header - Right side */}
+          <div className="absolute right-4 top-4 flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="lg"
+              className="text-white hover:bg-white/20 hover:text-white rounded"
+              onClick={() => copyToClipboard(instructor.instructorName, 'Instructor Name')}
+            >
+              <Copy className="w-4 h-4 mr-1" />
+              Copy
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-white hover:bg-white/20 rounded"
+              onClick={handlePrint}
+            >
+              <Printer className="w-4 h-4 mr-1" />
+              Print
+            </Button>
             <Button
               variant="ghost"
               size="icon"
+              className="h-10 w-10 rounded-full hover:bg-white/20 text-white"
               onClick={onClose}
-              className="h-6 w-6 rounded-full"
+              aria-label="Close dialog"
             >
-              <X className="h-4 w-4" />
+              <X className="h-6 w-6" />
             </Button>
           </div>
-        </DialogHeader>
+        </div>
 
-        <div className="space-y-6">
+        {/* Scrollable Content Area */}
+        <div className="flex-1 overflow-y-auto min-h-0">
+          <div className="p-6 space-y-6">
           {/* Header Section */}
           <Card>
             <CardContent className="p-6">
@@ -405,6 +455,7 @@ const InstructorDetailModal: React.FC<InstructorDetailModalProps> = ({
               </Card>
             </TabsContent>
           </Tabs>
+          </div>
         </div>
       </DialogContent>
     </Dialog>

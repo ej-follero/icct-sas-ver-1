@@ -23,7 +23,7 @@ export interface SortDialogProps<T extends string = string> {
   tooltip?: string;
 }
 
-export function SortDialog<T extends string = string>({
+function SortDialog<T extends string = string>({
   open,
   onOpenChange,
   sortField,
@@ -333,4 +333,7 @@ export function SortDialog<T extends string = string>({
     </Dialog>
     </>
   );
-} 
+}
+
+export { SortDialog };
+export default SortDialog; 

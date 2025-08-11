@@ -23,42 +23,46 @@ model RoleManagement {
 }
 
 model User {
-  userId              Int                  @id @default(autoincrement())
-  userName            String
-  email               String               @unique @db.VarChar(100)
-  passwordHash        String               @db.VarChar(255)
-  role                Role
-  status              UserStatus           @default(ACTIVE)
-  lastLogin           DateTime?
-  lastPasswordChange  DateTime?
-  failedLoginAttempts Int                  @default(0)
-  isEmailVerified     Boolean              @default(false)
-  isPhoneVerified     Boolean              @default(false)
-  twoFactorEnabled    Boolean              @default(false)
-  createdAt           DateTime             @default(now())
-  updatedAt           DateTime             @updatedAt
-  sessionVersion      Int                  @default(1)
-  customRoleId        Int?
-  Announcements       Announcement[]
-  attendanceOverrides Attendance[]         @relation("AttendanceOverride")
-  Attendance          Attendance[]
-  VerifiedAttendances Attendance[]         @relation("AttendanceVerification")
-  BackupLogs          BackupLog[]
-  DepartmentHead      Department[]         @relation("DepartmentHead")
-  Event               Event[]
-  Guardian            Guardian?
-  Instructor          Instructor?
-  PasswordResetTokens PasswordResetToken[]
-  RFIDLogs            RFIDLogs[]
-  AssignedTags        RFIDTags[]           @relation("TagAssignment")
-  ReportLogs          ReportLog[]
-  RestorePoints       RestorePoint[]
-  Student             Student[]
-  SystemBackups       SystemBackup[]
-  SystemLogs          SystemLogs[]
-  BackupSchedules     BackupSchedule[]
-  BackupScheduleLogs  BackupScheduleLog[]
-  CustomRole          RoleManagement?      @relation("UserRoles", fields: [customRoleId], references: [id])
+  userId                 Int                  @id @default(autoincrement())
+  userName               String
+  email                  String               @unique @db.VarChar(100)
+  passwordHash           String               @db.VarChar(255)
+  role                   Role
+  status                 UserStatus           @default(ACTIVE)
+  lastLogin              DateTime?
+  lastPasswordChange     DateTime?
+  failedLoginAttempts    Int                  @default(0)
+  isEmailVerified        Boolean              @default(false)
+  isPhoneVerified        Boolean              @default(false)
+  twoFactorEnabled       Boolean              @default(false)
+  createdAt              DateTime             @default(now())
+  updatedAt              DateTime             @updatedAt
+  sessionVersion         Int                  @default(1)
+  customRoleId           Int?
+  Announcements          Announcement[]
+  attendanceOverrides    Attendance[]         @relation("AttendanceOverride")
+  Attendance             Attendance[]
+  VerifiedAttendances    Attendance[]         @relation("AttendanceVerification")
+  BackupLogs             BackupLog[]
+  BackupSchedules        BackupSchedule[]
+  BackupScheduleLogs     BackupScheduleLog[]
+  DepartmentHead         Department[]         @relation("DepartmentHead")
+  Event                  Event[]
+  Guardian               Guardian?
+  Instructor             Instructor?
+  PasswordResetTokens    PasswordResetToken[]
+  RFIDLogs               RFIDLogs[]
+  AssignedTags           RFIDTags[]           @relation("TagAssignment")
+  ReportLogs             ReportLog[]
+  RestorePoints          RestorePoint[]
+  ResolvedSecurityAlerts SecurityAlert[]      @relation("SecurityAlertResolver")
+  SecurityAlerts         SecurityAlert[]
+  ResolvedSecurityLogs   SecurityLog[]        @relation("SecurityLogResolver")
+  SecurityLogs           SecurityLog[]
+  Student                Student[]
+  SystemBackups          SystemBackup[]
+  SystemLogs             SystemLogs[]
+  CustomRole             RoleManagement?      @relation("UserRoles", fields: [customRoleId], references: [id])
 
   @@index([email])
   @@index([role, status])
@@ -660,25 +664,25 @@ model PasswordResetToken {
 }
 
 model SystemBackup {
-  id            Int            @id @default(autoincrement())
+  id            Int                 @id @default(autoincrement())
   name          String
   description   String?
   type          BackupType
   size          String
-  status        BackupStatus   @default(IN_PROGRESS)
+  status        BackupStatus        @default(IN_PROGRESS)
   location      BackupLocation
-  isEncrypted   Boolean        @default(true)
-  retentionDays Int            @default(30)
+  isEncrypted   Boolean             @default(true)
+  retentionDays Int                 @default(30)
   filePath      String?
   checksum      String?
   createdBy     Int
-  createdAt     DateTime       @default(now())
+  createdAt     DateTime            @default(now())
   completedAt   DateTime?
   errorMessage  String?
   backupLogs    BackupLog[]
-  restorePoints RestorePoint[]
   scheduleLogs  BackupScheduleLog[]
-  createdByUser User           @relation(fields: [createdBy], references: [userId])
+  restorePoints RestorePoint[]
+  createdByUser User                @relation(fields: [createdBy], references: [userId])
 
   @@index([status])
   @@index([type])
@@ -738,29 +742,29 @@ model BackupSettings {
 }
 
 model BackupSchedule {
-  id                Int              @id @default(autoincrement())
-  name              String
-  description       String?
-  frequency         ScheduleFrequency
-  interval          Int              @default(1)
-  timeOfDay         String           @default("02:00") // HH:MM format
-  daysOfWeek        DayOfWeek[]      @default([])
-  dayOfMonth        Int?             // For monthly schedules
-  isActive          Boolean          @default(true)
-  lastRun           DateTime?
-  nextRun           DateTime?
-  totalRuns         Int              @default(0)
-  successfulRuns    Int              @default(0)
-  failedRuns        Int              @default(0)
-  backupType        BackupType       @default(FULL)
-  location          BackupLocation   @default(LOCAL)
-  isEncrypted       Boolean          @default(true)
-  retentionDays     Int              @default(30)
-  createdBy         Int
-  createdAt         DateTime         @default(now())
-  updatedAt         DateTime         @updatedAt
-  createdByUser     User             @relation(fields: [createdBy], references: [userId])
-  scheduleLogs      BackupScheduleLog[]
+  id             Int                 @id @default(autoincrement())
+  name           String
+  description    String?
+  frequency      ScheduleFrequency
+  interval       Int                 @default(1)
+  timeOfDay      String              @default("02:00")
+  daysOfWeek     DayOfWeek[]         @default([])
+  dayOfMonth     Int?
+  isActive       Boolean             @default(true)
+  lastRun        DateTime?
+  nextRun        DateTime?
+  totalRuns      Int                 @default(0)
+  successfulRuns Int                 @default(0)
+  failedRuns     Int                 @default(0)
+  backupType     BackupType          @default(FULL)
+  location       BackupLocation      @default(LOCAL)
+  isEncrypted    Boolean             @default(true)
+  retentionDays  Int                 @default(30)
+  createdBy      Int
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  createdByUser  User                @relation(fields: [createdBy], references: [userId])
+  scheduleLogs   BackupScheduleLog[]
 
   @@index([isActive])
   @@index([nextRun])
@@ -768,7 +772,7 @@ model BackupSchedule {
 }
 
 model BackupScheduleLog {
-  id            Int              @id @default(autoincrement())
+  id            Int               @id @default(autoincrement())
   scheduleId    Int
   backupId      Int?
   status        ScheduleLogStatus @default(PENDING)
@@ -777,14 +781,77 @@ model BackupScheduleLog {
   completedAt   DateTime?
   errorMessage  String?
   createdBy     Int
-  createdAt     DateTime         @default(now())
-  schedule      BackupSchedule   @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
-  backup        SystemBackup?    @relation(fields: [backupId], references: [id])
-  createdByUser User             @relation(fields: [createdBy], references: [userId])
+  createdAt     DateTime          @default(now())
+  backup        SystemBackup?     @relation(fields: [backupId], references: [id])
+  createdByUser User              @relation(fields: [createdBy], references: [userId])
+  schedule      BackupSchedule    @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
 
   @@index([scheduleId])
   @@index([scheduledAt])
   @@index([backupId])
+}
+
+model SecuritySettings {
+  id                          Int      @id @default(1)
+  minPasswordLength           Int
+  requireUppercase            Boolean
+  requireLowercase            Boolean
+  requireNumbers              Boolean
+  requireSpecialChars         Boolean
+  passwordExpiryDays          Int
+  sessionTimeoutMinutes       Int
+  maxConcurrentSessions       Int
+  forceLogoutOnPasswordChange Boolean
+  twoFactorEnabled            Boolean
+  twoFactorMethod             String
+  backupCodesEnabled          Boolean
+  maxLoginAttempts            Int
+  lockoutDurationMinutes      Int
+  ipWhitelistEnabled          Boolean
+  ipWhitelist                 String[]
+  auditLoggingEnabled         Boolean
+  loginNotificationsEnabled   Boolean
+  suspiciousActivityAlerts    Boolean
+  sslEnforcement              Boolean
+  apiRateLimiting             Boolean
+  dataEncryptionAtRest        Boolean
+}
+
+model SecurityLog {
+  id          Int       @id @default(autoincrement())
+  timestamp   DateTime  @default(now())
+  eventType   String
+  severity    String
+  description String
+  userId      Int?
+  ipAddress   String?
+  userAgent   String?
+  details     Json?
+  resolved    Boolean   @default(false)
+  resolvedBy  Int?
+  resolvedAt  DateTime?
+  resolver    User?     @relation("SecurityLogResolver", fields: [resolvedBy], references: [userId])
+  user        User?     @relation(fields: [userId], references: [userId])
+}
+
+model SecurityAlert {
+  id             String    @id @default(cuid())
+  type           String
+  title          String
+  message        String
+  timestamp      DateTime  @default(now())
+  userId         Int?
+  ipAddress      String?
+  resolved       Boolean   @default(false)
+  resolvedBy     Int?
+  resolvedAt     DateTime?
+  actionRequired Boolean   @default(false)
+  resolver       User?     @relation("SecurityAlertResolver", fields: [resolvedBy], references: [userId])
+  user           User?     @relation(fields: [userId], references: [userId])
+
+  @@index([type])
+  @@index([resolved])
+  @@index([timestamp])
 }
 
 enum UserStatus {

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { initialSubjects } from "../data";
 import { prisma } from "@/lib/prisma";
+import { SubjectType, SemesterType } from "@prisma/client";
 
 // Subject schema for validation
 const subjectSchema = z.object({
@@ -24,8 +24,23 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    // In a real application, you would fetch this from a database
-    const subject = initialSubjects.find(s => s.id === params.id);
+    const subjectId = parseInt(params.id);
+    
+    if (isNaN(subjectId)) {
+      return NextResponse.json(
+        { error: "Invalid subject ID" },
+        { status: 400 }
+      );
+    }
+
+    const subject = await prisma.subjects.findUnique({
+      where: { subjectId },
+      include: {
+        Department: true,
+        CourseOffering: true,
+        Instructor: true,
+      },
+    });
     
     if (!subject) {
       return NextResponse.json(
@@ -34,7 +49,50 @@ export async function GET(
       );
     }
 
-    return NextResponse.json(subject);
+    // Map the response to match frontend expectations
+    const responseSubject = {
+      subjectId: subject.subjectId,
+      subjectName: subject.subjectName,
+      subjectCode: subject.subjectCode,
+      subjectType: subject.subjectType,
+      status: subject.status,
+      description: subject.description,
+      lectureUnits: subject.lectureUnits,
+      labUnits: subject.labUnits,
+      creditedUnits: subject.creditedUnits,
+      totalHours: subject.totalHours,
+      prerequisites: subject.prerequisites,
+      courseId: subject.courseId,
+      departmentId: subject.departmentId,
+      academicYear: subject.academicYear,
+      semester: subject.semester,
+      maxStudents: subject.maxStudents,
+      createdAt: subject.createdAt,
+      updatedAt: subject.updatedAt,
+      department: subject.Department ? {
+        departmentId: subject.Department.departmentId,
+        departmentName: subject.Department.departmentName,
+        departmentCode: subject.Department.departmentCode,
+        departmentType: subject.Department.departmentType,
+        status: subject.Department.departmentStatus,
+      } : null,
+      course: subject.CourseOffering ? {
+        courseId: subject.CourseOffering.courseId,
+        courseName: subject.CourseOffering.courseName,
+        courseCode: subject.CourseOffering.courseCode,
+        courseType: subject.CourseOffering.courseType,
+        status: subject.CourseOffering.courseStatus,
+      } : null,
+      instructors: subject.Instructor ? subject.Instructor.map(instructor => ({
+        instructorId: instructor.instructorId,
+        firstName: instructor.firstName,
+        lastName: instructor.lastName,
+        email: instructor.email,
+        status: instructor.status,
+      })) : [],
+    };
+
+    return NextResponse.json(responseSubject);
   } catch (error) {
     console.error("Error fetching subject:", error);
     return NextResponse.json(
@@ -50,25 +108,96 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
+    const subjectId = parseInt(params.id);
+    
+    if (isNaN(subjectId)) {
+      return NextResponse.json(
+        { error: "Invalid subject ID" },
+        { status: 400 }
+      );
+    }
+
     const body = await request.json();
     const validatedData = subjectSchema.parse(body);
 
-    // In a real application, you would update this in a database
-    const subjectIndex = initialSubjects.findIndex(s => s.id === params.id);
+    // Check if subject exists
+    const existingSubject = await prisma.subjects.findUnique({
+      where: { subjectId }
+    });
     
-    if (subjectIndex === -1) {
+    if (!existingSubject) {
       return NextResponse.json(
         { error: "Subject not found" },
         { status: 404 }
       );
     }
 
-    const updatedSubject = {
-      ...initialSubjects[subjectIndex],
-      ...validatedData,
+    // Update the subject
+    const updatedSubject = await prisma.subjects.update({
+      where: { subjectId },
+      data: {
+        subjectName: validatedData.name,
+        subjectCode: validatedData.code,
+        subjectType: validatedData.type.toUpperCase() as SubjectType,
+        description: validatedData.description || "",
+        lectureUnits: validatedData.lecture_units,
+        labUnits: validatedData.laboratory_units,
+        creditedUnits: validatedData.units,
+        totalHours: validatedData.lecture_units + validatedData.laboratory_units,
+        departmentId: parseInt(validatedData.department),
+        semester: validatedData.semester.toUpperCase() as SemesterType,
+      },
+      include: {
+        Department: true,
+        CourseOffering: true,
+        Instructor: true,
+      },
+    });
+
+    // Map the response to match frontend expectations
+    const responseSubject = {
+      subjectId: updatedSubject.subjectId,
+      subjectName: updatedSubject.subjectName,
+      subjectCode: updatedSubject.subjectCode,
+      subjectType: updatedSubject.subjectType,
+      status: updatedSubject.status,
+      description: updatedSubject.description,
+      lectureUnits: updatedSubject.lectureUnits,
+      labUnits: updatedSubject.labUnits,
+      creditedUnits: updatedSubject.creditedUnits,
+      totalHours: updatedSubject.totalHours,
+      prerequisites: updatedSubject.prerequisites,
+      courseId: updatedSubject.courseId,
+      departmentId: updatedSubject.departmentId,
+      academicYear: updatedSubject.academicYear,
+      semester: updatedSubject.semester,
+      maxStudents: updatedSubject.maxStudents,
+      createdAt: updatedSubject.createdAt,
+      updatedAt: updatedSubject.updatedAt,
+      department: updatedSubject.Department ? {
+        departmentId: updatedSubject.Department.departmentId,
+        departmentName: updatedSubject.Department.departmentName,
+        departmentCode: updatedSubject.Department.departmentCode,
+        departmentType: updatedSubject.Department.departmentType,
+        status: updatedSubject.Department.departmentStatus,
+      } : null,
+      course: updatedSubject.CourseOffering ? {
+        courseId: updatedSubject.CourseOffering.courseId,
+        courseName: updatedSubject.CourseOffering.courseName,
+        courseCode: updatedSubject.CourseOffering.courseCode,
+        courseType: updatedSubject.CourseOffering.courseType,
+        status: updatedSubject.CourseOffering.courseStatus,
+      } : null,
+      instructors: updatedSubject.Instructor ? updatedSubject.Instructor.map(instructor => ({
+        instructorId: instructor.instructorId,
+        firstName: instructor.firstName,
+        lastName: instructor.lastName,
+        email: instructor.email,
+        status: instructor.status,
+      })) : [],
     };
 
-    return NextResponse.json(updatedSubject);
+    return NextResponse.json(responseSubject);
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
@@ -117,8 +246,7 @@ export async function DELETE(
     // Check if subject has any associated data
     if (subject._count.SubjectSchedule > 0 || 
         subject._count.Announcement > 0 || 
-        subject._count.Instructor > 0 ||
-        subject.currentEnrollment > 0) {
+        subject._count.Instructor > 0) {
       return NextResponse.json(
         { 
           error: "Cannot delete subject with associated data",
@@ -126,7 +254,7 @@ export async function DELETE(
             hasSchedules: subject._count.SubjectSchedule > 0,
             hasAnnouncements: subject._count.Announcement > 0,
             hasInstructors: subject._count.Instructor > 0,
-            hasEnrolledStudents: subject.currentEnrollment > 0
+            hasEnrolledStudents: false // This field doesn't exist in the schema
           }
         },
         { status: 409 }
@@ -146,6 +274,64 @@ export async function DELETE(
     console.error("Error deleting subject:", error);
     return NextResponse.json(
       { error: "Failed to delete subject" },
+      { status: 500 }
+    );
+  }
+}
+
+// HEAD handler to check if subject can be deleted
+export async function HEAD(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const subjectId = parseInt(params.id);
+    
+    if (isNaN(subjectId)) {
+      return NextResponse.json(
+        { error: "Invalid subject ID" },
+        { status: 400 }
+      );
+    }
+
+    // Check for associated data
+    const subject = await prisma.subjects.findUnique({
+      where: { subjectId },
+      include: {
+        _count: {
+          select: {
+            SubjectSchedule: true,
+            Announcement: true,
+            Instructor: true
+          }
+        }
+      }
+    });
+
+    if (!subject) {
+      return NextResponse.json(
+        { error: "Subject not found" },
+        { status: 404 }
+      );
+    }
+
+    const canDelete = subject._count.SubjectSchedule === 0 && 
+                     subject._count.Announcement === 0 && 
+                     subject._count.Instructor === 0;
+
+    return NextResponse.json({
+      canDelete,
+      details: {
+        hasSchedules: subject._count.SubjectSchedule > 0,
+        hasAnnouncements: subject._count.Announcement > 0,
+        hasInstructors: subject._count.Instructor > 0,
+        hasEnrolledStudents: false
+      }
+    });
+  } catch (error) {
+    console.error("Error checking subject deletability:", error);
+    return NextResponse.json(
+      { error: "Failed to check subject status" },
       { status: 500 }
     );
   }

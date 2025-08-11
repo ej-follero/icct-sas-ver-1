@@ -108,8 +108,15 @@ export function TableList<T extends object>({
         const isEditing = editingCell?.rowId === itemId && editingCell?.columnAccessor === col.accessor;
         if (col.accessor === 'expander' && onToggleExpand) {
           return (
-            <button onClick={() => onToggleExpand(itemId)} className="px-2 py-1 rounded-full hover:bg-gray-200">
-              {expandedRowIds.includes(itemId) ? <ChevronDown size={16} className="text-blue-500" /> : <ChevronRight size={16} className="text-blue-500" />}
+            <button 
+              onClick={() => onToggleExpand(itemId)} 
+              className="group relative w-8 h-8 rounded-full hover:bg-blue-100 transition-all duration-200 flex items-center justify-center"
+              aria-label={expandedRowIds.includes(itemId) ? 'Collapse details' : 'Expand details'}
+            >
+              <div className={`transition-transform duration-200 ${expandedRowIds.includes(itemId) ? 'rotate-180' : ''}`}>
+                <ChevronDown size={16} className="text-blue-600 group-hover:text-blue-700" />
+              </div>
+              <div className="absolute inset-0 rounded-full bg-blue-50 opacity-0 group-hover:opacity-100 transition-opacity duration-200"></div>
             </button>
           );
         }

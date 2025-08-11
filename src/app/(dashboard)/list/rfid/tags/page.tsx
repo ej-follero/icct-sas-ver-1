@@ -30,7 +30,7 @@ import { useDebounce } from '@/hooks/use-debounce';
 import { Card, CardHeader } from "@/components/ui/card";
 import SummaryCard from '@/components/SummaryCard';
 import { EmptyState } from '@/components/reusable';
-import { BulkActionsDialog } from '@/components/reusable/Dialogs/BulkActionsDialog';
+import BulkActionsDialog from '@/components/reusable/Dialogs/BulkActionsDialog';
 import { ViewDialog } from '@/components/reusable/Dialogs/ViewDialog';
 import { QuickActionsPanel } from '@/components/reusable/QuickActionsPanel';
 import { SummaryCardSkeleton, PageSkeleton } from '@/components/reusable/Skeleton';
@@ -45,6 +45,7 @@ import { useRef } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { CardContent, CardDescription, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { safeHighlight } from "@/lib/sanitizer";
 
 type TagStatus = "active" | "inactive" | "lost" | "damaged";
 type SortField = 'tagId' | 'studentName' | 'status' | 'lastSeen' | 'location' | 'scanCount' | 'assignedAt';
@@ -367,7 +368,7 @@ export default function RFIDTagsPage() {
               return (
                 <div 
                   className="text-sm font-medium text-blue-900 text-center"
-                  dangerouslySetInnerHTML={{ __html: highlightMatch(item.tagNumber, tagIdMatches) }}
+                  dangerouslySetInnerHTML={{ __html: safeHighlight(item.tagNumber, tagIdMatches) }}
                 />
               );
             }
@@ -388,7 +389,7 @@ export default function RFIDTagsPage() {
                     <div>
                       <div 
                         className="font-medium text-blue-900"
-                        dangerouslySetInnerHTML={{ __html: highlightMatch(`${item.student.firstName} ${item.student.lastName}`, nameMatches) }}
+                        dangerouslySetInnerHTML={{ __html: safeHighlight(`${item.student.firstName} ${item.student.lastName}`, nameMatches) }}
                       />
                       <div className="text-sm text-muted-foreground">{item.student.studentIdNum}</div>
                     </div>
@@ -922,8 +923,8 @@ export default function RFIDTagsPage() {
             // Placeholder implementation
             return { success: true };
           }}
-          getItemDisplayName={item => item.tagNumber}
-          getItemStatus={item => item.status}
+          getItemDisplayName={(item: RFIDTag) => item.tagNumber}
+          getItemStatus={(item: RFIDTag) => item.status}
         />
       </div>
     </div>

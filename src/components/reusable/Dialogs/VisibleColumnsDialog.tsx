@@ -36,7 +36,7 @@ interface VisibleColumnsDialogProps {
   onManualSelectionChange?: (state: ManualSelectionState) => void;
 }
 
-export function VisibleColumnsDialog({
+function VisibleColumnsDialog({
   open,
   onOpenChange,
   columns,
@@ -416,4 +416,7 @@ export function VisibleColumnsDialog({
       </DialogContent>
     </Dialog>
   );
-} 
+}
+
+export { VisibleColumnsDialog };
+export default VisibleColumnsDialog; 

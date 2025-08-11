@@ -6,7 +6,12 @@ import Logo from "@/components/Logo";
 import CustomMenu from "@/components/Menu";
 import { Menu, X, Maximize2, Minimize2, LayoutDashboard, FileBarChart2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
+import { 
+  Tooltip, 
+  TooltipTrigger, 
+  TooltipContent, 
+  TooltipProvider 
+} from "@/components/ui/tooltip";
 import { SearchBar } from "@/components/navbar/SearchBar";
 import { QuickAccessButtons } from "@/components/navbar/QuickAccessButtons";
 import { NotificationPopover } from "@/components/navbar/NotificationPopover";
@@ -148,18 +153,20 @@ const Navbar = ({ onSidebarToggle, sidebarCollapsed, logoOnly = false, hideLogo 
   return (
     <TooltipProvider>
       {/* Mobile Drawer and Backdrop */}
-      {/* Only visible on mobile */}
       {mobileDrawerOpen && (
         <>
           {/* Backdrop */}
           <div
             className="fixed inset-0 bg-black bg-opacity-40 z-40 md:hidden"
-            onClick={() => setMobileDrawerOpen(false)}
+            onClick={() => {
+              console.log('Backdrop clicked, closing drawer');
+              setMobileDrawerOpen(false);
+            }}
             aria-label="Close menu backdrop"
           />
           {/* Drawer */}
           <div
-            className="fixed top-[64px] left-0 h-[calc(100vh-64px)] w-64 bg-white z-50 shadow-2xl transition-transform duration-200 md:hidden"
+            className="fixed top-[64px] left-0 h-[calc(100vh-64px)] w-64 bg-[#0c2556] z-60 shadow-2xl transition-transform duration-200 md:hidden"
             style={{ transform: mobileDrawerOpen ? 'translateX(0)' : 'translateX(-100%)' }}
             aria-label="Mobile menu drawer"
           >
@@ -168,10 +175,13 @@ const Navbar = ({ onSidebarToggle, sidebarCollapsed, logoOnly = false, hideLogo 
                 variant="ghost"
                 size="icon"
                 aria-label="Close menu"
-                onClick={() => setMobileDrawerOpen(false)}
-                className="hover:bg-gray-100 rounded-xl"
+                onClick={() => {
+                  console.log('Close button clicked');
+                  setMobileDrawerOpen(false);
+                }}
+                className="hover:bg-blue-800/50 rounded-xl text-white"
               >
-                <X className="w-6 h-6 text-blue-700" />
+                <X className="w-6 h-6" />
               </Button>
             </div>
             {/* Sidebar navigation inside drawer */}
@@ -179,40 +189,53 @@ const Navbar = ({ onSidebarToggle, sidebarCollapsed, logoOnly = false, hideLogo 
           </div>
         </>
       )}
+
       <header
         ref={navbarRef}
-        className="fixed top-0 left-0 w-full h-16 bg-blue-100 z-50 shadow border-b border-gray-200 pt-8 pb-8"
+        className="fixed top-0 left-0 w-full h-16 bg-blue-100 z-50 shadow border-b border-gray-200"
         style={{ height: HEADER_HEIGHT }}
       >
         <nav className="w-full flex items-center justify-between gap-2 h-full px-2 md:px-0">
           {/* Left side: Logo and Hamburger icon, together and spaced */}
-          {!hideLogo && (
-            <div className="flex items-center w-auto md:w-64 justify-between">
+          <div className="flex items-center w-auto md:w-64 justify-between">
+            {!hideLogo && (
               <div className="flex-shrink-0">
                 <Logo variant={sidebarCollapsed ? "compact" : "default"} />
               </div>
-              {/* Hamburger for mobile */}
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-                onClick={() => setMobileDrawerOpen(true)}
-                className="inline-flex md:hidden hover:bg-white rounded-xl ml-2"
-              >
-                <Menu className="w-6 h-6 text-blue-700" />
-              </Button>
-              {/* Sidebar toggle for desktop */}
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-                onClick={onSidebarToggle}
-                className="hidden md:inline-flex hover:bg-white rounded-xl ml-2"
-              >
-                <Menu className="w-6 h-6 text-blue-700" />
-              </Button>
-            </div>
-          )}
+            )}
+            {/* Hamburger for mobile - always visible on mobile */}
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+              onClick={() => {
+                console.log('Mobile hamburger clicked, current state:', mobileDrawerOpen);
+                setMobileDrawerOpen(true);
+                console.log('Mobile drawer should now be open');
+              }}
+              className="inline-flex md:hidden hover:bg-white rounded-xl ml-2 cursor-pointer z-50 relative"
+              style={{ 
+                pointerEvents: 'auto',
+                touchAction: 'manipulation',
+                WebkitTapHighlightColor: 'transparent',
+                minWidth: '44px',
+                minHeight: '44px'
+              }}
+              data-testid="mobile-hamburger"
+            >
+              <Menu className="w-6 h-6 text-blue-700" />
+            </Button>
+            {/* Sidebar toggle for desktop */}
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+              onClick={onSidebarToggle}
+              className="hidden md:inline-flex hover:bg-white rounded-xl ml-2"
+            >
+              <Menu className="w-6 h-6 text-blue-700" />
+            </Button>
+          </div>
           {/* Right side: Controls (hidden on mobile) */}
           <div className="hidden md:flex items-center gap-2 flex-1 w-full justify-end pr-0 md:pr-16">
             {/* Search Bar */}

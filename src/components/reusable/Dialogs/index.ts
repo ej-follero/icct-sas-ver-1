@@ -1,0 +1,22 @@
+// Dialog Components Export
+export { default as AttendanceRecordsDialog } from './AttendanceRecordsDialog';
+export { default as BackupDialog } from './BackupDialog';
+export { default as BackupLogsDialog } from './BackupLogsDialog';
+export { default as BackupOperationsDialog } from './BackupOperationsDialog';
+export { default as BackupSchedulingDialog } from './BackupSchedulingDialog';
+export { default as BackupSettingsDialog } from './BackupSettingsDialog';
+export { default as BulkActionsDialog } from './BulkActionsDialog';
+export { default as DeactivateInstructorDialog } from './DeactivateInstructorDialog';
+export { default as DownloadDialog } from './DownloadDialog';
+export { default as EditInstructorDialog } from './EditInstructorDialog';
+export { default as EncryptionDialog } from './EncryptionDialog';
+export { default as ExportDialog } from './ExportDialog';
+export { default as ImportDialog } from './ImportDialog';
+export { default as IncrementalBackupDialog } from './IncrementalBackupDialog';
+export { default as RestoreDialog } from './RestoreDialog';
+export { default as RestorePointsDialog } from './RestorePointsDialog';
+export { default as SecurityManagementDialog } from './SecurityManagementDialog';
+export { default as SortDialog } from './SortDialog';
+export { default as UploadBackupDialog } from './UploadBackupDialog';
+export { default as ViewDialog } from './ViewDialog';
+export { default as VisibleColumnsDialog } from './VisibleColumnsDialog';

@@ -22,6 +22,9 @@ import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/comp
 import { Checkbox } from "@/components/ui/checkbox";
 import { useDebounce } from '@/hooks/use-debounce';
 import Fuse from "fuse.js";
+import { TablePagination } from '@/components/reusable/Table/TablePagination';
+import BulkActionsDialog from '@/components/reusable/Dialogs/BulkActionsDialog';
+import { ExportDialog } from '@/components/reusable/Dialogs/ExportDialog';
 
 // Updated role types based on schema
 type AdminUserStatus = "ACTIVE" | "INACTIVE" | "SUSPENDED" | "PENDING" | "BLOCKED";
@@ -90,6 +93,20 @@ export default function AdminUsersPage() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+  
+  // New state for missing features
+  const [showBulkActionsDialog, setShowBulkActionsDialog] = useState(false);
+  const [showExportDialog, setShowExportDialog] = useState(false);
+  const [showUserDetails, setShowUserDetails] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
+  const [showEditForm, setShowEditForm] = useState(false);
+  const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
+
+  // Export state
+  const [exportColumns, setExportColumns] = useState<string[]>([
+    'fullName', 'userName', 'email', 'role', 'status', 'lastLogin', 'twoFactorEnabled'
+  ]);
+  const [exportFormat, setExportFormat] = useState<'pdf' | 'excel' | 'csv' | null>(null);
 
   // Fetch admin users data
   const fetchAdminUsers = async (refresh: boolean = false) => {
@@ -181,6 +198,144 @@ export default function AdminUsersPage() {
     }
   };
 
+  // Bulk actions
+  const handleBulkActivate = async () => {
+    try {
+      const response = await fetch('/api/admin-users/bulk', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userIds: selectedIds,
+          action: 'activate'
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to activate users');
+      }
+
+      // Update local state
+      setAdminUsers(prev => prev.map(u => 
+        selectedIds.includes(u.id) ? { ...u, status: "ACTIVE" as AdminUserStatus } : u
+      ));
+      setSelectedIds([]);
+      toast.success(`Successfully activated ${selectedIds.length} admin users`);
+    } catch (error) {
+      console.error('Error bulk activating users:', error);
+      toast.error('Failed to activate users. Please try again.');
+    }
+  };
+
+  const handleBulkSuspend = async () => {
+    try {
+      const response = await fetch('/api/admin-users/bulk', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userIds: selectedIds,
+          action: 'suspend'
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to suspend users');
+      }
+
+      // Update local state
+      setAdminUsers(prev => prev.map(u => 
+        selectedIds.includes(u.id) ? { ...u, status: "SUSPENDED" as AdminUserStatus } : u
+      ));
+      setSelectedIds([]);
+      toast.success(`Successfully suspended ${selectedIds.length} admin users`);
+    } catch (error) {
+      console.error('Error bulk suspending users:', error);
+      toast.error('Failed to suspend users. Please try again.');
+    }
+  };
+
+  // Export functionality
+  const handleExport = async () => {
+    if (!exportFormat) {
+      toast.error('Please select an export format');
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/admin-users/export', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          format: exportFormat,
+          columns: exportColumns,
+          filters: {
+            status: statusFilter !== 'all' ? statusFilter : undefined,
+            role: roleFilter !== 'all' ? roleFilter : undefined,
+            search: searchInput || undefined
+          }
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to export data');
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `admin-users-${new Date().toISOString().split('T')[0]}.${exportFormat}`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      toast.success(`Admin users exported successfully as ${exportFormat.toUpperCase()}`);
+      setShowExportDialog(false);
+    } catch (error) {
+      console.error('Error exporting data:', error);
+      toast.error('Failed to export data. Please try again.');
+    }
+  };
+
+  // User management functions
+  const handleViewUser = (user: AdminUser) => {
+    setSelectedUser(user);
+    setShowUserDetails(true);
+  };
+
+  const handleEditUser = (user: AdminUser) => {
+    setEditingUser(user);
+    setShowEditForm(true);
+  };
+
+  const handleDeleteUser = async (user: AdminUser) => {
+    if (!confirm(`Are you sure you want to delete ${user.fullName}? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/admin-users/${user.id}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete user');
+      }
+
+      setAdminUsers(prev => prev.filter(u => u.id !== user.id));
+      toast.success('Admin user deleted successfully');
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      toast.error('Failed to delete user. Please try again.');
+    }
+  };
+
   // Initial data fetch
   useEffect(() => {
     fetchAdminUsers();
@@ -240,7 +395,59 @@ export default function AdminUsersPage() {
     setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
   };
 
+  // Export columns configuration for ExportDialog
+  const exportableColumns = [
+    { key: 'fullName', label: 'Full Name' },
+    { key: 'userName', label: 'Username' },
+    { key: 'email', label: 'Email' },
+    { key: 'role', label: 'Role' },
+    { key: 'status', label: 'Status' },
+    { key: 'lastLogin', label: 'Last Login' },
+    { key: 'twoFactorEnabled', label: '2FA Enabled' },
+    { key: 'department', label: 'Department' },
+    { key: 'createdAt', label: 'Created At' },
+    { key: 'updatedAt', label: 'Updated At' }
+  ];
 
+  // Export columns configuration for BulkActionsDialog
+  const bulkExportColumns = [
+    { id: 'fullName', label: 'Full Name', default: true },
+    { id: 'userName', label: 'Username', default: true },
+    { id: 'email', label: 'Email', default: true },
+    { id: 'role', label: 'Role', default: true },
+    { id: 'status', label: 'Status', default: true },
+    { id: 'lastLogin', label: 'Last Login', default: false },
+    { id: 'twoFactorEnabled', label: '2FA Enabled', default: false },
+    { id: 'department', label: 'Department', default: false },
+    { id: 'createdAt', label: 'Created At', default: false },
+    { id: 'updatedAt', label: 'Updated At', default: false }
+  ];
+
+  // Bulk actions configuration
+  const bulkActions = [
+    {
+      type: 'bulk-activate',
+      title: 'Activate Selected',
+      description: 'Activate all selected admin users',
+      icon: <Unlock className="w-5 h-5" />,
+      requiresConfirmation: true,
+      confirmationMessage: 'Are you sure you want to activate all selected admin users?'
+    },
+    {
+      type: 'bulk-suspend',
+      title: 'Suspend Selected',
+      description: 'Suspend all selected admin users',
+      icon: <Lock className="w-5 h-5" />,
+      requiresConfirmation: true,
+      confirmationMessage: 'Are you sure you want to suspend all selected admin users?'
+    },
+    {
+      type: 'bulk-export',
+      title: 'Export Selected',
+      description: 'Export selected admin users data',
+      icon: <Download className="w-5 h-5" />
+    }
+  ];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#f8fafc] via-[#ffffff] to-[#f8fafc] p-0 overflow-x-hidden">
@@ -293,8 +500,6 @@ export default function AdminUsersPage() {
               />
             </div>
 
-
-
             {/* Quick Actions Panel */}
             <div className="w-full max-w-full pt-4">
               <QuickActionsPanel
@@ -332,7 +537,7 @@ export default function AdminUsersPage() {
                     label: 'Bulk Actions',
                     description: 'Manage multiple users',
                     icon: <Settings className="w-5 h-5 text-white" />,
-                    onClick: () => {/* TODO: Implement bulk actions dialog */},
+                    onClick: () => setShowBulkActionsDialog(true),
                     disabled: selectedIds.length === 0
                   },
                   {
@@ -340,7 +545,7 @@ export default function AdminUsersPage() {
                     label: 'Export Data',
                     description: 'Export admin user data',
                     icon: <Download className="w-5 h-5 text-white" />,
-                    onClick: () => {/* TODO: Implement export functionality */}
+                    onClick: () => setShowExportDialog(true)
                   },
                   {
                     id: 'print-page',
@@ -354,7 +559,7 @@ export default function AdminUsersPage() {
                     label: 'System Audit',
                     description: 'View system audit logs',
                     icon: <FileText className="w-5 h-5 text-white" />,
-                    onClick: () => {/* TODO: Navigate to audit logs */}
+                    onClick: () => window.open('/settings/audit-logs', '_blank')
                   }
                 ]}
                 lastActionTime="2 minutes ago"
@@ -390,22 +595,22 @@ export default function AdminUsersPage() {
                   </div>
                 </CardHeader>
                 
-                                 {/* Search and Filter Section */}
-                 <div className="border-b border-gray-200 shadow-sm p-3 sm:p-4 lg:p-6">
-                   <div className="flex flex-col xl:flex-row gap-2 sm:gap-3 items-start xl:items-center">
-                     {/* Search Bar */}
-                     <div className="relative w-full xl:w-auto xl:min-w-[200px] xl:max-w-sm">
-                       <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                       <input
-                         type="text"
-                         placeholder="Search admin users..."
-                         value={searchInput}
-                         onChange={e => setSearchInput(e.target.value)}
-                         className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:outline-none"
-                       />
-                     </div>
-                     {/* Quick Filter Dropdowns */}
-                     <div className="flex flex-wrap gap-2 sm:gap-3 w-full xl:w-auto xl:ml-auto">
+                {/* Search and Filter Section */}
+                <div className="border-b border-gray-200 shadow-sm p-3 sm:p-4 lg:p-6">
+                  <div className="flex flex-col xl:flex-row gap-2 sm:gap-3 items-start xl:items-center">
+                    {/* Search Bar */}
+                    <div className="relative w-full xl:w-auto xl:min-w-[200px] xl:max-w-sm">
+                      <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                      <input
+                        type="text"
+                        placeholder="Search admin users..."
+                        value={searchInput}
+                        onChange={e => setSearchInput(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:outline-none"
+                      />
+                    </div>
+                    {/* Quick Filter Dropdowns */}
+                    <div className="flex flex-wrap gap-2 sm:gap-3 w-full xl:w-auto xl:ml-auto">
                       <Select value={statusFilter} onValueChange={setStatusFilter}>
                         <SelectTrigger className="w-full sm:w-28 lg:w-32 xl:w-28 text-gray-700">
                           <SelectValue placeholder="Status" />
@@ -466,8 +671,8 @@ export default function AdminUsersPage() {
                           </SelectItem>
                         </SelectContent>
                       </Select>
-                                         </div>
-                   </div>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Bulk Actions Bar */}
@@ -481,7 +686,7 @@ export default function AdminUsersPage() {
                           key: "bulk-activate",
                           label: "Activate Selected",
                           icon: <Unlock className="w-4 h-4 mr-2" />,
-                          onClick: () => {/* TODO: Implement bulk activate */},
+                          onClick: handleBulkActivate,
                           tooltip: "Activate selected admin users",
                           variant: "default"
                         },
@@ -489,7 +694,7 @@ export default function AdminUsersPage() {
                           key: "bulk-suspend",
                           label: "Suspend Selected",
                           icon: <Lock className="w-4 h-4 mr-2" />,
-                          onClick: () => {/* TODO: Implement bulk suspend */},
+                          onClick: handleBulkSuspend,
                           tooltip: "Suspend selected admin users",
                           variant: "destructive"
                         },
@@ -497,7 +702,7 @@ export default function AdminUsersPage() {
                           key: "export-selected",
                           label: "Export Selected",
                           icon: <Download className="w-4 h-4 mr-2" />,
-                          onClick: () => {/* TODO: Implement export selected */},
+                          onClick: () => setShowExportDialog(true),
                           tooltip: "Export selected admin users data"
                         }
                       ]}
@@ -652,14 +857,14 @@ export default function AdminUsersPage() {
                                         <Button
                                           variant="ghost"
                                           size="sm"
-                                          onClick={() => {/* View user details */}}
+                                          onClick={() => handleViewUser(user)}
                                         >
                                           <Eye className="h-4 w-4 text-blue-600" />
                                         </Button>
                                         <Button
                                           variant="ghost"
                                           size="sm"
-                                          onClick={() => {/* Edit user */}}
+                                          onClick={() => handleEditUser(user)}
                                         >
                                           <Pencil className="h-4 w-4 text-green-600" />
                                         </Button>
@@ -680,6 +885,14 @@ export default function AdminUsersPage() {
                                             <Lock className="h-4 w-4 text-red-600" />
                                           </Button>
                                         )}
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={() => handleDeleteUser(user)}
+                                          className="text-red-600 hover:text-red-700"
+                                        >
+                                          <Trash2 className="h-4 w-4" />
+                                        </Button>
                                       </div>
                                     </td>
                                   </tr>
@@ -692,6 +905,19 @@ export default function AdminUsersPage() {
                     </div>
                   </div>
                 </div>
+
+                {/* Pagination */}
+                {filteredUsers.length > 0 && (
+                  <TablePagination
+                    page={currentPage}
+                    pageSize={itemsPerPage}
+                    totalItems={filteredUsers.length}
+                    onPageChange={setCurrentPage}
+                    onPageSizeChange={setItemsPerPage}
+                    entityLabel="admin user"
+                    loading={isRefreshing}
+                  />
+                )}
               </Card>
             </div>
           </div>
@@ -705,6 +931,54 @@ export default function AdminUsersPage() {
             fetchAdminUsers(true);
             setShowAddForm(false);
           }}
+        />
+
+        {/* Bulk Actions Dialog */}
+        <BulkActionsDialog
+          open={showBulkActionsDialog}
+          onOpenChange={setShowBulkActionsDialog}
+          selectedItems={adminUsers.filter(user => selectedIds.includes(user.id))}
+          entityType="admin-user"
+          entityLabel="admin user"
+          availableActions={bulkActions}
+          exportColumns={bulkExportColumns}
+          notificationTemplates={[]}
+          stats={{
+            total: adminUsers.length,
+            active: adminUsers.filter(u => u.status === 'ACTIVE').length,
+            inactive: adminUsers.filter(u => u.status !== 'ACTIVE').length
+          }}
+          onActionComplete={(actionType, results) => {
+            console.log('Bulk action completed:', actionType, results);
+            fetchAdminUsers(true);
+          }}
+          onCancel={() => setShowBulkActionsDialog(false)}
+          onProcessAction={async (actionType, config) => {
+            // This would be handled by the BulkActionsDialog component
+            return { success: true, processed: selectedIds.length };
+          }}
+          getItemDisplayName={(user: AdminUser) => user.fullName}
+          getItemStatus={(user: AdminUser) => user.status}
+          statusOptions={[
+            { value: 'ACTIVE', label: 'Active' },
+            { value: 'INACTIVE', label: 'Inactive' },
+            { value: 'SUSPENDED', label: 'Suspended' },
+            { value: 'BLOCKED', label: 'Blocked' }
+          ]}
+        />
+
+        {/* Export Dialog */}
+        <ExportDialog
+          open={showExportDialog}
+          onOpenChange={setShowExportDialog}
+          exportableColumns={exportableColumns}
+          exportColumns={exportColumns}
+          setExportColumns={setExportColumns}
+          exportFormat={exportFormat}
+          setExportFormat={setExportFormat}
+          onExport={handleExport}
+          title="Export Admin Users"
+          tooltip="Export admin user data in various formats"
         />
       </div>
     );

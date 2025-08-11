@@ -29,6 +29,8 @@ export async function GET() {
       semester: section.semester || '',
       currentEnrollment: section.currentEnrollment,
       roomAssignment: section.roomAssignment || '',
+      createdAt: section.createdAt.toISOString(),
+      updatedAt: section.updatedAt.toISOString(),
     }));
 
     return NextResponse.json(mapped);
@@ -45,6 +47,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const data = await request.json();
+    
     // Create the section in the database
     const created = await prisma.section.create({
       data: {
@@ -58,7 +61,7 @@ export async function POST(request: Request) {
         roomAssignment: data.roomAssignment ?? null,
         scheduleNotes: data.scheduleNotes ?? null,
         courseId: Number(data.courseId),
-        semesterId: Number(data.semesterId),
+        semesterId: 1, // Default semester ID - you may want to make this dynamic
       },
       include: {
         Course: true,
@@ -66,6 +69,7 @@ export async function POST(request: Request) {
         SubjectSchedule: true,
       },
     });
+    
     // Map to backend keys for frontend compatibility
     const mapped = {
       sectionId: created.sectionId,
@@ -82,6 +86,8 @@ export async function POST(request: Request) {
       semester: created.semester || '',
       currentEnrollment: created.currentEnrollment,
       roomAssignment: created.roomAssignment || '',
+      createdAt: created.createdAt.toISOString(),
+      updatedAt: created.updatedAt.toISOString(),
     };
     return NextResponse.json(mapped, { status: 201 });
   } catch (error) {

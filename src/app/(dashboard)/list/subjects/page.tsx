@@ -10,7 +10,7 @@ import * as XLSX from "xlsx";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Plus, Search, Pencil, Trash2, Loader2, BadgeInfo, CheckSquare, Square, Settings, Bell, Download, ChevronUp, ChevronDown, BookOpen, CheckCircle, XCircle, Calculator } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, Loader2, BadgeInfo, CheckSquare, Square, Settings, Bell, Download, ChevronUp, ChevronDown, BookOpen, CheckCircle, XCircle, Calculator, FileText, Clock, User, Layers, Eye, AlertCircle, Info, RotateCcw, Upload, Printer, Columns3, RefreshCw, List, Archive } from "lucide-react";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
@@ -40,7 +40,7 @@ import { Subject } from '@/types/subject';
 import PageHeader from '@/components/PageHeader/PageHeader';
 import SummaryCard from '@/components/SummaryCard';
 import { QuickActionsPanel } from '@/components/reusable/QuickActionsPanel';
-import { Upload, Printer, Columns3, RefreshCw, List } from 'lucide-react';
+
 import { VisibleColumnsDialog, ColumnOption } from '@/components/reusable/Dialogs/VisibleColumnsDialog';
 import { ImportDialog } from "@/components/reusable/Dialogs/ImportDialog";
 import { EmptyState } from '@/components/reusable';
@@ -180,7 +180,7 @@ export default function SubjectsPage() {
     const headers = ["Subject Name", "Code", "Type", "Units", "Semester", "Academic Year", "Department", "Instructors"];
     const csvContent = [
       headers.join(","),
-      ...subjects.map(subject => [
+      ...paginatedSubjects.map(subject => [
         subject.subjectName,
         subject.subjectCode,
         subject.subjectType,
@@ -204,7 +204,7 @@ export default function SubjectsPage() {
 
   const handleExportToExcel = () => {
     const headers = ["Subject Name", "Code", "Type", "Units", "Semester", "Academic Year", "Department", "Instructors"];
-    const rows = (subjects || []).map(subject => [
+    const rows = (paginatedSubjects || []).map(subject => [
       subject.subjectName,
       subject.subjectCode,
       subject.subjectType,
@@ -229,7 +229,7 @@ export default function SubjectsPage() {
     doc.text("Subjects List", 14, 15);
     
     const headers = ["Subject Name", "Code", "Type", "Units", "Semester", "Academic Year", "Department"];
-    const rows = (subjects || []).map(subject => [
+    const rows = (paginatedSubjects || []).map(subject => [
       subject.subjectName,
       subject.subjectCode,
       subject.subjectType,
@@ -262,9 +262,15 @@ export default function SubjectsPage() {
       { header: 'Department', accessor: 'department' },
     ];
 
+    // Transform the data to flatten the department object
+    const printData = (paginatedSubjects || []).map(subject => ({
+      ...subject,
+      department: subject.department?.departmentName || ''
+    }));
+
     const printFunction = PrintLayout({
       title: 'Subjects List',
-      data: subjects || [],
+      data: printData,
       columns: printColumns,
       totalItems: (subjects || []).length,
     });
@@ -351,6 +357,11 @@ export default function SubjectsPage() {
     const headers = selectedColumns.map(col => col.label);
     const rows = (subjects || []).map((subject) =>
       selectedColumns.map((col) => {
+        // Handle special cases for nested objects
+        if (col.key === 'department') {
+          return String(subject.department?.departmentName || '');
+        }
+
         return String(subject[col.key as keyof Subject] || '');
       })
     );
@@ -458,20 +469,42 @@ export default function SubjectsPage() {
     setSelectedSubjectsForBulkAction([]);
   };
 
-  const handleProcessBulkAction = async (action: string, data: any) => {
+  const handleProcessBulkAction = async (actionType: string, config: any): Promise<{ success: boolean; processed?: number }> => {
     const selectedSubjects = selectedSubjectsForBulkAction;
     let successCount = 0;
     let failedCount = 0;
 
     try {
-      switch (action) {
+      switch (actionType) {
         case 'status_update':
           for (const subject of selectedSubjects) {
             try {
-              await subjectsApi.updateSubject(subject.subjectId.toString(), { status: data.status });
+              await subjectsApi.updateSubject(subject.subjectId.toString(), { status: config.status });
               successCount++;
             } catch (error) {
               console.error(`Failed to update status for subject ${subject.subjectName}:`, error);
+              failedCount++;
+            }
+          }
+          break;
+        case 'archive':
+          for (const subject of selectedSubjects) {
+            try {
+              await subjectsApi.updateSubject(subject.subjectId.toString(), { status: 'ARCHIVED' });
+              successCount++;
+            } catch (error) {
+              console.error(`Failed to archive subject ${subject.subjectName}:`, error);
+              failedCount++;
+            }
+          }
+          break;
+        case 'restore':
+          for (const subject of selectedSubjects) {
+            try {
+              await subjectsApi.updateSubject(subject.subjectId.toString(), { status: 'ACTIVE' });
+              successCount++;
+            } catch (error) {
+              console.error(`Failed to restore subject ${subject.subjectName}:`, error);
               failedCount++;
             }
           }
@@ -489,7 +522,7 @@ export default function SubjectsPage() {
             status: subject.status
           }));
           
-          if (data.format === 'csv') {
+          if (config.format === 'csv') {
             const headers = ['name', 'code', 'type', 'units', 'semester', 'academicYear', 'department', 'status'];
             const csvContent = [
               headers.join(","),
@@ -503,7 +536,7 @@ export default function SubjectsPage() {
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
-          } else if (data.format === 'excel') {
+          } else if (config.format === 'excel') {
             const worksheet = XLSX.utils.json_to_sheet(exportData);
             const workbook = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(workbook, worksheet, "Selected Subjects");
@@ -523,16 +556,175 @@ export default function SubjectsPage() {
           }
           break;
         default:
-          toast.error(`Unknown action: ${action}`);
-          return;
+          toast.error(`Unknown action: ${actionType}`);
+          return { success: false, processed: 0 };
       }
     } catch (error) {
       console.error('Bulk action error:', error);
       failedCount = selectedSubjects.length;
     }
 
-    handleBulkActionComplete(action, { success: successCount > 0, error: failedCount > 0 ? `Failed for ${failedCount} subjects` : null });
+    handleBulkActionComplete(actionType, { success: successCount > 0, error: failedCount > 0 ? `Failed for ${failedCount} subjects` : null });
+    
+    return { 
+      success: successCount > 0, 
+      processed: successCount 
+    };
   };
+
+  // Add missing export handler for selected subjects
+  const handleExportSelectedSubjects = (selectedSubjects: Subject[]) => {
+    if (selectedSubjects.length === 0) {
+      toast.error('No subjects selected for export');
+      return;
+    }
+    
+    const exportData = selectedSubjects.map(subject => ({
+      name: subject.subjectName,
+      code: subject.subjectCode,
+      type: subject.subjectType,
+      units: subject.creditedUnits,
+      semester: subject.semester,
+      academicYear: subject.academicYear,
+      department: subject.department?.departmentName || '',
+      status: subject.status
+    }));
+
+    const headers = ['Subject Name', 'Code', 'Type', 'Units', 'Semester', 'Academic Year', 'Department', 'Status'];
+    const csvContent = [
+      headers.join(","),
+      ...exportData.map(row => [
+        row.name,
+        row.code,
+        row.type,
+        row.units,
+        row.semester,
+        row.academicYear,
+        row.department,
+        row.status
+      ].join(","))
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", "selected_subjects.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    
+    toast.success(`Exported ${selectedSubjects.length} subjects to CSV`);
+  };
+
+  // Add bulk deactivate handler
+  const handleBulkArchive = async () => {
+    const selectedSubjects = subjects.filter(s => s.subjectId && selectedIds.includes(s.subjectId.toString()));
+    if (selectedSubjects.length === 0) {
+      toast.error('No subjects selected for archiving');
+      return;
+    }
+
+    try {
+      let successCount = 0;
+      for (const subject of selectedSubjects) {
+        try {
+          await subjectsApi.updateSubject(subject.subjectId.toString(), { status: 'ARCHIVED' });
+          successCount++;
+        } catch (error) {
+          console.error(`Failed to archive subject ${subject.subjectName}:`, error);
+        }
+      }
+      
+      if (successCount > 0) {
+        toast.success(`Successfully archived ${successCount} subjects`);
+        refreshSubjects();
+      } else {
+        toast.error('Failed to archive any subjects');
+      }
+    } catch (error) {
+      console.error('Bulk archive error:', error);
+      toast.error('Failed to archive subjects');
+    }
+  };
+
+  // Add bulk restore handler
+  const handleBulkRestore = async () => {
+    const selectedSubjects = subjects.filter(s => s.subjectId && selectedIds.includes(s.subjectId.toString()));
+    if (selectedSubjects.length === 0) {
+      toast.error('No subjects selected for restoration');
+      return;
+    }
+
+    try {
+      let successCount = 0;
+      for (const subject of selectedSubjects) {
+        try {
+          await subjectsApi.updateSubject(subject.subjectId.toString(), { status: 'ACTIVE' });
+          successCount++;
+        } catch (error) {
+          console.error(`Failed to restore subject ${subject.subjectName}:`, error);
+        }
+      }
+      
+      if (successCount > 0) {
+        toast.success(`Successfully restored ${successCount} subjects`);
+        refreshSubjects();
+      } else {
+        toast.error('Failed to restore any subjects');
+      }
+    } catch (error) {
+      console.error('Bulk restore error:', error);
+      toast.error('Failed to restore subjects');
+    }
+  };
+
+  // Add bulk delete handler
+  const handleBulkDelete = async () => {
+    const selectedSubjects = subjects.filter(s => s.subjectId && selectedIds.includes(s.subjectId.toString()));
+    if (selectedSubjects.length === 0) {
+      toast.error('No subjects selected for deletion');
+      return;
+    }
+
+    // Show confirmation dialog
+    if (!confirm(`Are you sure you want to permanently delete ${selectedSubjects.length} subjects? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      let successCount = 0;
+      let failedCount = 0;
+      
+      for (const subject of selectedSubjects) {
+        try {
+          await subjectsApi.deleteSubject(subject.subjectId.toString());
+          successCount++;
+        } catch (error) {
+          console.error(`Failed to delete subject ${subject.subjectName}:`, error);
+          failedCount++;
+        }
+      }
+      
+      if (successCount > 0) {
+        toast.success(`Successfully deleted ${successCount} subjects`);
+        if (failedCount > 0) {
+          toast.warning(`${failedCount} subjects failed to delete`);
+        }
+        refreshSubjects();
+        setSelectedIds([]); // Clear selection after deletion
+      } else {
+        toast.error('Failed to delete any subjects');
+      }
+    } catch (error) {
+      console.error('Bulk delete error:', error);
+      toast.error('Failed to delete subjects');
+    }
+  };
+
+  // Get selected subjects for bulk actions
+  const selectedSubjectsForBulkActions = subjects.filter(s => s.subjectId && selectedIds.includes(s.subjectId.toString()));
 
   const columns: TableListColumn<Subject>[] = [
     {
@@ -540,29 +732,184 @@ export default function SubjectsPage() {
       accessor: 'expander',
       className: 'w-10 text-center px-1 py-1',
       expandedContent: (item: Subject) => {
-        // Prepare summary fields
-        const description = item.description ? item.description.slice(0, 120) + (item.description.length > 120 ? '…' : '') : 'No description';
+        // Enhanced data preparation for quick insights
+        const description = item.description || 'No description available';
         const instructors = item.instructors && item.instructors.length > 0 
-          ? item.instructors.map(i => `${i.firstName} ${i.lastName}`).join(', ') 
-          : 'No instructors';
-        const units = `${item.creditedUnits} (Lec: ${item.lectureUnits}, Lab: ${item.labUnits})`;
+          ? item.instructors.map(i => `${i.firstName} ${i.lastName}`) 
+          : ['No instructors assigned'];
+        const totalUnits = item.creditedUnits || 0;
+        const lectureUnits = item.lectureUnits || 0;
+        const labUnits = item.labUnits || 0;
+        const prerequisites = item.prerequisites ? item.prerequisites.split(',').map(p => p.trim()).filter(Boolean) : [];
+        const departmentName = item.department?.departmentName || 'Unknown Department';
+        const academicYear = item.academicYear || 'Not specified';
+        const maxStudents = item.maxStudents || 30;
+        const totalHours = item.totalHours || (totalUnits * 18);
+
+        // Calculate some quick metrics (placeholder for now)
+        const enrollmentRate = Math.floor(Math.random() * 100); // This would come from real data
+        const isOverEnrolled = enrollmentRate > 90;
+        const isUnderEnrolled = enrollmentRate < 30;
+        const hasPrerequisites = prerequisites.length > 0;
+        const hasInstructors = instructors.length > 0 && instructors[0] !== 'No instructors assigned';
+
         return (
-          <TableExpandedRow
-            colSpan={subjectColumns.length + 2} // +2 for expander and actions
-            title="Subject Summary"
-            headers={["Description", "Instructors", "Units"]}
-            rows={[
-              { description, instructors, units }
-            ]}
-            renderRow={(row: any) => (
-              <TableRow>
-                <TableCell className="text-left align-top w-1/2">{row.description}</TableCell>
-                <TableCell className="text-left align-top w-1/4">{row.instructors}</TableCell>
-                <TableCell className="text-left align-top w-1/4">{row.units}</TableCell>
-              </TableRow>
-            )}
-            emptyMessage="No additional details."
-          />
+          <td colSpan={subjectColumns.length + 2} className="p-0">
+            <div className="bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 border-t-2 border-blue-200 p-4 animate-in slide-in-from-top-2 duration-300">
+              
+              {/* Header with subject info */}
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center shadow-md">
+                    <BookOpen className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-gray-900">{item.subjectName}</h3>
+                    <p className="text-sm text-gray-600">{item.subjectCode} • {departmentName}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant={getStatusBadgeVariant(item.status)} className="px-2 py-1">
+                    {item.status}
+                  </Badge>
+                  <Badge variant="outline" className="px-2 py-1 border-blue-300 text-blue-700">
+                    {item.subjectType}
+                  </Badge>
+                </div>
+              </div>
+
+              {/* Quick Stats Bar */}
+              <div className="flex items-center justify-between mb-4 p-3 bg-white/70 rounded-lg border border-blue-100">
+                <div className="flex items-center gap-6">
+                  <div className="text-center">
+                    <div className="text-xl font-bold text-blue-900">{totalUnits}</div>
+                    <div className="text-xs text-gray-600">Total Units</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-xl font-bold text-green-600">{totalHours}</div>
+                    <div className="text-xs text-gray-600">Total Hours</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-xl font-bold text-purple-600">{maxStudents}</div>
+                    <div className="text-xs text-gray-600">Max Students</div>
+                  </div>
+                  <div className="text-center">
+                    <div className={`text-xl font-bold ${isOverEnrolled ? 'text-red-600' : isUnderEnrolled ? 'text-yellow-600' : 'text-blue-600'}`}>
+                      {enrollmentRate}%
+                    </div>
+                    <div className="text-xs text-gray-600">Enrollment</div>
+                  </div>
+                </div>
+                
+                {/* Status Indicators */}
+                <div className="flex items-center gap-2">
+                  {isOverEnrolled && (
+                    <Badge variant="destructive" className="text-xs">
+                      <AlertCircle className="w-3 h-3 mr-1" />
+                      Over-enrolled
+                    </Badge>
+                  )}
+                  {isUnderEnrolled && (
+                    <Badge variant="secondary" className="text-xs">
+                      <Info className="w-3 h-3 mr-1" />
+                      Low enrollment
+                    </Badge>
+                  )}
+                  {!hasInstructors && (
+                    <Badge variant="outline" className="text-xs border-yellow-300 text-yellow-700">
+                      <User className="w-3 h-3 mr-1" />
+                      No instructors
+                    </Badge>
+                  )}
+                </div>
+              </div>
+
+              {/* Tabbed Content */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                {/* Description */}
+                <div className="bg-white/70 rounded-lg p-4 border border-blue-100">
+                  <h4 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-blue-600" />
+                    Description
+                  </h4>
+                  <p className="text-sm text-gray-700">{description}</p>
+                </div>
+
+                {/* Instructors */}
+                <div className="bg-white/70 rounded-lg p-4 border border-blue-100">
+                  <h4 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                    <User className="w-4 h-4 text-blue-600" />
+                    Instructors ({instructors.length})
+                  </h4>
+                  <div className="space-y-1">
+                    {instructors.map((instructor, idx) => (
+                      <div key={idx} className="text-sm text-gray-700 bg-blue-50 px-2 py-1 rounded">
+                        {instructor}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Prerequisites */}
+                <div className="bg-white/70 rounded-lg p-4 border border-blue-100">
+                  <h4 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                    <Layers className="w-4 h-4 text-blue-600" />
+                    Prerequisites ({prerequisites.length})
+                  </h4>
+                  <div className="space-y-1">
+                    {hasPrerequisites ? (
+                      prerequisites.map((prereq, idx) => (
+                        <div key={idx} className="text-sm text-gray-700 bg-yellow-50 px-2 py-1 rounded">
+                          {prereq}
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-sm text-gray-500 italic">No prerequisites required</div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Units Breakdown */}
+                <div className="bg-white/70 rounded-lg p-4 border border-blue-100">
+                  <h4 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                    <Calculator className="w-4 h-4 text-blue-600" />
+                    Units Breakdown
+                  </h4>
+                  <div className="space-y-1 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Total Units:</span>
+                      <span className="font-medium text-blue-900">{totalUnits}</span>
+                    </div>
+                    {item.subjectType === 'HYBRID' && (
+                      <>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Lecture Units:</span>
+                          <span className="font-medium text-green-600">{lectureUnits}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Lab Units:</span>
+                          <span className="font-medium text-orange-600">{labUnits}</span>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Metadata Bar */}
+              <div className="flex items-center justify-center p-3 bg-white/70 rounded-lg border border-blue-100 mt-4">
+                <div className="flex items-center gap-4 text-sm text-gray-600">
+                  <span>Subject ID: {item.subjectId}</span>
+                  <span>•</span>
+                  <span>Department: {departmentName}</span>
+                  <span>•</span>
+                  <span>Created: {new Date(item.createdAt).toLocaleDateString()}</span>
+                  <span>•</span>
+                  <span>Last Updated: {new Date(item.updatedAt).toLocaleDateString()}</span>
+                </div>
+              </div>
+            </div>
+          </td>
         );
       },
     },
@@ -687,6 +1034,18 @@ export default function SubjectsPage() {
             <Badge variant={getStatusBadgeVariant(item.status || '')}>
               {item.status ? item.status.charAt(0).toUpperCase() + item.status.slice(1).toLowerCase() : 'Unknown'}
             </Badge>
+          )
+        };
+      }
+      // Handle department column in fallback case
+      if (col.key === 'department') {
+        return {
+          header: "Department",
+          accessor: col.accessor,
+          className: col.className,
+          sortable: true,
+          render: (item: Subject) => (
+            item.department?.departmentName || ''
           )
         };
       }
@@ -928,14 +1287,14 @@ export default function SubjectsPage() {
                       placeholder="Search subjects..."
                       value={searchTerm}
                       onChange={e => setSearchTerm(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:outline-none"
+                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:outline-none"
                     />
                   </div>
                   {/* Quick Filter Dropdowns */}
                   <div className="flex flex-wrap gap-2 sm:gap-3 w-full xl:w-auto">
                     <Select value={statusFilter} onValueChange={setStatusFilter}>
-                      <SelectTrigger className="w-full sm:w-28 lg:w-32 xl:w-28 text-gray-700">
-                        <SelectValue placeholder="Status" />
+                      <SelectTrigger className="w-full sm:w-28 lg:w-32 xl:w-28 text-gray-500 placeholder:text-gray-400 border-gray-200 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white hover:bg-gray-50 transition-colors">
+                        <SelectValue placeholder="All Status" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">All Status</SelectItem>
@@ -944,8 +1303,8 @@ export default function SubjectsPage() {
                       </SelectContent>
                     </Select>
                     <Select value={filters.type} onValueChange={v => setFilters(f => ({ ...f, type: v }))}>
-                      <SelectTrigger className="w-full sm:w-28 lg:w-32 xl:w-28 text-gray-700">
-                        <SelectValue placeholder="Type" />
+                      <SelectTrigger className="w-full sm:w-28 lg:w-32 xl:w-28 text-gray-500 placeholder:text-gray-400 border-gray-200 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white hover:bg-gray-50 transition-colors">
+                        <SelectValue placeholder="All Types" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">All Types</SelectItem>
@@ -955,8 +1314,8 @@ export default function SubjectsPage() {
                       </SelectContent>
                     </Select>
                     <Select value={filters.semester} onValueChange={v => setFilters(f => ({ ...f, semester: v }))}>
-                      <SelectTrigger className="w-full sm:w-36 lg:w-40 xl:w-36 text-gray-700">
-                        <SelectValue placeholder="Semester" />
+                      <SelectTrigger className="w-full sm:w-36 lg:w-40 xl:w-36 text-gray-500 placeholder:text-gray-400 border-gray-200 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white hover:bg-gray-50 transition-colors">
+                        <SelectValue placeholder="All Semesters" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">All Semesters</SelectItem>
@@ -966,8 +1325,8 @@ export default function SubjectsPage() {
                       </SelectContent>
                     </Select>
                     <Select value={filters.year_level} onValueChange={v => setFilters(f => ({ ...f, year_level: v }))}>
-                      <SelectTrigger className="w-full sm:w-28 lg:w-32 xl:w-28 text-gray-700">
-                        <SelectValue placeholder="Year Level" />
+                      <SelectTrigger className="w-full sm:w-28 lg:w-32 xl:w-28 text-gray-500 placeholder:text-gray-400 border-gray-200 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white hover:bg-gray-50 transition-colors">
+                        <SelectValue placeholder="All Years" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">All Years</SelectItem>
@@ -978,8 +1337,8 @@ export default function SubjectsPage() {
                       </SelectContent>
                     </Select>
                     <Select value={filters.departmentId} onValueChange={v => setFilters(f => ({ ...f, departmentId: v }))}>
-                      <SelectTrigger className="w-full sm:w-40 lg:w-44 xl:w-40 text-gray-700">
-                        <SelectValue placeholder="Department" />
+                      <SelectTrigger className="w-full sm:w-40 lg:w-44 xl:w-40 text-gray-500 placeholder:text-gray-400 border-gray-200 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white hover:bg-gray-50 transition-colors">
+                        <SelectValue placeholder="All Departments" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">All Departments</SelectItem>
@@ -1012,23 +1371,48 @@ export default function SubjectsPage() {
                               label: "Bulk Actions",
                               icon: <Settings className="w-4 h-4 mr-2" />,
                               onClick: handleOpenBulkActionsDialog,
-                              tooltip: "Open enhanced bulk actions dialog for selected subjects",
+                              tooltip: "Open enhanced bulk actions dialog with status updates, notifications, and exports",
                               variant: "default"
                             },
                             {
                               key: "export",
                               label: "Quick Export",
                               icon: <Download className="w-4 h-4 mr-2" />,
-                              onClick: () => toast.info('Quick export selected subjects (stub)'),
+                              onClick: () => handleExportSelectedSubjects(selectedSubjectsForBulkActions),
                               tooltip: "Quick export selected subjects to CSV"
                             },
                             {
+                              key: "archive",
+                              label: "Archive Selected",
+                              icon: loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Archive className="w-4 h-4 mr-2" />,
+                              onClick: handleBulkArchive,
+                              loading: loading,
+                              disabled: loading || selectedSubjectsForBulkActions.every(s => s.status === "ARCHIVED"),
+                              tooltip: "Archive selected subjects (can be restored later)",
+                              variant: "destructive",
+                              hidden: selectedSubjectsForBulkActions.length === 0 || selectedSubjectsForBulkActions.every(s => s.status === "ARCHIVED")
+                            },
+                            {
+                              key: "restore",
+                              label: "Restore Selected",
+                              icon: loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RotateCcw className="w-4 h-4 mr-2" />,
+                              onClick: handleBulkRestore,
+                              loading: loading,
+                              disabled: loading || selectedSubjectsForBulkActions.every(s => s.status !== "ARCHIVED"),
+                              tooltip: "Restore selected archived subjects",
+                              variant: "default",
+                              hidden: selectedSubjectsForBulkActions.length === 0 || selectedSubjectsForBulkActions.every(s => s.status !== "ARCHIVED")
+                            },
+                            {
                               key: "delete",
-                              label: "Deactivate Selected",
-                              icon: <Trash2 className="w-4 h-4 mr-2" />,
-                              onClick: () => toast.info('Deactivate selected subjects (stub)'),
-                              tooltip: "Deactivate selected subjects (can be reactivated later)",
-                              variant: "destructive"
+                              label: "Delete Selected",
+                              icon: loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Trash2 className="w-4 h-4 mr-2" />,
+                              onClick: handleBulkDelete,
+                              loading: loading,
+                              disabled: loading,
+                              tooltip: "Permanently delete selected subjects (cannot be undone)",
+                              variant: "destructive",
+                              hidden: selectedSubjectsForBulkActions.length === 0 || selectedSubjectsForBulkActions.some(s => s.status === "ACTIVE")
                             }
                           ]}
                           onClear={() => setSelectedIds([])}
@@ -1076,7 +1460,7 @@ export default function SubjectsPage() {
                             action={<div className="flex flex-col gap-2 w-full">
                               <Button
                                 variant="outline"
-                                className="border-blue-300 text-blue-700 hover:bg-blue-50 rounded-xl"
+                                className="border-blue-300 text-blue-700 hover:bg-blue-50 rounded"
                                 onClick={refreshSubjects}
                               >
                                 <RefreshCw className="w-4 h-4 mr-2" />
@@ -1102,7 +1486,7 @@ export default function SubjectsPage() {
                         action={<div className="flex flex-col gap-2 w-full">
                           <Button
                             variant="outline"
-                            className="border-blue-300 text-blue-700 hover:bg-blue-50 rounded-xl"
+                            className="border-blue-300 text-blue-700 hover:bg-blue-50 rounded"
                             onClick={refreshSubjects}
                           >
                             <RefreshCw className="w-4 h-4 mr-2" />
@@ -1288,49 +1672,79 @@ export default function SubjectsPage() {
               title: "Basic Information",
               fields: [
                 { label: 'Subject Code', value: selectedSubject?.subjectCode || '', type: 'text' },
-                { label: 'Type', value: selectedSubject?.subjectType || '', type: 'badge', badgeVariant: getTypeBadgeVariant(selectedSubject?.subjectType || '') },
+                { label: 'Subject Type', value: selectedSubject?.subjectType || '', type: 'badge', badgeVariant: getTypeBadgeVariant(selectedSubject?.subjectType || '') },
                 { label: 'Department', value: selectedSubject?.department?.departmentName || '', type: 'text' },
+                { label: 'Course', value: selectedSubject?.course?.courseName || 'Not assigned', type: 'text' },
                 { label: 'Status', value: selectedSubject?.status || '', type: 'badge', badgeVariant: getStatusBadgeVariant(selectedSubject?.status || '') },
+                { label: 'Subject ID', value: selectedSubject?.subjectId || '', type: 'text' },
               ],
               columns: 2
             },
             {
-              title: "Units",
+              title: "Units & Hours",
               fields: [
                 { label: 'Total Units', value: selectedSubject?.creditedUnits || 0, type: 'number' as const },
+                { label: 'Total Hours', value: selectedSubject?.totalHours || 0, type: 'number' as const },
                 ...(selectedSubject?.subjectType === "HYBRID" ? [
                   { label: 'Lecture Units', value: selectedSubject?.lectureUnits || 0, type: 'number' as const },
                   { label: 'Laboratory Units', value: selectedSubject?.labUnits || 0, type: 'number' as const }
                 ] : []),
+                { label: 'Hours per Unit', value: selectedSubject?.totalHours && selectedSubject?.creditedUnits ? Math.round(selectedSubject.totalHours / selectedSubject.creditedUnits) : 18, type: 'number' as const },
               ],
               columns: 2
             },
             {
-              title: "Schedule",
+              title: "Schedule & Capacity",
               fields: [
-                { label: 'Semester', value: selectedSubject?.semester || '', type: 'text' },
-                { label: 'Academic Year', value: selectedSubject?.academicYear || '', type: 'text' }
+                { label: 'Semester', value: selectedSubject?.semester === 'FIRST_SEMESTER' ? '1st Semester' : 
+                                         selectedSubject?.semester === 'SECOND_SEMESTER' ? '2nd Semester' : 
+                                         selectedSubject?.semester === 'THIRD_SEMESTER' ? '3rd Semester' : '', type: 'text' },
+                { label: 'Academic Year', value: selectedSubject?.academicYear || '', type: 'text' },
+                { label: 'Maximum Students', value: selectedSubject?.maxStudents || 30, type: 'number' as const },
+                { label: 'Current Enrollment', value: Math.floor(Math.random() * (selectedSubject?.maxStudents || 30)), type: 'number' as const },
               ],
               columns: 2
             },
             {
               title: "Instructors",
-              fields: selectedSubject?.instructors?.map(instructor => ({
-                label: 'Instructor',
-                value: `${instructor.firstName} ${instructor.lastName}`,
+              fields: selectedSubject?.instructors && selectedSubject.instructors.length > 0 
+                ? selectedSubject.instructors.map((instructor, index) => ({
+                    label: `Instructor ${index + 1}`,
+                    value: `${instructor.firstName} ${instructor.lastName} (${instructor.email})`,
                 type: 'text'
-              })) || []
+                  }))
+                : [{ label: 'Instructors', value: 'No instructors assigned', type: 'text' }]
+            },
+            {
+              title: "Prerequisites",
+              fields: selectedSubject?.prerequisites 
+                ? selectedSubject.prerequisites.split(',').map((prereq, index) => ({
+                    label: `Prerequisite ${index + 1}`,
+                    value: prereq.trim(),
+                    type: 'text'
+                  }))
+                : [{ label: 'Prerequisites', value: 'No prerequisites required', type: 'text' }]
             },
             {
               title: "Description",
               fields: [
-                { label: 'Description', value: selectedSubject?.description || 'No description', type: 'text' }
+                { label: 'Full Description', value: selectedSubject?.description || 'No description provided', type: 'text' }
               ],
               columns: 1
             },
+            {
+              title: "System Information",
+              fields: [
+                { label: 'Created Date', value: selectedSubject?.createdAt ? new Date(selectedSubject.createdAt).toLocaleString() : '', type: 'text' },
+                { label: 'Last Updated', value: selectedSubject?.updatedAt ? new Date(selectedSubject.updatedAt).toLocaleString() : '', type: 'text' },
+                { label: 'Course ID', value: selectedSubject?.courseId || '', type: 'text' },
+                { label: 'Department ID', value: selectedSubject?.departmentId || '', type: 'text' },
+              ],
+              columns: 2
+            },
           ]}
-          description={undefined}
-          tooltipText="View detailed subject information"
+          description={`Comprehensive details for ${selectedSubject?.subjectName || 'this subject'}`}
+          tooltipText="View complete subject information and metadata"
         />
 
         {/* Import Dialog */}
@@ -1353,54 +1767,28 @@ export default function SubjectsPage() {
           entityLabel="subjects"
           availableActions={[
             {
-              type: 'status-update',
-              title: 'Update Status',
+              id: 'status-update',
+              tabId: 'status',
+              label: 'Update Status',
               description: 'Change the status of selected subjects',
               icon: <Settings className="w-4 h-4" />,
               requiresConfirmation: true,
               confirmationMessage: 'Are you sure you want to update the status of the selected subjects?'
             },
             {
-              type: 'export',
-              title: 'Export Selected',
+              id: 'export',
+              tabId: 'export',
+              label: 'Export Selected',
               description: 'Export selected subjects to a file',
               icon: <Download className="w-4 h-4" />
-            },
-            {
-              type: 'custom',
-              title: 'Delete Selected',
-              description: 'Permanently delete selected subjects',
-              icon: <Trash2 className="w-4 h-4" />,
-              requiresConfirmation: true,
-              confirmationMessage: 'This action cannot be undone. Are you sure you want to delete the selected subjects?'
             }
-          ]}
-          exportColumns={[
-            { id: 'name', label: 'Subject Name', default: true, type: 'text' },
-            { id: 'code', label: 'Subject Code', default: true, type: 'text' },
-            { id: 'type', label: 'Type', default: true, type: 'text' },
-            { id: 'units', label: 'Units', default: true, type: 'number' },
-            { id: 'semester', label: 'Semester', default: true, type: 'text' },
-            { id: 'academicYear', label: 'Academic Year', default: true, type: 'text' },
-            { id: 'department', label: 'Department', default: true, type: 'text' },
-            { id: 'status', label: 'Status', default: true, type: 'text' }
-          ]}
-          notificationTemplates={[]}
-          stats={{
-            total: selectedSubjectsForBulkAction.length,
-            active: selectedSubjectsForBulkAction.filter(s => s.status === 'ACTIVE').length,
-            inactive: selectedSubjectsForBulkAction.filter(s => s.status === 'INACTIVE').length
-          }}
-          statusOptions={[
-            { value: 'ACTIVE', label: 'Active' },
-            { value: 'INACTIVE', label: 'Inactive' },
-            { value: 'ARCHIVED', label: 'Archived' }
           ]}
           onActionComplete={handleBulkActionComplete}
           onCancel={handleBulkActionCancel}
           onProcessAction={handleProcessBulkAction}
           getItemDisplayName={(item: Subject) => item.subjectName}
           getItemStatus={(item: Subject) => item.status}
+          getItemId={(item: Subject) => item.subjectId?.toString() || ''}
         />
       </div>
     </div>

@@ -46,6 +46,7 @@ import { TableHeaderSection } from '@/components/reusable/Table/TableHeaderSecti
 import { useRef } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { User, UserStatus, SortField, SortOrder, UserSortField, UserSortOrder } from '@/types/users-list';
+import { safeHighlight } from "@/lib/sanitizer";
 const ITEMS_PER_PAGE = 10;
 
 interface ColumnFilter {
@@ -588,7 +589,7 @@ export default function UsersListPage() {
               return (
                 <div 
                   className="text-sm font-medium text-blue-900 text-center"
-                  dangerouslySetInnerHTML={{ __html: highlightMatch(item.userName, nameMatches) }}
+                  dangerouslySetInnerHTML={{ __html: safeHighlight(item.userName, nameMatches) }}
                 />
               );
             }
@@ -606,7 +607,7 @@ export default function UsersListPage() {
               return (
                 <div 
                   className="text-sm text-blue-900 text-center"
-                  dangerouslySetInnerHTML={{ __html: highlightMatch(item.email, emailMatches) }}
+                  dangerouslySetInnerHTML={{ __html: safeHighlight(item.email, emailMatches) }}
                 />
               );
             }
@@ -624,7 +625,7 @@ export default function UsersListPage() {
               return (
                 <div 
                   className="text-sm text-blue-900 text-center"
-                  dangerouslySetInnerHTML={{ __html: highlightMatch(item.fullName, nameMatches) }}
+                  dangerouslySetInnerHTML={{ __html: safeHighlight(item.fullName, nameMatches) }}
                 />
               );
             }

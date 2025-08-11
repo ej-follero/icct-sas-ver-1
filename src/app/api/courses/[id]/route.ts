@@ -14,6 +14,11 @@ export async function GET(
       },
       include: {
         Department: true,
+        Subjects: {
+          include: {
+            Instructor: true,
+          },
+        },
         _count: {
           select: {
             Student: true,
@@ -31,6 +36,11 @@ export async function GET(
         },
         include: {
           Department: true,
+          Subjects: {
+            include: {
+              Instructor: true,
+            },
+          },
           _count: {
             select: {
               Student: true,
@@ -48,19 +58,29 @@ export async function GET(
       );
     }
 
+    // Calculate unique instructors for this course
+    const uniqueInstructors = new Set();
+    course.Subjects.forEach(subject => {
+      subject.Instructor.forEach(instructor => {
+        uniqueInstructors.add(instructor.instructorId);
+      });
+    });
+
     return NextResponse.json({
       id: course.courseId.toString(),
       name: course.courseName,
       code: course.courseCode,
       department: course.Department?.departmentName ?? '',
+      departmentCode: course.Department?.departmentCode ?? '',
       description: course.description,
       units: course.totalUnits,
-      status: course.courseStatus === 'ACTIVE' ? 'active' : 'inactive',
+      status: course.courseStatus,
       totalStudents: course._count.Student,
-      totalInstructors: course._count.Section,
+      totalInstructors: uniqueInstructors.size,
       createdAt: course.createdAt.toISOString(),
       updatedAt: course.updatedAt.toISOString(),
       courseType: course.courseType,
+      major: course.major || '',
     });
   } catch (error) {
     console.error("Error fetching course:", error);
@@ -78,7 +98,7 @@ export async function PUT(
 ) {
   try {
     const body = await request.json();
-    const { name, code, department, description, units, status } = body;
+    const { name, code, department, description, units, status, courseType, major } = body;
 
     // Validate required fields
     if (!name || !code || !department || !units || !status) {
@@ -142,8 +162,8 @@ export async function PUT(
         description: description || "",
         totalUnits: units,
         courseStatus: status.toUpperCase(),
-        courseType: existingCourse.courseType,
-        major: existingCourse.major,
+        courseType: courseType || existingCourse.courseType,
+        major: major || existingCourse.major,
       },
       include: {
         Department: true,

@@ -4,9 +4,9 @@ services:
     image: postgres:latest
     container_name: icct-sas-db
     environment:
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: admin123
-      POSTGRES_DB: icct-sas
+      POSTGRES_USER: ${POSTGRES_USER:-admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-admin123}
+      POSTGRES_DB: ${POSTGRES_DB:-icct-sas}
       # Performance optimizations
       POSTGRES_MAX_CONNECTIONS: 100
       POSTGRES_SHARED_BUFFERS: 256MB
@@ -31,7 +31,7 @@ services:
           cpus: '0.5'
     # Health check
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U admin -d icct-sas"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-admin} -d ${POSTGRES_DB:-icct-sas}"]
       interval: 30s
       timeout: 10s
       retries: 3

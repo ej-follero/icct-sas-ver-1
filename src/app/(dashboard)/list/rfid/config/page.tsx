@@ -16,7 +16,7 @@ import { QuickActionsPanel } from '@/components/reusable/QuickActionsPanel';
 import { EmptyState } from '@/components/reusable';
 import { ConfirmDeleteDialog } from '@/components/ConfirmDeleteDialog';
 import { ViewDialog } from '@/components/reusable/Dialogs/ViewDialog';
-import { BulkActionsDialog } from '@/components/reusable/Dialogs/BulkActionsDialog';
+import BulkActionsDialog from '@/components/reusable/Dialogs/BulkActionsDialog';
 import { ExportDialog } from '@/components/reusable/Dialogs/ExportDialog';
 import { SortDialog, SortFieldOption } from '@/components/reusable/Dialogs/SortDialog';
 import { VisibleColumnsDialog, ColumnOption } from '@/components/reusable/Dialogs/VisibleColumnsDialog';
@@ -858,17 +858,17 @@ export default function RFIDConfigPage() {
             active: readers.filter(reader => selectedIds.includes(reader.id) && reader.status === 'ACTIVE').length,
             inactive: readers.filter(reader => selectedIds.includes(reader.id) && reader.status !== 'ACTIVE').length
           }}
-          onActionComplete={(actionType, results) => {
+          onActionComplete={(actionType: string, results: any) => {
             toast.success(`Bulk action '${actionType}' completed.`);
             setBulkActionsDialogOpen(false);
           }}
           onCancel={() => setBulkActionsDialogOpen(false)}
-          onProcessAction={async (actionType, config) => {
+          onProcessAction={async (actionType: string, config: any) => {
             await new Promise(resolve => setTimeout(resolve, 1000));
             return { success: true, processed: selectedIds.length };
           }}
-          getItemDisplayName={item => item.deviceName}
-          getItemStatus={item => item.status}
+          getItemDisplayName={(item: RFIDReader) => item.deviceName}
+          getItemStatus={(item: RFIDReader) => item.status}
         />
       </div>
     </div>

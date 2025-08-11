@@ -228,6 +228,80 @@ const menuConfig: MenuConfig = {
       ],
     },
     {
+      title: "ANALYTICS & INSIGHTS",
+      sectionIcon: <BarChart3 className="w-5 h-5" />,
+      compact: true,
+      items: [
+        { 
+          icon: <BarChart3 className="w-5 h-5" />, 
+          label: "Attendance Analytics", 
+          href: "/analytics/attendance", 
+          description: "Comprehensive attendance insights" 
+        },
+        {
+          icon: <TrendingUp className="w-5 h-5" />,
+          label: "Comparative Analysis", 
+          href: "/analytics/comparative",
+          description: "Student vs instructor comparisons"
+        },
+        { 
+          icon: <Users className="w-5 h-5" />, 
+          label: "Performance Insights", 
+          href: "/analytics/performance", 
+          description: "System-wide performance metrics" 
+        },
+        { 
+          icon: <Activity className="w-5 h-5" />, 
+          label: "Real-time Dashboard", 
+          href: "/analytics/realtime", 
+          description: "Live attendance monitoring" 
+        },
+        {
+          icon: <Target className="w-5 h-5" />,
+          label: "Goals & Compliance",
+          href: "/analytics/goals",
+          description: "Attendance goals and compliance tracking"
+        }
+      ],
+    },
+    {
+      title: "REPORTS & EXPORTS",
+      sectionIcon: <FileText className="w-5 h-5" />,
+      compact: true,
+      items: [
+        { 
+          icon: <FileText className="w-5 h-5" />, 
+          label: "Report Hub", 
+          href: "/reports", 
+          description: "Generate comprehensive reports" 
+        },
+        {
+          icon: <Download className="w-5 h-5" />,
+          label: "Data Export", 
+          href: "/reports/export",
+          description: "Bulk data export tools"
+        },
+        { 
+          icon: <Users className="w-5 h-5" />, 
+          label: "Attendance Reports", 
+          href: "/reports/attendance", 
+          description: "Student & instructor attendance reports" 
+        },
+        { 
+          icon: <Activity className="w-5 h-5" />, 
+          label: "System Reports", 
+          href: "/reports/system-logs", 
+          description: "System activity and audit logs" 
+        },
+        {
+          icon: <Calendar className="w-5 h-5" />,
+          label: "Scheduled Reports",
+          href: "/reports/scheduled",
+          description: "Automated report generation"
+        }
+      ],
+    },
+    {
       title: "ACADEMIC MANAGEMENT",
       sectionIcon: <BookOpen className="w-5 h-5" />,
       compact: true,

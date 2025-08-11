@@ -3,6 +3,7 @@ import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { auditService } from '@/lib/services/audit.service';
+import { env } from '@/lib/env-validation';
 
 const prisma = new PrismaClient();
 
@@ -137,14 +138,14 @@ export async function POST(request: Request) {
       );
     }
 
-    // Generate JWT token
+    // Generate JWT token using validated environment variable
     const token = jwt.sign(
       {
         userId: user.userId,
         email: user.email,
         role: user.role,
       },
-      process.env.JWT_SECRET || 'your-secret-key',
+      env.JWT_SECRET,
       { expiresIn: '24h' }
     );
 
@@ -185,7 +186,7 @@ export async function POST(request: Request) {
 
     response.cookies.set('token', token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: env.SECURE_COOKIES,
       sameSite: 'strict',
       maxAge: rememberMe ? 60 * 60 * 24 * 30 : 60 * 60 * 24, // 30 days or 1 day
       path: '/',

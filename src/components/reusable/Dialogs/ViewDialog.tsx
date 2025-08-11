@@ -70,7 +70,7 @@ interface ViewDialogProps {
   headerVariant?: 'default' | 'room';
 }
 
-export function ViewDialog({
+function ViewDialog({
   open,
   onOpenChange,
   title,
@@ -807,4 +807,7 @@ export function ViewDialog({
       </DialogContent>
     </Dialog>
   );
-} 
+}
+
+export { ViewDialog };
+export default ViewDialog; 

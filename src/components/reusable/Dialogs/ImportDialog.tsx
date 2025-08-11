@@ -75,7 +75,7 @@ interface ImportDialogProps {
   currentUserRole?: string; // For role-based validation
 }
 
-export function ImportDialog({
+function ImportDialog({
   open,
   onOpenChange,
   onImport,
@@ -2205,4 +2205,7 @@ export function ImportDialog({
       </Dialog>
     </Dialog>
   );
-} 
+}
+
+export { ImportDialog };
+export default ImportDialog; 

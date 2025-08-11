@@ -48,6 +48,7 @@ export interface RiskLevelData {
 
 export interface DepartmentStats {
   name: string;
+  code: string;
   totalClasses: number;
   attendedClasses: number;
   attendanceRate: number;
@@ -221,15 +222,23 @@ export const processRealTimeData = (data: AttendanceData[], type: 'instructor' |
       acc[item.department].count += 1;
       return acc;
     }, {} as Record<string, any>)
-  ).map(([name, dept]) => ({
-    name,
-    totalClasses: dept.totalClasses,
-    attendedClasses: dept.attendedClasses,
-    attendanceRate: calculateAttendanceRate(dept.attendedClasses, dept.totalClasses),
-    count: dept.count,
-    trend: (dept.attendanceRate > 85 ? 'up' : dept.attendanceRate < 75 ? 'down' : 'stable') as 'up' | 'down' | 'stable',
-    change: dept.attendanceRate - 85
-  }));
+  ).map(([name, dept]) => {
+    // Extract department code from the department field (format: "CODE - NAME")
+    const codeMatch = name.match(/^([A-Z0-9]+)\s*-\s*(.+)$/);
+    const code = codeMatch ? codeMatch[1] : name;
+    const displayName = codeMatch ? codeMatch[2] : name;
+    
+    return {
+      name: displayName,
+      code,
+      totalClasses: dept.totalClasses,
+      attendedClasses: dept.attendedClasses,
+      attendanceRate: calculateAttendanceRate(dept.attendedClasses, dept.totalClasses),
+      count: dept.count,
+      trend: (dept.attendanceRate > 85 ? 'up' : dept.attendanceRate < 75 ? 'down' : 'stable') as 'up' | 'down' | 'stable',
+      change: dept.attendanceRate - 85
+    };
+  });
 
   // Base analytics data
   const baseAnalytics: AnalyticsData = {

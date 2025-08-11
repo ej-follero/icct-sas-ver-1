@@ -29,7 +29,7 @@ interface ExportDialogProps {
   tooltip: string;
 }
 
-export function ExportDialog({
+function ExportDialog({
   open,
   onOpenChange,
   exportableColumns,
@@ -370,4 +370,7 @@ export function ExportDialog({
       </DialogContent>
     </Dialog>
   );
-} 
+}
+
+export { ExportDialog };
+export default ExportDialog; 

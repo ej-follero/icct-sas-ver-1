@@ -36,10 +36,11 @@ import { QuickActionsPanel } from '@/components/reusable/QuickActionsPanel';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useDebounce } from '@/hooks/use-debounce';
 import { ImportDialog } from "@/components/reusable/Dialogs/ImportDialog";
-import { BulkActionsDialog } from "@/components/reusable/Dialogs/BulkActionsDialog";
+import BulkActionsDialog from "@/components/reusable/Dialogs/BulkActionsDialog";
 import { VisibleColumnsDialog, ColumnOption } from "@/components/reusable/Dialogs/VisibleColumnsDialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Checkbox as SharedCheckbox } from '@/components/ui/checkbox';
+import { safeHighlight } from "@/lib/sanitizer";
 
 const readerSchema = z.object({
   readerId: z.number(),
@@ -302,7 +303,7 @@ export default function RFIDReadersPage() {
         return (
           <div 
             className="text-sm font-medium text-blue-900"
-            dangerouslySetInnerHTML={{ __html: highlightMatch(item.deviceId, deviceIdMatches) }}
+            dangerouslySetInnerHTML={{ __html: safeHighlight(item.deviceId, deviceIdMatches) }}
           />
         );
       }
@@ -316,7 +317,7 @@ export default function RFIDReadersPage() {
         return (
           <div 
             className="text-sm text-blue-900"
-            dangerouslySetInnerHTML={{ __html: highlightMatch(item.deviceName, deviceNameMatches) }}
+            dangerouslySetInnerHTML={{ __html: safeHighlight(item.deviceName, deviceNameMatches) }}
           />
         );
       }
@@ -332,7 +333,7 @@ export default function RFIDReadersPage() {
         return (
           <div 
             className="text-sm text-blue-900 font-mono"
-            dangerouslySetInnerHTML={{ __html: highlightMatch(item.ipAddress, ipMatches) }}
+            dangerouslySetInnerHTML={{ __html: safeHighlight(item.ipAddress, ipMatches) }}
           />
         );
       }
@@ -1080,8 +1081,8 @@ export default function RFIDReadersPage() {
            onActionComplete={handleBulkActionComplete}
            onCancel={handleBulkActionCancel}
            onProcessAction={handleProcessBulkAction}
-           getItemDisplayName={item => item.deviceName}
-           getItemStatus={item => item.status}
+                     getItemDisplayName={(item: RFIDReader) => item.deviceName}
+          getItemStatus={(item: RFIDReader) => item.status}
          />
       </div>
     </div>

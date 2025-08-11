@@ -16,7 +16,7 @@ export async function GET(request: Request) {
       frequency: frequency as any,
       page,
       limit,
-      search
+      search: search || undefined
     };
 
     const result = await backupSchedulingService.getSchedules(params);

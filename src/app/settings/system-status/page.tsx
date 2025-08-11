@@ -5,6 +5,12 @@ export const dynamic = 'force-dynamic';
 
 import { useState, useEffect } from "react";
 import { Settings, Activity, Database, Wifi, AlertTriangle, CheckCircle, Clock, Zap, TrendingUp, Server, HardDrive, Cpu, RefreshCw, Bell, Shield, Globe, Users, BarChart3, AlertCircle, Info, Search, Plus, Upload, Printer, Columns3, List, Download, Loader2, MoreHorizontal, Eye, Pencil, RotateCcw, X, Archive, Lock } from "lucide-react";
+import SystemLogViewer from '@/components/SystemLogViewer';
+import SystemStatusExportDialog from '@/components/SystemStatusExportDialog';
+import WebSocketMonitor from '@/components/WebSocketMonitor';
+import CacheMonitor from '@/components/CacheMonitor';
+import SystemSettingsConfig from '@/components/SystemSettingsConfig';
+import PerformanceMonitor from '@/components/PerformanceMonitor';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -104,6 +110,8 @@ export default function SystemStatusPage() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [error, setError] = useState<string | null>(null);
+  const [showLogViewer, setShowLogViewer] = useState(false);
+  const [showExportDialog, setShowExportDialog] = useState(false);
 
   // Check if user has access to system status
   const hasSystemMonitoringAccess = () => {
@@ -471,7 +479,7 @@ export default function SystemStatusPage() {
                 icon: <Download className="w-5 h-5 text-white" />,
                 onClick: () => {
                   if (canPerformAdminActions || hasLimitedAccess) {
-                    toast.info('Export functionality coming soon');
+                    setShowExportDialog(true);
                   } else {
                     toast.error('You do not have permission to export reports');
                   }
@@ -493,7 +501,7 @@ export default function SystemStatusPage() {
                 icon: <Eye className="w-5 h-5 text-white" />,
                 onClick: () => {
                   if (canPerformAdminActions || isSystemAuditor) {
-                    toast.info('Log viewer coming soon');
+                    setShowLogViewer(true);
                   } else {
                     toast.error('You do not have permission to view system logs');
                   }
@@ -965,6 +973,48 @@ export default function SystemStatusPage() {
             </div>
           </Card>
         </div>
+
+        {/* WebSocket Monitoring */}
+        {canPerformAdminActions && (
+          <div className="mt-6">
+            <WebSocketMonitor />
+          </div>
+        )}
+
+        {/* Cache Monitoring */}
+        {canPerformAdminActions && (
+          <div className="mt-6">
+            <CacheMonitor />
+          </div>
+        )}
+
+        {/* System Settings Configuration */}
+        {isSuperAdmin && (
+          <div className="mt-6">
+            <SystemSettingsConfig />
+          </div>
+        )}
+
+        {/* Performance Monitoring */}
+        {canPerformAdminActions && (
+          <div className="mt-6">
+            <PerformanceMonitor />
+          </div>
+        )}
+
+        {/* Log Viewer Dialog */}
+        <SystemLogViewer
+          open={showLogViewer}
+          onOpenChange={setShowLogViewer}
+          logType="system"
+        />
+
+        {/* Export Dialog */}
+        <SystemStatusExportDialog
+          open={showExportDialog}
+          onOpenChange={setShowExportDialog}
+          systemHealth={systemHealth}
+        />
       </div>
     </div>
   );

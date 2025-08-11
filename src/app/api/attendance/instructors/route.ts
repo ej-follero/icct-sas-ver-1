@@ -48,8 +48,20 @@ export async function GET(request: Request) {
         })
       },
       include: {
-        Department: true,
-        Subjects: true,
+        Department: {
+          select: {
+            departmentId: true,
+            departmentName: true,
+            departmentCode: true
+          }
+        },
+        Subjects: {
+          select: {
+            subjectId: true,
+            subjectName: true,
+            subjectCode: true
+          }
+        },
         Attendance: {
           where: {
             ...(startDate && endDate && {
@@ -58,11 +70,12 @@ export async function GET(request: Request) {
                 lte: new Date(endDate)
               }
             }),
-            ...(status && { status })
+            ...(status && { status: status as any })
           },
           orderBy: {
             timestamp: 'desc'
-          }
+          },
+          take: 100 // Limit to recent 100 records for performance
         }
       },
       orderBy: {
@@ -80,10 +93,10 @@ export async function GET(request: Request) {
 
     // Transform instructor data with attendance metrics
     const transformedInstructors = instructors.map(instructor => {
-      const attendanceRecords = instructor.Attendance;
+      const attendanceRecords = instructor.Attendance || [];
       
-      // Calculate attendance metrics
-      const totalScheduledClasses = attendanceRecords.length;
+      // Safely calculate attendance metrics
+      const totalScheduledClasses = attendanceRecords.length || 0;
       const attendedClasses = attendanceRecords.filter(r => r.status === 'PRESENT').length;
       const absentClasses = attendanceRecords.filter(r => r.status === 'ABSENT').length;
       const lateClasses = attendanceRecords.filter(r => r.status === 'LATE').length;
@@ -91,17 +104,23 @@ export async function GET(request: Request) {
 
       const attendanceRate = totalScheduledClasses > 0 
         ? (attendedClasses / totalScheduledClasses) * 100 
-        : 0;
+        : 100; // Default to 100% if no records (new instructor)
 
-      const punctualityScore = totalScheduledClasses > 0
-        ? ((attendedClasses) / (attendedClasses + lateClasses)) * 100
-        : 0;
+      const punctualityScore = (attendedClasses + lateClasses) > 0
+        ? (attendedClasses / (attendedClasses + lateClasses)) * 100
+        : 100; // Default to 100% if no attendance records
 
       // Calculate risk level
-      let riskLevel = 'LOW';
-      if (attendanceRate < 75) riskLevel = 'HIGH';
-      else if (attendanceRate < 85) riskLevel = 'MEDIUM';
-      else if (attendanceRate >= 95) riskLevel = 'NONE';
+      let riskLevel = 'NONE';
+      if (totalScheduledClasses === 0) {
+        riskLevel = 'NONE'; // New instructor with no records
+      } else if (attendanceRate < 75) {
+        riskLevel = 'HIGH';
+      } else if (attendanceRate < 85) {
+        riskLevel = 'MEDIUM';
+      } else if (attendanceRate < 95) {
+        riskLevel = 'LOW';
+      }
 
       // Calculate weekly pattern (mock for now - could be enhanced with actual data)
       const weeklyPattern = {
@@ -123,20 +142,24 @@ export async function GET(request: Request) {
       // Calculate trend (mock for now)
       const trend = parseFloat((Math.random() * 20 - 10).toFixed(1));
 
+      // Safely access department and subjects
+      const departmentName = instructor.Department?.departmentName || 'Unknown Department';
+      const subjects = instructor.Subjects?.map(subject => subject.subjectName) || [];
+
       return {
         instructorId: instructor.instructorId.toString(),
-        instructorName: `${instructor.firstName} ${instructor.lastName}`,
-        employeeId: instructor.employeeId,
-        department: instructor.Department.departmentName,
-        instructorType: instructor.instructorType,
-        specialization: instructor.specialization,
-        email: instructor.email,
-        phoneNumber: instructor.phoneNumber,
-        officeLocation: instructor.officeLocation,
-        officeHours: instructor.officeHours,
-        rfidTag: instructor.rfidTag,
-        status: instructor.status,
-        subjects: instructor.Subjects.map(subject => subject.subjectName),
+        instructorName: `${instructor.firstName || ''} ${instructor.lastName || ''}`.trim(),
+        employeeId: instructor.employeeId || '',
+        department: departmentName,
+        instructorType: instructor.instructorType || 'FULL_TIME',
+        specialization: instructor.specialization || '',
+        email: instructor.email || '',
+        phoneNumber: instructor.phoneNumber || '',
+        officeLocation: instructor.officeLocation || '',
+        officeHours: instructor.officeHours || '',
+        rfidTag: instructor.rfidTag || '',
+        status: instructor.status || 'ACTIVE',
+        subjects,
         schedules: [], // Could be populated with SubjectSchedule data if needed
         totalScheduledClasses,
         attendedClasses,
@@ -153,7 +176,7 @@ export async function GET(request: Request) {
         lastAttendance: attendanceRecords.length > 0 
           ? attendanceRecords[0].timestamp 
           : new Date(),
-        avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${instructor.firstName}${instructor.lastName}`,
+        avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${instructor.firstName || 'unknown'}${instructor.lastName || 'instructor'}`,
         attendanceRecords
       };
     });
@@ -163,12 +186,34 @@ export async function GET(request: Request) {
     return NextResponse.json(transformedInstructors);
   } catch (error) {
     console.error('Error fetching instructor attendance records:', error);
+    
+    // Enhanced error logging
+    if (error instanceof Error) {
+      console.error('Error name:', error.name);
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
+    }
+    
+    // Check if it's a Prisma error
+    if (error && typeof error === 'object' && 'code' in error) {
+      console.error('Prisma error code:', (error as any).code);
+      console.error('Prisma error meta:', (error as any).meta);
+    }
+    
     return NextResponse.json(
-      { error: 'Failed to fetch instructor attendance records', details: error instanceof Error ? error.message : 'Unknown error' },
+      { 
+        error: 'Failed to fetch instructor attendance records', 
+        details: error instanceof Error ? error.message : 'Unknown error',
+        timestamp: new Date().toISOString()
+      },
       { status: 500 }
     );
   } finally {
     // Always disconnect from database
-    await prisma.$disconnect();
+    try {
+      await prisma.$disconnect();
+    } catch (disconnectError) {
+      console.error('Error disconnecting from database:', disconnectError);
+    }
   }
 } 

@@ -18,7 +18,7 @@ export interface DownloadDialogProps {
   onDownload: (backupId: string) => Promise<boolean>;
 }
 
-export function DownloadDialog({
+function DownloadDialog({
   open,
   onOpenChange,
   backupId,
@@ -452,4 +452,7 @@ export function DownloadDialog({
       </DialogContent>
     </Dialog>
   );
-} 
+}
+
+export { DownloadDialog };
+export default DownloadDialog; 

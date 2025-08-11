@@ -2,7 +2,7 @@
 
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { z } from "zod";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -10,11 +10,32 @@ import { Select, SelectItem, SelectContent, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form";
-import { School, Book, Layers, Loader2, FileDiff, Info, RotateCcw, Save } from "lucide-react";
+import { School, Book, Layers, Info, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "sonner";
-import { Checkbox } from "@/components/ui/checkbox";
+import { subjectsApi } from '@/services/api/subjects';
+import { departmentsApi } from '@/services/api/departments';
+import { Subject } from '@/types/subject';
+import { MultiSearchableSelectSearch } from '@/components/reusable/Search/SearchableSelect';
+
+// Type for API request data
+type SubjectApiData = {
+  subjectName: string;
+  subjectCode: string;
+  subjectType: 'LECTURE' | 'LABORATORY' | 'HYBRID';
+  status: 'ACTIVE' | 'INACTIVE';
+  description: string;
+  lectureUnits: number;
+  labUnits: number;
+  creditedUnits: number;
+  totalHours: number;
+  prerequisites: string;
+  courseId: number;
+  departmentId: number;
+  academicYear: string;
+  semester: 'FIRST_SEMESTER' | 'SECOND_SEMESTER' | 'THIRD_SEMESTER';
+  maxStudents: number;
+};
 
 type SubjectFormData = {
   name: string;
@@ -30,6 +51,68 @@ type SubjectFormData = {
   prerequisites: string[];
   instructors: string[];
   status: "active" | "inactive";
+};
+
+// Transformation function to convert Subject to SubjectFormData
+const transformSubjectToFormData = (subject: any): SubjectFormData => {
+  if (!subject) return {
+    name: "",
+    code: "",
+    description: "",
+    type: "lecture",
+    lecture_units: 0,
+    laboratory_units: 0,
+    units: 0,
+    semester: "1st",
+    year_level: "1st",
+    department: "",
+    prerequisites: [],
+    instructors: [],
+    status: "active",
+  };
+
+  // Convert subject type
+  let type: "lecture" | "laboratory" | "both" = "lecture";
+  if (subject.subjectType === 'HYBRID') {
+    type = "both";
+  } else if (subject.subjectType === 'LABORATORY') {
+    type = "laboratory";
+  } else {
+    type = "lecture";
+  }
+
+  // Convert semester
+  let semester: "1st" | "2nd" | "3rd" = "1st";
+  if (subject.semester === 'SECOND_SEMESTER') {
+    semester = "2nd";
+  } else if (subject.semester === 'THIRD_SEMESTER') {
+    semester = "3rd";
+  }
+
+  // Convert status
+  const status: "active" | "inactive" = subject.status === 'ACTIVE' ? "active" : "inactive";
+
+  // Convert prerequisites string to array
+  const prerequisites = subject.prerequisites ? subject.prerequisites.split(',').map((p: string) => p.trim()).filter(Boolean) : [];
+
+  // Convert instructors to array of strings
+  const instructors = subject.instructors ? subject.instructors.map((i: any) => `${i.firstName} ${i.lastName}`) : [];
+
+  return {
+    name: subject.subjectName || "",
+    code: subject.subjectCode || "",
+    description: subject.description || "",
+    type,
+    lecture_units: subject.lectureUnits || 0,
+    laboratory_units: subject.labUnits || 0,
+    units: subject.creditedUnits || 0,
+    semester,
+    year_level: "1st", // Default value as it's not in the Subject type
+    department: subject.department?.departmentName || subject.departmentId?.toString() || "",
+    prerequisites,
+    instructors,
+    status,
+  };
 };
 
 const schema = z.object({
@@ -93,29 +176,18 @@ const schema = z.object({
 
 type Props = {
   type: "create" | "update" | "delete" | "view";
-  data?: SubjectFormData;
+  data?: Subject | SubjectFormData;
   id?: string;
   onSuccess?: () => void;
+  showSubmitButton?: boolean;
 };
 
-// Mock data for departments - replace with actual API call later
-const departments = [
-  { id: "1", name: "College of Information Technology" },
-  { id: "2", name: "College of Engineering" },
-  { id: "3", name: "College of Education" },
-];
-
-// Mock data for instructors - replace with actual API call later
-const instructors = [
-  { id: "1", name: "John Doe" },
-  { id: "2", name: "Jane Smith" },
-  { id: "3", name: "Alice Johnson" },
-];
-
-export default function SubjectForm({ type, data, id, onSuccess }: Props) {
+export default function SubjectForm({ type, data, id, onSuccess, showSubmitButton = true }: Props) {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [departments, setDepartments] = useState<{ id: string; name: string; code: string }[]>([]);
+  const [instructors, setInstructors] = useState<{ id: string; name: string }[]>([]);
+  const [loading, setLoading] = useState(false);
 
   const defaultValues: SubjectFormData = {
     name: "",
@@ -142,58 +214,118 @@ export default function SubjectForm({ type, data, id, onSuccess }: Props) {
     formState: { errors, isDirty },
   } = useForm<SubjectFormData>({
     resolver: zodResolver(schema),
-    defaultValues: data || defaultValues,
+    defaultValues: transformSubjectToFormData(data) || defaultValues,
   });
 
-  const handleReset = () => {
-    reset(data || defaultValues);
-  };
+  // Reset form when data changes (for edit mode)
+  useEffect(() => {
+    if (data) {
+      const transformedData = transformSubjectToFormData(data);
+      reset(transformedData);
+    }
+  }, [data, reset]);
 
-  const handleSaveDraft = async () => {
+  // Fetch departments and instructors on component mount
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        // Fetch departments and instructors in parallel
+        const [departmentsResponse, instructorsResponse] = await Promise.all([
+          fetch('/api/departments'),
+          fetch('/api/instructors')
+        ]);
+
+        // Handle departments response
+        if (!departmentsResponse.ok) {
+          console.error('Departments API error:', departmentsResponse.status, departmentsResponse.statusText);
+          throw new Error(`Failed to fetch departments: ${departmentsResponse.status} ${departmentsResponse.statusText}`);
+        }
+        const departmentsData = await departmentsResponse.json();
+        
+        if (departmentsData.error) {
+          throw new Error(departmentsData.error);
+        }
+
+        // Handle instructors response
+        if (!instructorsResponse.ok) {
+          console.error('Instructors API error:', instructorsResponse.status, instructorsResponse.statusText);
+          throw new Error(`Failed to fetch instructors: ${instructorsResponse.status} ${instructorsResponse.statusText}`);
+        }
+        const instructorsData = await instructorsResponse.json();
+
+        // Transform departments data to match expected format
+        const formattedDepartments = (departmentsData.data || []).map((dept: any) => ({ 
+          id: dept.id, 
+          name: dept.name, 
+          code: dept.code 
+        }));
+
+        setDepartments(formattedDepartments);
+        setInstructors(instructorsData);
+      } catch (error) {
+        console.error('Error fetching form data:', error);
+        toast.error(error instanceof Error ? error.message : 'Failed to load form data');
+        
+        // Set empty arrays as fallback
+        setDepartments([]);
+        setInstructors([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  // Handle form submission
+  const onSubmit = async (formData: SubjectFormData) => {
     try {
-      setIsSavingDraft(true);
+      setIsSubmitting(true);
       setError(null);
 
-      const formData = watch();
-      const normalizedData = {
-      ...formData,
-        department: parseInt(formData.department),
-        status: "inactive", // Using inactive as draft status
+      // Transform form data to match the Subject interface
+      const subjectData: SubjectApiData = {
+        subjectName: formData.name,
+        subjectCode: formData.code,
+        subjectType: formData.type === 'both' ? 'HYBRID' : formData.type.toUpperCase() as 'LECTURE' | 'LABORATORY',
+        status: formData.status.toUpperCase() as 'ACTIVE' | 'INACTIVE',
+        description: formData.description,
+        lectureUnits: formData.type === 'both' ? (formData.lecture_units || 0) : (formData.units || 0),
+        labUnits: formData.type === 'both' ? (formData.laboratory_units || 0) : 0,
+        creditedUnits: formData.units || 0,
+        totalHours: (formData.units || 0) * 18, // Assuming 18 hours per unit
+        prerequisites: formData.prerequisites.join(', '),
+        courseId: 1, // Default course ID - should be selected from form
+        departmentId: parseInt(formData.department),
+        academicYear: "2024-2025", // Should be selected from form
+        semester: formData.semester === '1st' ? 'FIRST_SEMESTER' : 
+                 formData.semester === '2nd' ? 'SECOND_SEMESTER' : 'THIRD_SEMESTER',
+        maxStudents: 30, // Default value
       };
 
-      let response;
       if (type === "create") {
-        response = await fetch("/api/subjects/draft", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(normalizedData),
-        });
+        await subjectsApi.createSubject(subjectData);
+        toast.success("Subject created successfully");
       } else if (type === "update" && id) {
-        response = await fetch(`/api/subjects/${id}/draft`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(normalizedData),
-        });
+        await subjectsApi.updateSubject(id, subjectData);
+        toast.success("Subject updated successfully");
       }
 
-      if (!response?.ok) {
-        const errorData = await response?.json();
-        throw new Error(errorData?.error || "Failed to save draft");
-      }
-
-      toast.success("Draft saved successfully");
       onSuccess?.();
-    } catch (err: any) {
-      setError(err.message);
-      toast.error(err.message);
+    } catch (error: any) {
+      console.error("Error submitting form:", error);
+      setError(error.message || "Failed to save subject");
+      toast.error(error.message || "Failed to save subject");
     } finally {
-      setIsSavingDraft(false);
+      setIsSubmitting(false);
     }
   };
 
   // If in view mode, don't render the form submission logic
   if (type === "view") {
-  return (
+    const viewData = transformSubjectToFormData(data);
+    return (
       <div className="space-y-6">
         {/* Basic Information Section */}
         <div>
@@ -207,20 +339,20 @@ export default function SubjectForm({ type, data, id, onSuccess }: Props) {
             <div>
               <Label htmlFor="name" className="text-sm text-blue-900">Subject Name</Label>
               <div className="mt-1 p-2 bg-gray-50 rounded-md border border-gray-200 text-gray-700">
-                {data?.name}
+                {viewData.name}
               </div>
             </div>
             <div>
               <Label htmlFor="code" className="text-sm text-blue-900">Subject Code</Label>
               <div className="mt-1 p-2 bg-gray-50 rounded-md border border-gray-200 text-gray-700">
-                {data?.code}
+                {viewData.code}
               </div>
             </div>
             <div>
               <Label htmlFor="type" className="text-sm text-blue-900">Type</Label>
               <div className="mt-1">
-                <Badge variant={data?.type === "both" ? "info" : data?.type === "lecture" ? "success" : "warning"}>
-                  {data?.type ? data.type.charAt(0).toUpperCase() + data.type.slice(1) : "Unknown"}
+                <Badge variant={viewData.type === "both" ? "info" : viewData.type === "lecture" ? "success" : "warning"}>
+                  {viewData.type ? viewData.type.charAt(0).toUpperCase() + viewData.type.slice(1) : "Unknown"}
                 </Badge>
               </div>
             </div>
@@ -239,21 +371,21 @@ export default function SubjectForm({ type, data, id, onSuccess }: Props) {
             <div>
               <Label htmlFor="units" className="text-sm text-blue-900">Total Units</Label>
               <div className="mt-1 p-2 bg-gray-50 rounded-md border border-gray-200 text-gray-700">
-                {data?.units}
+                {viewData.units}
               </div>
             </div>
-            {data?.type === "both" && (
+            {viewData.type === "both" && (
               <>
                 <div>
                   <Label htmlFor="lecture_units" className="text-sm text-blue-900">Lecture Units</Label>
                   <div className="mt-1 p-2 bg-gray-50 rounded-md border border-gray-200 text-gray-700">
-                    {data?.lecture_units}
+                    {viewData.lecture_units}
                   </div>
                 </div>
                 <div>
                   <Label htmlFor="laboratory_units" className="text-sm text-blue-900">Laboratory Units</Label>
                   <div className="mt-1 p-2 bg-gray-50 rounded-md border border-gray-200 text-gray-700">
-                    {data?.laboratory_units}
+                    {viewData.laboratory_units}
                   </div>
                 </div>
               </>
@@ -273,13 +405,13 @@ export default function SubjectForm({ type, data, id, onSuccess }: Props) {
             <div>
               <Label htmlFor="semester" className="text-sm text-blue-900">Semester</Label>
               <div className="mt-1 p-2 bg-gray-50 rounded-md border border-gray-200 text-gray-700">
-                {data?.semester}
+                {viewData.semester}
               </div>
             </div>
             <div>
               <Label htmlFor="year_level" className="text-sm text-blue-900">Year Level</Label>
               <div className="mt-1 p-2 bg-gray-50 rounded-md border border-gray-200 text-gray-700">
-                {data?.year_level}
+                {viewData.year_level}
               </div>
             </div>
           </div>
@@ -297,7 +429,7 @@ export default function SubjectForm({ type, data, id, onSuccess }: Props) {
             <div>
               <Label htmlFor="department" className="text-sm text-blue-900">Department</Label>
               <div className="mt-1 p-2 bg-gray-50 rounded-md border border-gray-200 text-gray-700">
-                {data?.department}
+                {departments.find(d => d.id === viewData.department)?.name || viewData.department}
               </div>
             </div>
           </div>
@@ -315,7 +447,7 @@ export default function SubjectForm({ type, data, id, onSuccess }: Props) {
             <div>
               <Label htmlFor="description" className="text-sm text-blue-900">Subject Description</Label>
               <div className="mt-1 p-2 bg-gray-50 rounded-md border border-gray-200 text-gray-700 min-h-[100px]">
-                {data?.description || "No description provided"}
+                {viewData.description || "No description provided"}
               </div>
             </div>
           </div>
@@ -331,28 +463,19 @@ export default function SubjectForm({ type, data, id, onSuccess }: Props) {
           </div>
           <div className="h-px bg-blue-100 w-full mb-4"></div>
           <div className="space-y-2">
-            {instructors.map((instructor) => (
-              <div key={instructor.id} className="flex items-center gap-2">
-                <Checkbox
-                  id={`instructor-${instructor.id}`}
-                  checked={watch("instructors")?.includes(instructor.id)}
-                  onCheckedChange={(checked) => {
-                    const currentInstructors = watch("instructors") || [];
-                    if (checked) {
-                      setValue("instructors", [...currentInstructors, instructor.id]);
-                    } else {
-                      setValue(
-                        "instructors",
-                        currentInstructors.filter((id) => id !== instructor.id)
-                      );
-                    }
-                  }}
-                />
-                <Label htmlFor={`instructor-${instructor.id}`} className="text-sm text-gray-700">
-                  {instructor.name}
-                </Label>
-              </div>
-            ))}
+            <div className="mt-1 p-2 bg-gray-50 rounded-md border border-gray-200 text-gray-700">
+              {viewData.instructors && viewData.instructors.length > 0 ? (
+                <div className="flex flex-wrap gap-1">
+                  {viewData.instructors.map((instructorName, index) => (
+                    <span key={index} className="inline-flex items-center px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded">
+                      {instructorName}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <span className="text-gray-500">No instructors assigned</span>
+              )}
+            </div>
           </div>
         </div>
 
@@ -403,47 +526,6 @@ export default function SubjectForm({ type, data, id, onSuccess }: Props) {
     );
   }
 
-  const onSubmit = async (formData: SubjectFormData) => {
-    try {
-      setIsSubmitting(true);
-      setError(null);
-
-      const normalizedData = {
-        ...formData,
-        // Ensure department is sent as an ID
-        department: parseInt(formData.department),
-      };
-
-      let response;
-      if (type === "create") {
-        response = await fetch("/api/subjects", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(normalizedData),
-        });
-      } else if (type === "update" && id) {
-        response = await fetch(`/api/subjects/${id}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(normalizedData),
-        });
-      }
-
-      if (!response?.ok) {
-        const errorData = await response?.json();
-        throw new Error(errorData?.error || "Failed to save subject");
-      }
-
-      toast.success(type === "create" ? "Subject created successfully" : "Subject updated successfully");
-      onSuccess?.();
-    } catch (err: any) {
-      setError(err.message);
-      toast.error(err.message);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
   const handleDelete = async () => {
     try {
       setIsSubmitting(true);
@@ -451,15 +533,7 @@ export default function SubjectForm({ type, data, id, onSuccess }: Props) {
 
       if (!id) throw new Error("No subject ID provided");
 
-      const response = await fetch(`/api/subjects/${id}`, {
-        method: "DELETE",
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData?.error || "Failed to delete subject");
-      }
-
+      await subjectsApi.deleteSubject(id);
       toast.success("Subject deleted successfully");
       onSuccess?.();
     } catch (err: any) {
@@ -502,6 +576,15 @@ export default function SubjectForm({ type, data, id, onSuccess }: Props) {
             {isSubmitting ? "Deleting..." : "Delete"}
           </Button>
         </div>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+        <span className="ml-2 text-gray-600">Loading form data...</span>
       </div>
     );
   }
@@ -724,15 +807,26 @@ export default function SubjectForm({ type, data, id, onSuccess }: Props) {
                   <SelectValue placeholder="Select department" />
                 </SelectTrigger>
                 <SelectContent>
-                {departments.map((dept) => (
-                  <SelectItem key={dept.id} value={dept.id}>
-                    {dept.name}
+                {departments.length > 0 ? (
+                  departments.map((dept) => (
+                    <SelectItem key={dept.id} value={dept.id}>
+                      {dept.name}
+                    </SelectItem>
+                  ))
+                ) : (
+                  <SelectItem value="no-departments" disabled>
+                    No departments available
                   </SelectItem>
-                ))}
+                )}
                 </SelectContent>
               </Select>
             {errors.department && (
               <p className="text-sm text-red-600 mt-1">{errors.department.message}</p>
+            )}
+            {departments.length === 0 && (
+              <p className="text-sm text-yellow-600 mt-1">
+                No departments found. Please create departments first.
+              </p>
             )}
           </div>
         </div>
@@ -776,28 +870,26 @@ export default function SubjectForm({ type, data, id, onSuccess }: Props) {
         </div>
         <div className="h-px bg-blue-100 w-full mb-4"></div>
         <div className="space-y-2">
-          {instructors.map((instructor) => (
-            <div key={instructor.id} className="flex items-center gap-2">
-              <Checkbox
-                id={`instructor-${instructor.id}`}
-                checked={watch("instructors")?.includes(instructor.id)}
-                onCheckedChange={(checked) => {
-                  const currentInstructors = watch("instructors") || [];
-                  if (checked) {
-                    setValue("instructors", [...currentInstructors, instructor.id]);
-                  } else {
-                    setValue(
-                      "instructors",
-                      currentInstructors.filter((id) => id !== instructor.id)
-                    );
-                  }
-                }}
-              />
-              <Label htmlFor={`instructor-${instructor.id}`} className="text-sm text-gray-700">
-                {instructor.name}
-              </Label>
+          {instructors.length > 0 ? (
+            <MultiSearchableSelectSearch
+              options={instructors.map(instructor => ({
+                value: instructor.id,
+                label: instructor.name
+              }))}
+              value={watch("instructors") || []}
+              onChange={(selectedIds) => setValue("instructors", selectedIds)}
+              placeholder="Search and select instructors..."
+              className="w-full"
+              maxDisplayItems={2}
+              noOptionsMessage="No instructors found"
+              noMoreOptionsMessage="No more instructors found"
+              startTypingMessage="Start typing to search instructors"
+            />
+          ) : (
+            <div className="p-3 bg-yellow-50 border border-yellow-200 rounded text-yellow-700 text-sm">
+              No instructors available. Please create instructors first.
             </div>
-          ))}
+          )}
           {errors.instructors && (
             <p className="text-sm text-red-600 mt-1">{errors.instructors.message}</p>
           )}
@@ -843,42 +935,25 @@ export default function SubjectForm({ type, data, id, onSuccess }: Props) {
         </div>
       )}
 
-      {/* Submit Button */}
-      <div className="flex justify-end gap-3">
-        <Button
-          variant="outline"
-          type="button"
-          onClick={handleReset}
-          disabled={isSubmitting || !isDirty}
-          className="w-32 border border-blue-300 text-blue-500"
-        >
-          <RotateCcw className="w-4 h-4 mr-2" />
-          Reset
-        </Button>
-        <Button
-          variant="outline"
-          type="button"
-          onClick={handleSaveDraft}
-          disabled={isSubmitting || isSavingDraft || !isDirty}
-          className="w-32 border border-blue-300 text-blue-500"
-        >
-          <Save className="w-4 h-4 mr-2" />
-          {isSavingDraft ? "Saving..." : "Save Draft"}
-        </Button>
-        <Button
-          type="submit"
-          disabled={isSubmitting || isSavingDraft}
-          className="w-32 bg-blue-600 hover:bg-blue-700 text-white"
-        >
-          {isSubmitting
-            ? type === "update"
-              ? "Saving..."
-              : "Saving..."
-            : type === "update"
-              ? "Update Subject"
-              : "Create Subject"}
-        </Button>
-      </div>
+      {/* Submit Button - Only show if showSubmitButton is true */}
+      {showSubmitButton && (
+        <div className="flex justify-end pt-4 border-t border-blue-100">
+          <Button
+            type="submit"
+            disabled={isSubmitting}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-6"
+          >
+            {isSubmitting ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                {type === "create" ? "Creating..." : "Updating..."}
+              </>
+            ) : (
+              type === "create" ? "Create Subject" : "Update Subject"
+            )}
+          </Button>
+        </div>
+      )}
     </form>
   );
 }

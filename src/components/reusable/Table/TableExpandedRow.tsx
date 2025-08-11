@@ -35,7 +35,11 @@ export function TableExpandedRow<T>({
               </TableRow>
             </TableHeader>
             <TableBody className="[&>tr>td]:text-blue-900">
-              {rows.map(renderRow)}
+              {rows.map((row, index) => (
+                <React.Fragment key={index}>
+                  {renderRow(row)}
+                </React.Fragment>
+              ))}
             </TableBody>
           </Table>
         ) : (

@@ -42,6 +42,11 @@ export async function GET() {
       },
       include: {
         Department: true,
+        Subjects: {
+          include: {
+            Instructor: true,
+          },
+        },
         _count: {
           select: {
             Student: true,
@@ -54,21 +59,32 @@ export async function GET() {
     console.log(`Retrieved ${courses.length} courses from database`);
 
     // Transform the data to match the frontend interface
-    const transformedCourses = courses.map(course => ({
-      id: course.courseId.toString(),
-      name: course.courseName,
-      code: course.courseCode,
-      department: course.Department?.departmentName || '',
-      departmentCode: course.Department?.departmentCode || '',
-      description: course.description || '',
-      units: course.totalUnits,
-      status: course.courseStatus,
-      totalStudents: course._count.Student,
-      totalInstructors: course._count.Section, // Using section count as a proxy for instructors
-      createdAt: course.createdAt.toISOString(),
-      updatedAt: course.updatedAt.toISOString(),
-      courseType: course.courseType,
-    }));
+    const transformedCourses = courses.map(course => {
+      // Calculate unique instructors for this course
+      const uniqueInstructors = new Set();
+      course.Subjects.forEach(subject => {
+        subject.Instructor.forEach(instructor => {
+          uniqueInstructors.add(instructor.instructorId);
+        });
+      });
+
+      return {
+        id: course.courseId.toString(),
+        name: course.courseName,
+        code: course.courseCode,
+        department: course.Department?.departmentName || '',
+        departmentCode: course.Department?.departmentCode || '',
+        description: course.description || '',
+        units: course.totalUnits,
+        status: course.courseStatus,
+        totalStudents: course._count.Student,
+        totalInstructors: uniqueInstructors.size, // Actual count of unique instructors
+        createdAt: course.createdAt.toISOString(),
+        updatedAt: course.updatedAt.toISOString(),
+        courseType: course.courseType,
+        major: course.major || '',
+      };
+    });
 
     console.log("Courses transformed successfully");
     return NextResponse.json(transformedCourses);

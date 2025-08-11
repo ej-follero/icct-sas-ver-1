@@ -40,6 +40,7 @@ import { VisibleColumnsDialog, ColumnOption } from '@/components/reusable/Dialog
 import { z } from "zod";
 import CalendarView from "@/components/CalendarView";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { safeHighlight } from "@/lib/sanitizer";
 
 // Update enums to match backend
 
@@ -496,7 +497,7 @@ export default function RoomsPage() {
             return (
               <div
                 className="text-sm font-medium text-blue-900"
-                dangerouslySetInnerHTML={{ __html: highlightMatch(item.roomNo, nameMatches) }}
+                dangerouslySetInnerHTML={{ __html: safeHighlight(item.roomNo, nameMatches) }}
               />
             );
           }
@@ -1121,7 +1122,7 @@ export default function RoomsPage() {
               {/* Quick Filter Dropdowns */}
               <div className="flex flex-wrap gap-2 sm:gap-3 w-full xl:w-auto">
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="w-full sm:w-32 lg:w-36 xl:w-32 text-gray-700 rounded">
+                  <SelectTrigger className="w-full sm:w-32 lg:w-36 xl:w-32 text-gray-500 rounded">
                     <SelectValue placeholder="All Status" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1134,7 +1135,7 @@ export default function RoomsPage() {
                   </SelectContent>
                 </Select>
                 <Select value={typeFilter} onValueChange={setTypeFilter}>
-                  <SelectTrigger className="w-full sm:w-28 lg:w-32 xl:w-28 text-gray-700 rounded">
+                  <SelectTrigger className="w-full sm:w-28 lg:w-32 xl:w-28 text-gray-500 rounded">
                     <SelectValue placeholder="Type" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1147,7 +1148,7 @@ export default function RoomsPage() {
                   </SelectContent>
                 </Select>
                 <Select value={buildingFilter} onValueChange={setBuildingFilter}>
-                  <SelectTrigger className="w-full sm:w-40 lg:w-48 xl:w-44 text-gray-700 rounded">
+                  <SelectTrigger className="w-full sm:w-40 lg:w-48 xl:w-44 text-gray-500 rounded">
                     <SelectValue placeholder="Building" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1160,7 +1161,7 @@ export default function RoomsPage() {
                   </SelectContent>
                 </Select>
                 <Select value={floorFilter} onValueChange={setFloorFilter}>
-                  <SelectTrigger className="w-full sm:w-28 lg:w-32 xl:w-28 text-gray-700 rounded">
+                  <SelectTrigger className="w-full sm:w-28 lg:w-32 xl:w-28 text-gray-500 rounded">
                     <SelectValue placeholder="Floor" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1174,7 +1175,7 @@ export default function RoomsPage() {
                   </SelectContent>
                 </Select>
                 <Select value={occupancyFilter} onValueChange={setOccupancyFilter}>
-                  <SelectTrigger className="w-full sm:w-32 lg:w-36 xl:w-32 text-gray-700 rounded">
+                  <SelectTrigger className="w-full sm:w-32 lg:w-36 xl:w-32 text-gray-500 rounded">
                     <SelectValue placeholder="Room Status" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1607,65 +1608,38 @@ export default function RoomsPage() {
         entityLabel="room"
         availableActions={[
           {
-            type: 'status-update',
-            title: 'Update Status',
+            id: 'status-update',
+            label: 'Update Status',
             description: 'Update status of selected rooms',
-            icon: <Settings className="w-4 h-4" />
+            icon: <Settings className="w-4 h-4" />,
+            tabId: 'status'
           },
           {
-            type: 'export',
-            title: 'Export Data',
+            id: 'export',
+            label: 'Export Data',
             description: 'Export selected rooms data',
-            icon: <Download className="w-4 h-4" />
+            icon: <Download className="w-4 h-4" />,
+            tabId: 'export'
           },
           {
-            type: 'custom',
-            title: 'Bulk Assignment',
+            id: 'bulk-assignment',
+            label: 'Bulk Assignment',
             description: 'Assign rooms to schedules or events',
-            icon: <Calendar className="w-4 h-4" />
+            icon: <Calendar className="w-4 h-4" />,
+            tabId: 'assignment'
           },
           {
-            type: 'custom',
-            title: 'Delete/Deactivate/Reactivate',
+            id: 'bulk-delete',
+            label: 'Delete/Deactivate/Reactivate',
             description: 'Bulk deactivate, reactivate, or delete rooms',
-            icon: <Trash2 className="w-4 h-4" />
+            icon: <Trash2 className="w-4 h-4" />,
+            tabId: 'delete'
           }
         ]}
-        exportColumns={[
-          { id: 'roomNo', label: 'Room Number', default: true },
-          { id: 'roomType', label: 'Type', default: true },
-          { id: 'roomCapacity', label: 'Capacity', default: false },
-          { id: 'roomBuildingLoc', label: 'Building', default: true },
-          { id: 'roomFloorLoc', label: 'Floor', default: true },
-          { id: 'readerId', label: 'RFID Reader', default: false },
-          { id: 'status', label: 'Status', default: true },
-          { id: 'isActive', label: 'Active', default: false }
-        ]}
-        notificationTemplates={[
-          {
-            id: 'maintenance',
-            name: 'Room Under Maintenance',
-            subject: 'Room Maintenance Notice',
-            message: 'The room is scheduled for maintenance.',
-            availableFor: ['room']
-          },
-          {
-            id: 'available',
-            name: 'Room Available',
-            subject: 'Room Now Available',
-            message: 'The room is now available for use.',
-            availableFor: ['room']
-          }
-        ]}
-        stats={{
-          total: selectedRoomsForBulkAction.length,
-          active: selectedRoomsForBulkAction.filter(r => r.status === 'AVAILABLE').length,
-          inactive: selectedRoomsForBulkAction.filter(r => r.status === 'INACTIVE').length
-        }}
         onActionComplete={handleBulkActionComplete}
         onCancel={handleBulkActionCancel}
         onProcessAction={async (actionType: string, config: any) => {
-          if (actionType === 'assignment') {
+          if (actionType === 'bulk-assignment') {
             // Prompt user for schedule (stub)
             const schedule = window.prompt('Enter maintenance schedule name (stub):', 'Quarterly Maintenance');
             if (!schedule) {
@@ -1685,6 +1659,7 @@ export default function RoomsPage() {
         }}
         getItemDisplayName={(item: Room) => item.roomNo}
         getItemStatus={(item: Room) => item.status}
+        getItemId={(item: Room) => String(item.id)}
       />
 
       <ConfirmDeleteDialog

@@ -32,9 +32,9 @@ import { useDebounce } from '@/hooks/use-debounce';
 import { Card, CardHeader } from "@/components/ui/card";
 import SummaryCard from '@/components/SummaryCard';
 import { EmptyState } from '@/components/reusable';
-import { BulkActionsDialog } from '@/components/reusable/Dialogs/BulkActionsDialog';
+import BulkActionsDialog from '@/components/reusable/Dialogs/BulkActionsDialog';
 import { ViewDialog } from '@/components/reusable/Dialogs/ViewDialog';
-import { QuickActionsPanel, getDepartmentsQuickActions } from '@/components/reusable/QuickActionsPanel';
+import { QuickActionsPanel } from '@/components/reusable/QuickActionsPanel';
 import { SummaryCardSkeleton, PageSkeleton } from '@/components/reusable/Skeleton';
 import { VisibleColumnsDialog, ColumnOption } from '@/components/reusable/Dialogs/VisibleColumnsDialog';
 
@@ -87,15 +87,15 @@ const departmentSortFieldOptions: SortFieldOption<string>[] = [
 
 
 
-// Define column configuration once
+// Define column configuration once - Enhanced responsive design
 const DEPARTMENT_COLUMNS: TableListColumn<Department>[] = [
   { 
     header: "Logo", 
     accessor: "logo", 
-    className: "text-center align-middle w-12 min-w-[48px]", 
+    className: "text-center align-middle w-10 sm:w-12 min-w-[40px] sm:min-w-[48px]", 
     render: (item: Department) => (
       item.logo ? (
-        <div className="w-8 h-8 mx-auto rounded-full overflow-hidden border-2 border-blue-200">
+        <div className="w-6 h-6 sm:w-8 sm:h-8 mx-auto rounded-full overflow-hidden border-2 border-blue-200">
           <img
             src={item.logo}
             alt={`${item.name} logo`}
@@ -103,37 +103,37 @@ const DEPARTMENT_COLUMNS: TableListColumn<Department>[] = [
           />
         </div>
       ) : (
-        <div className="w-8 h-8 mx-auto rounded-full bg-gray-100 border-2 border-gray-200 flex items-center justify-center">
-          <Building2 className="w-4 h-4 text-gray-400" />
+        <div className="w-6 h-6 sm:w-8 sm:h-8 mx-auto rounded-full bg-gray-100 border-2 border-gray-200 flex items-center justify-center">
+          <Building2 className="w-3 h-3 sm:w-4 sm:h-4 text-gray-400" />
         </div>
       )
     )
   },
-    { 
-      header: "Department Name", 
-      accessor: "name", 
-      className: "text-center align-middle min-w-[120px] max-w-[200px] whitespace-normal font-medium text-blue-900", 
-      sortable: true 
-    },
-    { 
-      header: "Code", 
-      accessor: "code", 
-      className: "text-center align-middle min-w-[80px] max-w-[100px] whitespace-nowrap text-blue-900", 
-      sortable: true 
-    },
+  { 
+    header: "Department Name", 
+    accessor: "name", 
+    className: "text-center align-middle min-w-[100px] sm:min-w-[120px] max-w-[150px] sm:max-w-[200px] whitespace-normal font-medium text-blue-900 text-xs sm:text-sm", 
+    sortable: true 
+  },
+  { 
+    header: "Code", 
+    accessor: "code", 
+    className: "text-center align-middle min-w-[60px] sm:min-w-[80px] max-w-[80px] sm:max-w-[100px] whitespace-nowrap text-blue-900 text-xs sm:text-sm", 
+    sortable: true 
+  },
   { 
     header: "Head of Department", 
     accessor: "headOfDepartment", 
-    className: "text-center align-middle min-w-[120px] max-w-[180px] whitespace-normal text-blue-900", 
+    className: "text-center align-middle min-w-[100px] sm:min-w-[120px] max-w-[150px] sm:max-w-[180px] whitespace-normal text-blue-900 text-xs sm:text-sm", 
     render: (item: Department) => (
       <div className="text-center">
         <div className="font-medium text-blue-900">
           {item.headOfDepartmentDetails ? (
-            <div className="font-semibold truncate">
+            <div className="font-semibold truncate text-xs sm:text-sm">
               {item.headOfDepartmentDetails.firstName} {item.headOfDepartmentDetails.middleName ? item.headOfDepartmentDetails.middleName + ' ' : ''}{item.headOfDepartmentDetails.lastName}
             </div>
           ) : (
-            <span className={`${item.headOfDepartment === 'Not Assigned' ? 'text-gray-500 italic' : 'text-blue-900'} truncate`}>
+            <span className={`${item.headOfDepartment === 'Not Assigned' ? 'text-gray-500 italic' : 'text-blue-900'} truncate text-xs sm:text-sm`}>
               {item.headOfDepartment}
             </span>
           )}
@@ -142,27 +142,32 @@ const DEPARTMENT_COLUMNS: TableListColumn<Department>[] = [
     ),
     sortable: true 
   },
-  { header: "Description", accessor: "description", className: "text-center align-middle min-w-[100px] max-w-[150px] whitespace-normal text-blue-900", sortable: true },
+  { 
+    header: "Description", 
+    accessor: "description", 
+    className: "text-center align-middle min-w-[80px] sm:min-w-[100px] max-w-[120px] sm:max-w-[150px] whitespace-normal text-blue-900 text-xs sm:text-sm", 
+    sortable: true 
+  },
   { 
     header: "Total Courses", 
     accessor: "totalCourses", 
-    className: "text-center align-middle min-w-[80px] max-w-[100px] whitespace-normal text-blue-900", 
+    className: "text-center align-middle min-w-[60px] sm:min-w-[80px] max-w-[80px] sm:max-w-[100px] whitespace-normal text-blue-900 text-xs sm:text-sm", 
     render: (item: Department) => item.courseOfferings?.length || 0,
     sortable: true
   },
-    { 
-      header: "Total Instructors", 
-      accessor: "totalInstructors", 
-      className: "text-center align-middle min-w-[80px] max-w-[100px] whitespace-normal text-blue-900", 
-      sortable: true 
-    },
+  { 
+    header: "Total Instructors", 
+    accessor: "totalInstructors", 
+    className: "text-center align-middle min-w-[60px] sm:min-w-[80px] max-w-[80px] sm:max-w-[100px] whitespace-normal text-blue-900 text-xs sm:text-sm", 
+    sortable: true 
+  },
   { 
     header: "Status", 
     accessor: "status", 
-    className: "text-center align-middle min-w-[80px] max-w-[100px] whitespace-nowrap", 
+    className: "text-center align-middle min-w-[60px] sm:min-w-[80px] max-w-[80px] sm:max-w-[100px] whitespace-nowrap", 
     render: (item: Department) => (
-      <Badge variant={item.status === "active" ? "success" : "destructive"} className="text-xs px-2 py-1 rounded-full flex justify-center">
-        {item.status.toUpperCase()}
+      <Badge variant={item.status === "active" ? "success" : "destructive"} className="text-xs px-1 sm:px-2 py-0.5 sm:py-1 rounded-full flex justify-center">
+        <span className="text-xs">{item.status.toUpperCase()}</span>
       </Badge>
     ),
     sortable: true
@@ -471,51 +476,51 @@ export default function DepartmentListPage() {
       className: 'w-10 text-center px-1 py-1',
       expandedContent: (item: Department) => (
         <td colSpan={columns.length} className="bg-transparent px-0 py-0">
-          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-t border-blue-100 p-6">
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-t border-blue-100 p-3 sm:p-4 md:p-6">
             {/* Course Offerings Section */}
             <div className="bg-white rounded-xl shadow-sm border border-blue-100 overflow-hidden">
-              <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-4 py-3">
-                <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-                  <BookOpen className="w-5 h-5" />
+              <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-3 sm:px-4 py-2 sm:py-3">
+                <h3 className="text-base sm:text-lg font-semibold text-white flex items-center gap-2">
+                  <BookOpen className="w-4 h-4 sm:w-5 sm:h-5" />
                   Course Offerings ({item.courseOfferings?.length || 0})
                 </h3>
               </div>
-              <div className="p-4">
+              <div className="p-3 sm:p-4">
                 {item.courseOfferings && item.courseOfferings.length > 0 ? (
                   <div className="overflow-x-auto">
                     <table className="w-full">
                       <thead>
                         <tr className="border-b border-gray-200">
-                          <th className="text-left py-2 px-3 text-sm font-semibold text-gray-700">Course Name</th>
-                          <th className="text-left py-2 px-3 text-sm font-semibold text-gray-700">Code</th>
-                          <th className="text-center py-2 px-3 text-sm font-semibold text-gray-700">Status</th>
-                          <th className="text-center py-2 px-3 text-sm font-semibold text-gray-700">Students</th>
-                          <th className="text-center py-2 px-3 text-sm font-semibold text-gray-700">Sections</th>
-                          <th className="text-left py-2 px-3 text-sm font-semibold text-gray-700">Description</th>
+                          <th className="text-center py-2 px-2 sm:px-3 text-xs sm:text-sm font-semibold text-gray-700">Course Name</th>
+                          <th className="text-left py-2 px-2 sm:px-3 text-xs sm:text-sm font-semibold text-gray-700">Code</th>
+                          <th className="text-center py-2 px-2 sm:px-3 text-xs sm:text-sm font-semibold text-gray-700">Status</th>
+                          <th className="text-center py-2 px-2 sm:px-3 text-xs sm:text-sm font-semibold text-gray-700">Students</th>
+                          <th className="text-center py-2 px-2 sm:px-3 text-xs sm:text-sm font-semibold text-gray-700">Sections</th>
+                          <th className="text-center py-2 px-2 sm:px-3 text-xs sm:text-sm font-semibold text-gray-700">Description</th>
                         </tr>
                       </thead>
                       <tbody>
                         {(item.courseOfferings || []).map((course) => (
                           <tr key={course.id} className="border-b border-gray-100 hover:bg-blue-50 transition-colors duration-150">
-                            <td className="py-3 px-3">
-                              <div className="font-medium text-blue-900">{course.name}</div>
+                            <td className="py-2 sm:py-3 px-2 sm:px-3">
+                              <div className="font-medium text-blue-900 text-xs sm:text-sm">{course.name}</div>
                             </td>
-                            <td className="py-3 px-3">
-                              <code className="bg-gray-100 px-2 py-1 rounded text-sm font-mono text-gray-700">{course.code}</code>
+                            <td className="py-2 sm:py-3 px-2 sm:px-3">
+                              <code className="bg-gray-100 px-1 sm:px-2 py-0.5 sm:py-1 rounded text-xs sm:text-sm font-mono text-gray-700">{course.code}</code>
                             </td>
-                            <td className="py-3 px-3 text-center">
+                            <td className="py-2 sm:py-3 px-2 sm:px-3 text-center">
                               <Badge variant={course.status === 'active' ? 'success' : 'destructive'} className="text-xs">
                                 {course.status}
                               </Badge>
                             </td>
-                            <td className="py-3 px-3 text-center">
-                              <span className="font-semibold text-blue-900">{course.totalStudents || 0}</span>
+                            <td className="py-2 sm:py-3 px-2 sm:px-3 text-center">
+                              <span className="font-semibold text-blue-900 text-xs sm:text-sm">{course.totalStudents || 0}</span>
                             </td>
-                            <td className="py-3 px-3 text-center">
-                              <span className="font-semibold text-blue-900">{course.totalSections || 0}</span>
+                            <td className="py-2 sm:py-3 px-2 sm:px-3 text-center">
+                              <span className="font-semibold text-blue-900 text-xs sm:text-sm">{course.totalSections || 0}</span>
                             </td>
-                            <td className="py-3 px-3">
-                              <span className="text-sm text-gray-600">
+                            <td className="py-2 sm:py-3 px-2 sm:px-3">
+                              <span className="text-xs sm:text-sm text-gray-600">
                                 {course.description || 'No description available'}
                               </span>
                             </td>
@@ -525,9 +530,9 @@ export default function DepartmentListPage() {
                     </table>
                   </div>
                 ) : (
-                  <div className="text-center py-8">
-                    <BookOpen className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-                    <p className="text-gray-500 text-sm">No courses offered by this department</p>
+                  <div className="text-center py-6 sm:py-8">
+                    <BookOpen className="w-8 h-8 sm:w-12 sm:h-12 text-gray-400 mx-auto mb-2 sm:mb-3" />
+                    <p className="text-gray-500 text-xs sm:text-sm">No courses offered by this department</p>
                     <p className="text-gray-400 text-xs mt-1">Courses can be added through the course management system</p>
                   </div>
                 )}
@@ -544,15 +549,15 @@ export default function DepartmentListPage() {
         </div>
       ),
       accessor: 'select',
-      className: 'w-10 text-center px-1 py-1', // reduced padding
+      className: 'w-8 sm:w-10 text-center px-0.5 sm:px-1 py-1', // responsive padding
     },
     ...DEPARTMENT_COLUMNS.filter(col => visibleColumns.includes(col.accessor)),
     { 
       header: "Actions", 
       accessor: "actions", 
-      className: "text-center align-middle px-1 py-1", // reduced padding
+      className: "text-center align-middle px-0.5 sm:px-1 py-1 min-w-[80px] sm:min-w-[100px]", // responsive padding and width
       render: (item: Department) => (
-        <div className="flex gap-1 justify-center">
+        <div className="flex gap-0.5 sm:gap-1 justify-center">
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -560,13 +565,13 @@ export default function DepartmentListPage() {
                   variant="ghost"
                   size="icon"
                   aria-label="View Department"
-                  className="hover:bg-blue-50"
+                  className="hover:bg-blue-50 h-7 w-7 sm:h-8 sm:w-8"
                   onClick={() => handleView(item)}
                 >
-                  <Eye className="h-4 w-4 text-blue-600" />
+                  <Eye className="h-3 w-3 sm:h-4 sm:w-4 text-blue-600" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side="top" align="center" className="bg-blue-900 text-white">
+              <TooltipContent side="top" align="center" className="bg-blue-900 text-white text-xs">
                 View details
               </TooltipContent>
             </Tooltip>
@@ -576,13 +581,13 @@ export default function DepartmentListPage() {
                   variant="ghost"
                   size="icon"
                   aria-label="Edit Department"
-                  className="hover:bg-green-50"
+                  className="hover:bg-green-50 h-7 w-7 sm:h-8 sm:w-8"
                   onClick={() => handleEdit(item)}
                 >
-                  <Pencil className="h-4 w-4 text-green-600" />
+                  <Pencil className="h-3 w-3 sm:h-4 sm:w-4 text-green-600" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side="top" align="center" className="bg-blue-900 text-white">
+              <TooltipContent side="top" align="center" className="bg-blue-900 text-white text-xs">
                 {getEditTooltip(item) || "Edit"}
               </TooltipContent>
             </Tooltip>
@@ -593,14 +598,14 @@ export default function DepartmentListPage() {
                     variant="ghost"
                     size="icon"
                     aria-label="Reactivate Department"
-                    className="hover:bg-green-50"
+                    className="hover:bg-green-50 h-7 w-7 sm:h-8 sm:w-8"
                     onClick={() => handleReactivate(item)}
                     disabled={pageState.isDeleting}
                   >
-                    <RotateCcw className="h-4 w-4 text-green-600" />
+                    <RotateCcw className="h-3 w-3 sm:h-4 sm:w-4 text-green-600" />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent side="top" align="center" className="bg-blue-900 text-white">
+                <TooltipContent side="top" align="center" className="bg-blue-900 text-white text-xs">
                   Reactivate department
                 </TooltipContent>
               </Tooltip>
@@ -612,15 +617,15 @@ export default function DepartmentListPage() {
                       variant="ghost"
                       size="icon"
                       aria-label="Deactivate Department"
-                      className="hover:bg-red-50"
+                      className="hover:bg-red-50 h-7 w-7 sm:h-8 sm:w-8"
                       onClick={() => handleDelete(item)}
                       disabled={pageState.isDeleting}
                     >
-                      <Trash2 className="h-4 w-4 text-red-600" />
+                      <Trash2 className="h-3 w-3 sm:h-4 sm:w-4 text-red-600" />
                     </Button>
                   </span>
                 </TooltipTrigger>
-                <TooltipContent side="top" align="center" className="bg-blue-900 text-white">
+                <TooltipContent side="top" align="center" className="bg-blue-900 text-white text-xs">
                   {getDeleteTooltip(item) || "Deactivate"}
                 </TooltipContent>
               </Tooltip>
@@ -676,17 +681,110 @@ export default function DepartmentListPage() {
   };
 
   const handleBulkActionExecute = async () => {
-    if (bulkActions.assignInstructors) {
-      toast.info('Assign Instructors (stub)');
-      // Implement actual logic here
-    }
-    if (bulkActions.archiveRestore) {
-      toast.info('Archive/Restore Departments (stub)');
-      // Implement actual logic here
-    }
-    if (bulkActions.assignCourses) {
-      toast.info('Assign Courses (stub)');
-      // Implement actual logic here
+    setPageState(prev => ({ ...prev, loading: true }));
+    try {
+      let successCount = 0;
+      const selectedDepartments = departments.filter(d => selectedIds.includes(d.id));
+      
+      if (bulkActions.assignInstructors) {
+        // Implement assign instructors logic
+        const response = await fetch('/api/departments/bulk/assign-instructors', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            departmentIds: selectedIds,
+            instructorIds: [] // This could be enhanced to allow instructor selection
+          }),
+        });
+        
+        if (response.ok) {
+          successCount++;
+          toast.success(`Instructors assigned to ${selectedDepartments.length} departments`);
+        } else {
+          throw new Error('Failed to assign instructors');
+        }
+      }
+      
+      if (bulkActions.archiveRestore) {
+        // Implement archive/restore logic based on current status
+        const activeDepartments = selectedDepartments.filter(d => d.status === 'active');
+        const inactiveDepartments = selectedDepartments.filter(d => d.status === 'inactive');
+        
+        if (activeDepartments.length > 0) {
+          // Archive active departments
+          const updatePromises = activeDepartments.map(async (dept) => {
+            const response = await fetch(`/api/departments/${dept.id}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ status: 'inactive' }),
+            });
+            if (!response.ok) throw new Error(`Failed to archive department ${dept.id}`);
+            return response.json();
+          });
+          
+          await Promise.all(updatePromises);
+          toast.success(`${activeDepartments.length} departments archived`);
+        }
+        
+        if (inactiveDepartments.length > 0) {
+          // Restore inactive departments
+          const updatePromises = inactiveDepartments.map(async (dept) => {
+            const response = await fetch(`/api/departments/${dept.id}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ status: 'active' }),
+            });
+            if (!response.ok) throw new Error(`Failed to restore department ${dept.id}`);
+            return response.json();
+          });
+          
+          await Promise.all(updatePromises);
+          toast.success(`${inactiveDepartments.length} departments restored`);
+        }
+        
+        // Update local state
+        setDepartments(prev => prev.map(d => {
+          if (selectedIds.includes(d.id)) {
+            return { ...d, status: d.status === 'active' ? 'inactive' as const : 'active' as const };
+          }
+          return d;
+        }));
+        
+        successCount++;
+      }
+      
+      if (bulkActions.assignCourses) {
+        // Implement assign courses logic
+        const response = await fetch('/api/departments/bulk/assign-courses', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            departmentIds: selectedIds,
+            courseIds: [] // This could be enhanced to allow course selection
+          }),
+        });
+        
+        if (response.ok) {
+          successCount++;
+          toast.success(`Courses assigned to ${selectedDepartments.length} departments`);
+        } else {
+          throw new Error('Failed to assign courses');
+        }
+      }
+      
+      // Clear selections and reset actions
+      setSelectedIds([]);
+      setBulkActions({ assignInstructors: false, archiveRestore: false, assignCourses: false });
+      
+      if (successCount > 0) {
+        await refreshDepartments(); // Refresh data to reflect changes
+      }
+      
+    } catch (error) {
+      console.error('Bulk action failed:', error);
+      toast.error(`Bulk action failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setPageState(prev => ({ ...prev, loading: false }));
     }
   };
 
@@ -1784,8 +1882,58 @@ export default function DepartmentListPage() {
   const selectedDepartments = departments.filter(d => selectedIds.includes(d.id));
 
   // Handler for quick export
-  const handleExportSelectedDepartments = (selected: Department[]) => {
-    toast.success(`${selected.length} departments exported (stub)`);
+  const handleExportSelectedDepartments = async (selected: Department[]) => {
+    if (selected.length === 0) {
+      toast.error("No departments selected for export");
+      return;
+    }
+
+    try {
+      setPageState(prev => ({ ...prev, isExporting: true }));
+      
+      // Prepare data for export
+      const exportData = selected.map(dept => ({
+        'Department Name': dept.name,
+        'Code': dept.code,
+        'Head of Department': dept.headOfDepartment || 'Not Assigned',
+        'Status': dept.status,
+        'Total Instructors': dept.totalInstructors || 0,
+        'Total Courses': dept.courseOfferings?.length || 0,
+        'Description': dept.description || ''
+      }));
+
+      // Create workbook and worksheet
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(exportData);
+
+      // Auto-size columns
+      const colWidths = Object.keys(exportData[0] || {}).map(key => {
+        const maxLength = Math.max(
+          key.length,
+          ...exportData.map(row => String(row[key as keyof typeof row] || '').length)
+        );
+        return { wch: Math.min(Math.max(maxLength + 2, 10), 50) };
+      });
+      ws['!cols'] = colWidths;
+
+      // Add worksheet to workbook
+      XLSX.utils.book_append_sheet(wb, ws, "Selected Departments");
+
+      // Generate filename with timestamp
+      const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+      const filename = `selected-departments-${timestamp}.xlsx`;
+
+      // Write and download file
+      XLSX.writeFile(wb, filename);
+      
+      toast.success(`${selected.length} departments exported successfully to ${filename}`);
+      
+    } catch (error) {
+      console.error('Export failed:', error);
+      toast.error(`Export failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setPageState(prev => ({ ...prev, isExporting: false }));
+    }
   };
 
   // Handler for enhanced bulk actions
@@ -1884,7 +2032,7 @@ export default function DepartmentListPage() {
             <p className="text-red-600">{pageState.error}</p>
             <button 
               onClick={() => window.location.reload()} 
-              className="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+              className="mt-4 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
             >
               Retry
             </button>
@@ -1921,22 +2069,27 @@ export default function DepartmentListPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#f8fafc] via-[#ffffff] to-[#f8fafc] p-0 overflow-x-hidden">
-        <div className="w-full max-w-full px-4 sm:px-6 lg:px-8 space-y-8 sm:space-y-10">
-        <PageHeader
-          title="Departments"
-          subtitle="Manage academic departments and their details"
-          breadcrumbs={[
-            { label: "Home", href: "/" },
-            { label: "Academic Management", href: "/academic-management" },
-            { label: "Departments" }
-          ]}
-        />
+    <div className="min-h-screen bg-gradient-to-br from-[#f8fafc] via-[#ffffff] to-[#f8fafc] overflow-x-hidden">
+      {/* Main container with responsive padding and spacing */}
+      <div className="w-full max-w-none px-2 sm:px-3 md:px-4 lg:px-6 xl:px-8 py-2 sm:py-3 md:py-4 lg:py-6 space-y-3 sm:space-y-4 md:space-y-5 lg:space-y-6">
+        
+        {/* Page Header - Responsive */}
+        <div className="w-full">
+          <PageHeader
+            title="Departments"
+            subtitle="Manage academic departments and their details"
+            breadcrumbs={[
+              { label: "Home", href: "/" },
+              { label: "Academic Management", href: "/academic-management" },
+              { label: "Departments" }
+            ]}
+          />
+        </div>
 
-        {/* Summary Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+        {/* Summary Cards - Enhanced responsive grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-5 lg:gap-6">
           <SummaryCard
-            icon={<Users className="text-blue-700 w-5 h-5" />}
+            icon={<Users className="text-blue-700 w-4 h-4 sm:w-5 sm:h-5" />}
             label="Total Departments"
             value={departments.length}
             valueClassName="text-blue-900"
@@ -1944,7 +2097,7 @@ export default function DepartmentListPage() {
             loading={pageState.loading}
           />
           <SummaryCard
-            icon={<UserCheck className="text-blue-700 w-5 h-5" />}
+            icon={<UserCheck className="text-blue-700 w-4 h-4 sm:w-5 sm:h-5" />}
             label="Active Departments"
             value={departments.filter(d => d.status === 'active').length}
             valueClassName="text-blue-900"
@@ -1952,7 +2105,7 @@ export default function DepartmentListPage() {
             loading={pageState.loading}
           />
           <SummaryCard
-            icon={<UserX className="text-blue-700 w-5 h-5" />}
+            icon={<UserX className="text-blue-700 w-4 h-4 sm:w-5 sm:h-5" />}
             label="Inactive Departments"
             value={departments.filter(d => d.status === 'inactive').length}
             valueClassName="text-blue-900"
@@ -1960,7 +2113,7 @@ export default function DepartmentListPage() {
             loading={pageState.loading}
           />
           <SummaryCard
-            icon={<UserPlus className="text-blue-700 w-5 h-5" />}
+            icon={<UserPlus className="text-blue-700 w-4 h-4 sm:w-5 sm:h-5" />}
             label="Total Instructors"
             value={departments.reduce((sum, d) => sum + (d.totalInstructors || 0), 0)}
             valueClassName="text-blue-900"
@@ -1969,296 +2122,341 @@ export default function DepartmentListPage() {
           />
         </div>
 
-        {/* Quick Actions Panel */}
-        <div className="w-full max-w-full pt-4">
+        {/* Quick Actions Panel - Responsive */}
+        <div className="w-full max-w-full pt-2 sm:pt-3 md:pt-4">
           <QuickActionsPanel
             variant="premium"
             title="Quick Actions"
             subtitle="Essential tools and shortcuts"
-          icon={
-            <div className="w-6 h-6 text-white">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
-              </svg>
-            </div>
-          }
-          actionCards={[
-            {
-              id: 'add-department',
-              label: 'Add Department',
-              description: 'Create new department',
-              icon: <Plus className="w-5 h-5 text-white" />,
-              onClick: () => { 
-                setModalDepartment(undefined); 
-                setModalOpen(true); 
-              }
-            },
-            {
-              id: 'import-data',
-              label: 'Import Data',
-              description: 'Import departments from file',
-              icon: <Upload className="w-5 h-5 text-white" />,
-              onClick: () => setImportDialogOpen(true)
-            },
-            {
-              id: 'print-page',
-              label: 'Print Page',
-              description: 'Print department list',
-              icon: <Printer className="w-5 h-5 text-white" />,
-              onClick: handlePrint
-            },
-            {
-              id: 'visible-columns',
-              label: 'Visible Columns',
-              description: 'Manage table columns',
-              icon: <Columns3 className="w-5 h-5 text-white" />,
-              onClick: () => setVisibleColumnsDialogOpen(true)
-            },
-            {
-              id: 'refresh-data',
-              label: 'Refresh Data',
-              description: 'Reload department data',
-              icon: pageState.isRefreshing ? (
-                <RefreshCw className="w-5 h-5 text-white animate-spin" />
-              ) : (
-                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            icon={
+              <div className="w-5 h-5 sm:w-6 sm:h-6 text-white">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
                 </svg>
-              ),
-              onClick: refreshDepartments,
-              disabled: pageState.isRefreshing,
-              loading: pageState.isRefreshing
-            },
-            {
-              id: 'sort-options',
-              label: 'Sort Options',
-              description: 'Configure sorting',
-              icon: <List className="w-5 h-5 text-white" />,
-              onClick: () => setSortDialogOpen(true)
+              </div>
             }
-          ]}
-          lastActionTime={lastActionTime}
-          onLastActionTimeChange={setLastActionTime}
-          collapsible={true}
-          defaultCollapsed={true}
-                      onCollapseChange={(collapsed) => {
+            actionCards={[
+              {
+                id: 'add-department',
+                label: 'Add Department',
+                description: 'Create new department',
+                icon: <Plus className="w-4 h-4 sm:w-5 sm:h-5 text-white" />,
+                onClick: () => { 
+                  setModalDepartment(undefined); 
+                  setModalOpen(true); 
+                }
+              },
+              {
+                id: 'import-data',
+                label: 'Import Data',
+                description: 'Import departments from file',
+                icon: <Upload className="w-4 h-4 sm:w-5 sm:h-5 text-white" />,
+                onClick: () => setImportDialogOpen(true)
+              },
+              {
+                id: 'print-page',
+                label: 'Print Page',
+                description: 'Print department list',
+                icon: <Printer className="w-4 h-4 sm:w-5 sm:h-5 text-white" />,
+                onClick: handlePrint
+              },
+              {
+                id: 'visible-columns',
+                label: 'Visible Columns',
+                description: 'Manage table columns',
+                icon: <Columns3 className="w-4 h-4 sm:w-5 sm:h-5 text-white" />,
+                onClick: () => setVisibleColumnsDialogOpen(true)
+              },
+              {
+                id: 'refresh-data',
+                label: 'Refresh Data',
+                description: 'Reload department data',
+                icon: pageState.isRefreshing ? (
+                  <RefreshCw className="w-4 h-4 sm:w-5 sm:h-5 text-white animate-spin" />
+                ) : (
+                  <svg className="w-4 h-4 sm:w-5 sm:h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                ),
+                onClick: refreshDepartments,
+                disabled: pageState.isRefreshing,
+                loading: pageState.isRefreshing
+              },
+              {
+                id: 'sort-options',
+                label: 'Sort Options',
+                description: 'Configure sorting',
+                icon: <List className="w-4 h-4 sm:w-5 sm:h-5 text-white" />,
+                onClick: () => setSortDialogOpen(true)
+              }
+            ]}
+            lastActionTime={lastActionTime}
+            onLastActionTimeChange={setLastActionTime}
+            collapsible={true}
+            defaultCollapsed={true}
+            onCollapseChange={(collapsed) => {
               console.log('Quick Actions Panel collapsed:', collapsed);
-              // You can add additional logic here, like saving to localStorage
             }}
           />
         </div>
 
-        {/* Main Content Area */}
-        <div className="w-full max-w-full pt-4">
+        {/* Main Content Area - Enhanced responsive layout */}
+        <div className="w-full max-w-full pt-2 sm:pt-3 md:pt-4">
           <Card className="shadow-lg rounded-xl overflow-hidden p-0 w-full max-w-full">
-          <CardHeader className="p-0">
-            {/* Blue Gradient Header - flush to card edge, no rounded corners */}
-            <div className="bg-gradient-to-r from-[#1e40af] to-[#3b82f6] p-0">
-              <div className="py-4 sm:py-6">
-                <div className="flex items-center gap-3 px-4 sm:px-6">
-                  <div className="w-8 h-8 flex items-center justify-center">
-                    <Search className="w-5 h-5 text-white" />
+            <CardHeader className="p-0">
+              {/* Blue Gradient Header - Responsive padding */}
+              <div className="bg-gradient-to-r from-[#1e40af] to-[#3b82f6] p-4 sm:p-5 md:p-6">
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center">
+                    <Search className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-bold text-white">Department List</h3>
-                    <p className="text-blue-100 text-sm">Search and filter department information</p>
+                    <h3 className="text-lg sm:text-xl font-bold text-white">Department List</h3>
+                    <p className="text-blue-100 text-xs sm:text-sm">Search and filter department information</p>
                   </div>
                 </div>
               </div>
-            </div>
-          </CardHeader>
-          {/* Search and Filter Section */}
-          <div className="border-b border-gray-200 shadow-sm p-3 sm:p-4 lg:p-6">
-            <div className="flex flex-col xl:flex-row gap-2 sm:gap-3 items-start xl:items-center justify-end">
-              {/* Search Bar */}
-              <div className="relative w-full xl:w-auto xl:min-w-[200px] xl:max-w-sm">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Search departments..."
-                  value={search}
-                  onChange={e => setSearch(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:outline-none"
-                />
-              </div>
-              {/* Quick Filter Dropdowns */}
-              <div className="flex flex-wrap gap-2 sm:gap-3 w-full xl:w-auto">
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="w-full sm:w-28 lg:w-32 xl:w-28 text-gray-400 rounded border-gray-300 hover:border-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                    <SelectValue placeholder="Status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Status</SelectItem> 
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="inactive">Inactive</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Select value={headFilter} onValueChange={setHeadFilter}>
-                  <SelectTrigger className="w-full sm:w-28 lg:w-32 xl:w-28 text-gray-400 rounded border-gray-300 hover:border-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                    <SelectValue placeholder="Head" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Heads</SelectItem>
-                    <SelectItem value="assigned">Assigned</SelectItem>
-                    <SelectItem value="unassigned">Not Assigned</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </div>
-          {/* Bulk Actions Bar */}
-          {selectedIds.length > 0 && (
-            <div className="mt-2 sm:mt-3 px-2 sm:px-3 lg:px-6 max-w-full">
-              <BulkActionsBar
-                selectedCount={selectedIds.length}
-                entityLabel="department"
-                actions={[
-                  {
-                    key: "bulk-actions",
-                    label: "Bulk Actions",
-                    icon: <Settings className="w-4 h-4 mr-2" />,
-                    onClick: handleOpenBulkActionsDialog,
-                    tooltip: "Open enhanced bulk actions dialog for selected departments",
-                    variant: "default"
-                  },
-                  {
-                    key: "export",
-                    label: "Quick Export",
-                    icon: <Download className="w-4 h-4 mr-2" />,
-                    onClick: () => handleExportSelectedDepartments(selectedDepartments),
-                    tooltip: "Quick export selected departments to CSV"
-                  },
-                  {
-                    key: "delete",
-                    label: "Deactivate Selected",
-                    icon: pageState.loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Trash2 className="w-4 h-4 mr-2" />,
-                    onClick: handleBulkDelete,
-                    loading: pageState.loading,
-                    disabled: pageState.loading,
-                    tooltip: "Deactivate selected departments (can be reactivated later)",
-                    variant: "destructive",
-                    hidden: selectedDepartments.length === 0 || selectedDepartments.every(d => d.status === "inactive")
-                  },
-                  {
-                    key: "reactivate",
-                    label: "Reactivate Selected",
-                    icon: pageState.loading ? <Loader2 className="h-4 h-4 mr-2 animate-spin" /> : <RotateCcw className="w-4 h-4 mr-2" />,
-                    onClick: () => setBulkReactivateDialogOpen(true),
-                    loading: pageState.loading,
-                    disabled: pageState.loading,
-                    tooltip: "Reactivate selected inactive departments",
-                    variant: "default",
-                    hidden: selectedDepartments.length === 0 || selectedDepartments.every(d => d.status === "active")
-                  }
-                ]}
-                onClear={() => setSelectedIds([])}
-              />
-            </div>
-          )}
-          {/* Table layout for xl+ only */}
-          <div className="hidden xl:block">
-            <div className="px-4 sm:px-6 pt-6 pb-6"> {/* Add top and bottom padding around the table */}
-              <div className="overflow-x-auto bg-white/70 shadow-none relative"> {/* border and border-blue-100 removed */}
-                <TableList
-                  columns={columns}
-                  data={paginatedDepartments}
-                  loading={pageState.loading}
-                  selectedIds={selectedIds}
-                  emptyMessage={null}
-                  onSelectRow={handleSelectRow}
-                  onSelectAll={handleSelectAll}
-                  isAllSelected={isAllSelected}
-                  isIndeterminate={isIndeterminate}
-                  getItemId={(item) => item.id}
-                  expandedRowIds={expandedRowIds}
-                  onToggleExpand={(itemId) => {
-                    setExpandedRowIds(current =>
-                      current.includes(itemId)
-                        ? current.filter(id => id !== itemId)
-                        : [...current, itemId]
-                    );
-                  }}
-                  editingCell={editingCell}
-                  onCellClick={(item, columnAccessor) => {
-                    if (["name", "code", "headOfDepartment"].includes(columnAccessor)) {
-                      setEditingCell({ rowId: item.id, columnAccessor });
-                    }
-                  }}
-                  onCellChange={async (rowId, columnAccessor, value) => {
-                    setEditingCell(null);
-                    // Handle cell change logic here
-                  }}
-                  sortState={{ field: sortState.field, order: sortState.order }}
-                  onSort={handleSort}
-                  className="border-0 shadow-none max-w-full"
-                />
-              </div>
-            </div>
-          </div>
-          {/* Card layout for small screens */}
-          <div className="block xl:hidden p-2 sm:p-3 lg:p-4 max-w-full">
-            <div className="px-2 sm:px-4 pt-6 pb-6"> {/* Add top and bottom padding for mobile card view */}
-              {!pageState.loading && filteredDepartments.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-8 px-4">
-                  <EmptyState
-                    icon={<Users className="w-6 h-6 text-blue-400" />}
-                    title="No departments found"
-                    description="Try adjusting your search criteria or filters to find the departments you're looking for."
-                    action={
-                      <div className="flex flex-col gap-2 w-full">
-                        <Button
-                          variant="outline"
-                          className="border-blue-300 text-blue-700 hover:bg-blue-50 rounded-xl"
-                          onClick={refreshDepartments}
-                        >
-                          <RefreshCw className="w-4 h-4 mr-2" />
-                          Refresh Data
-                        </Button>
-                      </div>
-                    }
+            </CardHeader>
+            
+            {/* Search and Filter Section - Enhanced responsive layout */}
+            <div className="border-b border-gray-200 shadow-sm p-3 sm:p-4 md:p-5 lg:p-6">
+              <div className="flex flex-col lg:flex-row gap-3 sm:gap-4 items-stretch lg:items-center justify-end">
+                {/* Search Bar - Responsive width */}
+                <div className="relative w-full lg:w-auto lg:min-w-[250px] lg:max-w-sm">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Search departments..."
+                    value={search}
+                    onChange={e => setSearch(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2.5 sm:py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:outline-none text-sm"
                   />
                 </div>
-              ) : (
-                <TableCardView
-                  items={paginatedDepartments}
-                  selectedIds={selectedIds}
-                  onSelect={handleSelectRow}
-                  onView={(item) => {
-                    setViewDepartment(item);
-                    setDialogState(prev => ({ ...prev, viewDialogOpen: true }));
-                  }}
-                  onEdit={(item) => handleEdit(item)}
-                  onDelete={(item) => {
-                    handleDelete(item);
-                  }}
-                  getItemId={(item) => item.id}
-                  getItemName={(item) => item.name}
-                  getItemCode={(item) => item.code}
-                  getItemStatus={(item) => item.status}
-                  getItemDescription={(item) => item.description}
-                  getItemDetails={(item) => [
-                    { label: 'Head', value: item.headOfDepartment || 'Not Assigned' },
-                    { label: 'Courses', value: item.courseOfferings?.length || 0 },
-                    { label: 'Instructors', value: item.totalInstructors || 0 },
-                  ]}
-                  disabled={(item) => false} // Admin can edit all departments
-                  deleteTooltip={(item) => item.status === "inactive" ? "Department is already inactive" : undefined}
-                  isLoading={pageState.loading}
-                />
-              )}
+                
+                {/* Quick Filter Dropdowns - Responsive layout */}
+                <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full lg:w-auto lg:flex-shrink-0">
+                  <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <SelectTrigger className="w-full sm:w-auto sm:min-w-[120px] text-gray-500 rounded border-gray-300 hover:border-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm">
+                      <SelectValue placeholder="Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Status</SelectItem> 
+                      <SelectItem value="active">Active</SelectItem>
+                      <SelectItem value="inactive">Inactive</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select value={headFilter} onValueChange={setHeadFilter}>
+                    <SelectTrigger className="w-full sm:w-auto sm:min-w-[140px] text-gray-500 rounded border-gray-300 hover:border-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm">
+                      <SelectValue placeholder="Head" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Heads</SelectItem>
+                      <SelectItem value="assigned">Assigned</SelectItem>
+                      <SelectItem value="unassigned">Not Assigned</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
             </div>
-          </div>
-          {/* Pagination */}
-          <TablePagination
-            page={currentPage}
-            pageSize={itemsPerPage}
-            totalItems={filteredDepartments.length}
-            onPageChange={setCurrentPage}
-            onPageSizeChange={setItemsPerPage}
-            pageSizeOptions={[10, 25, 50, 100]}
-            loading={pageState.loading}
-          />
-        </Card>
+            
+            {/* Bulk Actions Bar - Responsive */}
+            {selectedIds.length > 0 && (
+              <div className="mt-2 sm:mt-3 px-3 sm:px-4 md:px-5 lg:px-6 max-w-full">
+                <BulkActionsBar
+                  selectedCount={selectedIds.length}
+                  entityLabel="department"
+                  actions={[
+                    {
+                      key: "bulk-actions",
+                      label: "Bulk Actions",
+                      icon: <Settings className="w-4 h-4 mr-2" />,
+                      onClick: handleOpenBulkActionsDialog,
+                      tooltip: "Open enhanced bulk actions dialog for selected departments",
+                      variant: "default"
+                    },
+                    {
+                      key: "export",
+                      label: "Quick Export",
+                      icon: <Download className="w-4 h-4 mr-2" />,
+                      onClick: () => handleExportSelectedDepartments(selectedDepartments),
+                      tooltip: "Quick export selected departments to CSV"
+                    },
+                    {
+                      key: "delete",
+                      label: "Deactivate Selected",
+                      icon: pageState.loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Trash2 className="w-4 h-4 mr-2" />,
+                      onClick: handleBulkDelete,
+                      loading: pageState.loading,
+                      disabled: pageState.loading,
+                      tooltip: "Deactivate selected departments (can be reactivated later)",
+                      variant: "destructive",
+                      hidden: selectedDepartments.length === 0 || selectedDepartments.every(d => d.status === "inactive")
+                    },
+                    {
+                      key: "reactivate",
+                      label: "Reactivate Selected",
+                      icon: pageState.loading ? <Loader2 className="h-4 h-4 mr-2 animate-spin" /> : <RotateCcw className="w-4 h-4 mr-2" />,
+                      onClick: () => setBulkReactivateDialogOpen(true),
+                      loading: pageState.loading,
+                      disabled: pageState.loading,
+                      tooltip: "Reactivate selected inactive departments",
+                      variant: "default",
+                      hidden: selectedDepartments.length === 0 || selectedDepartments.every(d => d.status === "active")
+                    }
+                  ]}
+                  onClear={() => setSelectedIds([])}
+                />
+              </div>
+            )}
+            
+            {/* Table layout for large screens - Enhanced responsive */}
+            <div className="hidden xl:block">
+              <div className="px-3 sm:px-4 md:px-5 lg:px-6 pt-4 sm:pt-5 md:pt-6 pb-4 sm:pb-5 md:pb-6">
+                <div className="overflow-x-auto bg-white/70 shadow-none relative">
+                  <TableList
+                    columns={columns}
+                    data={paginatedDepartments}
+                    loading={pageState.loading}
+                    selectedIds={selectedIds}
+                    emptyMessage={null}
+                    onSelectRow={handleSelectRow}
+                    onSelectAll={handleSelectAll}
+                    isAllSelected={isAllSelected}
+                    isIndeterminate={isIndeterminate}
+                    getItemId={(item) => item.id}
+                    expandedRowIds={expandedRowIds}
+                    onToggleExpand={(itemId) => {
+                      setExpandedRowIds(current =>
+                        current.includes(itemId)
+                          ? current.filter(id => id !== itemId)
+                          : [...current, itemId]
+                      );
+                    }}
+                    editingCell={editingCell}
+                    onCellClick={(item, columnAccessor) => {
+                      if (["name", "code", "headOfDepartment"].includes(columnAccessor)) {
+                        setEditingCell({ rowId: item.id, columnAccessor });
+                      }
+                    }}
+                    onCellChange={async (rowId, columnAccessor, value) => {
+                      setEditingCell(null);
+                      // Handle cell change logic here
+                    }}
+                    sortState={{ field: sortState.field, order: sortState.order }}
+                    onSort={handleSort}
+                    className="border-0 shadow-none max-w-full"
+                  />
+                </div>
+              </div>
+            </div>
+            
+            {/* Medium screen table layout */}
+            <div className="hidden lg:block xl:hidden">
+              <div className="px-3 sm:px-4 md:px-5 lg:px-6 pt-4 sm:pt-5 md:pt-6 pb-4 sm:pb-5 md:pb-6">
+                <div className="overflow-x-auto bg-white/70 shadow-none relative">
+                  <TableList
+                    columns={columns.filter(col => !['description', 'logo'].includes(col.accessor))}
+                    data={paginatedDepartments}
+                    loading={pageState.loading}
+                    selectedIds={selectedIds}
+                    emptyMessage={null}
+                    onSelectRow={handleSelectRow}
+                    onSelectAll={handleSelectAll}
+                    isAllSelected={isAllSelected}
+                    isIndeterminate={isIndeterminate}
+                    getItemId={(item) => item.id}
+                    expandedRowIds={expandedRowIds}
+                    onToggleExpand={(itemId) => {
+                      setExpandedRowIds(current =>
+                        current.includes(itemId)
+                          ? current.filter(id => id !== itemId)
+                          : [...current, itemId]
+                      );
+                    }}
+                    editingCell={editingCell}
+                    onCellClick={(item, columnAccessor) => {
+                      if (["name", "code", "headOfDepartment"].includes(columnAccessor)) {
+                        setEditingCell({ rowId: item.id, columnAccessor });
+                      }
+                    }}
+                    onCellChange={async (rowId, columnAccessor, value) => {
+                      setEditingCell(null);
+                    }}
+                    sortState={{ field: sortState.field, order: sortState.order }}
+                    onSort={handleSort}
+                    className="border-0 shadow-none max-w-full"
+                  />
+                </div>
+              </div>
+            </div>
+            
+            {/* Card layout for small to medium screens - Enhanced responsive */}
+            <div className="block lg:hidden p-2 sm:p-3 max-w-full">
+              <div className="px-2 sm:px-3 md:px-4 pt-4 sm:pt-5 md:pt-6 pb-4 sm:pb-5 md:pb-6">
+                {!pageState.loading && filteredDepartments.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-8 sm:py-12 px-3 sm:px-4">
+                    <EmptyState
+                      icon={<Users className="w-6 h-6 sm:w-8 sm:h-8 text-blue-400" />}
+                      title="No departments found"
+                      description="Try adjusting your search criteria or filters to find the departments you're looking for."
+                      action={
+                        <div className="flex flex-col gap-2 w-full max-w-sm">
+                          <Button
+                            variant="outline"
+                            className="border-blue-300 text-blue-700 hover:bg-blue-50 rounded-xl text-sm"
+                            onClick={refreshDepartments}
+                          >
+                            <RefreshCw className="w-4 h-4 mr-2" />
+                            Refresh Data
+                          </Button>
+                        </div>
+                      }
+                    />
+                  </div>
+                ) : (
+                  <TableCardView
+                    items={paginatedDepartments}
+                    selectedIds={selectedIds}
+                    onSelect={handleSelectRow}
+                    onView={(item) => {
+                      setViewDepartment(item);
+                      setDialogState(prev => ({ ...prev, viewDialogOpen: true }));
+                    }}
+                    onEdit={(item) => handleEdit(item)}
+                    onDelete={(item) => {
+                      handleDelete(item);
+                    }}
+                    getItemId={(item) => item.id}
+                    getItemName={(item) => item.name}
+                    getItemCode={(item) => item.code}
+                    getItemStatus={(item) => item.status}
+                    getItemDescription={(item) => item.description}
+                    getItemDetails={(item) => [
+                      { label: 'Head', value: item.headOfDepartment || 'Not Assigned' },
+                      { label: 'Courses', value: item.courseOfferings?.length || 0 },
+                      { label: 'Instructors', value: item.totalInstructors || 0 },
+                    ]}
+                    disabled={(item) => false} // Admin can edit all departments
+                    deleteTooltip={(item) => item.status === "inactive" ? "Department is already inactive" : undefined}
+                    isLoading={pageState.loading}
+                  />
+                )}
+              </div>
+            </div>
+            
+            {/* Pagination - Responsive */}
+            <div className="px-3 sm:px-4 md:px-5 lg:px-6 pb-4 sm:pb-5 md:pb-6">
+              <TablePagination
+                page={currentPage}
+                pageSize={itemsPerPage}
+                totalItems={filteredDepartments.length}
+                onPageChange={setCurrentPage}
+                onPageSizeChange={setItemsPerPage}
+                pageSizeOptions={[10, 25, 50, 100]}
+                loading={pageState.loading}
+              />
+            </div>
+          </Card>
         </div>
       </div>
 
@@ -2408,56 +2606,144 @@ export default function DepartmentListPage() {
         entityLabel="department"
         availableActions={[
           {
-            type: 'status-update',
-            title: 'Update Status',
-            description: 'Update status of selected departments',
-            icon: <Settings className="w-4 h-4" />
-          },
-          {
-            type: 'notification',
-            title: 'Send Notification',
-            description: 'Send notifications to selected departments',
-            icon: <Bell className="w-4 h-4" />
-          },
-          {
-            type: 'export',
-            title: 'Export Data',
-            description: 'Export selected departments data',
-            icon: <Download className="w-4 h-4" />
-          }
-        ]}
-        exportColumns={[
-          { id: 'logo', label: 'Logo', default: false },
-          { id: 'name', label: 'Department Name', default: true },
-          { id: 'code', label: 'Department Code', default: true },
-          { id: 'headOfDepartment', label: 'Head of Department', default: true },
-          { id: 'status', label: 'Status', default: true },
-          { id: 'totalCourses', label: 'Total Courses', default: false },
-          { id: 'totalInstructors', label: 'Total Instructors', default: false }
-        ]}
-        notificationTemplates={[
-          {
             id: 'status-update',
-            name: 'Status Update Notification',
-            subject: 'Department Status Update',
-            message: 'Your department status has been updated to {status}.',
-            availableFor: ['department']
+            label: 'Update Status',
+            description: 'Update status of selected departments',
+            icon: <Settings className="w-4 h-4" />,
+            tabId: 'status'
+          },
+          {
+            id: 'notification',
+            label: 'Send Notification',
+            description: 'Send notifications to selected departments',
+            icon: <Bell className="w-4 h-4" />,
+            tabId: 'notifications'
+          },
+          {
+            id: 'export',
+            label: 'Export Data',
+            description: 'Export selected departments data',
+            icon: <Download className="w-4 h-4" />,
+            tabId: 'export'
           }
         ]}
-        stats={{
-          total: selectedDepartmentsForBulkAction.length,
-          active: selectedDepartmentsForBulkAction.filter(d => d.status === 'active').length,
-          inactive: selectedDepartmentsForBulkAction.filter(d => d.status === 'inactive').length
-        }}
         onActionComplete={handleBulkActionComplete}
         onCancel={handleBulkActionCancel}
         onProcessAction={async (actionType: string, config: any) => {
-          // Stub implementation
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          return { success: true, processed: selectedDepartmentsForBulkAction.length };
+          try {
+            switch (actionType) {
+              case 'status_change':
+                const targetStatus = config.status as 'active' | 'inactive';
+                const updatePromises = selectedDepartmentsForBulkAction.map(async (dept) => {
+                  const response = await fetch(`/api/departments/${dept.id}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status: targetStatus }),
+                  });
+                  if (!response.ok) throw new Error(`Failed to update department ${dept.id}`);
+                  return response.json();
+                });
+                
+                await Promise.all(updatePromises);
+                
+                // Update local state
+                setDepartments(prev => prev.map(d => {
+                  if (selectedDepartmentsForBulkAction.some(selected => selected.id === d.id)) {
+                    return { ...d, status: targetStatus };
+                  }
+                  return d;
+                }));
+                
+                return { 
+                  success: true, 
+                  processed: selectedDepartmentsForBulkAction.length,
+                  message: `${selectedDepartmentsForBulkAction.length} departments updated to ${targetStatus}`
+                };
+                
+              case 'assign_instructors':
+                const instructorIds = config.instructorIds || [];
+                const assignResponse = await fetch('/api/departments/bulk/assign-instructors', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ 
+                    departmentIds: selectedDepartmentsForBulkAction.map(d => d.id),
+                    instructorIds 
+                  }),
+                });
+                
+                if (!assignResponse.ok) {
+                  throw new Error('Failed to assign instructors');
+                }
+                
+                return { 
+                  success: true, 
+                  processed: selectedDepartmentsForBulkAction.length,
+                  message: `Instructors assigned to ${selectedDepartmentsForBulkAction.length} departments`
+                };
+                
+              case 'bulk_delete':
+                const deletePromises = selectedDepartmentsForBulkAction.map(async (dept) => {
+                  const response = await fetch(`/api/departments/${dept.id}`, {
+                    method: 'DELETE',
+                  });
+                  if (!response.ok) throw new Error(`Failed to delete department ${dept.id}`);
+                  return response.json();
+                });
+                
+                await Promise.all(deletePromises);
+                
+                // Remove from local state
+                const deletedIds = selectedDepartmentsForBulkAction.map(d => d.id);
+                setDepartments(prev => prev.filter(d => !deletedIds.includes(d.id)));
+                setSelectedIds(prev => prev.filter(id => !deletedIds.includes(id)));
+                
+                return { 
+                  success: true, 
+                  processed: selectedDepartmentsForBulkAction.length,
+                  message: `${selectedDepartmentsForBulkAction.length} departments deleted`
+                };
+                
+              case 'export':
+                const exportFormat = config.format || 'excel';
+                const exportData = selectedDepartmentsForBulkAction.map(dept => ({
+                  'Department Name': dept.name,
+                  'Code': dept.code,
+                  'Head of Department': dept.headOfDepartment || 'Not Assigned',
+                  'Status': dept.status,
+                  'Total Instructors': dept.totalInstructors || 0,
+                  'Total Courses': dept.courseOfferings?.length || 0,
+                  'Description': dept.description || ''
+                }));
+
+                if (exportFormat === 'excel') {
+                  const wb = XLSX.utils.book_new();
+                  const ws = XLSX.utils.json_to_sheet(exportData);
+                  XLSX.utils.book_append_sheet(wb, ws, "Bulk Export");
+                  const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+                  XLSX.writeFile(wb, `bulk-departments-${timestamp}.xlsx`);
+                }
+                
+                return { 
+                  success: true, 
+                  processed: selectedDepartmentsForBulkAction.length,
+                  message: `${selectedDepartmentsForBulkAction.length} departments exported`
+                };
+                
+              default:
+                throw new Error(`Unknown action type: ${actionType}`);
+            }
+          } catch (error) {
+            console.error('Bulk action processing failed:', error);
+            return { 
+              success: false, 
+              processed: 0,
+              error: error instanceof Error ? error.message : 'Unknown error'
+            };
+          }
         }}
         getItemDisplayName={(item: Department) => item.name}
         getItemStatus={(item: Department) => item.status}
+        getItemId={(item: Department) => item.id}
       />
 
       {/* Import Dialog */}
@@ -2518,42 +2804,7 @@ export default function DepartmentListPage() {
         confirmLabel="Reactivate"
       />
 
-      {selectedIds.length > 0 && (
-        <div className="bg-blue-50 border border-blue-100 rounded-2xl p-6 mb-6 max-w-3xl mx-auto">
-          <h2 className="text-2xl font-bold text-blue-900 mb-2">Bulk Actions</h2>
-          <hr className="mb-4 border-blue-100" />
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center gap-2 text-blue-900 text-lg font-medium cursor-pointer">
-              <Checkbox checked={bulkActions.assignInstructors} onCheckedChange={() => handleBulkActionChange('assignInstructors')} />
-              <span>Assign Instructors</span>
-            </div>
-            <div className="flex items-center gap-2 text-blue-900 text-lg font-medium cursor-pointer">
-              <Checkbox checked={bulkActions.archiveRestore} onCheckedChange={() => handleBulkActionChange('archiveRestore')} />
-              <span>Archive/Restore Departments</span>
-            </div>
-            <div className="flex items-center gap-2 text-blue-900 text-lg font-medium cursor-pointer">
-              <Checkbox checked={bulkActions.assignCourses} onCheckedChange={() => handleBulkActionChange('assignCourses')} />
-              <span>Assign Courses</span>
-            </div>
-          </div>
-          <div className="mt-6 flex gap-3">
-            <Button
-              onClick={handleBulkActionExecute}
-              disabled={!(bulkActions.assignInstructors || bulkActions.archiveRestore || bulkActions.assignCourses)}
-              className="bg-blue-700 text-white rounded-xl px-6 py-2 font-semibold hover:bg-blue-800"
-            >
-              Execute Selected Actions
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => setBulkActions({ assignInstructors: false, archiveRestore: false, assignCourses: false })}
-              className="rounded-xl px-6 py-2 font-semibold border-blue-300 text-blue-700 hover:bg-blue-50"
-            >
-              Clear
-            </Button>
-          </div>
-        </div>
-      )}
+
     </div>
   );
 }

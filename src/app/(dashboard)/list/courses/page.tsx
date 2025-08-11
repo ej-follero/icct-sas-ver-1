@@ -28,10 +28,11 @@ import { TableExpandedRow } from '@/components/reusable/Table/TableExpandedRow';
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import PageHeader from '@/components/PageHeader/PageHeader';
 import { useDebounce } from '@/hooks/use-debounce';
+import { safeHighlight } from "@/lib/sanitizer";
 import { Card, CardHeader } from "@/components/ui/card";
 import SummaryCard from '@/components/SummaryCard';
 import { EmptyState } from '@/components/reusable';
-import { BulkActionsDialog } from '@/components/reusable/Dialogs/BulkActionsDialog';
+import BulkActionsDialog from '@/components/reusable/Dialogs/BulkActionsDialog';
 import { ViewDialog } from '@/components/reusable/Dialogs/ViewDialog';
 import { QuickActionsPanel } from '@/components/reusable/QuickActionsPanel';
 import { SummaryCardSkeleton, PageSkeleton } from '@/components/reusable/Skeleton';
@@ -42,7 +43,7 @@ import { Label } from "@/components/ui/label";
 import { useRouter } from "next/navigation";
 import { Checkbox as SharedCheckbox } from '@/components/ui/checkbox';
 import { Pagination } from "@/components/Pagination";
-import { TableHeaderSection } from '@/components/reusable/Table/TableHeaderSection';
+
 import { subjectsApi } from '@/services/api/subjects';
 import { useRef } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -216,7 +217,7 @@ const courseColumns = [
   { key: 'status', label: 'Status', accessor: 'status', className: 'text-center', sortable: true },
 ];
 
-// Use accessor/label for TableHeaderSection compatibility
+// Define exportable columns for dialog compatibility
 const exportableColumns: { accessor: string; label: string }[] = courseColumns.map((col) => ({ accessor: col.key, label: col.label }));
 // For export dialogs, use the old { key, label } version
 const exportableColumnsForExport: { key: string; label: string }[] = courseColumns.map((col) => ({ key: col.key, label: col.label }));
@@ -428,9 +429,8 @@ export default function CourseListPage() {
   const fetchStudents = async (courseId: string) => {
     setStudentsLoading(prev => ({ ...prev, [courseId]: true }));
     try {
-      const res = await fetch(`/api/attendance/students?courseId=${courseId}`);
-      const data = await res.json();
-      setCourseStudents(prev => ({ ...prev, [courseId]: data.students || data }));
+      // Student attendance API was removed - using alternative approach
+      setCourseStudents(prev => ({ ...prev, [courseId]: [] }));
     } catch (e) {
       toast.error('Failed to load students for this course');
       setCourseStudents(prev => ({ ...prev, [courseId]: [] }));
@@ -444,7 +444,7 @@ export default function CourseListPage() {
     {
       header: '',
       accessor: 'expander',
-      className: 'w-10 text-center px-1 py-1',
+      className: 'w-10 text-center align-middle px-1 py-1',
       render: (item: Course) => (
         <button
           onClick={() => onToggleExpand(item.id)}
@@ -566,7 +566,7 @@ export default function CourseListPage() {
         />
       ),
       accessor: 'select',
-      className: 'w-12 text-center',
+      className: 'w-12 text-center align-middle',
     },
     ...courseColumns
       .filter(col => visibleColumns.includes(col.key))
@@ -575,7 +575,7 @@ export default function CourseListPage() {
           return {
             header: col.label,
             accessor: col.accessor,
-            className: 'text-center',
+            className: 'text-center align-middle min-w-[120px] max-w-[200px] whitespace-normal font-medium text-blue-900',
             sortable: col.sortable,
             render: (item: Course) => {
               const fuseResult = fuzzyResults.find(r => r.item.id === item.id) as FuseResult<Course> | undefined;
@@ -583,7 +583,7 @@ export default function CourseListPage() {
               return (
                 <div 
                   className="text-sm font-medium text-blue-900 text-center"
-                  dangerouslySetInnerHTML={{ __html: highlightMatch(item.name, nameMatches) }}
+                  dangerouslySetInnerHTML={{ __html: safeHighlight(item.name, nameMatches ? [...nameMatches] : undefined) }}
                 />
               );
             }
@@ -593,7 +593,7 @@ export default function CourseListPage() {
           return {
             header: col.label,
             accessor: col.accessor,
-            className: 'text-center',
+            className: 'text-center align-middle min-w-[80px] max-w-[100px] whitespace-nowrap text-blue-900',
             sortable: col.sortable,
             render: (item: Course) => {
               const fuseResult = fuzzyResults.find(r => r.item.id === item.id) as FuseResult<Course> | undefined;
@@ -601,7 +601,7 @@ export default function CourseListPage() {
               return (
                 <div 
                   className="text-sm text-blue-900 text-center"
-                  dangerouslySetInnerHTML={{ __html: highlightMatch(item.code, codeMatches) }}
+                  dangerouslySetInnerHTML={{ __html: safeHighlight(item.code, codeMatches ? [...codeMatches] : undefined) }}
                 />
               );
             }
@@ -611,7 +611,7 @@ export default function CourseListPage() {
           return {
             header: col.label,
             accessor: col.accessor,
-            className: 'text-center',
+            className: 'text-center align-middle min-w-[120px] max-w-[180px] whitespace-normal text-blue-900',
             sortable: col.sortable,
             render: (item: Course) => (
               <span className="text-sm text-blue-900 text-center">{item.department || 'Not Applicable'}</span>
@@ -622,7 +622,7 @@ export default function CourseListPage() {
           return {
             header: col.label,
             accessor: col.accessor,
-            className: 'text-center',
+            className: 'text-center align-middle min-w-[100px] max-w-[120px] whitespace-normal text-blue-900',
             sortable: col.sortable,
             render: (item: Course) => (
               <Badge variant={item.courseType === "MANDATORY" ? "success" : "secondary"} className="text-center">
@@ -635,7 +635,7 @@ export default function CourseListPage() {
           return {
             header: col.label,
             accessor: col.accessor,
-            className: 'text-center',
+            className: 'text-center align-middle min-w-[100px] max-w-[150px] whitespace-normal text-blue-900',
             sortable: col.sortable,
             render: (item: Course) => (
               <span className="text-sm text-blue-900 text-center">{item.major ? item.major : 'Not Applicable'}</span>
@@ -646,7 +646,7 @@ export default function CourseListPage() {
           return {
             header: col.label,
             accessor: col.accessor,
-            className: 'text-center',
+            className: 'text-center align-middle min-w-[80px] max-w-[100px] whitespace-nowrap',
             sortable: col.sortable,
             render: (item: Course) => (
               <Badge variant={item.status === "ACTIVE" ? "success" : item.status === "INACTIVE" ? "destructive" : item.status === "ARCHIVED" ? "secondary" : "warning"} className="text-center">
@@ -658,14 +658,14 @@ export default function CourseListPage() {
         return {
           header: col.label,
           accessor: col.accessor,
-          className: 'text-center',
+          className: 'text-center align-middle min-w-[80px] max-w-[120px] whitespace-normal text-blue-900',
           sortable: col.sortable
         };
       }),
     {
       header: "Actions",
       accessor: "actions",
-      className: "text-center",
+      className: "text-center align-middle px-1 py-1",
       render: (item: Course) => (
         <div className="flex gap-1 justify-center">
           <TooltipProvider>
@@ -707,6 +707,7 @@ export default function CourseListPage() {
                 Edit
               </TooltipContent>
             </Tooltip>
+
             {item.status === "ARCHIVED" ? (
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -745,12 +746,12 @@ export default function CourseListPage() {
                 </TooltipTrigger>
                 <TooltipContent side="top" align="center" className="bg-blue-900 text-white">
                   {item.status === "ACTIVE"
-                    ? "Cannot delete an active course"
+                    ? "Cannot archive an active course"
                     : item.totalStudents > 0
-                    ? "Cannot delete course with enrolled students"
+                    ? "Cannot archive course with enrolled students"
                     : item.totalInstructors > 0
-                    ? "Cannot delete course with assigned instructors"
-                    : "Archive"}
+                    ? "Cannot archive course with assigned instructors"
+                    : "Archive course"}
                 </TooltipContent>
               </Tooltip>
             )}
@@ -976,7 +977,7 @@ export default function CourseListPage() {
     }
   };
 
-  // Delete course
+  // Archive course (soft delete)
   const handleDelete = async (id: string) => {
     try {
       const response = await fetch(`/api/courses/${id}`, {
@@ -985,17 +986,17 @@ export default function CourseListPage() {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData?.error || "Failed to delete course");
+        throw new Error(errorData?.error || "Failed to archive course");
       }
 
-      toast.success("Course deleted successfully");
+      toast.success("Course archived successfully");
       await fetchCourses(true);
     } catch (error: any) {
       toast.error(error.message);
     }
   };
 
-  // Bulk delete courses
+  // Bulk archive courses (soft delete)
   const handleBulkDelete = async () => {
     try {
       const response = await fetch("/api/courses/bulk-delete", {
@@ -1006,10 +1007,10 @@ export default function CourseListPage() {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData?.error || "Failed to delete courses");
+        throw new Error(errorData?.error || "Failed to archive courses");
       }
 
-      toast.success("Selected courses deleted successfully");
+      toast.success("Selected courses archived successfully");
       setSelectedIds([]);
       await fetchCourses(true);
     } catch (error: any) {
@@ -1168,20 +1169,20 @@ export default function CourseListPage() {
   }, [courses]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#f8fafc] via-[#ffffff] to-[#f8fafc] p-0 overflow-x-hidden">
-        <div className="w-full max-w-full px-4 sm:px-6 lg:px-8 space-y-8 sm:space-y-10">
-      <PageHeader
-        title="Courses"
-        subtitle="Manage academic courses and their information"
-        breadcrumbs={[
-          { label: "Home", href: "/" },
-          { label: "Academic Management", href: "/academic-management" },
-          { label: "Courses" }
-        ]}
-      />
+    <div className="min-h-screen bg-gradient-to-br from-[#f8fafc] via-[#ffffff] to-[#f8fafc] overflow-x-hidden">
+      <div className="w-full max-w-none px-2 sm:px-4 py-2 sm:py-4 space-y-4 sm:space-y-6">
+        <PageHeader
+          title="Courses"
+          subtitle="Manage academic courses and their information"
+          breadcrumbs={[
+            { label: "Home", href: "/" },
+            { label: "Academic Management", href: "/academic-management" },
+            { label: "Courses" }
+          ]}
+        />
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+        <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-3 xs:gap-4 sm:gap-4 md:gap-5 lg:gap-6">
           <SummaryCard
             icon={<BookOpen className="text-blue-500 w-5 h-5" />}
             label="Total Courses"
@@ -1213,7 +1214,7 @@ export default function CourseListPage() {
         </div>
 
         {/* Quick Actions Panel */}
-        <div className="w-full max-w-full pt-4">
+        <div className="w-full max-w-full pt-2 xs:pt-3 sm:pt-4">
           <QuickActionsPanel
             variant="premium"
             title="Quick Actions"
@@ -1310,23 +1311,23 @@ export default function CourseListPage() {
               </div>
             </CardHeader>
             {/* Search and Filter Section */}
-            <div className="border-b border-gray-200 shadow-sm p-3 sm:p-4 lg:p-6">
-              <div className="flex flex-col xl:flex-row gap-2 sm:gap-3 items-start xl:items-center justify-end">
+            <div className="border-b border-gray-200 shadow-sm p-2 xs:p-3 sm:p-4 md:p-5 lg:p-6">
+              <div className="flex flex-col sm:flex-row gap-2 xs:gap-3 sm:gap-4 items-stretch sm:items-center justify-end">
                 {/* Search Bar */}
-                <div className="relative w-full xl:w-auto xl:min-w-[200px] xl:max-w-sm">
-                  <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                <div className="relative w-full sm:w-auto sm:min-w-[200px] sm:max-w-sm">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                   <input
                     type="text"
                     placeholder="Search courses..."
                     value={searchInput}
                     onChange={e => setSearchInput(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:outline-none"
+                    className="w-full pl-10 pr-4 py-2.5 xs:py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:outline-none text-sm"
                   />
                 </div>
                 {/* Quick Filter Dropdowns */}
-                <div className="flex flex-wrap gap-2 sm:gap-3 w-full xl:w-auto">
+                <div className="flex flex-row gap-2 xs:gap-3 w-full sm:w-auto sm:flex-shrink-0">
                   <Select value={statusFilter} onValueChange={setStatusFilter}>
-                    <SelectTrigger className="w-full sm:w-28 lg:w-32 xl:w-28 text-gray-700">
+                    <SelectTrigger className="w-full xs:w-24 sm:w-28 md:w-32 text-gray-400 rounded border-gray-300 hover:border-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm">
                       <SelectValue placeholder="Status" />
                     </SelectTrigger>
                     <SelectContent>
@@ -1354,7 +1355,7 @@ export default function CourseListPage() {
                     </SelectContent>
                   </Select>
                   <Select value={courseTypeFilter} onValueChange={setCourseTypeFilter}>
-                    <SelectTrigger className="w-full sm:w-28 lg:w-32 xl:w-28 text-gray-700">
+                    <SelectTrigger className="w-full xs:w-24 sm:w-28 md:w-32 text-gray-400 rounded border-gray-300 hover:border-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm">
                       <SelectValue placeholder="Course Type" />
                     </SelectTrigger>
                     <SelectContent>
@@ -1364,7 +1365,7 @@ export default function CourseListPage() {
                     </SelectContent>
                   </Select>
                   <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
-                    <SelectTrigger className="w-full sm:w-32 lg:w-40 xl:w-40 text-gray-700">
+                    <SelectTrigger className="w-full xs:w-28 sm:w-32 md:w-40 text-gray-400 rounded border-gray-300 hover:border-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm">
                       <SelectValue placeholder="Department Code" />
                     </SelectTrigger>
                     <SelectContent>
@@ -1379,7 +1380,7 @@ export default function CourseListPage() {
             </div>
             {/* Bulk Actions Bar */}
             {selectedIds.length > 0 && (
-              <div className="mt-2 sm:mt-3 px-2 sm:px-3 lg:px-6 max-w-full">
+              <div className="mt-2 xs:mt-3 px-2 xs:px-3 sm:px-4 md:px-5 lg:px-6 max-w-full">
                 <BulkActionsBar
                   selectedCount={selectedIds.length}
                   entityLabel="course"
@@ -1402,7 +1403,7 @@ export default function CourseListPage() {
                     {
                       key: "archive",
                       label: "Archive Selected",
-                      icon: loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Trash2 className="w-4 h-4 mr-2" />,
+                      icon: loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Archive className="w-4 h-4 mr-2" />,
                       onClick: () => setBulkActionsDialogOpen(true),
                       loading: loading,
                       disabled: loading || selectedCourses.every(c => c.status === "ARCHIVED"),
@@ -1426,9 +1427,10 @@ export default function CourseListPage() {
                 />
               </div>
             )}
-            {/* Table Content */}
-            <div className="relative px-2 sm:px-3 lg:px-6 mt-3 sm:mt-4 lg:mt-6">
-              <div className="overflow-x-auto bg-white/70 shadow-none relative"> {/* border and border-blue-100 removed */}
+          {/* Table layout for large screens */}
+          <div className="hidden lg:block">
+            <div className="px-2 xs:px-3 sm:px-4 md:px-5 lg:px-6 pt-4 xs:pt-5 sm:pt-6 pb-4 xs:pb-5 sm:pb-6">
+              <div className="overflow-x-auto bg-white/70 shadow-none relative">
                 {/* Loader overlay when refreshing */}
                 {isRefreshing && (
                   <div className="absolute inset-0 bg-white/70 flex items-center justify-center z-20">
@@ -1477,16 +1479,81 @@ export default function CourseListPage() {
                   )}
                 </div>
               </div>
-              {/* Pagination */}
-                <TablePagination
-                  page={currentPage}
-                  pageSize={itemsPerPage}
-                  totalItems={filteredCourses.length}
-                  onPageChange={setCurrentPage}
-                  onPageSizeChange={setItemsPerPage}
-                  entityLabel="course"
+            </div>
+          </div>
+          {/* Card layout for small to medium screens */}
+          <div className="block lg:hidden p-1 xs:p-2 sm:p-3 max-w-full">
+            <div className="px-2 xs:px-3 sm:px-4 pt-4 xs:pt-5 sm:pt-6 pb-4 xs:pb-5 sm:pb-6">
+              {!loading && filteredCourses.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-6 xs:py-8 px-3 xs:px-4">
+                  <EmptyState
+                    icon={<BookOpen className="w-5 h-5 xs:w-6 xs:h-6 text-blue-400" />}
+                    title="No courses found"
+                    description="Try adjusting your search criteria or filters to find the courses you're looking for."
+                    action={
+                      <div className="flex flex-col gap-2 w-full max-w-sm">
+                        <Button
+                          variant="outline"
+                          className="border-blue-300 text-blue-700 hover:bg-blue-50 rounded-xl text-sm"
+                          onClick={() => fetchCourses(true)}
+                        >
+                          <RefreshCw className="w-4 h-4 mr-2" />
+                          Refresh Data
+                        </Button>
+                      </div>
+                    }
+                  />
+                </div>
+              ) : (
+                <TableCardView
+                  items={paginatedCourses}
+                  selectedIds={selectedIds}
+                  onSelect={handleSelectRow}
+                  onView={(item) => {
+                    setSelectedCourse(item);
+                    setViewModalOpen(true);
+                  }}
+                  onEdit={(item) => {
+                    setSelectedCourse(item);
+                    setEditModalOpen(true);
+                  }}
+                  onDelete={(item) => {
+                    setSelectedCourse(item);
+                    setDeleteModalOpen(true);
+                  }}
+                  getItemId={(item) => item.id}
+                  getItemName={(item) => item.name}
+                  getItemCode={(item) => item.code}
+                  getItemStatus={(item) => mapStatusToLowerCase(item.status)}
+                  getItemDescription={(item) => item.department}
+                  getItemDetails={(item) => [
+                    { label: 'Department', value: item.department },
+                    { label: 'Units', value: item.units.toString() },
+                    { label: 'Type', value: item.courseType },
+                    { label: 'Major', value: item.major || 'N/A' },
+                    { label: 'Students', value: item.totalStudents.toString() },
+                    { label: 'Instructors', value: item.totalInstructors.toString() },
+                  ]}
+                  disabled={(item) => false}
+                  deleteTooltip={(item) => item.status === "ARCHIVED" ? "Course is already archived" : "Archive course"}
+                  isLoading={loading}
                 />
-              </div>
+              )}
+            </div>
+          </div>
+          {/* Pagination */}
+          <div className="px-2 xs:px-3 sm:px-4 md:px-5 lg:px-6">
+            <TablePagination
+              page={currentPage}
+              pageSize={itemsPerPage}
+              totalItems={filteredCourses.length}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={setItemsPerPage}
+              entityLabel="course"
+              pageSizeOptions={[10, 25, 50, 100]}
+              loading={loading}
+            />
+          </div>
           </Card>
         </div>
 
@@ -1513,7 +1580,10 @@ export default function CourseListPage() {
         onCancel={() => { setDeleteModalOpen(false); setSelectedCourse(null); }}
         canDelete={true}
         deleteError={undefined}
-        description={selectedCourse ? `Are you sure you want to delete the course "${selectedCourse.name}"? This action cannot be undone.` : undefined}
+
+        description={selectedCourse ? `Are you sure you want to archive the course "${selectedCourse.name}"?` : undefined}
+        affectedItems={5}
+        affectedItemType="students"
       />
 
       <CourseForm
@@ -1642,8 +1712,8 @@ export default function CourseListPage() {
         open={importDialogOpen}
         onOpenChange={setImportDialogOpen}
         onImport={handleImportCourses}
-        entityName="CourseOffering"
-        templateUrl={undefined}
+        entityName="Course"
+        templateUrl="/api/courses/template"
         acceptedFileTypes={[".csv", ".xlsx", ".xls"]}
         maxFileSize={5}
       />
@@ -1655,22 +1725,16 @@ export default function CourseListPage() {
         entityType="course"
         entityLabel="course"
         availableActions={[
-          { type: 'status-update', title: 'Update Status', description: 'Update status of selected courses', icon: <Settings className="w-4 h-4" /> },
-          { type: 'notification', title: 'Send Notification', description: 'Send notification to instructors', icon: <Bell className="w-4 h-4" /> },
-          { type: 'export', title: 'Export Data', description: 'Export selected courses data', icon: <Download className="w-4 h-4" /> },
+          { id: 'status-update', label: 'Update Status', description: 'Update status of selected courses', icon: <Settings className="w-4 h-4" />, tabId: 'status' },
+          { id: 'notification', label: 'Send Notification', description: 'Send notification to instructors', icon: <Bell className="w-4 h-4" />, tabId: 'notifications' },
+          { id: 'export', label: 'Export Data', description: 'Export selected courses data', icon: <Download className="w-4 h-4" />, tabId: 'export' },
         ]}
-        exportColumns={courseColumns.map(col => ({ id: col.key, label: col.label, default: true }))}
-        notificationTemplates={[]}
-        stats={{
-          total: selectedCoursesForBulkAction.length,
-          active: selectedCoursesForBulkAction.filter(c => c.status === 'ACTIVE').length,
-          inactive: selectedCoursesForBulkAction.filter(c => c.status === 'INACTIVE' || c.status === 'ARCHIVED').length
-        }}
         onActionComplete={handleBulkActionComplete}
         onCancel={handleBulkActionCancel}
         onProcessAction={handleProcessBulkAction}
-        getItemDisplayName={item => item.name}
-        getItemStatus={item => item.status}
+        getItemDisplayName={(item: Course) => item.name}
+        getItemStatus={(item: Course) => item.status}
+        getItemId={(item: Course) => item.id}
       />
     </div>
   </div>

@@ -1740,6 +1740,9 @@ export function DepartmentForm({
                           placeholder={loading ? "Loading courses..." : courses.length > 0 ? "Search and select courses..." : "No courses available"}
                           className="border-blue-200 focus:border-blue-400 focus:ring-blue-400"
                           maxDisplayItems={5}
+                          noOptionsMessage="No courses found"
+                          noMoreOptionsMessage="No more courses found"
+                          startTypingMessage="Start typing to search courses"
                         />
                       )}
                     </FormControl>

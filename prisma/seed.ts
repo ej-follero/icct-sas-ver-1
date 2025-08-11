@@ -376,6 +376,12 @@ async function main() {
   await prisma.courseOffering.deleteMany({});
   await prisma.semester.deleteMany({});
   await prisma.department.deleteMany({});
+  await prisma.systemBackup.deleteMany({});
+  await prisma.restorePoint.deleteMany({});
+  await prisma.backupLog.deleteMany({});
+  await prisma.backupScheduleLog.deleteMany({});
+  await prisma.backupSchedule.deleteMany({});
+  await prisma.backupSettings.deleteMany({});
   await prisma.user.deleteMany({});
 
   const collegeData = generateRealisticCollegeData();
@@ -1862,6 +1868,39 @@ async function main() {
         createdAt: absence.timestamp,
       }
     });
+  }
+
+  // 25. Seed SecuritySettings if not present
+  const existingSecuritySettings = await prisma.securitySettings.findUnique({ where: { id: 1 } });
+  if (!existingSecuritySettings) {
+    await prisma.securitySettings.create({
+      data: {
+        id: 1,
+        minPasswordLength: 8,
+        requireUppercase: true,
+        requireLowercase: true,
+        requireNumbers: true,
+        requireSpecialChars: false,
+        passwordExpiryDays: 90,
+        sessionTimeoutMinutes: 30,
+        maxConcurrentSessions: 3,
+        forceLogoutOnPasswordChange: true,
+        twoFactorEnabled: true,
+        twoFactorMethod: "APP",
+        backupCodesEnabled: true,
+        maxLoginAttempts: 5,
+        lockoutDurationMinutes: 15,
+        ipWhitelistEnabled: false,
+        ipWhitelist: [],
+        auditLoggingEnabled: true,
+        loginNotificationsEnabled: true,
+        suspiciousActivityAlerts: true,
+        sslEnforcement: true,
+        apiRateLimiting: true,
+        dataEncryptionAtRest: true,
+      }
+    });
+    console.log('🔐 Seeded default SecuritySettings');
   }
 
   console.log('✅ Database seeding completed successfully!');

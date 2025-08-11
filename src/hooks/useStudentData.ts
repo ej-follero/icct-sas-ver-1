@@ -95,7 +95,8 @@ export function useStudentData(options: UseStudentDataOptions = {}): UseStudentD
       params.set('page', page.toString());
       params.set('pageSize', pageSize.toString());
 
-      const response = await fetch(`/api/attendance/students?${params}`);
+      // Student attendance API was removed
+      throw new Error('Student attendance functionality has been removed');
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);

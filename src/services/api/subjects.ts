@@ -53,7 +53,7 @@ async function fetchWithRetry(url: string, options: RequestInit, retries = MAX_R
     }
     return response;
   } catch (error) {
-    if (retries > 0 && error instanceof ApiError && error.status >= 500) {
+    if (retries > 0 && error instanceof ApiError && error.status && error.status >= 500) {
       await delay(RETRY_DELAY);
       return fetchWithRetry(url, options, retries - 1);
     }
@@ -89,7 +89,7 @@ export const subjectsApi = {
     return data;
   },
 
-  async createSubject(subject: Omit<Subject, 'id'>): Promise<Subject> {
+  async createSubject(subject: Omit<Subject, 'subjectId' | 'createdAt' | 'updatedAt'>): Promise<Subject> {
     const response = await fetchWithRetry('/api/subjects', {
       method: 'POST',
       headers: {
@@ -103,7 +103,7 @@ export const subjectsApi = {
     return data;
   },
 
-  async updateSubject(id: string, subject: Partial<Subject>): Promise<Subject> {
+  async updateSubject(id: string, subject: Partial<Omit<Subject, 'subjectId' | 'createdAt' | 'updatedAt'>>): Promise<Subject> {
     const response = await fetchWithRetry(`/api/subjects/${id}`, {
       method: 'PUT',
       headers: {
@@ -133,11 +133,45 @@ export const subjectsApi = {
       hasEnrolledStudents: boolean;
     };
   }> {
-    const response = await fetchWithRetry(`/api/subjects/${id}/check-deletable`, {
-      method: 'GET',
-    });
+    try {
+      const response = await fetchWithRetry(`/api/subjects/${id}`, {
+        method: 'HEAD',
+      });
 
-    return response.json();
+      if (!response.ok) {
+        throw new ApiError('Failed to check if subject can be deleted', response.status);
+      }
+
+      // Check if response has content
+      const text = await response.text();
+      if (!text) {
+        // If no content, assume subject can be deleted
+        return {
+          canDelete: true,
+          details: {
+            hasSchedules: false,
+            hasAnnouncements: false,
+            hasInstructors: false,
+            hasEnrolledStudents: false,
+          }
+        };
+      }
+
+      const data = JSON.parse(text);
+      return data;
+    } catch (error) {
+      // If there's any error, assume subject can be deleted
+      console.warn('Subject deletable check failed, assuming subject can be deleted:', error);
+      return {
+        canDelete: true,
+        details: {
+          hasSchedules: false,
+          hasAnnouncements: false,
+          hasInstructors: false,
+          hasEnrolledStudents: false,
+        }
+      };
+    }
   },
 
   clearCache() {

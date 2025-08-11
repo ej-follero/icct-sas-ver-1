@@ -33,19 +33,33 @@ export function CrossFilterPanel({
         </Button>
       </div>
       <div className="flex flex-wrap gap-2">
-        {Object.entries(activeFilters).map(([key, value]) => (
-          <Badge key={key} variant="secondary" className="bg-blue-100 text-blue-800">
-            {key}: {value}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => onClearFilter(key)}
-              className="ml-2 h-4 w-4 p-0 hover:bg-blue-200"
-            >
-              <X className="w-3 h-3" />
-            </Button>
-          </Badge>
-        ))}
+        {Object.entries(activeFilters).map(([key, value]) => {
+          // Format the value for display
+          let displayValue = value;
+          if (typeof value === 'object' && value !== null) {
+            if (key === 'timeRange' && value.preset) {
+              displayValue = value.preset === 'custom' 
+                ? `${value.start?.toLocaleDateString()} - ${value.end?.toLocaleDateString()}`
+                : value.preset;
+            } else {
+              displayValue = JSON.stringify(value);
+            }
+          }
+          
+          return (
+            <Badge key={key} variant="secondary" className="bg-blue-100 text-blue-800">
+              {key}: {displayValue}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onClearFilter(key)}
+                className="ml-2 h-4 w-4 p-0 hover:bg-blue-200"
+              >
+                <X className="w-3 h-3" />
+              </Button>
+            </Badge>
+          );
+        })}
       </div>
     </div>
   );

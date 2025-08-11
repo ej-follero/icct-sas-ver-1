@@ -15,8 +15,8 @@ interface AttendanceHeaderProps {
 }
 
 const PageHeader: React.FC<AttendanceHeaderProps> = ({ title, subtitle, breadcrumbs }) => (
-  <Card className="bg-gradient-to-r from-[#1e40af] via-[#1e40af] to-[#3b82f6] rounded-3xl border-0 shadow-xl mb-2 mt-3 relative overflow-hidden">
-    <CardContent className="p-8 px-6 border-0">
+  <Card className="bg-gradient-to-r from-[#1e40af] via-[#1e40af] to-[#3b82f6] rounded-2xl border-0 shadow-lg mb-4 relative overflow-hidden">
+    <CardContent className="p-5 sm:p-7 border-0">
       {/* Background Pattern */}
       <div className="absolute inset-0 opacity-10">
         <div className="absolute top-0 left-0 w-32 h-32 bg-white rounded-full -translate-x-16 -translate-y-16"></div>
@@ -24,8 +24,8 @@ const PageHeader: React.FC<AttendanceHeaderProps> = ({ title, subtitle, breadcru
         <div className="absolute top-1/2 right-1/4 w-16 h-16 bg-white rounded-full opacity-50"></div>
       </div>
       {/* Breadcrumb Navigation */}
-      <nav className="flex items-center text-sm text-blue-200 mb-6 relative z-10">
-        <div className="flex items-center gap-2 bg-blue-800/30 rounded-xl px-3 py-2 backdrop-blur-sm border border-blue-700/30">
+      <nav className="flex items-center text-sm text-blue-200 mb-4 relative z-10">
+        <div className="flex items-center gap-2 bg-blue-800/30 rounded-lg px-3 py-1.5 backdrop-blur-sm border border-blue-700/30">
           <Home className="h-4 w-4 text-blue-300" />
           {breadcrumbs && breadcrumbs.length > 0 && (
             <>
@@ -35,7 +35,7 @@ const PageHeader: React.FC<AttendanceHeaderProps> = ({ title, subtitle, breadcru
                   {idx < breadcrumbs.length - 1 ? (
                     <span className="text-blue-200">{crumb.label}</span>
                   ) : (
-                    <span className="text-white font-medium bg-blue-600 px-2 py-1 rounded">{crumb.label}</span>
+                    <span className="text-white font-medium bg-blue-600 px-2 py-0.5 rounded text-xs">{crumb.label}</span>
                   )}
                 </React.Fragment>
               ))}
@@ -44,12 +44,12 @@ const PageHeader: React.FC<AttendanceHeaderProps> = ({ title, subtitle, breadcru
         </div>
       </nav>
       {/* Main Header */}
-      <div className="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-6 relative z-10">
+      <div className="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-4 relative z-10">
         <div className="flex-1">
-          <div className="flex items-center gap-4 mb-4">
+          <div className="flex items-center gap-4">
             <div>
-              <h1 className="text-4xl font-bold text-white mb-2 leading-tight">{title}</h1>
-              <p className="text-blue-200 text-lg leading-relaxed">{subtitle}</p>
+              <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2 leading-tight">{title}</h1>
+              <p className="text-blue-200 text-sm sm:text-base leading-relaxed">{subtitle}</p>
             </div>
           </div>
         </div>

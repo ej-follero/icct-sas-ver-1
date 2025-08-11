@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { SubjectType } from "@prisma/client";
+import { SubjectType, SemesterType } from "@prisma/client";
 
 // Subject schema for validation
 const subjectSchema = z.object({
@@ -176,33 +176,53 @@ export async function POST(request: Request) {
     const body = await request.json();
     const validatedData = subjectSchema.parse(body);
 
-    // Placeholder values for required fields - replace with real logic as needed
-    const courseId = 1; // TODO: Get from validatedData or request
-    const departmentId = 1; // TODO: Get from validatedData or request
-    const academicYear = "2024-2025"; // TODO: Get from validatedData or request
-    const semester = "FIRST_SEMESTER"; // TODO: Map from validatedData or request
-
+    // Map the validated data to database fields
     const newSubject = await prisma.subjects.create({
       data: {
         subjectName: validatedData.name,
         subjectCode: validatedData.code,
-        subjectType: SubjectType[validatedData.type.toUpperCase() as keyof typeof SubjectType],
-        status: "ACTIVE", // Or map from validatedData if provided
+        subjectType: validatedData.type.toUpperCase() as SubjectType,
+        status: "ACTIVE",
         description: validatedData.description || "",
         lectureUnits: validatedData.lecture_units,
         labUnits: validatedData.laboratory_units,
         creditedUnits: validatedData.units,
-        totalHours: 0, // Set as needed or calculate
-        prerequisites: "", // Or validatedData.prerequisites?.join(',')
-        courseId,
-        departmentId,
-        academicYear,
-        semester,
+        totalHours: validatedData.lecture_units + validatedData.laboratory_units,
+        prerequisites: "",
+        courseId: 1, // Default course ID - should be passed from frontend
+        departmentId: parseInt(validatedData.department),
+        academicYear: "2024-2025", // Should be passed from frontend
+        semester: validatedData.semester.toUpperCase() as SemesterType,
         maxStudents: 30,
       },
     });
 
-    return NextResponse.json(newSubject, { status: 201 });
+    // Map the response to match frontend expectations
+    const responseSubject = {
+      subjectId: newSubject.subjectId,
+      subjectName: newSubject.subjectName,
+      subjectCode: newSubject.subjectCode,
+      subjectType: newSubject.subjectType,
+      status: newSubject.status,
+      description: newSubject.description,
+      lectureUnits: newSubject.lectureUnits,
+      labUnits: newSubject.labUnits,
+      creditedUnits: newSubject.creditedUnits,
+      totalHours: newSubject.totalHours,
+      prerequisites: newSubject.prerequisites,
+      courseId: newSubject.courseId,
+      departmentId: newSubject.departmentId,
+      academicYear: newSubject.academicYear,
+      semester: newSubject.semester,
+      maxStudents: newSubject.maxStudents,
+      createdAt: newSubject.createdAt,
+      updatedAt: newSubject.updatedAt,
+      department: null, // Will be populated when fetched with include
+      course: null, // Will be populated when fetched with include
+      instructors: [], // Will be populated when fetched with include
+    };
+
+    return NextResponse.json(responseSubject, { status: 201 });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
 
 // GET /api/sections/[id]/subjects
 export async function GET(
@@ -7,44 +8,43 @@ export async function GET(
 ) {
   try {
     const sectionId = parseInt(params.id);
-    // TODO: Replace with actual DB query
-    const subjects = [
-      {
-        code: "ABA-SUBJ1",
-        name: "Associate in Business Administration Subject 1",
-        units: 3,
-        type: "Laboratory",
-        status: "Active",
+    
+    // Fetch subjects for this section through SubjectSchedule
+    const subjectSchedules = await prisma.subjectSchedule.findMany({
+      where: { sectionId },
+      include: {
+        subject: {
+          include: {
+            CourseOffering: true,
+            Department: true,
+          },
+        },
+        instructor: {
+          select: {
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+        },
       },
-      {
-        code: "ABA-SUBJ2",
-        name: "Associate in Business Administration Subject 2",
-        units: 3,
-        type: "Laboratory",
-        status: "Active",
-      },
-      {
-        code: "ABA-SUBJ3",
-        name: "Associate in Business Administration Subject 3",
-        units: 3,
-        type: "Lecture",
-        status: "Active",
-      },
-      {
-        code: "ABA-SUBJ4",
-        name: "Associate in Business Administration Subject 4",
-        units: 3,
-        type: "Laboratory",
-        status: "Active",
-      },
-      {
-        code: "ABA-SUBJ5",
-        name: "Associate in Business Administration Subject 5",
-        units: 3,
-        type: "Laboratory",
-        status: "Active",
-      },
-    ];
+    });
+
+    // Map to frontend format
+    const subjects = subjectSchedules.map(schedule => ({
+      code: schedule.subject.subjectCode,
+      name: schedule.subject.subjectName,
+      units: schedule.subject.creditedUnits,
+      type: schedule.subject.subjectType,
+      status: schedule.subject.status,
+      instructor: schedule.instructor ? 
+        `${schedule.instructor.firstName} ${schedule.instructor.lastName}` : 
+        'Not Assigned',
+      day: schedule.day,
+      startTime: schedule.startTime,
+      endTime: schedule.endTime,
+      room: schedule.roomId,
+    }));
+
     return NextResponse.json(subjects);
   } catch (error) {
     console.error("Error fetching subjects for section:", error);

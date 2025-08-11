@@ -30,7 +30,7 @@ import { useDebounce } from '@/hooks/use-debounce';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import SummaryCard from '@/components/SummaryCard';
 import { EmptyState } from '@/components/reusable';
-import { BulkActionsDialog } from '@/components/reusable/Dialogs/BulkActionsDialog';
+import BulkActionsDialog from '@/components/reusable/Dialogs/BulkActionsDialog';
 import { ViewDialog } from '@/components/reusable/Dialogs/ViewDialog';
 import { QuickActionsPanel } from '@/components/reusable/QuickActionsPanel';
 import { SummaryCardSkeleton, PageSkeleton } from '@/components/reusable/Skeleton';
@@ -44,6 +44,7 @@ import { Pagination } from "@/components/Pagination";
 import { TableHeaderSection } from '@/components/reusable/Table/TableHeaderSection';
 import { useRef } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { safeHighlight } from "@/lib/sanitizer";
 
 type RFIDLogStatus = "success" | "error" | "unauthorized" | "timeout";
 type RFIDScanType = "entry" | "exit" | "attendance" | "access";
@@ -476,7 +477,7 @@ export default function RFIDLogsPage() {
               return (
                 <div 
                   className="text-sm font-medium text-blue-900 text-center"
-                  dangerouslySetInnerHTML={{ __html: highlightMatch(item.tagId, tagIdMatches) }}
+                  dangerouslySetInnerHTML={{ __html: safeHighlight(item.tagId, tagIdMatches) }}
                 />
               );
             }
@@ -497,7 +498,7 @@ export default function RFIDLogsPage() {
                     <div>
                       <div 
                         className="font-medium text-blue-900"
-                        dangerouslySetInnerHTML={{ __html: highlightMatch(item.studentName, nameMatches) }}
+                        dangerouslySetInnerHTML={{ __html: safeHighlight(item.studentName, nameMatches) }}
                       />
                       <div className="text-sm text-muted-foreground">{item.studentId}</div>
                     </div>
@@ -523,7 +524,7 @@ export default function RFIDLogsPage() {
                   <ScanLine className="w-3 h-3" />
                   <span 
                     className="text-sm text-blue-900"
-                    dangerouslySetInnerHTML={{ __html: highlightMatch(item.readerId, readerMatches) }}
+                    dangerouslySetInnerHTML={{ __html: safeHighlight(item.readerId, readerMatches) }}
                   />
                 </div>
               );
@@ -544,7 +545,7 @@ export default function RFIDLogsPage() {
                   <MapPin className="w-3 h-3" />
                   <span 
                     className="text-sm text-blue-900"
-                    dangerouslySetInnerHTML={{ __html: highlightMatch(item.location, locationMatches) }}
+                    dangerouslySetInnerHTML={{ __html: safeHighlight(item.location, locationMatches) }}
                   />
                 </div>
               );

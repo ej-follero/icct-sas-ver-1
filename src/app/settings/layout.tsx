@@ -20,14 +20,15 @@ export default function SettingsLayout({
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
-      {/* Sidebar - fixed, full height */}
+      {/* Sidebar - fixed, full height - hidden on mobile, shown on desktop */}
       <aside
         className={`hidden md:flex flex-col fixed left-0 top-16 h-[calc(100vh-64px)] z-30 bg-[#0c2556] shadow-lg transition-all duration-300 ease-in-out ${sidebarCollapsed ? 'w-16' : 'w-64'}`}
         style={{ width: sidebarCollapsed ? 64 : 256 }}
       >
         <Menu role={role as Role} collapsed={sidebarCollapsed} />
       </aside>
-      {/* Logo/hamburger group fixed over sidebar */}
+      
+      {/* Logo/hamburger group fixed over sidebar - hidden on mobile, shown on desktop */}
       <div className={`hidden md:flex flex-col fixed left-0 top-0 h-16 z-40 bg-blue-100 transition-all duration-300 ease-in-out ${sidebarCollapsed ? 'w-16' : 'w-64'}`}
         style={{ width: sidebarCollapsed ? 64 : 256 }}
       >
@@ -35,14 +36,16 @@ export default function SettingsLayout({
           <Navbar onSidebarToggle={handleSidebarToggle} sidebarCollapsed={sidebarCollapsed} logoOnly />
         </div>
       </div>
+      
       {/* Main area: header/navbar and content */}
-      <div className={`flex-1 flex flex-col min-h-screen pt-16 transition-all duration-300 ease-in-out ${sidebarCollapsed ? 'md:ml-16' : 'md:ml-64'}`}>
-        {/* Header/Navbar - fixed at top of main area, offset by sidebar width */}
+      <div className={`flex-1 flex flex-col min-h-screen transition-all duration-300 ease-in-out ${sidebarCollapsed ? 'md:ml-16' : 'md:ml-64'}`}>
+        {/* Header/Navbar - fixed at top, full width on mobile, offset on desktop */}
         <header className={`fixed top-0 z-20 w-full h-16 bg-blue-100 shadow flex items-center px-4 md:px-8 border-b transition-all duration-300 ease-in-out ${sidebarCollapsed ? 'md:ml-16' : 'md:ml-64'}`}>
           <Navbar onSidebarToggle={handleSidebarToggle} sidebarCollapsed={sidebarCollapsed} hideLogo />
         </header>
-        {/* Main Content */}
-        <main className="flex-1 p-4 bg-gray-50 min-h-[calc(100vh-4rem)]">
+        
+        {/* Main Content - responsive padding */}
+        <main className="flex-1 p-4 bg-gray-50 min-h-[calc(100vh-4rem)] pt-16 md:pt-4">
           {children}
         </main>
       </div>
