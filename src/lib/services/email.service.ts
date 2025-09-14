@@ -1,4 +1,4 @@
-import nodemailer from 'nodemailer';
+import * as nodemailer from 'nodemailer';
 
 export interface EmailOptions {
   to: string;
@@ -18,7 +18,7 @@ export class EmailService {
   private transporter: nodemailer.Transporter;
 
   constructor() {
-    this.transporter = nodemailer.createTransporter({
+    this.transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST || 'smtp.gmail.com',
       port: parseInt(process.env.SMTP_PORT || '587'),
       secure: false, // true for 465, false for other ports
@@ -47,10 +47,22 @@ export class EmailService {
     }
   }
 
+  async testConnection(): Promise<boolean> {
+    try {
+      // Test SMTP connection
+      await this.transporter.verify();
+      return true;
+    } catch (error) {
+      console.error('SMTP connection test failed:', error);
+      return false;
+    }
+  }
+
   // Password reset email template
   async sendPasswordResetEmail(email: string, resetToken: string, userName: string): Promise<boolean> {
-    const resetUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/reset-password?token=${resetToken}`;
-    
+    try {
+      const resetUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/reset-password?token=${resetToken}`;
+      
     const template: EmailTemplate = {
       subject: 'Password Reset Request - ICCT Smart Attendance System',
       html: `
@@ -121,6 +133,10 @@ export class EmailService {
       html: template.html,
       text: template.text,
     });
+    } catch (error) {
+      console.error('Password reset email failed:', error);
+      return false;
+    }
   }
 
   // Attendance notification email template

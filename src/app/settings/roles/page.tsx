@@ -252,21 +252,21 @@ const initialRoles: Role[] = [
 
 // Column definitions with optimized widths
 const roleColumns = [
-  { key: 'name', label: 'Role Name', accessor: 'name', className: 'text-blue-900 font-medium', sortable: true, width: 'w-48' },
-  { key: 'description', label: 'Description', accessor: 'description', className: 'text-blue-900', sortable: true, width: 'w-80' },
-  { key: 'permissions', label: 'Permissions', accessor: 'permissions', className: 'text-center text-blue-900', sortable: true, width: 'w-32' },
-  { key: 'totalUsers', label: 'Users', accessor: 'totalUsers', className: 'text-center text-blue-900', sortable: true, width: 'w-20' },
-  { key: 'status', label: 'Status', accessor: 'status', className: 'text-center', sortable: true, width: 'w-24' },
+  { key: 'name', label: 'Role Name', accessor: 'name', className: 'text-blue-900 font-medium', sortable: true, width: 'w-28 sm:w-32 md:w-40 lg:w-48' },
+  { key: 'description', label: 'Description', accessor: 'description', className: 'text-blue-900', sortable: true, width: 'w-32 sm:w-40 md:w-60 lg:w-80' },
+  { key: 'permissions', label: 'Permissions', accessor: 'permissions', className: 'text-center text-blue-900', sortable: true, width: 'w-20 sm:w-24 md:w-28 lg:w-32' },
+  { key: 'totalUsers', label: 'Users', accessor: 'totalUsers', className: 'text-center text-blue-900', sortable: true, width: 'w-14 sm:w-16 md:w-18 lg:w-20' },
+  { key: 'status', label: 'Status', accessor: 'status', className: 'text-center', sortable: true, width: 'w-18 sm:w-20 md:w-22 lg:w-24' },
 ];
 
 // Expander column for expandable rows
 const EXPANDER_COLUMN: TableListColumn<Role> = {
   header: '',
   accessor: 'expander',
-  className: 'w-8 text-center px-1 py-1',
+  className: 'w-6 sm:w-8 text-center px-1 py-1',
   expandedContent: (item: Role) => (
     <td colSpan={roleColumns.length + 3} className="bg-transparent px-0 py-0">
-      <div className="flex flex-col md:flex-row gap-8 p-8 bg-white shadow-lg border border-blue-100">
+      <div className="flex flex-col md:flex-row gap-4 sm:gap-6 md:gap-8 p-4 sm:p-6 md:p-8 bg-white shadow-lg border border-blue-100">
         {/* Permissions Section */}
         <div className="flex-1 min-w-0">
           <div className="mb-6">
@@ -274,7 +274,7 @@ const EXPANDER_COLUMN: TableListColumn<Role> = {
               <Shield className="w-5 h-5 text-blue-400" />
               Permissions ({item.permissions.length})
             </h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3">
               {item.permissions.map((permission, index) => (
                 <div key={index} className="flex items-center gap-2 p-2 bg-blue-50 rounded-lg">
                   <UserCheck className="w-4 h-4 text-green-600" />
@@ -743,7 +743,7 @@ export default function RolesPage() {
         />
       ),
       accessor: 'select',
-      className: 'w-8 text-center',
+      className: 'w-6 sm:w-8 text-center',
     },
     ...roleColumns
       .filter(col => visibleColumns.includes(col.key))
@@ -781,22 +781,24 @@ export default function RolesPage() {
             )
           };
         }
-        if (col.key === 'permissions') {
+                         if (col.key === 'permissions') {
           return {
-            header: col.label,
+            header: <div className="text-center">{col.label}</div>,
             accessor: col.accessor,
             className: `${col.width || ''} text-center`,
             sortable: col.sortable,
             render: (item: Role) => (
-              <span className="text-sm text-blue-900 text-center">
-                {item.permissions.length} permissions
-              </span>
+              <div className="flex justify-center">
+                <span className="text-sm text-blue-900 text-center">
+                  {item.permissions.length} permissions
+                </span>
+              </div>
             )
           };
         }
         if (col.key === 'totalUsers') {
           return {
-            header: col.label,
+            header: <div className="text-center">{col.label}</div>,
             accessor: col.accessor,
             className: `${col.width || ''} text-center`,
             sortable: col.sortable,
@@ -809,7 +811,7 @@ export default function RolesPage() {
         }
         if (col.key === 'status') {
           return {
-            header: col.label,
+            header: <div className="text-center">{col.label}</div>,
             accessor: col.accessor,
             className: `${col.width || ''} text-center`,
             sortable: col.sortable,
@@ -821,18 +823,18 @@ export default function RolesPage() {
           };
         }
         return {
-          header: col.label,
+          header: <div className="text-center">{col.label}</div>,
           accessor: col.accessor,
           className: `${col.width || ''} text-center`,
           sortable: col.sortable
         };
       }),
     {
-      header: "Actions",
-      accessor: "actions",
-      className: "w-32 text-center",
-      render: (item: Role) => (
-        <div className="flex gap-1 justify-center">
+      header: <div className="text-center">Actions</div>,
+      accessor: "rowActions",
+      className: "w-20 sm:w-24 md:w-28 lg:w-32 text-center",
+              render: (item: Role) => (
+          <div className="flex gap-1 justify-center">
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -899,7 +901,7 @@ export default function RolesPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#f8fafc] via-[#ffffff] to-[#f8fafc] p-0 overflow-x-hidden">
-      <div className="w-full max-w-full px-4 sm:px-6 lg:px-8 space-y-8 sm:space-y-10">
+      <div className="w-full max-w-none px-2 sm:px-4 md:px-6 lg:px-8 space-y-4 sm:space-y-6 md:space-y-8 lg:space-y-10">
         <PageHeader
           title="Roles & Permissions"
           subtitle="Manage user roles and their access permissions"
@@ -911,7 +913,7 @@ export default function RolesPage() {
         />
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2 sm:gap-3 md:gap-4 lg:gap-6">
           <SummaryCard
             icon={<Shield className="text-blue-500 w-5 h-5" />}
             label="Total Roles"
@@ -945,7 +947,7 @@ export default function RolesPage() {
 
 
         {/* Quick Actions Panel */}
-        <div className="w-full max-w-full pt-4">
+        <div className="w-full pt-2 sm:pt-4">
           <QuickActionsPanel
             variant="premium"
             title="Quick Actions"
@@ -1022,20 +1024,20 @@ export default function RolesPage() {
         </div>
 
         {/* Main Content Area */}
-        <div className="w-full max-w-full pt-4">
-          <Card className="shadow-lg rounded-xl overflow-hidden p-0 w-full max-w-full">
+        <div className="w-full pt-2 sm:pt-4">
+          <Card className="shadow-lg rounded-xl overflow-hidden p-0 w-full">
             <CardHeader className="p-0">
               {/* Blue Gradient Header */}
-              <div className="bg-gradient-to-r from-[#1e40af] to-[#3b82f6] p-0">
-                <div className="py-4 sm:py-6">
-                  <div className="flex items-center gap-3 px-4 sm:px-6">
+                             <div className="bg-gradient-to-r from-[#1e40af] to-[#3b82f6] p-0">
+                 <div className="py-3 sm:py-4 md:py-6">
+                   <div className="flex items-center gap-2 sm:gap-3 px-3 sm:px-4 md:px-6">
                     <div className="w-8 h-8 flex items-center justify-center">
                       <Shield className="w-5 h-5 text-white" />
                     </div>
-                    <div>
-                      <h3 className="text-lg font-bold text-white">Role List</h3>
-                      <p className="text-blue-100 text-sm">Search and filter role information</p>
-                    </div>
+                                         <div>
+                       <h3 className="text-base sm:text-lg font-bold text-white">Role List</h3>
+                       <p className="text-blue-100 text-xs sm:text-sm">Search and filter role information</p>
+                     </div>
                   </div>
                 </div>
               </div>
@@ -1063,29 +1065,29 @@ export default function RolesPage() {
               </div>
             )}
             
-            {/* Search and Filter Section */}
-            <div className="border-b border-gray-200 shadow-sm p-3 sm:p-4 lg:p-6">
-              <div className="flex flex-col xl:flex-row gap-2 sm:gap-3 items-start xl:items-center justify-end">
-                {/* Search Bar */}
-                <div className="relative w-full xl:w-auto xl:min-w-[200px] xl:max-w-sm">
+                         {/* Search and Filter Section */}
+             <div className="border-b border-gray-200 shadow-sm p-2 sm:p-3 md:p-4 lg:p-6">
+               <div className="flex flex-col lg:flex-row gap-2 sm:gap-3 items-start lg:items-center justify-between">
+                                 {/* Search Bar */}
+                 <div className="relative w-full lg:w-auto lg:min-w-[200px] lg:max-w-xs xl:max-w-sm">
                   <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                  <input
-                    type="text"
-                    placeholder="Search roles..."
-                    value={searchInput}
-                    onChange={e => setSearchInput(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:outline-none"
-                    aria-label="Search roles by name or description"
-                    aria-describedby="search-help"
-                  />
+                                     <input
+                     type="text"
+                     placeholder="Search roles..."
+                     value={searchInput}
+                     onChange={e => setSearchInput(e.target.value)}
+                     className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:outline-none text-gray-500"
+                     aria-label="Search roles by name or description"
+                     aria-describedby="search-help"
+                   />
                   <div id="search-help" className="sr-only">
                     Use Ctrl+F to quickly focus this search box
                   </div>
                 </div>
-                {/* Quick Filter Dropdowns */}
-                <div className="flex flex-wrap gap-2 sm:gap-3 w-full xl:w-auto rounded">
+                                 {/* Quick Filter Dropdowns */}
+                 <div className="flex flex-wrap gap-2 sm:gap-3 w-full lg:w-auto">
                   <Select value={statusFilter} onValueChange={setStatusFilter}>
-                    <SelectTrigger className="w-full sm:w-28 lg:w-32 xl:w-28 text-gray-700">
+                                         <SelectTrigger className="w-full sm:w-28 md:w-32 lg:w-28 text-gray-500 rounded">
                       <SelectValue placeholder="Status" />
                     </SelectTrigger>
                     <SelectContent>
@@ -1099,9 +1101,9 @@ export default function RolesPage() {
               </div>
             </div>
 
-            {/* Bulk Actions Bar */}
-            {selectedIds.length > 0 && (
-              <div className="mt-2 sm:mt-3 px-2 sm:px-3 lg:px-6 max-w-full">
+                         {/* Bulk Actions Bar */}
+             {selectedIds.length > 0 && (
+               <div className="mt-2 sm:mt-3 px-2 sm:px-3 md:px-4 lg:px-6">
                 <BulkActionsBar
                   selectedCount={selectedIds.length}
                   entityLabel="role"
@@ -1164,9 +1166,9 @@ export default function RolesPage() {
               </div>
             )}
 
-            {/* Table Content */}
-            <div className="relative px-2 sm:px-3 lg:px-6 mt-3 sm:mt-4 lg:mt-6">
-              <div className="overflow-x-auto bg-white/70 shadow-none relative">
+                         {/* Table Content */}
+             <div className="relative px-2 sm:px-3 md:px-4 lg:px-6 mt-2 sm:mt-3 md:mt-4 lg:mt-6">
+              <div className="overflow-x-auto bg-white/70 shadow-none relative w-full">
                 {isRefreshing && (
                   <div className="absolute inset-0 bg-white/70 flex items-center justify-center z-20">
                     <Loader2 className="h-12 w-12 text-blue-600 animate-spin" />
@@ -1174,15 +1176,15 @@ export default function RolesPage() {
                 )}
                 <div className="print-content">
                   {initialLoading ? (
-                    <div className="flex flex-col items-center justify-center py-8 px-4">
-                      <div className="flex items-center gap-3 mb-4">
-                        <Loader2 className="h-8 w-8 text-blue-600 animate-spin" />
-                        <span className="text-lg font-semibold text-blue-900">Loading roles...</span>
-                      </div>
-                      <p className="text-sm text-blue-700">Please wait while we fetch the latest data</p>
-                    </div>
-                  ) : !loading && filteredRoles.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-8 px-4">
+                                       <div className="flex flex-col items-center justify-center py-6 sm:py-8 px-3 sm:px-4">
+                     <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
+                       <Loader2 className="h-6 w-6 sm:h-8 sm:w-8 text-blue-600 animate-spin" />
+                       <span className="text-base sm:text-lg font-semibold text-blue-900">Loading roles...</span>
+                     </div>
+                     <p className="text-xs sm:text-sm text-blue-700 text-center">Please wait while we fetch the latest data</p>
+                   </div>
+                                     ) : !loading && filteredRoles.length === 0 ? (
+                     <div className="flex flex-col items-center justify-center py-6 sm:py-8 px-3 sm:px-4">
                       <EmptyState
                         icon={<Shield className="w-6 h-6 text-blue-400" />}
                         title="No roles found"
@@ -1213,7 +1215,7 @@ export default function RolesPage() {
                       isAllSelected={isAllSelected}
                       isIndeterminate={isIndeterminate}
                       getItemId={(item) => item.id}
-                      className="border-0 shadow-none max-w-full"
+                      className="border-0 shadow-none w-full"
                       sortState={{ field: sortField, order: sortOrder }}
                       onSort={handleSort}
                       expandedRowIds={expandedRowIds}
@@ -1229,8 +1231,8 @@ export default function RolesPage() {
                 </div>
               </div>
               
-              {/* Mobile Card View */}
-              <div className="block xl:hidden">
+                             {/* Mobile Card View */}
+               <div className="block lg:hidden">
                 <TableCardView
                   items={paginatedRoles}
                   selectedIds={selectedIds}
@@ -1481,123 +1483,63 @@ export default function RolesPage() {
           entityLabel="role"
           availableActions={[
             {
-              type: 'status-update',
-              title: 'Update Status',
+              id: 'status-update',
+              label: 'Update Status',
               description: 'Change status of selected roles',
               icon: <Settings className="w-4 h-4" />,
+              tabId: 'actions',
               requiresConfirmation: true,
               confirmationMessage: 'Are you sure you want to update the status of selected roles?'
             },
             {
-              type: 'notification',
-              title: 'Send Notification',
+              id: 'notification',
+              label: 'Send Notification',
               description: 'Send notifications to role users',
               icon: <Bell className="w-4 h-4" />,
+              tabId: 'actions',
               requiresConfirmation: true,
               confirmationMessage: 'Are you sure you want to send notifications to users with these roles?'
             },
             {
-              type: 'export',
-              title: 'Export Data',
+              id: 'export',
+              label: 'Export Data',
               description: 'Export selected roles data',
               icon: <Download className="w-4 h-4" />,
-              requiresConfirmation: false
+              tabId: 'actions'
             }
           ]}
-          exportColumns={[
-            { id: 'name', label: 'Role Name', default: true, type: 'text' },
-            { id: 'description', label: 'Description', default: true, type: 'text' },
-            { id: 'permissions', label: 'Permissions', default: true, type: 'text' },
-            { id: 'totalUsers', label: 'Total Users', default: true, type: 'number' },
-            { id: 'status', label: 'Status', default: true, type: 'text' },
-            { id: 'createdAt', label: 'Created At', default: false, type: 'date' },
-            { id: 'updatedAt', label: 'Updated At', default: false, type: 'date' }
-          ]}
-          notificationTemplates={[
-            {
-              id: 'role-update',
-              name: 'Role Update Notification',
-              subject: 'Role Update Notification',
-              message: 'Your role has been updated. Please review the changes.',
-              availableFor: ['role']
-            },
-            {
-              id: 'role-assignment',
-              name: 'Role Assignment Notification',
-              subject: 'New Role Assignment',
-              message: 'You have been assigned a new role. Please review your permissions.',
-              availableFor: ['role']
-            },
-            {
-              id: 'role-status-change',
-              name: 'Role Status Change',
-              subject: 'Role Status Update',
-              message: 'Your role status has been changed. Please check your current permissions and access levels.',
-              availableFor: ['role']
-            },
-            {
-              id: 'role-permission-update',
-              name: 'Role Permission Update',
-              subject: 'Role Permissions Updated',
-              message: 'Your role permissions have been updated. Please review your new access levels and capabilities.',
-              availableFor: ['role']
-            }
-          ]}
-          stats={{
-            total: roles.length,
-            active: roles.filter(role => role.status === 'ACTIVE').length,
-            inactive: roles.filter(role => role.status === 'INACTIVE').length,
-            custom: {
-              archived: roles.filter(role => role.status === 'ARCHIVED').length
-            }
-          }}
-          statusOptions={[
-            { value: 'ACTIVE', label: 'Active', icon: <CheckCircle className="w-4 h-4 text-green-600" /> },
-            { value: 'INACTIVE', label: 'Inactive', icon: <XCircle className="w-4 h-4 text-red-600" /> },
-            { value: 'ARCHIVED', label: 'Archived', icon: <Archive className="w-4 h-4 text-gray-600" /> }
-          ]}
-          onActionComplete={(actionType, results) => {
-            console.log('Bulk action completed:', actionType, results);
-            toast.success(`Bulk action completed: ${actionType}`);
-            setBulkActionsDialogOpen(false);
-            setSelectedRolesForBulkAction([]);
-          }}
-          onCancel={() => {
-            setBulkActionsDialogOpen(false);
-            setSelectedRolesForBulkAction([]);
-          }}
-          onProcessAction={async (actionType, config) => {
-            console.log('Processing bulk action:', actionType, config);
-            
-            // Handle role-specific bulk actions
-            if (actionType === 'bulk-actions' && config.actionType === 'role-bulk-actions') {
-              console.log('Processing role bulk actions:', config);
-              
-              // Simulate API call for role bulk actions
-              await new Promise(resolve => setTimeout(resolve, 1500));
-              
-              return {
-                success: selectedRolesForBulkAction.length,
-                failed: 0,
-                errors: [],
-                totalUsersAffected: config.totalUsersAffected,
-                actionType: 'role-bulk-actions'
-              };
-            }
-            
-            // Handle other action types
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            
-            return {
-              success: selectedRolesForBulkAction.length,
-              failed: 0,
-              errors: []
-            };
-          }}
-          getItemDisplayName={(role) => role.name}
-          getItemStatus={(role) => role.status}
-          getItemEmail={(role) => ''} // Roles don't have emails
-        />
+           onActionComplete={(actionType, results) => {
+             console.log('Bulk action completed:', actionType, results);
+             toast.success(`Bulk action completed: ${actionType}`);
+             setBulkActionsDialogOpen(false);
+             setSelectedRolesForBulkAction([]);
+           }}
+           onCancel={() => {
+             setBulkActionsDialogOpen(false);
+             setSelectedRolesForBulkAction([]);
+           }}
+           onProcessAction={async (actionType, config) => {
+             console.log('Processing bulk action:', actionType, config);
+             
+             // Handle role-specific bulk actions
+             if (actionType === 'bulk-actions' && config.actionType === 'role-bulk-actions') {
+               console.log('Processing role bulk actions:', config);
+               
+               // Simulate API call for role bulk actions
+               await new Promise(resolve => setTimeout(resolve, 1500));
+               
+               return { success: true, processed: selectedRolesForBulkAction.length };
+             }
+             
+             // Handle other action types
+             await new Promise(resolve => setTimeout(resolve, 1000));
+             
+             return { success: true, processed: selectedRolesForBulkAction.length };
+           }}
+           getItemId={(role: Role) => role.id}
+           getItemDisplayName={(role: Role) => role.name}
+           getItemStatus={(role: Role) => role.status}
+         />
 
 
       </div>

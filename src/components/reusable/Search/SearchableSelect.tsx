@@ -12,6 +12,8 @@ interface SearchableSelectProps {
   placeholder?: string;
   className?: string;
   noOptionsMessage?: string;
+  asyncSearch?: (query: string) => Promise<Option[]>;
+  minChars?: number;
 }
 
 interface MultiSearchableSelectProps {
@@ -32,11 +34,15 @@ const SearchableSelectSearch: React.FC<SearchableSelectProps> = ({
   onChange, 
   placeholder = 'Select...', 
   className = '',
-  noOptionsMessage = 'No options found'
+  noOptionsMessage = 'No options found',
+  asyncSearch,
+  minChars = 2,
 }) => {
   const [search, setSearch] = useState('');
   const [isOpen, setIsOpen] = useState(false);
   const [displayValue, setDisplayValue] = useState('');
+  const [asyncOptions, setAsyncOptions] = useState<Option[] | null>(null);
+  const [loading, setLoading] = useState(false);
   
   // Set display value based on selected value
   useEffect(() => {
@@ -44,9 +50,35 @@ const SearchableSelectSearch: React.FC<SearchableSelectProps> = ({
     setDisplayValue(selectedOption ? selectedOption.label : search);
   }, [value, options, search]);
 
-  const filteredOptions = options.filter(opt => 
+  const sourceOptions = asyncOptions ?? options;
+  const filteredOptions = sourceOptions.filter(opt => 
     opt.label.toLowerCase().includes(search.toLowerCase())
   );
+
+  // Async search loader
+  useEffect(() => {
+    let cancelled = false;
+    const run = async () => {
+      if (!asyncSearch) return;
+      if (search.trim().length < minChars) {
+        setAsyncOptions(null);
+        return;
+      }
+      setLoading(true);
+      try {
+        const res = await asyncSearch(search.trim());
+        if (!cancelled) setAsyncOptions(res);
+      } catch (e) {
+        if (!cancelled) setAsyncOptions([]);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [search, asyncSearch, minChars]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearch(e.target.value);
@@ -80,8 +112,16 @@ const SearchableSelectSearch: React.FC<SearchableSelectProps> = ({
         className="w-full px-3 py-2 border border-blue-200 rounded bg-background text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-blue-400"
       />
       {isOpen && (
-        <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-blue-200 rounded shadow-lg z-50 max-h-48 overflow-y-auto">
-          {filteredOptions.length > 0 ? (
+        <div
+          className="absolute top-full left-0 right-0 mt-1 bg-white border border-blue-200 rounded shadow-lg z-50 max-h-48 overflow-y-auto overscroll-contain"
+          onWheelCapture={(e) => e.stopPropagation()}
+          onScrollCapture={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.preventDefault()}
+          onTouchStart={(e) => e.preventDefault()}
+        >
+          {loading ? (
+            <div className="px-3 py-2 text-blue-400 text-sm">Searching…</div>
+          ) : filteredOptions.length > 0 ? (
             filteredOptions.map(opt => (
               <div
                 key={opt.value}
@@ -187,7 +227,13 @@ const MultiSearchableSelectSearch: React.FC<MultiSearchableSelectProps> = ({
       
       {/* Dropdown */}
       {isOpen && (
-        <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-blue-200 rounded shadow-lg z-50 max-h-48 overflow-y-auto">
+        <div
+          className="absolute top-full left-0 right-0 mt-1 bg-white border border-blue-200 rounded shadow-lg z-50 max-h-48 overflow-y-auto overscroll-contain"
+          onWheelCapture={(e) => e.stopPropagation()}
+          onScrollCapture={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.preventDefault()}
+          onTouchStart={(e) => e.preventDefault()}
+        >
           {filteredOptions.length > 0 ? (
             filteredOptions.map(opt => (
               <div

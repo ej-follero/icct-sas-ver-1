@@ -4,13 +4,14 @@ import { prisma } from "@/lib/prisma";
 // GET /api/courses/[id] - Get a specific course
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
     // Try to find by ID first
     let course = await prisma.courseOffering.findUnique({
       where: {
-        courseId: parseInt(params.id),
+        courseId: parseInt(id),
       },
       include: {
         Department: true,
@@ -32,7 +33,7 @@ export async function GET(
     if (!course) {
       course = await prisma.courseOffering.findUnique({
         where: {
-          courseCode: params.id,
+          courseCode: id,
         },
         include: {
           Department: true,
@@ -94,8 +95,9 @@ export async function GET(
 // PUT /api/courses/[id] - Update a course
 export async function PUT(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
     const body = await request.json();
     const { name, code, department, description, units, status, courseType, major } = body;
@@ -111,7 +113,7 @@ export async function PUT(
     // Try to find by ID first
     let existingCourse = await prisma.courseOffering.findUnique({
       where: {
-        courseId: parseInt(params.id),
+        courseId: parseInt(id),
       },
     });
 
@@ -119,7 +121,7 @@ export async function PUT(
     if (!existingCourse) {
       existingCourse = await prisma.courseOffering.findUnique({
         where: {
-          courseCode: params.id,
+          courseCode: id,
         },
       });
     }
@@ -202,13 +204,14 @@ export async function PUT(
 // DELETE /api/courses/[id] - Soft delete (archive) a course
 export async function DELETE(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
     // Try to find by ID first
     let existingCourse = await prisma.courseOffering.findUnique({
       where: {
-        courseId: parseInt(params.id),
+        courseId: parseInt(id),
       },
     });
 
@@ -216,7 +219,7 @@ export async function DELETE(
     if (!existingCourse) {
       existingCourse = await prisma.courseOffering.findUnique({
         where: {
-          courseCode: params.id,
+          courseCode: id,
         },
       });
     }
@@ -254,8 +257,9 @@ export async function DELETE(
 // PATCH /api/courses/[id] - Update course status (e.g., restore from archived)
 export async function PATCH(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
     const body = await request.json();
     const { status } = body;
@@ -268,14 +272,14 @@ export async function PATCH(
     // Try to find by ID first
     let existingCourse = await prisma.courseOffering.findUnique({
       where: {
-        courseId: parseInt(params.id),
+        courseId: parseInt(id),
       },
     });
     // If not found by ID, try to find by code
     if (!existingCourse) {
       existingCourse = await prisma.courseOffering.findUnique({
         where: {
-          courseCode: params.id,
+          courseCode: id,
         },
       });
     }

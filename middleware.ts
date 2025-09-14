@@ -13,6 +13,10 @@ const protectedRoutes = {
   '/analytics': ['ADMIN', 'INSTRUCTOR'],
   '/settings': ['ADMIN'],
   '/rfid': ['ADMIN'],
+  '/api/emails': ['ADMIN', 'INSTRUCTOR'],
+  '/api/announcements': ['ADMIN', 'INSTRUCTOR'],
+  '/api/communications': ['ADMIN', 'INSTRUCTOR'],
+  '/api/communications/logs': ['ADMIN', 'INSTRUCTOR'],
   '/api/users': ['ADMIN'],
   '/api/roles': ['ADMIN'],
   '/api/departments': ['ADMIN'],
@@ -73,6 +77,8 @@ export async function middleware(request: NextRequest) {
     return response;
   }
 
+  // Ensure email APIs are always protected (no dev bypass)
+
   // Check if route requires authentication
   const requiresAuth = Object.keys(protectedRoutes).some(route => 
     pathname.startsWith(route)
@@ -86,7 +92,11 @@ export async function middleware(request: NextRequest) {
   const token = request.cookies.get('token')?.value;
 
   if (!token) {
-    // Redirect to login if no token
+    // For API routes, return JSON 401 instead of redirect
+    if (pathname.startsWith('/api/')) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    // Redirect to login for page routes
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('redirect', pathname);
     return NextResponse.redirect(loginUrl);

@@ -5,9 +5,7 @@ import { prisma } from '@/lib/prisma';
 // GET all users
 export async function GET() {
   try {
-    console.log('Connecting to database...');
-    await prisma.$connect();
-    console.log('Database connected, fetching users...');
+    console.log('Fetching users...');
     
     const users = await prisma.user.findMany({
       include: {
@@ -142,8 +140,6 @@ export async function GET() {
       { error: `Failed to fetch users: ${error instanceof Error ? error.message : 'Unknown error'}` },
       { status: 500 }
     );
-  } finally {
-    await prisma.$disconnect();
   }
 }
 

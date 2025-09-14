@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ChevronLeft, ChevronRight, Download, X, Calendar, Copy, Printer, ClipboardList } from "lucide-react";
 import { toast } from "sonner";
 
@@ -60,8 +60,12 @@ export default function AttendanceRecordsDialog({
   const [dateRange, setDateRange] = useState("last-30-days");
   const [selectedSubject, setSelectedSubject] = useState("all");
   const [selectedStatus, setSelectedStatus] = useState("all");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [fetchedRecords, setFetchedRecords] = useState<AttendanceRecord[] | null>(null);
+  const [fetching, setFetching] = useState(false);
 
-  if (!instructor) return null;
+  // Do not early return before hooks; guard rendering later to keep hook order stable
 
   // Helper functions
   const copyToClipboard = async (text: string, fieldLabel: string) => {
@@ -81,22 +85,129 @@ export default function AttendanceRecordsDialog({
     toast.info('Export functionality coming soon');
   };
 
-  // Mock data for demonstration
-  const mockRecords = Array.from({ length: 10 }, (_, i) => ({
-    id: `record-${i}`,
-    date: new Date(Date.now() - i * 24 * 60 * 60 * 1000).toLocaleDateString(),
-    timeIn: i % 4 === 0 ? undefined : '8:00 AM',
-    timeOut: i % 4 === 0 ? undefined : '5:00 PM',
-    status: (i % 4 === 0 ? 'ABSENT' : i % 5 === 0 ? 'LATE' : 'PRESENT') as 'PRESENT' | 'ABSENT' | 'LATE' | 'EXCUSED',
-    subject: instructor.subjects[i % instructor.subjects.length],
-    room: `A-${200 + (i % 5)}`,
-    notes: i % 4 === 0 ? 'Sick leave' : i % 5 === 0 ? 'Traffic delay' : undefined,
-    isManualEntry: false,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  }));
+  // Prefer records passed via props; otherwise, try to map instructor.attendanceRecords from API
+  const mappedInstructorRecords: AttendanceRecord[] = Array.isArray((instructor as any)?.attendanceRecords)
+    ? ((instructor as any).attendanceRecords as any[]).slice(0, 50).map((r: any) => ({
+        id: String(r.attendanceId ?? `${r.timestamp}-${r.subjectSchedId ?? ''}`),
+        date: new Date(r.timestamp).toLocaleDateString(),
+        timeIn: r.status === 'PRESENT' || r.status === 'LATE' ? new Date(r.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : undefined,
+        timeOut: r.checkOutTime ? new Date(r.checkOutTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : undefined,
+        status: r.status,
+        subject: r.subjectSchedule?.subject?.subjectName || 'Unknown Subject',
+        room: r.subjectSchedule?.room?.roomNo || 'Unknown Room',
+        notes: r.notes,
+        isManualEntry: r.attendanceType === 'MANUAL_ENTRY',
+        createdAt: new Date(r.timestamp).toISOString(),
+        updatedAt: new Date(r.timestamp).toISOString()
+      }))
+    : [];
 
-  const displayRecords = records.length > 0 ? records : mockRecords;
+  const baseRecords = records.length > 0 ? records : mappedInstructorRecords;
+
+  // Fetch records from API when filters change
+  useEffect(() => {
+    if (!instructor) return;
+    const fetchFiltered = async () => {
+      try {
+        setFetching(true);
+        const params = new URLSearchParams();
+        params.append('instructorId', instructor.instructorId);
+
+        // Date range presets
+        const now = new Date();
+        let start: Date | null = null;
+        let end: Date | null = now;
+        if (dateRange === 'last-7-days') {
+          start = new Date();
+          start.setDate(start.getDate() - 7);
+        } else if (dateRange === 'last-30-days') {
+          start = new Date();
+          start.setDate(start.getDate() - 30);
+        } else if (dateRange === 'this-month') {
+          start = new Date(now.getFullYear(), now.getMonth(), 1);
+        } else if (dateRange === 'this-semester') {
+          // Approximate to last 4 months
+          start = new Date();
+          start.setMonth(start.getMonth() - 4);
+        } else if (dateRange === 'custom') {
+          // No-op for now (could wire to a real date picker later)
+          start = null;
+          end = null;
+        }
+
+        if (start) params.append('startDate', start.toISOString());
+        if (end) params.append('endDate', end.toISOString());
+
+        if (selectedStatus !== 'all') params.append('status', selectedStatus);
+        if (selectedSubject !== 'all') params.append('subjectName', selectedSubject);
+
+        const res = await fetch(`/api/attendance/instructors?${params.toString()}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        const inst = Array.isArray(data) ? data[0] : null;
+        const apiRecords: AttendanceRecord[] = Array.isArray(inst?.attendanceRecords)
+          ? inst.attendanceRecords.map((r: any) => ({
+              id: String(r.attendanceId ?? `${r.timestamp}-${r.subjectSchedId ?? ''}`),
+              date: new Date(r.timestamp).toLocaleDateString(),
+              timeIn: r.status === 'PRESENT' || r.status === 'LATE' ? new Date(r.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : undefined,
+              timeOut: r.checkOutTime ? new Date(r.checkOutTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : undefined,
+              status: r.status,
+              subject: r.subjectSchedule?.subject?.subjectName || 'Unknown Subject',
+              room: r.subjectSchedule?.room?.roomNo || 'Unknown Room',
+              notes: r.notes,
+              isManualEntry: r.attendanceType === 'MANUAL_ENTRY',
+              createdAt: new Date(r.timestamp).toISOString(),
+              updatedAt: new Date(r.timestamp).toISOString()
+            }))
+          : [];
+        setFetchedRecords(apiRecords);
+        setPage(1);
+      } catch (e) {
+        // Fallback to base records on error
+        setFetchedRecords(null);
+      } finally {
+        setFetching(false);
+      }
+    };
+
+    fetchFiltered();
+  }, [instructor, dateRange, selectedSubject, selectedStatus]);
+
+  const displayRecords = fetchedRecords ?? baseRecords;
+
+  // Ensure current page stays within bounds when data changes
+  const totalRecords = displayRecords.length;
+  const totalPages = Math.max(1, Math.ceil(totalRecords / pageSize));
+
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [page, totalPages]);
+
+  const paginatedRecords = useMemo(() => {
+    const startIndex = (page - 1) * pageSize;
+    const endIndex = startIndex + pageSize;
+    return displayRecords.slice(startIndex, endIndex);
+  }, [displayRecords, page, pageSize]);
+
+  const rangeStart = totalRecords === 0 ? 0 : (page - 1) * pageSize + 1;
+  const rangeEnd = Math.min(page * pageSize, totalRecords);
+
+  // Compute a sliding window of page numbers (max 5)
+  const visiblePages = useMemo(() => {
+    const windowSize = 5;
+    if (totalPages <= windowSize) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1);
+    }
+    const start = Math.max(1, Math.min(page - 2, totalPages - (windowSize - 1)));
+    return Array.from({ length: windowSize }, (_, i) => start + i);
+  }, [page, totalPages]);
+
+  // Guard rendering when no instructor is provided (hooks above still called consistently)
+  if (!instructor) {
+    return null;
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -169,74 +280,69 @@ export default function AttendanceRecordsDialog({
           <div className="p-6 space-y-6 max-h-full overflow-y-auto">
             {/* Quick Stats Row */}
             <div className="grid grid-cols-4 gap-4">
-              <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
+              <div className="bg-green-50 border border-green-200 rounded p-4 text-center">
                 <div className="text-2xl font-bold text-green-700">{instructor.attendedClasses}</div>
                 <div className="text-sm text-green-600">Classes Attended</div>
               </div>
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-center">
+              <div className="bg-red-50 border border-red-200 rounded p-4 text-center">
                 <div className="text-2xl font-bold text-red-700">{instructor.absentClasses}</div>
                 <div className="text-sm text-red-600">Classes Missed</div>
               </div>
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-center">
+              <div className="bg-yellow-50 border border-yellow-200 rounded p-4 text-center">
                 <div className="text-2xl font-bold text-yellow-700">{instructor.lateClasses}</div>
                 <div className="text-sm text-yellow-600">Late Arrivals</div>
               </div>
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
+              <div className="bg-blue-50 border border-blue-200 rounded p-4 text-center">
                 <div className="text-2xl font-bold text-blue-700">{instructor.totalScheduledClasses}</div>
                 <div className="text-sm text-blue-600">Total Scheduled</div>
               </div>
             </div>
 
             {/* Filters Section */}
-            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-              <div className="flex flex-wrap gap-4 items-center">
-                <div className="flex items-center gap-2">
-                  <label className="text-sm font-medium text-gray-700">Date Range:</label>
-                  <select 
-                    className="text-sm border border-gray-300 rounded px-3 py-1"
-                    value={dateRange}
-                    onChange={(e) => setDateRange(e.target.value)}
-                  >
-                    <option value="last-30-days">Last 30 days</option>
-                    <option value="last-7-days">Last 7 days</option>
-                    <option value="this-month">This month</option>
-                    <option value="this-semester">This semester</option>
-                    <option value="custom">Custom range</option>
-                  </select>
-                </div>
-                <div className="flex items-center gap-2">
-                  <label className="text-sm font-medium text-gray-700">Subject:</label>
-                  <select 
-                    className="text-sm border border-gray-300 rounded px-3 py-1"
-                    value={selectedSubject}
-                    onChange={(e) => setSelectedSubject(e.target.value)}
-                  >
-                    <option value="all">All subjects</option>
-                    {instructor.subjects.map(subject => (
-                      <option key={subject} value={subject}>{subject}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="flex items-center gap-2">
-                  <label className="text-sm font-medium text-gray-700">Status:</label>
-                  <select 
-                    className="text-sm border border-gray-300 rounded px-3 py-1"
-                    value={selectedStatus}
-                    onChange={(e) => setSelectedStatus(e.target.value)}
-                  >
-                    <option value="all">All statuses</option>
-                    <option value="PRESENT">Present</option>
-                    <option value="ABSENT">Absent</option>
-                    <option value="LATE">Late</option>
-                    <option value="EXCUSED">Excused</option>
-                  </select>
-                </div>
+            <div className="bg-gray-50 border border-gray-200 rounded p-4">
+              <div className="flex flex-wrap gap-3 items-center justify-end">
+                <Select value={dateRange} onValueChange={(v) => setDateRange(v)}>
+                  <SelectTrigger className="w-full sm:w-44 text-sm text-gray-500 min-w-0 rounded border-gray-300 bg-white hover:bg-gray-50">
+                    <SelectValue placeholder="Date Range" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="last-30-days">Last 30 days</SelectItem>
+                    <SelectItem value="last-7-days">Last 7 days</SelectItem>
+                    <SelectItem value="this-month">This month</SelectItem>
+                    <SelectItem value="this-semester">This semester</SelectItem>
+                    <SelectItem value="custom">Custom range</SelectItem>
+                  </SelectContent>
+                </Select>
 
+                <Select value={selectedSubject} onValueChange={(v) => setSelectedSubject(v)}>
+                  <SelectTrigger className="w-full sm:w-44 text-sm text-gray-500 min-w-0 rounded border-gray-300 bg-white hover:bg-gray-50">
+                    <SelectValue placeholder="All subjects" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All subjects</SelectItem>
+                    {instructor.subjects.map((subject) => (
+                      <SelectItem key={subject} value={subject}>{subject}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Select value={selectedStatus} onValueChange={(v) => setSelectedStatus(v)}>
+                  <SelectTrigger className="w-full sm:w-44 text-sm text-gray-500 min-w-0 rounded border-gray-300 bg-white hover:bg-gray-50">
+                    <SelectValue placeholder="All statuses" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All statuses</SelectItem>
+                    <SelectItem value="PRESENT">Present</SelectItem>
+                    <SelectItem value="ABSENT">Absent</SelectItem>
+                    <SelectItem value="LATE">Late</SelectItem>
+                    <SelectItem value="EXCUSED">Excused</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 
             {/* Attendance Records Table */}
-            <div className="border border-gray-200 rounded-lg overflow-hidden">
+            <div className="border border-gray-200 rounded overflow-hidden">
               <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
                 <h4 className="font-semibold text-gray-900">Recent Attendance Records</h4>
                 <p className="text-sm text-gray-600">Showing last 50 records</p>
@@ -256,7 +362,7 @@ export default function AttendanceRecordsDialog({
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {displayRecords.map((record, i) => (
+                    {paginatedRecords.map((record, i) => (
                       <tr key={record.id} className="hover:bg-gray-50">
                         <td className="px-4 py-3 text-sm text-gray-900">{record.date}</td>
                         <td className="px-4 py-3 text-sm text-gray-900">{record.timeIn || '-'}</td>
@@ -283,16 +389,24 @@ export default function AttendanceRecordsDialog({
               <div className="bg-gray-50 px-4 py-3 border-t border-gray-200">
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-600">
-                    Showing 1 to 10 of 1,234 records
+                    Showing {rangeStart} to {rangeEnd} of {totalRecords} records
                   </span>
                   <div className="flex gap-2">
-                    <Button size="sm" variant="outline" disabled>
+                    <Button size="sm" variant="outline" className="rounded" disabled={page === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
                       <ChevronLeft className="w-4 h-4" />
                     </Button>
-                    <Button size="sm" variant="outline">1</Button>
-                    <Button size="sm" variant="outline">2</Button>
-                    <Button size="sm" variant="outline">3</Button>
-                    <Button size="sm" variant="outline">
+                    {visiblePages.map((p) => (
+                      <Button
+                        key={p}
+                        size="sm"
+                        variant={p === page ? "default" : "outline"}
+                        className="rounded"
+                        onClick={() => setPage(p)}
+                      >
+                        {p}
+                      </Button>
+                    ))}
+                    <Button size="sm" variant="outline" className="rounded" disabled={page === totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>
                       <ChevronRight className="w-4 h-4" />
                     </Button>
                   </div>

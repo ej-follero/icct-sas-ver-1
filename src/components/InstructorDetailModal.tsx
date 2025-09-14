@@ -11,9 +11,8 @@ import { Calendar } from '@/components/ui/calendar';
 import { 
   User, Mail, Phone, MapPin, Clock, BookOpen, TrendingUp, TrendingDown, 
   Calendar as CalendarIcon, Activity, Shield, AlertTriangle, CheckCircle,
-  X, Building, GraduationCap, Target, Zap, Users, BarChart3, Copy, Printer, Eye
+  X, Building, GraduationCap, Target, Zap, Users, BarChart3, Eye
 } from 'lucide-react';
-import { toast } from "sonner";
 import { InstructorAttendance, ScheduleAttendance, WeeklyAttendancePattern } from '@/types/instructor-attendance';
 import { getAttendanceRateColor } from '@/lib/colors';
 
@@ -21,34 +20,18 @@ interface InstructorDetailModalProps {
   instructor: InstructorAttendance | null;
   isOpen: boolean;
   onClose: () => void;
-  onUpdate?: (instructorId: string, updates: Partial<InstructorAttendance>) => void;
-  onSendNotification?: (instructorId: string, type: string, message: string) => void;
 }
 
 const InstructorDetailModal: React.FC<InstructorDetailModalProps> = ({
   instructor,
   isOpen,
-  onClose,
-  onUpdate,
-  onSendNotification
+  onClose
 }) => {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
 
   if (!instructor) return null;
 
-  // Helper functions
-  const copyToClipboard = async (text: string, fieldLabel: string) => {
-    try {
-      await navigator.clipboard.writeText(text.toString());
-      toast.success(`${fieldLabel} copied to clipboard`);
-    } catch (err) {
-      toast.error('Failed to copy to clipboard');
-    }
-  };
-
-  const handlePrint = () => {
-    toast.success('Print dialog opened');
-  };
+  // View-only: remove copy/print helpers
 
   const getRiskBadgeColor = (risk: string) => {
     switch (risk) {
@@ -63,7 +46,7 @@ const InstructorDetailModal: React.FC<InstructorDetailModalProps> = ({
     switch (status) {
       case 'ACTIVE': return 'bg-green-100 text-green-800 border-green-200';
       case 'INACTIVE': return 'bg-gray-100 text-gray-800 border-gray-200';
-      case 'ON_LEAVE': return 'bg-blue-100 text-blue-800 border-blue-200';
+      
       default: return 'bg-gray-100 text-gray-800 border-gray-200';
     }
   };
@@ -140,24 +123,6 @@ const InstructorDetailModal: React.FC<InstructorDetailModalProps> = ({
           <div className="absolute right-4 top-4 flex items-center gap-2">
             <Button
               variant="ghost"
-              size="lg"
-              className="text-white hover:bg-white/20 hover:text-white rounded"
-              onClick={() => copyToClipboard(instructor.instructorName, 'Instructor Name')}
-            >
-              <Copy className="w-4 h-4 mr-1" />
-              Copy
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-white hover:bg-white/20 rounded"
-              onClick={handlePrint}
-            >
-              <Printer className="w-4 h-4 mr-1" />
-              Print
-            </Button>
-            <Button
-              variant="ghost"
               size="icon"
               className="h-10 w-10 rounded-full hover:bg-white/20 text-white"
               onClick={onClose}
@@ -213,117 +178,19 @@ const InstructorDetailModal: React.FC<InstructorDetailModalProps> = ({
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t">
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-blue-600">{instructor.attendanceRate}%</div>
-                      <div className="text-xs text-gray-600">Attendance Rate</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-green-600">{instructor.punctualityScore}%</div>
-                      <div className="text-xs text-gray-600">Punctuality</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-purple-600">{instructor.currentStreak}</div>
-                      <div className="text-xs text-gray-600">Current Streak</div>
-                    </div>
-                  </div>
+                  {/* Simplified header: omit KPIs to avoid redundancy with expandable row */}
                 </div>
               </div>
             </CardContent>
           </Card>
 
           {/* Tabs Section */}
-          <Tabs defaultValue="overview" className="w-full">
-            <TabsList className="grid w-full grid-cols-4">
-              <TabsTrigger value="overview">Overview</TabsTrigger>
+          <Tabs defaultValue="analytics" className="w-full">
+            <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="schedule">Schedule</TabsTrigger>
               <TabsTrigger value="analytics">Analytics</TabsTrigger>
               <TabsTrigger value="contact">Contact</TabsTrigger>
             </TabsList>
-
-            <TabsContent value="overview" className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Attendance Metrics */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      <BarChart3 className="w-5 h-5" />
-                      Attendance Metrics
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm">Total Classes</span>
-                        <span className="font-semibold">{instructor.totalScheduledClasses}</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-green-600">Attended</span>
-                        <span className="font-semibold text-green-600">{instructor.attendedClasses}</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-yellow-600">Late</span>
-                        <span className="font-semibold text-yellow-600">{instructor.lateClasses}</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-red-600">Absent</span>
-                        <span className="font-semibold text-red-600">{instructor.absentClasses}</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-blue-600">On Leave</span>
-                        <span className="font-semibold text-blue-600">{instructor.onLeaveClasses}</span>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* Weekly Pattern */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      <Activity className="w-5 h-5" />
-                      Weekly Pattern
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <WeeklyPatternChart pattern={instructor.weeklyPattern} />
-                  </CardContent>
-                </Card>
-              </div>
-
-              {/* Performance Indicators */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <TrendingUp className="w-5 h-5" />
-                    Performance Indicators
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div className="text-center p-4 border rounded-lg">
-                      <div className="text-2xl font-bold mb-2">{instructor.consistencyRating}/5</div>
-                      <div className="text-sm text-gray-600">Consistency Rating</div>
-                    </div>
-                    <div className="text-center p-4 border rounded-lg">
-                      <div className="flex items-center justify-center gap-1 text-2xl font-bold mb-2">
-                        {instructor.trend > 0 ? (
-                          <TrendingUp className="w-6 h-6 text-green-600" />
-                        ) : (
-                          <TrendingDown className="w-6 h-6 text-red-600" />
-                        )}
-                        {Math.abs(instructor.trend)}%
-                      </div>
-                      <div className="text-sm text-gray-600">Trend</div>
-                    </div>
-                    <div className="text-center p-4 border rounded-lg">
-                      <div className="text-2xl font-bold mb-2">{instructor.subjects.length}</div>
-                      <div className="text-sm text-gray-600">Subjects Teaching</div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
 
             <TabsContent value="schedule" className="space-y-4">
               <Card>
@@ -344,43 +211,20 @@ const InstructorDetailModal: React.FC<InstructorDetailModalProps> = ({
             </TabsContent>
 
             <TabsContent value="analytics" className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-lg">Monthly Attendance</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="rounded-md border">
-                      <Calendar
-                        mode="single"
-                        selected={selectedDate}
-                        onSelect={(date) => date && setSelectedDate(date)}
-                      />
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-lg">Subject Performance</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-3">
-                      {instructor.schedules.map((schedule, index) => (
-                        <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
-                          <div>
-                            <div className="font-medium">{schedule.subjectName}</div>
-                            <div className="text-sm text-gray-600">{schedule.subjectCode}</div>
-                          </div>
-                          <Badge className={getAttendanceRateColor(schedule.attendanceRate).bg}>
-                            {schedule.attendanceRate}%
-                          </Badge>
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">Monthly Attendance</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="rounded-md border">
+                    <Calendar
+                      mode="single"
+                      selected={selectedDate}
+                      onSelect={(date) => date && setSelectedDate(date)}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
             </TabsContent>
 
             <TabsContent value="contact" className="space-y-4">
@@ -396,24 +240,10 @@ const InstructorDetailModal: React.FC<InstructorDetailModalProps> = ({
                     <div className="flex items-center gap-3">
                       <Mail className="w-5 h-5 text-gray-500" />
                       <span>{instructor.email}</span>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => window.open(`mailto:${instructor.email}`)}
-                      >
-                        Send Email
-                      </Button>
                     </div>
                     <div className="flex items-center gap-3">
                       <Phone className="w-5 h-5 text-gray-500" />
                       <span>{instructor.phoneNumber}</span>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => window.open(`tel:${instructor.phoneNumber}`)}
-                      >
-                        Call
-                      </Button>
                     </div>
                     {instructor.officeLocation && (
                       <div className="flex items-center gap-3">
@@ -433,24 +263,7 @@ const InstructorDetailModal: React.FC<InstructorDetailModalProps> = ({
                     </div>
                   </div>
 
-                  {onSendNotification && (
-                    <div className="mt-6 pt-6 border-t">
-                      <div className="flex gap-2">
-                        <Button
-                          variant="outline"
-                          onClick={() => onSendNotification(instructor.instructorId, 'reminder', 'Attendance reminder')}
-                        >
-                          Send Reminder
-                        </Button>
-                        <Button
-                          variant="outline"
-                          onClick={() => onSendNotification(instructor.instructorId, 'alert', 'Attendance alert')}
-                        >
-                          Send Alert
-                        </Button>
-                      </div>
-                    </div>
-                  )}
+                  {/* View-only: no action buttons in contact tab */}
                 </CardContent>
               </Card>
             </TabsContent>

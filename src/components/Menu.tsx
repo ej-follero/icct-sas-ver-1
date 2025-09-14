@@ -48,6 +48,8 @@ import {
   Key,
   Globe,
   Upload,
+  Building2,
+  GraduationCap,
 } from "lucide-react";
 import { cn } from "@/lib/utils"; // shadcn classnames utility
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -85,8 +87,8 @@ const menuConfig: MenuConfig = {
       title: "USER MANAGEMENT",
       sectionIcon: <UserCircle className="w-5 h-5" />,
       items: [
-        { icon: <Users className="w-5 h-5" />, label: "Users", href: "/list/users", description: "Manage all users" },
-        { icon: <Shield className="w-5 h-5" />, label: "Roles", href: "/settings/roles", description: "Manage roles and permissions" },
+        { icon: <Users className="w-5 h-5" />, label: "All Users", href: "/list/users", description: "Manage all users with role-based filtering" },
+        { icon: <Shield className="w-5 h-5" />, label: "Roles & Permissions", href: "/settings/roles", description: "Manage roles and permissions" },
         { icon: <UserCheck className="w-5 h-5" />, label: "Super Admin Users", href: "/settings/super-admin-users", description: "Manage Super Admin accounts" },
         { icon: <Activity className="w-5 h-5" />, label: "Admin Audit", href: "/settings/admin-audit", description: "Admin user audit trail" },
       ],
@@ -177,7 +179,6 @@ const menuConfig: MenuConfig = {
       sectionIcon: <Settings className="w-5 h-5" />,
       compact: true,
       items: [
-        { icon: <Users className="w-5 h-5" />, label: "Admin Users", href: "/settings/admin-users", description: "Manage admin accounts" },
         {
           icon: <Shield className="w-5 h-5" />, label: "Access Control", href: "#", description: "Security settings",
           subItems: [
@@ -334,8 +335,8 @@ const menuConfig: MenuConfig = {
       title: "USER MANAGEMENT",
       sectionIcon: <UserCircle className="w-5 h-5" />,
       items: [
-        { icon: <Users className="w-5 h-5" />, label: "Users", href: "/list/users" },
-        { icon: <Shield className="w-5 h-5" />, label: "Roles", href: "/settings/roles" },
+        { icon: <Users className="w-5 h-5" />, label: "All Users", href: "/list/users", description: "Manage all users with role-based filtering" },
+        { icon: <Shield className="w-5 h-5" />, label: "Roles & Permissions", href: "/settings/roles", description: "Manage roles and permissions" },
       ],
     },
     {
@@ -383,7 +384,6 @@ const menuConfig: MenuConfig = {
       sectionIcon: <Settings className="w-5 h-5" />,
       compact: true,
       items: [
-        { icon: <Users className="w-5 h-5" />, label: "Admin Users", href: "/settings/admin-users", description: "Manage admin accounts" },
         {
           icon: <Shield className="w-5 h-5" />, label: "Access Control", href: "#", description: "Security settings",
           subItems: [
@@ -445,14 +445,14 @@ const menuConfig: MenuConfig = {
         },
       ],
     },
-    {
-      title: "USER MANAGEMENT",
-      sectionIcon: <UserCircle className="w-5 h-5" />,
-      items: [
-        { icon: <Users className="w-5 h-5" />, label: "Users", href: "/list/users" },
-        { icon: <Shield className="w-5 h-5" />, label: "Roles", href: "/settings/roles" },
-      ],
-    },
+         {
+       title: "USER MANAGEMENT",
+       sectionIcon: <UserCircle className="w-5 h-5" />,
+       items: [
+         { icon: <Users className="w-5 h-5" />, label: "All Users", href: "/list/users", description: "Manage all users with role-based filtering" },
+         { icon: <Shield className="w-5 h-5" />, label: "Roles & Permissions", href: "/settings/roles", description: "Manage roles and permissions" },
+       ],
+     },
     {
       title: "RFID MANAGEMENT",
       sectionIcon: <ScanLine className="w-5 h-5" />,
@@ -498,7 +498,6 @@ const menuConfig: MenuConfig = {
       sectionIcon: <Settings className="w-5 h-5" />,
       compact: true,
       items: [
-        { icon: <Users className="w-5 h-5" />, label: "Admin Users", href: "/settings/admin-users", description: "Manage admin accounts" },
         {
           icon: <Shield className="w-5 h-5" />, label: "Access Control", href: "#", description: "Security settings",
           subItems: [
@@ -546,7 +545,7 @@ const menuConfig: MenuConfig = {
       items: [
         { icon: <School className="w-5 h-5" />, label: "My Classes", href: "/list/classes" },
         { icon: <School className="w-5 h-5" />, label: "My Subjects", href: "/list/subjects" },
-        { icon: <School className="w-5 h-5" />, label: "Student List", href: "/list/students" },
+                 { icon: <School className="w-5 h-5" />, label: "Student List", href: "/list/users" },
       ],
     },
     {
@@ -813,7 +812,6 @@ const menuConfig: MenuConfig = {
       sectionIcon: <Settings className="w-5 h-5" />,
       compact: true,
       items: [
-        { icon: <Users className="w-5 h-5" />, label: "Admin Users", href: "/settings/admin-users", description: "View admin accounts" },
         {
           icon: <Shield className="w-5 h-5" />, label: "Access Control", href: "#", description: "Security settings",
           subItems: [

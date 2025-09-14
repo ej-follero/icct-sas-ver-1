@@ -1575,14 +1575,14 @@ export default function UsersListPage() {
                     placeholder="Search users..."
                     value={searchInput}
                     onChange={e => setSearchInput(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 sm:py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:outline-none text-sm sm:text-base"
+                    className="w-full pl-10 pr-4 h-9 sm:h-10 border border-gray-300 rounded text-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:outline-none text-sm sm:text-base"
                   />
                 </div>
                 
                 {/* Quick Filter Dropdowns - In one row on larger screens */}
                 <div className="flex flex-wrap gap-2 sm:gap-3">
                   <Select value={statusFilter} onValueChange={setStatusFilter}>
-                    <SelectTrigger className="w-32 sm:w-36 text-xs sm:text-sm text-gray-700 h-9 sm:h-10">
+                    <SelectTrigger className="w-32 sm:w-36 text-xs sm:text-sm text-gray-500 h-9 sm:h-10 rounded">
                       <SelectValue placeholder="Status" />
                     </SelectTrigger>
                     <SelectContent>
@@ -1611,7 +1611,7 @@ export default function UsersListPage() {
                   </Select>
                   
                   <Select value={roleFilter} onValueChange={setRoleFilter}>
-                    <SelectTrigger className="w-28 sm:w-32 text-xs sm:text-sm text-gray-700 h-9 sm:h-10">
+                    <SelectTrigger className="w-28 sm:w-32 text-xs sm:text-sm text-gray-500 h-9 sm:h-10 rounded">
                       <SelectValue placeholder="Role" />
                     </SelectTrigger>
                     <SelectContent>
@@ -1623,7 +1623,7 @@ export default function UsersListPage() {
                   </Select>
 
                   <Select value={verificationFilter} onValueChange={setVerificationFilter}>
-                    <SelectTrigger className="w-36 sm:w-40 text-xs sm:text-sm text-gray-700 h-9 sm:h-10">
+                    <SelectTrigger className="w-36 sm:w-40 text-xs sm:text-sm text-gray-500 h-9 sm:h-10 rounded">
                       <SelectValue placeholder="Email Verification" />
                     </SelectTrigger>
                     <SelectContent>
@@ -1642,7 +1642,7 @@ export default function UsersListPage() {
                   </Select>
 
                   <Select value={twoFactorFilter} onValueChange={setTwoFactorFilter}>
-                    <SelectTrigger className="w-24 sm:w-28 text-xs sm:text-sm text-gray-700 h-9 sm:h-10">
+                    <SelectTrigger className="w-24 sm:w-28 text-xs sm:text-sm text-gray-500 h-9 sm:h-10 rounded">
                       <SelectValue placeholder="2FA" />
                     </SelectTrigger>
                     <SelectContent>
@@ -1661,7 +1661,7 @@ export default function UsersListPage() {
                   </Select>
 
                   <Select value={loginActivityFilter} onValueChange={setLoginActivityFilter}>
-                    <SelectTrigger className="w-32 sm:w-36 text-xs sm:text-sm text-gray-700 h-9 sm:h-10">
+                    <SelectTrigger className="w-32 sm:w-36 text-xs sm:text-sm text-gray-500 h-9 sm:h-10 rounded">
                       <SelectValue placeholder="Activity" />
                     </SelectTrigger>
                     <SelectContent>
@@ -2036,60 +2036,41 @@ export default function UsersListPage() {
           maxFileSize={10}
         />
 
-        <BulkActionsDialog
+        <BulkActionsDialog<User>
           open={bulkActionsDialogOpen}
           onOpenChange={setBulkActionsDialogOpen}
           selectedItems={selectedUsersForBulkAction}
-          entityType="instructor"
+          entityType="user"
           entityLabel="user"
           availableActions={[
             { 
-              type: 'status-update', 
-              title: 'Update User Status', 
+              id: 'status-update', 
+              label: 'Update User Status', 
               description: 'Activate, deactivate, or suspend selected users', 
-              icon: <Settings className="w-4 h-4" /> 
+              icon: <Settings className="w-4 h-4" />,
+              tabId: 'status'
             },
             { 
-              type: 'notification', 
-              title: 'Send Notifications', 
+              id: 'notification', 
+              label: 'Send Notifications', 
               description: 'Send email notifications to selected users', 
-              icon: <Bell className="w-4 h-4" /> 
+              icon: <Bell className="w-4 h-4" />,
+              tabId: 'notifications'
             },
             { 
-              type: 'export', 
-              title: 'Export User Data', 
+              id: 'export', 
+              label: 'Export User Data', 
               description: 'Export user information in various formats', 
-              icon: <Download className="w-4 h-4" /> 
+              icon: <Download className="w-4 h-4" />,
+              tabId: 'export'
             },
           ]}
-          exportColumns={userColumns.map(col => ({ id: col.key, label: col.label, default: true }))}
-          notificationTemplates={[
-            {
-              id: 'welcome',
-              name: 'Welcome Message',
-              subject: 'Welcome to Our Platform',
-              message: 'Welcome! Your account has been successfully created.',
-              availableFor: ['instructor']
-            },
-            {
-              id: 'status-change',
-              name: 'Status Update',
-              subject: 'Account Status Update',
-              message: 'Your account status has been updated. Please check your account for details.',
-              availableFor: ['instructor']
-            }
-          ]}
-          stats={{
-            total: selectedUsersForBulkAction.length,
-            active: selectedUsersForBulkAction.filter(u => u.status === 'active').length,
-            inactive: selectedUsersForBulkAction.filter(u => u.status === 'inactive' || u.status === 'suspended').length
-          }}
           onActionComplete={handleBulkActionComplete}
           onCancel={handleBulkActionCancel}
           onProcessAction={handleProcessBulkAction}
-          getItemDisplayName={item => item.userName}
-          getItemStatus={item => item.status}
-          getItemEmail={item => item.email}
+          getItemDisplayName={(item: User) => item.userName}
+          getItemStatus={(item: User) => item.status}
+          getItemId={(item: User) => item.id}
         />
 
         {/* Legacy dialogs for backward compatibility */}

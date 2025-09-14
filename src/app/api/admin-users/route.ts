@@ -5,9 +5,7 @@ import { prisma } from '@/lib/prisma';
 // GET admin users only
 export async function GET() {
   try {
-    console.log('Connecting to database...');
-    await prisma.$connect();
-    console.log('Database connected, fetching admin users...');
+    console.log('Fetching admin users...');
     
     const adminUsers = await prisma.user.findMany({
       where: {
@@ -78,8 +76,6 @@ export async function GET() {
       { error: `Failed to fetch admin users: ${error instanceof Error ? error.message : 'Unknown error'}` },
       { status: 500 }
     );
-  } finally {
-    await prisma.$disconnect();
   }
 }
 

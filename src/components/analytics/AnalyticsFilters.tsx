@@ -18,6 +18,7 @@ interface AnalyticsFiltersProps {
   enableTimeRange?: boolean;
   timeRange?: TimeRange;
   onTimeRangeChange?: (timeRange: TimeRange) => void;
+  onCustomRangeApply?: () => void;
 }
 
 export function AnalyticsFilters({
@@ -28,7 +29,8 @@ export function AnalyticsFilters({
   onRiskLevelChange,
   enableTimeRange = false,
   timeRange,
-  onTimeRangeChange
+  onTimeRangeChange,
+  onCustomRangeApply
 }: AnalyticsFiltersProps) {
   return (
     <div>
@@ -65,7 +67,7 @@ export function AnalyticsFilters({
             <TimeRangeSelector
               timeRange={timeRange}
               onTimeRangeChange={onTimeRangeChange}
-              
+              onCustomRangeApply={onCustomRangeApply}
             />
           )}
         </div>

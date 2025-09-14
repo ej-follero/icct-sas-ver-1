@@ -20,3 +20,7 @@ export { default as SortDialog } from './SortDialog';
 export { default as UploadBackupDialog } from './UploadBackupDialog';
 export { default as ViewDialog } from './ViewDialog';
 export { default as VisibleColumnsDialog } from './VisibleColumnsDialog';
+export { default as ManualAttendanceDialog } from './ManualAttendanceDialog';
+export { default as EmailDetailDialog } from './EmailDetailDialog';
+export { default as EmailComposeDialog } from './EmailComposeDialog';
+export { default as EmailBulkMoveDialog } from './EmailBulkMoveDialog';

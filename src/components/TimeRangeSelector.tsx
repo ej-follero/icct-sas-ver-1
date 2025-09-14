@@ -16,6 +16,7 @@ interface TimeRange {
 interface TimeRangeSelectorProps {
   timeRange: TimeRange;
   onTimeRangeChange: (range: TimeRange) => void;
+  onCustomRangeApply?: () => void;
 }
 
 interface DatePickerPopoverProps {
@@ -23,11 +24,12 @@ interface DatePickerPopoverProps {
   onOpenChange: (open: boolean) => void;
   timeRange: TimeRange;
   onTimeRangeChange: (range: TimeRange) => void;
+  onCustomRangeApply?: () => void;
   trigger: React.ReactNode;
 }
 
 // Reusable DatePickerPopover Component
-function DatePickerPopover({ isOpen, onOpenChange, timeRange, onTimeRangeChange, trigger }: DatePickerPopoverProps) {
+function DatePickerPopover({ isOpen, onOpenChange, timeRange, onTimeRangeChange, onCustomRangeApply, trigger }: DatePickerPopoverProps) {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [hoveredDate, setHoveredDate] = useState<Date | null>(null);
   const [selectionMode, setSelectionMode] = useState<'single' | 'range'>('single');
@@ -391,6 +393,10 @@ function DatePickerPopover({ isOpen, onOpenChange, timeRange, onTimeRangeChange,
                 event.preventDefault();
                 event.stopPropagation();
                 onOpenChange(false);
+                // Call the custom range apply function if provided
+                if (onCustomRangeApply) {
+                  onCustomRangeApply();
+                }
               }}
             >
               Apply
@@ -403,7 +409,7 @@ function DatePickerPopover({ isOpen, onOpenChange, timeRange, onTimeRangeChange,
   );
 }
 
-export function TimeRangeSelector({ timeRange, onTimeRangeChange }: TimeRangeSelectorProps) {
+export function TimeRangeSelector({ timeRange, onTimeRangeChange, onCustomRangeApply }: TimeRangeSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
   const suppressCloseRef = useRef(false);
   const handlePopoverOpenChange = (nextOpen: boolean) => {
@@ -484,6 +490,7 @@ export function TimeRangeSelector({ timeRange, onTimeRangeChange }: TimeRangeSel
           onOpenChange={handlePopoverOpenChange}
           timeRange={timeRange}
           onTimeRangeChange={onTimeRangeChange}
+          onCustomRangeApply={onCustomRangeApply}
           trigger={<div />}
         />
       )}

@@ -5,7 +5,6 @@ import { prisma } from '@/lib/prisma';
 // GET all departments
 export async function GET() {
   try {
-    await prisma.$connect();
     const departments = await prisma.department.findMany({
       include: {
         _count: {
@@ -122,12 +121,6 @@ export async function GET() {
       { error: 'Failed to fetch departments', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
-  } finally {
-    try {
-      await prisma.$disconnect();
-    } catch (disconnectError) {
-      console.error('Error disconnecting from database:', disconnectError);
-    }
   }
 }
 

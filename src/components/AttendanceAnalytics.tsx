@@ -63,9 +63,10 @@ import {
   ResponsiveContainer,
   AreaChart,
   Area,
-  Legend
+  Legend,
+  ReferenceLine
 } from 'recharts';
-import { AnalyticsHeader, AnalyticsFilters, QuickStats, ChartCard, DrillDownBreadcrumbs, CrossFilterPanel, TimeRangeSelector } from './analytics';
+import { AnalyticsHeader, AnalyticsFilters, QuickStats, ChartCard, DrillDownBreadcrumbs, TimeRangeSelector } from './analytics';
 import { 
   processRealTimeData, 
   calculateAttendanceRate, 
@@ -79,6 +80,8 @@ import {
   type DataValidationResult,
   type RiskLevelData
 } from '@/lib/analytics-utils';
+import { ExportService } from '@/lib/services/export.service';
+import { Toast } from '@/components/ui/toast';
 
 // Enhanced TypeScript interfaces for advanced interactivity
 interface DrillDownState {
@@ -89,15 +92,7 @@ interface DrillDownState {
   filters: Record<string, any>;
 }
 
-interface CrossFilterState {
-  activeFilters: Record<string, any>;
-  appliedFilters: Record<string, any>;
-  filterHistory: Array<{
-    timestamp: Date;
-    filter: Record<string, any>;
-    source: string;
-  }>;
-}
+
 
 interface TimeRange {
   start: Date;
@@ -107,10 +102,8 @@ interface TimeRange {
 
 interface AdvancedInteractivityProps {
   drillDown: DrillDownState;
-  crossFilter: CrossFilterState;
   timeRange: TimeRange;
   onDrillDown: (level: string, data: any) => void;
-  onCrossFilter: (filters: Record<string, any>) => void;
   onTimeRangeChange: (range: TimeRange) => void;
   onResetFilters: () => void;
 }
@@ -130,12 +123,17 @@ interface AttendanceAnalyticsProps {
   type: 'instructor' | 'student';
   onDrillDown?: (filter: { type: string; value: string }) => void;
   onExport?: (format: 'pdf' | 'csv' | 'excel') => void;
+  onRefresh?: () => void;
   enableAdvancedFeatures?: boolean;
   enableRealTime?: boolean;
-  enableCrossFiltering?: boolean;
+
   enableDrillDown?: boolean;
   enableTimeRange?: boolean;
   showHeader?: boolean;
+  showSecondaryFilters?: boolean;
+  selectedSubject?: string;
+  onSubjectChange?: (value: string) => void;
+  subjects?: Array<{ id: string; name: string }>;
 }
 
 // Utility functions imported from analytics-utils
@@ -373,7 +371,9 @@ export const FullscreenAttendanceDistributionModal = ({
   courses = [],
   sections = [],
   subjects = [],
-  yearLevels = []
+  yearLevels = [],
+  showSecondaryFilters = true,
+  loading = false
 }: {
   totalPresent: number;
   totalLate: number;
@@ -393,54 +393,59 @@ export const FullscreenAttendanceDistributionModal = ({
   sections?: Array<{ id: string; name: string }>;
   subjects?: Array<{ id: string; name: string }>;
   yearLevels?: Array<{ id: string; name: string }>;
+  showSecondaryFilters?: boolean;
+  loading?: boolean;
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [localSelectedSubject, setLocalSelectedSubject] = useState(selectedSubject);
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
         {trigger}
       </DialogTrigger>
-      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto rounded-xl">
-        <DialogHeader>
-          <div className="flex items-center justify-between">
-            <DialogTitle className="flex items-center gap-3">
+      <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden rounded-2xl border-0 shadow-2xl">
+        <DialogHeader className="bg-gradient-to-br from-blue-600 via-blue-700 to-blue-800 -m-6 p-6 rounded-t-2xl relative overflow-hidden">
+          
+          <div className="flex items-center justify-between relative z-10">
+            <DialogTitle className="flex items-center gap-4">
               <div>
-                <div className="text-2xl font-bold text-gray-900">Attendance Distribution</div>
-                <div className="text-sm text-gray-600">Complete analysis with chart and detailed breakdown for {type === 'instructor' ? 'instructors' : 'students'}</div>
+                <div className="text-2xl font-bold text-white tracking-tight">Attendance Distribution</div>
+                <div className="text-blue-100 mt-1 flex items-center gap-2 text-sm">
+                  Complete analysis with chart and detailed breakdown for {type === 'instructor' ? 'instructors' : 'students'}
+                </div>
               </div>
             </DialogTitle>
             <Button
               variant="ghost"
-              size="sm"
-              className="h-8 w-8 p-0 hover:bg-gray-100"
+              size="lg"
+              className="h-10 w-10 p-0 hover:bg-white/20 rounded-full transition-all duration-200"
               onClick={() => setIsOpen(false)}
             >
-              <X className="w-4 h-4" />
+              <X className="w-5 h-5 text-white" />
             </Button>
           </div>
         </DialogHeader>
-        <div className="py-6">
+        <div className="p-6 overflow-y-auto max-h-[calc(90vh-180px)]">
           {/* Secondary Filters */}
-          <SecondaryFilters
-            selectedCourse={selectedCourse}
-            selectedSection={selectedSection}
-            selectedSubject={selectedSubject}
-            selectedYearLevel={selectedYearLevel}
-            onCourseChange={onCourseChange || (() => {})}
-            onSectionChange={onSectionChange || (() => {})}
-            onSubjectChange={onSubjectChange || (() => {})}
-            onYearLevelChange={onYearLevelChange || (() => {})}
-            courses={courses}
-            sections={sections}
-            subjects={subjects}
-            yearLevels={yearLevels}
-          />
+          {showSecondaryFilters && (
+            <div className="mb-6">
+              <SecondaryFilters
+                selectedSubject={localSelectedSubject}
+                onSubjectChange={setLocalSelectedSubject}
+                subjects={subjects}
+              />
+            </div>
+          )}
           
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Chart Section */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-gray-900">Visual Overview</h3>
-              <div className="bg-white border border-gray-200 rounded-xl p-6">
+            <div className="space-y-4 h-full">
+              <div className="flex items-center gap-3">
+                <div className="w-1 h-5 bg-gradient-to-b from-blue-600 to-blue-800 rounded-full"></div>
+                <h3 className="text-lg font-bold text-blue-900">Visual Overview</h3>
+              </div>
+              <div className="bg-white border border-gray-100 rounded-xl p-6 pb-8 h-full min-h-[400px] flex flex-col shadow-sm hover:shadow-lg transition-all duration-300 relative overflow-hidden group">
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-blue-600"></div>
                 <AttendanceDistributionChart
                   totalPresent={totalPresent}
                   totalLate={totalLate}
@@ -450,9 +455,13 @@ export const FullscreenAttendanceDistributionModal = ({
             </div>
             
             {/* Detailed Breakdown Section */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-gray-900">Detailed Breakdown</h3>
-              <div className="bg-white border border-gray-200 rounded-xl p-6">
+            <div className="space-y-4 h-full">
+              <div className="flex items-center gap-3">
+                <div className="w-1 h-5 bg-gradient-to-b from-blue-600 to-blue-800 rounded-full"></div>
+                <h3 className="text-lg font-bold text-blue-900">Detailed Breakdown</h3>
+              </div>
+              <div className="bg-white border border-gray-100 rounded-xl p-6 pb-8 h-full min-h-[400px] flex flex-col shadow-sm hover:shadow-lg transition-all duration-300 relative overflow-hidden group">
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-blue-600"></div>
                 <AttendanceDistribution
                   totalPresent={totalPresent}
                   totalLate={totalLate}
@@ -491,7 +500,8 @@ export const FullscreenWeeklyTrendModal = ({
   courses = [],
   sections = [],
   subjects = [],
-  yearLevels = []
+  yearLevels = [],
+  showSecondaryFilters = true
 }: {
   weeklyData: any[];
   type: 'instructor' | 'student';
@@ -511,65 +521,71 @@ export const FullscreenWeeklyTrendModal = ({
   sections?: Array<{ id: string; name: string }>;
   subjects?: Array<{ id: string; name: string }>;
   yearLevels?: Array<{ id: string; name: string }>;
+  showSecondaryFilters?: boolean;
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [localSelectedSubject, setLocalSelectedSubject] = useState(selectedSubject);
     return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
         {trigger}
       </DialogTrigger>
-      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <div className="flex items-center justify-between">
-            <DialogTitle className="flex items-center gap-3">
+      <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden rounded-2xl border-0 shadow-2xl">
+        <DialogHeader className="bg-gradient-to-br from-blue-600 via-blue-700 to-blue-800 -m-6 p-6 rounded-t-2xl relative overflow-hidden">
+          <div className="flex items-center justify-between relative z-10">
+            <DialogTitle className="flex items-center gap-4">
               <div>
-                <div className="text-2xl font-bold text-gray-900">
-                  Attendance Trend Analysis - Full View
+                <div className="text-2xl font-bold text-white tracking-tight">
+                  Attendance Trend Analysis
                   {showComparison && (
-                    <span className="ml-3 inline-flex items-center gap-1 text-sm bg-blue-100 text-blue-700 px-2 py-1 rounded-full">
+                    <span className="ml-3 inline-flex items-center gap-1 text-sm bg-white/20 text-white px-2 py-1 rounded-full backdrop-blur-sm">
                       <TrendingUp className="w-3 h-3" />
                       Comparison enabled
                     </span>
                   )}
                 </div>
-                <div className="text-sm text-gray-600">Complete trend analysis for {type === 'instructor' ? 'instructors' : 'students'}</div>
+                <div className="text-blue-100 mt-1 flex items-center gap-2 text-sm">
+                  Complete trend analysis for {type === 'instructor' ? 'instructors' : 'students'}
+                </div>
               </div>
             </DialogTitle>
             <Button
               variant="ghost"
-              size="sm"
-              className="h-8 w-8 p-0 hover:bg-gray-100"
+              size="lg"
+              className="h-10 w-10 p-0 hover:bg-white/20 rounded-full transition-all duration-200"
               onClick={() => setIsOpen(false)}
             >
-              <X className="w-4 h-4" />
+              <X className="w-5 h-5 text-white" />
             </Button>
           </div>
         </DialogHeader>
-        <div className="py-6">
+        <div className="p-6 overflow-y-auto max-h-[calc(90vh-180px)]">
           {/* Secondary Filters */}
-          <SecondaryFilters
-            selectedCourse={selectedCourse}
-            selectedSection={selectedSection}
-            selectedSubject={selectedSubject}
-            selectedYearLevel={selectedYearLevel}
-            onCourseChange={onCourseChange || (() => {})}
-            onSectionChange={onSectionChange || (() => {})}
-            onSubjectChange={onSubjectChange || (() => {})}
-            onYearLevelChange={onYearLevelChange || (() => {})}
-            courses={courses}
-            sections={sections}
-            subjects={subjects}
-            yearLevels={yearLevels}
-          />
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {showSecondaryFilters && (
+            <div className="mb-6">
+              <SecondaryFilters
+                selectedSubject={localSelectedSubject}
+                onSubjectChange={setLocalSelectedSubject}
+                subjects={subjects}
+              />
+            </div>
+          )}
+          
+          <div className="grid grid-cols-1 gap-6">
             {/* Chart Section */}
             <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-gray-900">Trend Visualization</h3>
-              <div className="bg-white border border-gray-200 rounded-xl p-6">
+              <div className="flex items-center gap-3">
+                <div className="w-1 h-5 bg-gradient-to-b from-blue-600 to-blue-800 rounded-full"></div>
+                <h3 className="text-lg font-bold text-blue-900">Trend Visualization</h3>
+              </div>
+              <div className="bg-white border border-gray-100 rounded-xl p-6 shadow-sm hover:shadow-lg transition-all duration-300 relative overflow-hidden group">
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-blue-600"></div>
                 <div className="h-96">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={weeklyData}>
+                  {weeklyData.length === 0 ? (
+                    <NoDataState selectedSubject={localSelectedSubject} type={type} subjects={subjects} />
+                  ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={weeklyData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
                       <XAxis 
                         dataKey={weeklyData.length > 0 ? Object.keys(weeklyData[0]).find(key => key !== 'attendanceRate' && key !== 'label') || 'week' : 'week'}
@@ -657,16 +673,21 @@ export const FullscreenWeeklyTrendModal = ({
                       />
                     </LineChart>
                   </ResponsiveContainer>
+                  )}
                 </div>
               </div>
             </div>
             
             {/* Detailed Analysis Section */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-gray-900">Trend Analysis</h3>
-              <div className="bg-white border border-gray-200 rounded-xl p-6">
+              <div className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-1 h-5 bg-gradient-to-b from-blue-600 to-blue-800 rounded-full"></div>
+                  <h3 className="text-lg font-bold text-blue-900">Trend Analysis</h3>
+                </div>
+                <div className="bg-white border border-gray-100 rounded-xl p-6 shadow-sm hover:shadow-lg transition-all duration-300 relative overflow-hidden group">
+                  <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-blue-600"></div>
                 <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-4">
                     <div className="bg-blue-50 rounded p-4">
                       <div className="text-2xl font-bold text-blue-700">
                         {weeklyData.length > 0 ? weeklyData[weeklyData.length - 1]?.attendanceRate?.toFixed(1) : '0'}%
@@ -748,7 +769,8 @@ export const FullscreenLateArrivalModal = ({
   courses = [],
   sections = [],
   subjects = [],
-  yearLevels = []
+  yearLevels = [],
+  showSecondaryFilters = true
 }: {
   lateData: any[];
   type: 'instructor' | 'student';
@@ -768,65 +790,71 @@ export const FullscreenLateArrivalModal = ({
   sections?: Array<{ id: string; name: string }>;
   subjects?: Array<{ id: string; name: string }>;
   yearLevels?: Array<{ id: string; name: string }>;
+  showSecondaryFilters?: boolean;
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [localSelectedSubject, setLocalSelectedSubject] = useState(selectedSubject);
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
         {trigger}
       </DialogTrigger>
-      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <div className="flex items-center justify-between">
-            <DialogTitle className="flex items-center gap-3">
+      <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden rounded-2xl border-0 shadow-2xl">
+        <DialogHeader className="bg-gradient-to-br from-blue-600 via-blue-700 to-blue-800 -m-6 p-6 rounded-t-2xl relative overflow-hidden">
+          <div className="flex items-center justify-between relative z-10">
+            <DialogTitle className="flex items-center gap-4">
               <div>
-                <div className="text-2xl font-bold text-gray-900">
-                  Late Arrival Patterns - Full View
+                <div className="text-2xl font-bold text-white tracking-tight">
+                  Late Arrival Trends
                   {showComparison && (
-                    <span className="ml-3 inline-flex items-center gap-1 text-sm bg-red-100 text-red-700 px-2 py-1 rounded-full">
+                    <span className="ml-3 inline-flex items-center gap-1 text-sm bg-white/20 text-white px-2 py-1 rounded-full backdrop-blur-sm">
                       <TrendingUp className="w-3 h-3" />
                       Comparison enabled
                     </span>
                   )}
                 </div>
-                <div className="text-sm text-gray-600">Late arrival trend analysis for {type === 'instructor' ? 'instructors' : 'students'}</div>
+                <div className="text-blue-100 mt-1 flex items-center gap-2 text-sm">
+                  Late arrival trend analysis for {type === 'instructor' ? 'instructors' : 'students'}
+                </div>
               </div>
             </DialogTitle>
             <Button
               variant="ghost"
-              size="sm"
-              className="h-8 w-8 p-0 hover:bg-gray-100"
+              size="lg"
+              className="h-10 w-10 p-0 hover:bg-white/20 rounded-full transition-all duration-200"
               onClick={() => setIsOpen(false)}
             >
-              <X className="w-4 h-4" />
+              <X className="w-5 h-5 text-white" />
             </Button>
           </div>
         </DialogHeader>
-        <div className="py-6">
+        <div className="p-6 overflow-y-auto max-h-[calc(90vh-180px)]">
           {/* Secondary Filters */}
-          <SecondaryFilters
-            selectedCourse={selectedCourse}
-            selectedSection={selectedSection}
-            selectedSubject={selectedSubject}
-            selectedYearLevel={selectedYearLevel}
-            onCourseChange={onCourseChange || (() => {})}
-            onSectionChange={onSectionChange || (() => {})}
-            onSubjectChange={onSubjectChange || (() => {})}
-            onYearLevelChange={onYearLevelChange || (() => {})}
-            courses={courses}
-            sections={sections}
-            subjects={subjects}
-            yearLevels={yearLevels}
-          />
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {showSecondaryFilters && (
+            <div className="mb-6">
+              <SecondaryFilters
+                selectedSubject={localSelectedSubject}
+                onSubjectChange={setLocalSelectedSubject}
+                subjects={subjects}
+              />
+            </div>
+          )}
+          
+          <div className="grid grid-cols-1 gap-6">
             {/* Chart Section */}
             <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-gray-900">Late Arrival Visualization</h3>
-              <div className="bg-white border border-gray-200 rounded-xl p-6">
+              <div className="flex items-center gap-3">
+                <div className="w-1 h-5 bg-gradient-to-b from-blue-600 to-blue-800 rounded-full"></div>
+                <h3 className="text-lg font-bold text-blue-900">Late Arrival Visualization</h3>
+              </div>
+              <div className="bg-white border border-gray-100 rounded-xl p-6 shadow-sm hover:shadow-lg transition-all duration-300 relative overflow-hidden group">
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-blue-600"></div>
                 <div className="h-96">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={lateData}>
+                  {lateData.length === 0 ? (
+                    <NoDataState selectedSubject={localSelectedSubject} type={type} subjects={subjects} />
+                  ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={lateData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
                       <XAxis 
                         dataKey={lateData.length > 0 ? Object.keys(lateData[0]).find(key => key !== 'lateRate' && key !== 'label' && key !== 'previousLateRate') || 'week' : 'week'}
@@ -913,14 +941,19 @@ export const FullscreenLateArrivalModal = ({
                       />
                     </LineChart>
                   </ResponsiveContainer>
+                  )}
                 </div>
               </div>
             </div>
             
             {/* Detailed Analysis Section */}
             <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-gray-900">Late Arrival Analysis</h3>
-              <div className="bg-white border border-gray-200 rounded-xl p-6">
+              <div className="flex items-center gap-3">
+                <div className="w-1 h-5 bg-gradient-to-b from-blue-600 to-blue-800 rounded-full"></div>
+                <h3 className="text-lg font-bold text-blue-900">Late Arrival Analysis</h3>
+              </div>
+              <div className="bg-white border border-gray-100 rounded-xl p-6 shadow-sm hover:shadow-lg transition-all duration-300 relative overflow-hidden group">
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-blue-600"></div>
                 <div className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div className="bg-red-50 rounded p-4">
@@ -938,7 +971,7 @@ export const FullscreenLateArrivalModal = ({
                   </div>
                   
                   <div className="space-y-3">
-                    <h4 className="font-semibold text-gray-900">
+                    <h4 className="font-semibold text-blue-900">
                       Detailed Breakdown
                       {showComparison && <span className="text-sm font-normal text-gray-500 ml-2">(with comparison)</span>}
                     </h4>
@@ -1000,7 +1033,8 @@ export const FullscreenRiskDistributionModal = ({
   courses = [],
   sections = [],
   subjects = [],
-  yearLevels = []
+  yearLevels = [],
+  showSecondaryFilters = true
 }: {
   riskLevelData: any[];
   type: 'instructor' | 'student';
@@ -1018,6 +1052,7 @@ export const FullscreenRiskDistributionModal = ({
   sections?: Array<{ id: string; name: string }>;
   subjects?: Array<{ id: string; name: string }>;
   yearLevels?: Array<{ id: string; name: string }>;
+  showSecondaryFilters?: boolean;
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   return (
@@ -1025,7 +1060,7 @@ export const FullscreenRiskDistributionModal = ({
       <DialogTrigger asChild>
         {trigger}
       </DialogTrigger>
-      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto rounded-xl">
         <DialogHeader>
           <div className="flex items-center justify-between">
             <DialogTitle className="flex items-center gap-3">
@@ -1034,7 +1069,8 @@ export const FullscreenRiskDistributionModal = ({
               </div>
               <div>
                 <div className="text-2xl font-bold text-gray-900">Risk Level Distribution - Full View</div>
-                <div className="text-sm text-gray-600">Complete risk analysis for {type === 'instructor' ? 'instructors' : 'students'}</div>
+                <div className="text-sm text-gray-600">Complete risk analysis for {type === 'instructor' ? 'instructors' : 'students'}
+                </div>
               </div>
             </DialogTitle>
             <Button
@@ -1049,20 +1085,13 @@ export const FullscreenRiskDistributionModal = ({
         </DialogHeader>
         <div className="py-6">
           {/* Secondary Filters */}
-          <SecondaryFilters
-            selectedCourse={selectedCourse}
-            selectedSection={selectedSection}
-            selectedSubject={selectedSubject}
-            selectedYearLevel={selectedYearLevel}
-            onCourseChange={onCourseChange || (() => {})}
-            onSectionChange={onSectionChange || (() => {})}
-            onSubjectChange={onSubjectChange || (() => {})}
-            onYearLevelChange={onYearLevelChange || (() => {})}
-            courses={courses}
-            sections={sections}
-            subjects={subjects}
-            yearLevels={yearLevels}
-          />
+          {showSecondaryFilters && (
+            <SecondaryFilters
+              selectedSubject={selectedSubject}
+              onSubjectChange={onSubjectChange || (() => {})}
+              subjects={subjects}
+            />
+          )}
           
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             {/* Chart Section */}
@@ -1165,62 +1194,91 @@ export const FullscreenDepartmentPerformanceModal = ({
   departmentStats,
   type,
   trigger,
-  onExport
+  onExport,
+  selectedCourse = 'all',
+  selectedSection = 'all',
+  selectedSubject = 'all',
+  selectedYearLevel = 'all',
+  onCourseChange,
+  onSectionChange,
+  onSubjectChange,
+  onYearLevelChange,
+  courses = [],
+  sections = [],
+  subjects = [],
+  yearLevels = [],
+  showSecondaryFilters = true
 }: {
   departmentStats: any[];
   type: 'instructor' | 'student';
   trigger: React.ReactNode;
   onExport?: (format: 'pdf' | 'csv' | 'excel') => void;
+  selectedCourse?: string;
+  selectedSection?: string;
+  selectedSubject?: string;
+  selectedYearLevel?: string;
+  onCourseChange?: (value: string) => void;
+  onSectionChange?: (value: string) => void;
+  onSubjectChange?: (value: string) => void;
+  onYearLevelChange?: (value: string) => void;
+  courses?: Array<{ id: string; name: string }>;
+  sections?: Array<{ id: string; name: string }>;
+  subjects?: Array<{ id: string; name: string }>;
+  yearLevels?: Array<{ id: string; name: string }>;
+  showSecondaryFilters?: boolean;
 }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [localSelectedSubject, setLocalSelectedSubject] = useState(selectedSubject);
+
   return (
-    <Dialog>
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
         {trigger}
       </DialogTrigger>
-      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <div className="flex items-center justify-between">
-            <DialogTitle className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
-                <Users className="w-5 h-5 text-blue-600" />
-              </div>
+      <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden rounded-2xl border-0 shadow-2xl">
+        <DialogHeader className="bg-gradient-to-br from-blue-600 via-blue-700 to-blue-800 -m-6 p-6 rounded-t-2xl relative overflow-hidden">
+          <div className="flex items-center justify-between relative z-10">
+            <DialogTitle className="flex items-center gap-4">
               <div>
-                <div className="text-2xl font-bold text-gray-900">Department Performance - Full View</div>
-                <div className="text-sm text-gray-600">Complete department analysis for {type === 'instructor' ? 'instructors' : 'students'}</div>
+                <div className="text-2xl font-bold text-white tracking-tight">
+                  Department Performance
+                </div>
+                <div className="text-blue-100 mt-1 flex items-center gap-2 text-sm">
+                  Complete department analysis for {type === 'instructor' ? 'instructors' : 'students'}
+                </div>
               </div>
             </DialogTitle>
-            <div className="flex items-center gap-2">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" className="flex items-center gap-2">
-                    <Download className="w-4 h-4" />
-                    Export
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => onExport?.('csv')}>
-                    <Download className="w-4 h-4 mr-2" />
-                    Download CSV
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => onExport?.('pdf')}>
-                    <Download className="w-4 h-4 mr-2" />
-                    Download PDF
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => onExport?.('excel')}>
-                    <Download className="w-4 h-4 mr-2" />
-                    Download Excel
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
+            <Button
+              variant="ghost"
+              size="lg"
+              className="h-10 w-10 p-0 hover:bg-white/20 rounded-full transition-all duration-200"
+              onClick={() => setIsOpen(false)}
+            >
+              <X className="w-5 h-5 text-white" />
+            </Button>
           </div>
         </DialogHeader>
-        <div className="py-6">
+        <div className="p-6 overflow-y-auto max-h-[calc(90vh-180px)]">
+          {/* Secondary Filters */}
+          {showSecondaryFilters && (
+            <div className="mb-6">
+              <SecondaryFilters
+                selectedSubject={localSelectedSubject}
+                onSubjectChange={setLocalSelectedSubject}
+                subjects={subjects}
+              />
+            </div>
+          )}
+          
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             {/* Chart Section */}
             <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-gray-900">Performance Visualization</h3>
-              <div className="bg-white border border-gray-200 rounded-xl p-6">
+              <div className="flex items-center gap-3">
+                <div className="w-1 h-5 bg-gradient-to-b from-blue-600 to-blue-800 rounded-full"></div>
+                <h3 className="text-lg font-bold text-blue-900">Performance Visualization</h3>
+              </div>
+              <div className="bg-white border border-gray-100 rounded-xl p-6 shadow-sm hover:shadow-lg transition-all duration-300 relative overflow-hidden group">
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-blue-600"></div>
                 <div className="h-96">
                   <ResponsiveContainer width="100%" height="100%">
                                   <BarChart data={departmentStats}>
@@ -1234,6 +1292,7 @@ export const FullscreenDepartmentPerformanceModal = ({
                         tick={{ fontSize: 12, fill: '#6b7280' }}
                         axisLine={{ stroke: '#e5e7eb' }}
                         tickFormatter={(value) => `${value}%`}
+                        domain={[0, 100]}
                       />
                       <RechartsTooltip 
                         contentStyle={{
@@ -1252,6 +1311,19 @@ export const FullscreenDepartmentPerformanceModal = ({
                         fill="#1e40af"
                         radius={[4, 4, 0, 0]}
                         name="Attendance Rate"
+                      />
+                      <ReferenceLine 
+                        y={85} 
+                        stroke="#0ea5e9" 
+                        strokeDasharray="5 5" 
+                        strokeWidth={2}
+                        label={{ 
+                          value: "Target 85%", 
+                          position: "insideTopRight",
+                          fill: "#0ea5e9",
+                          fontSize: 12,
+                          fontWeight: "bold"
+                        }}
                       />
                     </BarChart>
                   </ResponsiveContainer>
@@ -1296,6 +1368,11 @@ export const FullscreenDepartmentPerformanceModal = ({
             </div>
           </div>
         </div>
+
+        {/* Footer with Export Button */}
+        <div className="flex items-center justify-end gap-3 pt-6 border-t border-gray-200 sticky bottom-0 bg-white">
+          <DownloadDropdown onExport={onExport} />
+        </div>
       </DialogContent>
     </Dialog>
   );
@@ -1337,6 +1414,7 @@ export const AttendanceDistributionChart = ({
               }
               labelLine={{ stroke: '#6b7280', strokeWidth: 1.5 }}
               paddingAngle={2}
+              aria-label="Attendance distribution pie chart showing present, late, and absent percentages"
             >
               {chartData.map((entry, index) => (
                 <Cell 
@@ -1376,6 +1454,22 @@ export const AttendanceDistributionChart = ({
         </div>
       </div>
       
+      {/* Legend */}
+      <div className="mt-6">
+        <div className="flex items-center justify-center gap-8">
+          {chartData.map((item, index) => (
+            <div key={index} className="flex items-center gap-2">
+              <div 
+                className="w-4 h-4 rounded-sm" 
+                style={{ backgroundColor: item.color }}
+              ></div>
+              <span className="text-sm font-medium text-gray-700">
+                {item.name} ({item.value.toLocaleString()})
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
 
     </div>
   );
@@ -1426,7 +1520,7 @@ const ChartNoData = ({
   iconColor?: string;
   bgColor?: string;
 }) => (
-  <div className={`${bgColor} rounded-lg border-2 border-dashed border-gray-200 p-8 text-center`}>
+  <div className={`${bgColor} rounded border-2 border-dashed border-gray-200 p-8 text-center`}>
     <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
       <Icon className={`w-6 h-6 ${iconColor}`} />
     </div>
@@ -1437,102 +1531,75 @@ const ChartNoData = ({
 
 // Secondary Filter Component for Drill-Down
 const SecondaryFilters = ({
-  selectedCourse,
-  selectedSection,
   selectedSubject,
-  selectedYearLevel,
-  onCourseChange,
-  onSectionChange,
   onSubjectChange,
-  onYearLevelChange,
-  courses = [],
-  sections = [],
-  subjects = [],
-  yearLevels = []
+  subjects = []
 }: {
-  selectedCourse: string;
-  selectedSection: string;
   selectedSubject: string;
-  selectedYearLevel: string;
-  onCourseChange: (value: string) => void;
-  onSectionChange: (value: string) => void;
   onSubjectChange: (value: string) => void;
-  onYearLevelChange: (value: string) => void;
-  courses?: Array<{ id: string; name: string }>;
-  sections?: Array<{ id: string; name: string }>;
   subjects?: Array<{ id: string; name: string }>;
-  yearLevels?: Array<{ id: string; name: string }>;
-}) => (
-  <div className="flex flex-wrap gap-3 mb-4 justify-end">
-    
-    <Select value={selectedCourse} onValueChange={onCourseChange}>
-      <SelectTrigger className="w-40 h-8 text-sm text-gray-500 rounded">
-        <SelectValue placeholder="All Courses" />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value="all">All Courses</SelectItem>
-        {courses.map(course => (
-          <SelectItem key={course.id} value={course.id}>
-            {course.name}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-    
-    <Select value={selectedSection} onValueChange={onSectionChange}>
-    <SelectTrigger className="w-40 h-8 text-sm text-gray-500 rounded">
-        <SelectValue placeholder="All Sections" />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value="all">All Sections</SelectItem>
-        {sections.map(section => (
-          <SelectItem key={section.id} value={section.id}>
-            {section.name}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-    
-    <Select value={selectedSubject} onValueChange={onSubjectChange}>
-    <SelectTrigger className="w-40 h-8 text-sm text-gray-500 rounded">
-        <SelectValue placeholder="All Subjects" />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value="all">All Subjects</SelectItem>
-        {subjects.map(subject => (
-          <SelectItem key={subject.id} value={subject.id}>
-            {subject.name}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-    
-    <Select value={selectedYearLevel} onValueChange={onYearLevelChange}>
-    <SelectTrigger className="w-40 h-8 text-sm text-gray-500 rounded">
-        <SelectValue placeholder="All Year Levels" />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value="all">All Year Levels</SelectItem>
-        {yearLevels.map(yearLevel => (
-          <SelectItem key={yearLevel.id} value={yearLevel.id}>
-            {yearLevel.name}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  </div>
-);
+}) => {
+  const [searchQuery, setSearchQuery] = useState('');
+  
+  const filteredSubjects = subjects.filter(subject =>
+    subject.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  return (
+    <div className="flex flex-wrap gap-3 mb-4 mt-4 justify-end items-center">
+      <Select value={selectedSubject} onValueChange={onSubjectChange}>
+        <SelectTrigger className="w-48 h-8 text-sm text-gray-500 rounded">
+          <SelectValue placeholder="All Subjects">
+            {selectedSubject === 'all' ? (
+              <div className="truncate">All Subjects</div>
+            ) : (
+              <div className="truncate" title={subjects.find(s => s.id === selectedSubject)?.name || selectedSubject}>
+                {subjects.find(s => s.id === selectedSubject)?.name || selectedSubject}
+              </div>
+            )}
+          </SelectValue>
+        </SelectTrigger>
+        <SelectContent className="w-48 max-h-60 rounded-lg" position="popper" side="bottom" align="end" sideOffset={4}>
+          <div className="p-2 border-b border-gray-200">
+                          <input
+                type="text"
+                placeholder="Search subject codes..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+          </div>
+          <div className="max-h-40 overflow-y-auto">
+            <SelectItem value="all" className="text-sm">All Subjects</SelectItem>
+            {filteredSubjects.map(subject => (
+              <SelectItem key={subject.id} value={subject.id} className="text-sm">
+                <div className="truncate" title={subject.name}>
+                  {subject.name}
+                </div>
+              </SelectItem>
+            ))}
+            {filteredSubjects.length === 0 && searchQuery && (
+              <div className="px-2 py-1 text-sm text-gray-500">
+                No subjects found
+              </div>
+            )}
+          </div>
+        </SelectContent>
+      </Select>
+    </div>
+  );
+};
 
 // Reusable Download Dropdown Component
 const DownloadDropdown = ({ onExport }: { onExport?: (format: 'pdf' | 'csv' | 'excel') => void }) => (
   <DropdownMenu>
     <DropdownMenuTrigger asChild>
-      <Button variant="outline" size="sm" className="h-8 px-3 text-xs rounded bg-blue-600 text-white border-blue-600 hover:bg-blue-700 hover:border-blue-700">
+      <Button variant="outline" size="lg" className="h-8 px-3 text-sm rounded bg-blue-600 text-white border-blue-600 hover:bg-blue-700 hover:text-white hover:border-blue-700">
         <Download className="w-3 h-3 mr-1" />
         Export
       </Button>
     </DropdownMenuTrigger>
-    <DropdownMenuContent align="end" className="w-40">
+    <DropdownMenuContent align="end" className="w-40 text-sm">
       <DropdownMenuItem onClick={() => onExport?.('pdf')}>
         <FileText className="w-3 h-3 mr-2" />
         PDF
@@ -1561,6 +1628,36 @@ const ErrorBoundary = ({ error, onRetry }: { error: string; onRetry: () => void 
   </div>
 );
 
+const NoDataState = ({ 
+  selectedSubject, 
+  type,
+  subjects = []
+}: { 
+  selectedSubject: string; 
+  type: 'instructor' | 'student';
+  subjects?: Array<{ id: string; name: string }>;
+}) => {
+  const selectedSubjectName = selectedSubject === 'all' ? 'All Subjects' : 
+    subjects.find(s => s.id === selectedSubject)?.name || selectedSubject;
+  
+  return (
+    <div className="flex flex-col items-center justify-center h-96 text-center">
+      <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+        <BarChart3 className="w-8 h-8 text-gray-400" />
+      </div>
+      <h3 className="text-lg font-semibold text-gray-900 mb-2">No Data Available</h3>
+      <p className="text-gray-600 mb-4 max-w-md">
+        No attendance data found for <span className="font-medium text-blue-600">{selectedSubjectName}</span> 
+        in the selected time period.
+      </p>
+      <div className="flex items-center gap-2 text-sm text-gray-500">
+        <Info className="w-4 h-4" />
+        <span>Try selecting a different subject or time range</span>
+      </div>
+    </div>
+  );
+};
+
 export const FullscreenPatternAnalysisModal = ({
   patternData,
   type,
@@ -1578,7 +1675,8 @@ export const FullscreenPatternAnalysisModal = ({
   courses = [],
   sections = [],
   subjects = [],
-  yearLevels = []
+  yearLevels = [],
+  showSecondaryFilters = true
 }: {
   patternData: any[];
   type: 'instructor' | 'student';
@@ -1597,76 +1695,66 @@ export const FullscreenPatternAnalysisModal = ({
   sections?: Array<{ id: string; name: string }>;
   subjects?: Array<{ id: string; name: string }>;
   yearLevels?: Array<{ id: string; name: string }>;
+  showSecondaryFilters?: boolean;
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [localSelectedSubject, setLocalSelectedSubject] = useState(selectedSubject);
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
         {trigger}
       </DialogTrigger>
-      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <div className="flex items-center justify-between">
-            <DialogTitle className="flex items-center gap-3">
+      <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden rounded-2xl border-0 shadow-2xl">
+        <DialogHeader className="bg-gradient-to-br from-blue-600 via-blue-700 to-blue-800 -m-6 p-6 rounded-t-2xl relative overflow-hidden">
+          <div className="flex items-center justify-between relative z-10">
+            <DialogTitle className="flex items-center gap-4">
               <div>
-                <div className="text-2xl font-bold text-gray-900">
-                  Attendance Pattern Analysis - Full View
+                <div className="text-2xl font-bold text-white tracking-tight">
+                  Attendance Pattern Analysis
                 </div>
-                <div className="text-sm text-gray-600">Pattern analysis with moving averages and peak detection for {type === 'instructor' ? 'instructors' : 'students'}</div>
+                <div className="text-blue-100 mt-1 flex items-center gap-2 text-sm">
+                  Pattern analysis with moving averages and peak detection for {type === 'instructor' ? 'instructors' : 'students'}
+                </div>
               </div>
             </DialogTitle>
-            <div className="flex items-center gap-2">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" className="flex items-center gap-2">
-                    <Download className="w-4 h-4" />
-                    Export
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => onExport?.('csv')}>
-                    <Download className="w-4 h-4 mr-2" />
-                    Download CSV
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => onExport?.('pdf')}>
-                    <Download className="w-4 h-4 mr-2" />
-                    Download PDF
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => onExport?.('excel')}>
-                    <Download className="w-4 h-4 mr-2" />
-                    Download Excel
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
+            <Button
+              variant="ghost"
+              size="lg"
+              className="h-10 w-10 p-0 hover:bg-white/20 rounded-full transition-all duration-200"
+              onClick={() => setIsOpen(false)}
+            >
+              <X className="w-5 h-5 text-white" />
+            </Button>
           </div>
         </DialogHeader>
-        <div className="py-6">
+        <div className="p-6 overflow-y-auto max-h-[calc(90vh-180px)]">
           {/* Secondary Filters */}
-          <SecondaryFilters
-            selectedCourse={selectedCourse}
-            selectedSection={selectedSection}
-            selectedSubject={selectedSubject}
-            selectedYearLevel={selectedYearLevel}
-            onCourseChange={onCourseChange || (() => {})}
-            onSectionChange={onSectionChange || (() => {})}
-            onSubjectChange={onSubjectChange || (() => {})}
-            onYearLevelChange={onYearLevelChange || (() => {})}
-            courses={courses}
-            sections={sections}
-            subjects={subjects}
-            yearLevels={yearLevels}
-          />
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {showSecondaryFilters && (
+            <div className="mb-6">
+              <SecondaryFilters
+                selectedSubject={localSelectedSubject}
+                onSubjectChange={setLocalSelectedSubject}
+                subjects={subjects}
+              />
+            </div>
+          )}
+          
+          <div className="grid grid-cols-1 gap-6">
             {/* Chart Section */}
             <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-gray-900">Pattern Visualization</h3>
-              <div className="bg-white border border-gray-200 rounded-xl p-6">
+              <div className="flex items-center gap-3">
+                <div className="w-1 h-5 bg-gradient-to-b from-blue-600 to-blue-800 rounded-full"></div>
+                <h3 className="text-lg font-bold text-blue-900">Pattern Visualization</h3>
+              </div>
+              <div className="bg-white border border-gray-100 rounded-xl p-6 shadow-sm hover:shadow-lg transition-all duration-300 relative overflow-hidden group">
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-blue-600"></div>
                 <div className="h-96">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={patternData}>
+                  {patternData.length === 0 ? (
+                    <NoDataState selectedSubject={localSelectedSubject} type={type} subjects={subjects} />
+                  ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={patternData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
                       <XAxis 
                         dataKey={patternData.length > 0 ? Object.keys(patternData[0]).find(key => key !== 'attendanceRate' && key !== 'movingAverage' && key !== 'label') || 'period' : 'period'}
@@ -1735,17 +1823,22 @@ export const FullscreenPatternAnalysisModal = ({
                       />
                     </LineChart>
                   </ResponsiveContainer>
+                  )}
                 </div>
               </div>
             </div>
 
             {/* Analysis Section */}
             <div className="space-y-6">
-              <h3 className="text-lg font-semibold text-gray-900">Pattern Insights</h3>
+              <div className="flex items-center gap-3">
+                <div className="w-1 h-5 bg-gradient-to-b from-blue-600 to-blue-800 rounded-full"></div>
+                <h3 className="text-lg font-bold text-blue-900">Pattern Insights</h3>
+              </div>
               
               {/* Pattern Statistics */}
-              <div className="bg-white border border-gray-200 rounded-lg p-6">
-                <h4 className="text-md font-semibold text-gray-900 mb-4">Pattern Statistics</h4>
+              <div className="bg-white border border-gray-100 rounded-xl p-6 shadow-sm hover:shadow-lg transition-all duration-300 relative overflow-hidden group">
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-blue-600"></div>
+                <h4 className="text-md font-semibold text-blue-900 mb-4">Pattern Statistics</h4>
                 <div className="space-y-3">
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-gray-600">Peaks Detected:</span>
@@ -1775,37 +1868,43 @@ export const FullscreenPatternAnalysisModal = ({
               </div>
 
               {/* Pattern Interpretation */}
-              <div className="bg-white border border-gray-200 rounded-lg p-6">
-                <h4 className="text-md font-semibold text-gray-900 mb-4">Pattern Interpretation</h4>
-                <div className="space-y-3 text-sm text-gray-600">
+              <div className="bg-white border border-gray-100 rounded-xl p-6 shadow-sm hover:shadow-lg transition-all duration-300 relative overflow-hidden group">
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-blue-600"></div>
+                <h4 className="text-md font-semibold text-blue-900 mb-4">Pattern Interpretation</h4>
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 text-sm text-gray-600">
                   <div className="flex items-start gap-2">
                     <div className="w-2 h-2 bg-blue-600 rounded-full mt-2 flex-shrink-0"></div>
                     <div>
-                      <span className="font-medium text-gray-900">Attendance Rate:</span> Shows the actual attendance percentage over time
+                      <span className="font-medium text-blue-500">Attendance Rate:</span> Shows the actual attendance percentage over time
                     </div>
                   </div>
                   <div className="flex items-start gap-2">
                     <div className="w-2 h-2 bg-green-600 rounded-full mt-2 flex-shrink-0"></div>
                     <div>
-                      <span className="font-medium text-gray-900">Moving Average:</span> Smoothed trend line that helps identify overall patterns
+                      <span className="font-medium text-green-600">Moving Average:</span> Smoothed trend line that helps identify overall patterns
                     </div>
                   </div>
                   <div className="flex items-start gap-2">
                     <div className="w-2 h-2 bg-yellow-500 rounded-full mt-2 flex-shrink-0"></div>
                     <div>
-                      <span className="font-medium text-gray-900">Peaks:</span> High attendance periods that may indicate effective engagement strategies
+                      <span className="font-medium text-yellow-500">Peaks:</span> High attendance periods that may indicate effective engagement strategies
                     </div>
                   </div>
                   <div className="flex items-start gap-2">
                     <div className="w-2 h-2 bg-red-500 rounded-full mt-2 flex-shrink-0"></div>
                     <div>
-                      <span className="font-medium text-gray-900">Valleys:</span> Low attendance periods that may require intervention or investigation
+                      <span className="font-medium text-red-500">Valleys:</span> Low attendance periods that may require intervention or investigation
                     </div>
                   </div>
                 </div>
               </div>
             </div>
           </div>
+        </div>
+        
+ {/* Footer with Export Button */}
+ <div className="flex items-center justify-end gap-3 pt-6 border-t border-gray-200 sticky bottom-0 bg-white">
+          <DownloadDropdown onExport={onExport} />
         </div>
       </DialogContent>
     </Dialog>
@@ -1829,7 +1928,8 @@ export const FullscreenStreakAnalysisModal = ({
   courses = [],
   sections = [],
   subjects = [],
-  yearLevels = []
+  yearLevels = [],
+  showSecondaryFilters = true
 }: {
   streakData: { data: any[]; stats: any };
   type: 'instructor' | 'student';
@@ -1848,68 +1948,72 @@ export const FullscreenStreakAnalysisModal = ({
   sections?: Array<{ id: string; name: string }>;
   subjects?: Array<{ id: string; name: string }>;
   yearLevels?: Array<{ id: string; name: string }>;
+  showSecondaryFilters?: boolean;
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [localSelectedSubject, setLocalSelectedSubject] = useState(selectedSubject);
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
         {trigger}
       </DialogTrigger>
-      <DialogContent className="max-w-7xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-3">
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900">Streak Analysis - Detailed Breakdown</h2>
-              <p className="text-sm text-gray-600 mt-1">
-                {type === 'instructor' ? 'Teaching' : 'Student'} attendance streak patterns and insights
-              </p>
-            </div>
-            <div className="flex items-center gap-2 ml-auto">
-              <Badge variant="outline" className="text-xs">
-                Detailed View
-              </Badge>
-            </div>
-          </DialogTitle>
+      <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden rounded-2xl border-0 shadow-2xl">
+        <DialogHeader className="bg-gradient-to-br from-blue-600 via-blue-700 to-blue-800 -m-6 p-6 rounded-t-2xl relative overflow-hidden">
+          <div className="flex items-center justify-between relative z-10">
+            <DialogTitle className="flex items-center gap-4">
+              <div>
+                <div className="text-2xl font-bold text-white tracking-tight">
+                  Streak Analysis
+                </div>
+                <div className="text-blue-100 mt-1 flex items-center gap-2 text-sm">
+                  {type === 'instructor' ? 'Teaching' : 'Student'} attendance streak patterns and insights
+                </div>
+              </div>
+            </DialogTitle>
+            <Button
+              variant="ghost"
+              size="lg"
+              className="h-10 w-10 p-0 hover:bg-white/20 rounded-full transition-all duration-200"
+              onClick={() => setIsOpen(false)}
+            >
+              <X className="w-5 h-5 text-white" />
+            </Button>
+          </div>
         </DialogHeader>
 
-        <div className="space-y-8">
+        <div className="p-6 overflow-y-auto max-h-[calc(90vh-180px)] space-y-6">
           {/* Secondary Filters */}
-          <SecondaryFilters
-            selectedCourse={selectedCourse}
-            selectedSection={selectedSection}
-            selectedSubject={selectedSubject}
-            selectedYearLevel={selectedYearLevel}
-            onCourseChange={onCourseChange || (() => {})}
-            onSectionChange={onSectionChange || (() => {})}
-            onSubjectChange={onSubjectChange || (() => {})}
-            onYearLevelChange={onYearLevelChange || (() => {})}
-            courses={courses}
-            sections={sections}
-            subjects={subjects}
-            yearLevels={yearLevels}
-          />
+          {showSecondaryFilters && (
+            <div className="mb-6">
+              <SecondaryFilters
+                selectedSubject={localSelectedSubject}
+                onSubjectChange={setLocalSelectedSubject}
+                subjects={subjects}
+              />
+            </div>
+          )}
 
           {/* Streak Statistics Overview */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+          <div className="grid grid-cols-4 gap-4">
+            <div className="bg-green-50 border border-green-200 rounded p-4">
               <div className="text-3xl font-bold text-green-600">{streakData.stats.maxGoodStreak}</div>
               <div className="text-sm text-green-600 font-medium">Longest Good Streak</div>
               <div className="text-xs text-green-500 mt-1">Consecutive days ≥85%</div>
             </div>
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+            <div className="bg-red-50 border border-red-200 rounded p-4">
               <div className="text-3xl font-bold text-red-600">{streakData.stats.maxPoorStreak}</div>
               <div className="text-sm text-red-600 font-medium">Longest Poor Streak</div>
               <div className="text-xs text-red-500 mt-1">Consecutive days &lt;85%</div>
             </div>
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="bg-blue-50 border border-blue-200 rounded p-4">
               <div className="text-3xl font-bold text-blue-600">{Math.abs(streakData.stats.currentStreak)}</div>
               <div className="text-sm text-blue-600 font-medium">
                 Current {streakData.stats.currentStreakType === 'good' ? 'Good' : 'Poor'} Streak
               </div>
               <div className="text-xs text-blue-500 mt-1">Active streak</div>
             </div>
-            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+            <div className="bg-gray-50 border border-gray-200 rounded p-4">
               <div className="text-3xl font-bold text-gray-600">{streakData.stats.totalGoodDays}</div>
               <div className="text-sm text-gray-600 font-medium">Total Good Days</div>
               <div className="text-xs text-gray-500 mt-1">Out of {streakData.data.length} days</div>
@@ -1917,11 +2021,18 @@ export const FullscreenStreakAnalysisModal = ({
           </div>
 
           {/* Enhanced Streak Chart */}
-          <div className="bg-white border border-gray-200 rounded-lg p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Streak Timeline</h3>
+          <div className="bg-white border border-gray-100 rounded-xl p-6 shadow-sm hover:shadow-lg transition-all duration-300 relative overflow-hidden group">
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-blue-600"></div>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-1 h-5 bg-gradient-to-b from-blue-600 to-blue-800 rounded-full"></div>
+              <h3 className="text-lg font-bold text-blue-900">Streak Timeline</h3>
+            </div>
             <div className="h-96">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={streakData.data}>
+              {streakData.data.length === 0 ? (
+                <NoDataState selectedSubject={localSelectedSubject} type={type} subjects={subjects} />
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={streakData.data}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
                   <XAxis 
                     dataKey={getXAxisConfig?.().dataKey || 'date'}
@@ -1975,12 +2086,17 @@ export const FullscreenStreakAnalysisModal = ({
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
+              )}
             </div>
           </div>
 
           {/* Detailed Breakdown */}
-          <div className="bg-white border border-gray-200 rounded-lg p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Streak Breakdown</h3>
+          <div className="bg-white border border-gray-100 rounded-xl p-6 shadow-sm hover:shadow-lg transition-all duration-300 relative overflow-hidden group">
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-blue-600"></div>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-1 h-5 bg-gradient-to-b from-blue-600 to-blue-800 rounded-full"></div>
+              <h3 className="text-lg font-bold text-blue-900">Streak Breakdown</h3>
+            </div>
             <div className="space-y-4">
               {(() => {
                 const streaks = [];
@@ -2018,7 +2134,7 @@ export const FullscreenStreakAnalysisModal = ({
                 return streaks.map((streak, index) => (
                   <div 
                     key={index}
-                    className={`p-4 rounded-lg border ${
+                    className={`p-4 rounded border ${
                       streak.type === 'good' 
                         ? 'bg-green-50 border-green-200' 
                         : 'bg-red-50 border-red-200'
@@ -2046,36 +2162,11 @@ export const FullscreenStreakAnalysisModal = ({
               })()}
             </div>
           </div>
+        </div>
 
-          {/* Export Options */}
-          {onExport && (
-            <div className="flex justify-end gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => onExport('csv')}
-                className="text-xs"
-              >
-                Export CSV
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => onExport('excel')}
-                className="text-xs"
-              >
-                Export Excel
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => onExport('pdf')}
-                className="text-xs"
-              >
-                Export PDF
-              </Button>
-            </div>
-          )}
+        {/* Footer with Export Button */}
+        <div className="flex items-center justify-end gap-3 pt-6 border-t border-gray-200 sticky bottom-0 bg-white">
+          <DownloadDropdown onExport={onExport} />
         </div>
       </DialogContent>
     </Dialog>
@@ -2088,12 +2179,17 @@ export function AttendanceAnalytics({
   type,
   onDrillDown,
   onExport,
+  onRefresh,
   enableAdvancedFeatures = true,
   enableRealTime = false,
-  enableCrossFiltering = true,
+
   enableDrillDown = true,
   enableTimeRange = true,
-  showHeader = true
+  showHeader = true,
+  showSecondaryFilters = true,
+  selectedSubject = 'all',
+  onSubjectChange,
+  subjects = []
 }: AttendanceAnalyticsProps) {
   // Enhanced state management for advanced interactivity
   const [selectedDepartment, setSelectedDepartment] = useState('all');
@@ -2102,12 +2198,16 @@ export function AttendanceAnalytics({
   const [expandedCharts, setExpandedCharts] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('overview');
+  const [showOverviewCards, setShowOverviewCards] = useState(true);
   const [loadingState, setLoadingState] = useState<LoadingState>({
     isLoading: false,
     progress: 0,
     message: '',
     stage: 'fetching'
   });
+
+  // Toast notification state
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
 
   // Advanced interactivity states
   const [drillDownState, setDrillDownState] = useState<DrillDownState>({
@@ -2118,11 +2218,7 @@ export function AttendanceAnalytics({
     filters: {}
   });
 
-  const [crossFilterState, setCrossFilterState] = useState<CrossFilterState>({
-    activeFilters: {},
-    appliedFilters: {},
-    filterHistory: []
-  });
+
 
   const [timeRange, setTimeRange] = useState<TimeRange>({
     start: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // 30 days ago
@@ -2137,7 +2233,6 @@ export function AttendanceAnalytics({
   // Secondary filter state for drill-down
   const [selectedCourse, setSelectedCourse] = useState('all');
   const [selectedSection, setSelectedSection] = useState('all');
-  const [selectedSubject, setSelectedSubject] = useState('all');
   const [selectedYearLevel, setSelectedYearLevel] = useState('all');
 
   // Performance optimizations
@@ -2147,6 +2242,11 @@ export function AttendanceAnalytics({
   // Enhanced data processing with real-time capabilities
   const analyticsData = useMemo(() => {
     try {
+      // Validate input data
+      if (!data || !Array.isArray(data)) {
+        throw new Error('Invalid data format: data must be an array');
+      }
+
       setLoadingState({
         isLoading: true,
         progress: 0,
@@ -2359,458 +2459,90 @@ export function AttendanceAnalytics({
     }
   };
 
-  // Generate dynamic chart data based on time filter using actual database data
-  const generateDynamicChartData = () => {
-    if (!timeRange || !analyticsData) return analyticsData?.weeklyData || [];
+  // Fetch real database data for charts
+  const [chartData, setChartData] = useState<any>({
+    timeBasedData: [],
+    departmentStats: [],
+    riskLevelData: [],
+    lateArrivalData: [],
+    patternData: [],
+    streakData: { data: [], stats: {} }
+  });
 
-    const now = new Date();
-    let data: any[] = [];
-
-    // Calculate base attendance rate from actual data
-    const totalPresent = analyticsData.attendedClasses;
-    const totalAbsent = analyticsData.absentClasses;
-    const totalLate = analyticsData.lateClasses;
-    const totalClasses = totalPresent + totalAbsent + totalLate;
-    const baseAttendanceRate = totalClasses > 0 ? (totalPresent / totalClasses) * 100 : 85;
-
-    // Generate comparison data if enabled
-    const generateComparisonData = (baseRate: number, offset: number) => {
-      const comparisonData: any[] = [];
-      
-      switch (timeRange.preset) {
-        case 'today':
-          for (let hour = 6; hour <= 23; hour++) {
-            const variation = Math.sin(hour * 0.5) * 5;
-            comparisonData.push({
-              hour,
-              attendanceRate: Math.max(0, Math.min(100, baseRate + variation + offset)),
-              label: `${hour}:00`
-            });
-          }
-          break;
-        case 'week':
-          const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-          days.forEach((day, index) => {
-            const isWeekend = index === 0 || index === 6;
-            const variation = isWeekend ? -5 : 2;
-            comparisonData.push({
-              day: index,
-              attendanceRate: Math.max(0, Math.min(100, baseRate + variation + offset)),
-              label: day
-            });
-          });
-          break;
-        case 'month':
-          const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-          for (let day = 1; day <= daysInMonth; day++) {
-            const date = new Date(now.getFullYear(), now.getMonth(), day);
-            const dayOfWeek = date.getDay();
-            const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-            const variation = isWeekend ? -8 : 1;
-            comparisonData.push({
-              date: date.toISOString().split('T')[0],
-              attendanceRate: Math.max(0, Math.min(100, baseRate + variation + offset)),
-              label: `${now.getMonth() + 1}/${day}`
-            });
-          }
-          break;
-        case 'quarter':
-          for (let week = 1; week <= 13; week++) {
-            const trend = Math.sin(week * 0.3) * 3;
-            comparisonData.push({
-              week,
-              attendanceRate: Math.max(0, Math.min(100, baseRate + trend + offset)),
-              label: `Week ${week}`
-            });
-          }
-          break;
-        case 'year':
-          for (let month = 1; month <= 12; month++) {
-            const seasonalVariation = Math.sin((month - 1) * Math.PI / 6) * 4;
-            comparisonData.push({
-              month,
-              attendanceRate: Math.max(0, Math.min(100, baseRate + seasonalVariation + offset)),
-              label: new Date(now.getFullYear(), month - 1).toLocaleDateString('en-US', { month: 'short' })
-            });
-          }
-          break;
-        default:
-          break;
-      }
-      return comparisonData;
-    };
-
-    switch (timeRange.preset) {
-      case 'today':
-        // Generate hourly data for today based on actual attendance rate (6 AM to 11 PM)
-        for (let hour = 6; hour <= 23; hour++) {
-          // Slight variation based on actual data, not random
-          const variation = Math.sin(hour * 0.5) * 5; // Smooth variation
-          data.push({
-            hour,
-            attendanceRate: Math.max(0, Math.min(100, baseAttendanceRate + variation)),
-            label: `${hour}:00`
-          });
-        }
-        break;
-
-      case 'week':
-        // Generate daily data for this week based on actual attendance rate
-        const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-        days.forEach((day, index) => {
-          // Weekday vs weekend variation based on actual data
-          const isWeekend = index === 0 || index === 6;
-          const variation = isWeekend ? -5 : 2; // Lower attendance on weekends
-          data.push({
-            day: index,
-            attendanceRate: Math.max(0, Math.min(100, baseAttendanceRate + variation)),
-            label: day
-          });
-        });
-        break;
-
-      case 'month':
-        // Generate daily data for this month based on actual attendance rate
-        const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-        for (let day = 1; day <= daysInMonth; day++) {
-          const date = new Date(now.getFullYear(), now.getMonth(), day);
-          const dayOfWeek = date.getDay();
-          const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-          const variation = isWeekend ? -8 : 1; // Lower attendance on weekends
-          
-          data.push({
-            date: date.toISOString().split('T')[0],
-            attendanceRate: Math.max(0, Math.min(100, baseAttendanceRate + variation)),
-            label: `${now.getMonth() + 1}/${day}`
-          });
-        }
-        break;
-
-      case 'quarter':
-        // Generate weekly data for this quarter based on actual attendance rate
-        for (let week = 1; week <= 13; week++) {
-          // Gradual improvement trend based on actual data
-          const trend = Math.sin(week * 0.3) * 3; // Smooth trend
-          data.push({
-            week,
-            attendanceRate: Math.max(0, Math.min(100, baseAttendanceRate + trend)),
-            label: `Week ${week}`
-          });
-        }
-        break;
-
-      case 'year':
-        // Generate monthly data for this year based on actual attendance rate
-        for (let month = 1; month <= 12; month++) {
-          // Seasonal variation based on actual data
-          const seasonalVariation = Math.sin((month - 1) * Math.PI / 6) * 4; // Seasonal pattern
-          data.push({
-            month,
-            attendanceRate: Math.max(0, Math.min(100, baseAttendanceRate + seasonalVariation)),
-            label: new Date(now.getFullYear(), month - 1).toLocaleDateString('en-US', { month: 'short' })
-          });
-        }
-        break;
-
-      case 'custom':
-        // Generate daily data for custom range based on actual attendance rate
-        if (timeRange.start && timeRange.end) {
-          const start = new Date(timeRange.start);
-          const end = new Date(timeRange.end);
-          
-          // Ensure dates are valid
-          if (isNaN(start.getTime()) || isNaN(end.getTime())) {
-            console.warn('Invalid custom date range:', { start: timeRange.start, end: timeRange.end });
-            return analyticsData?.weeklyData || [];
-          }
-          
-          const daysDiff = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
-          
-          // Limit to reasonable range (max 365 days)
-          const maxDays = Math.min(daysDiff, 365);
-          
-          for (let i = 0; i <= maxDays; i++) {
-            const date = new Date(start.getTime() + (i * 24 * 60 * 60 * 1000));
-            const dayOfWeek = date.getDay();
-            const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-            const variation = isWeekend ? -6 : 1;
-            
-            data.push({
-              date: date.toISOString().split('T')[0],
-              attendanceRate: Math.max(0, Math.min(100, baseAttendanceRate + variation)),
-              label: `${date.getMonth() + 1}/${date.getDate()}`
-            });
-          }
-        } else {
-          // Fallback to weekly data if custom range is invalid
-          data = analyticsData?.weeklyData || [];
-        }
-        break;
-
-      default:
-        data = analyticsData?.weeklyData || [];
-    }
-
-    // Add comparison data if enabled
-    if (showComparison) {
-      const comparisonData = generateComparisonData(baseAttendanceRate, -3); // Previous period is typically lower
-      return data.map((item, index) => ({
-        ...item,
-        previousAttendanceRate: comparisonData[index]?.attendanceRate || item.attendanceRate
+  // Fetch real analytics data from API
+  const fetchAnalyticsData = useCallback(async () => {
+    try {
+      setLoadingState(prev => ({
+        ...prev,
+        isLoading: true,
+        message: 'Fetching analytics data...',
+        stage: 'fetching'
       }));
-    }
 
-    return data;
-  };
-
-  // Generate late arrival trend data
-  const generateLateArrivalData = () => {
-    if (!timeRange || !analyticsData) return [];
-
-    const now = new Date();
-    let data: any[] = [];
-
-    // Calculate base late arrival rate from actual data
-    const totalPresent = analyticsData.attendedClasses;
-    const totalAbsent = analyticsData.absentClasses;
-    const totalLate = analyticsData.lateClasses;
-    const totalClasses = totalPresent + totalAbsent + totalLate;
-    const baseLateRate = totalClasses > 0 ? (totalLate / totalClasses) * 100 : 8;
-
-    // Generate comparison data if enabled
-    const generateLateComparisonData = (baseRate: number, offset: number) => {
-      const comparisonData: any[] = [];
-      
-      switch (timeRange.preset) {
-        case 'today':
-          for (let hour = 6; hour <= 23; hour++) {
-            const variation = Math.sin(hour * 0.5) * 2;
-            comparisonData.push({
-              hour,
-              lateRate: Math.max(0, Math.min(25, baseRate + variation + offset)),
-              label: `${hour}:00`
-            });
-          }
-          break;
-        case 'week':
-          const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-          days.forEach((day, index) => {
-            const isWeekend = index === 0 || index === 6;
-            const variation = isWeekend ? -1 : 1;
-            comparisonData.push({
-              day: index,
-              lateRate: Math.max(0, Math.min(25, baseRate + variation + offset)),
-              label: day
-            });
-          });
-          break;
-        case 'month':
-          const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-          for (let day = 1; day <= daysInMonth; day++) {
-            const date = new Date(now.getFullYear(), now.getMonth(), day);
-            const dayOfWeek = date.getDay();
-            const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-            const variation = isWeekend ? -2 : 0.5;
-            comparisonData.push({
-              date: date.toISOString().split('T')[0],
-              lateRate: Math.max(0, Math.min(25, baseRate + variation + offset)),
-              label: `${now.getMonth() + 1}/${day}`
-            });
-          }
-          break;
-        case 'quarter':
-          for (let week = 1; week <= 13; week++) {
-            const trend = Math.sin(week * 0.3) * 1.5;
-            comparisonData.push({
-              week,
-              lateRate: Math.max(0, Math.min(25, baseRate + trend + offset)),
-              label: `Week ${week}`
-            });
-          }
-          break;
-        case 'year':
-          for (let month = 1; month <= 12; month++) {
-            const seasonalVariation = Math.sin((month - 1) * Math.PI / 6) * 2;
-            comparisonData.push({
-              month,
-              lateRate: Math.max(0, Math.min(25, baseRate + seasonalVariation + offset)),
-              label: new Date(now.getFullYear(), month - 1).toLocaleDateString('en-US', { month: 'short' })
-            });
-          }
-          break;
-        default:
-          break;
-      }
-      return comparisonData;
-    };
-
-    switch (timeRange.preset) {
-      case 'today':
-        for (let hour = 6; hour <= 23; hour++) {
-          const variation = Math.sin(hour * 0.5) * 2;
-          data.push({
-            hour,
-            lateRate: Math.max(0, Math.min(25, baseLateRate + variation)),
-            label: `${hour}:00`
-          });
-        }
-        break;
-      case 'week':
-        const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-        days.forEach((day, index) => {
-          const isWeekend = index === 0 || index === 6;
-          const variation = isWeekend ? -1 : 1;
-          data.push({
-            day: index,
-            lateRate: Math.max(0, Math.min(25, baseLateRate + variation)),
-            label: day
-          });
-        });
-        break;
-      case 'month':
-        const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-        for (let day = 1; day <= daysInMonth; day++) {
-          const date = new Date(now.getFullYear(), now.getMonth(), day);
-          const dayOfWeek = date.getDay();
-          const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-          const variation = isWeekend ? -2 : 0.5;
-          data.push({
-            date: date.toISOString().split('T')[0],
-            lateRate: Math.max(0, Math.min(25, baseLateRate + variation)),
-            label: `${now.getMonth() + 1}/${day}`
-          });
-        }
-        break;
-      case 'quarter':
-        for (let week = 1; week <= 13; week++) {
-          const trend = Math.sin(week * 0.3) * 1.5;
-          data.push({
-            week,
-            lateRate: Math.max(0, Math.min(25, baseLateRate + trend)),
-            label: `Week ${week}`
-          });
-        }
-        break;
-      case 'year':
-        for (let month = 1; month <= 12; month++) {
-          const seasonalVariation = Math.sin((month - 1) * Math.PI / 6) * 2;
-          data.push({
-            month,
-            lateRate: Math.max(0, Math.min(25, baseLateRate + seasonalVariation)),
-            label: new Date(now.getFullYear(), month - 1).toLocaleDateString('en-US', { month: 'short' })
-          });
-        }
-        break;
-      default:
-        data = [
-          { week: 'Week 1', lateRate: 5 },
-          { week: 'Week 2', lateRate: 4 },
-          { week: 'Week 3', lateRate: 3 },
-          { week: 'Week 4', lateRate: 2 },
-          { week: 'Week 5', lateRate: 1 }
-        ];
-    }
-
-    // Add comparison data if enabled
-    if (showLateComparison) {
-      const comparisonData = generateLateComparisonData(baseLateRate, 1); // Previous period is typically higher
-      return data.map((item, index) => ({
-        ...item,
-        previousLateRate: comparisonData[index]?.lateRate || item.lateRate
-      }));
-    }
-
-    return data;
-  };
-
-  // Generate pattern analysis data (with moving average and peak/low markers)
-  const generatePatternAnalysisData = () => {
-    const base = generateDynamicChartData();
-    if (!base || base.length === 0) return [] as Array<any>;
-
-    const windowSize = 3;
-    const result = base.map((point: any, index: number, arr: any[]) => {
-      const start = Math.max(0, index - Math.floor(windowSize / 2));
-      const end = Math.min(arr.length, start + windowSize);
-      const slice = arr.slice(start, end);
-      const movingAverage =
-        slice.reduce((sum: number, p: any) => sum + (p.attendanceRate ?? 0), 0) /
-        (slice.length || 1);
-      const prev = arr[index - 1]?.attendanceRate ?? point.attendanceRate;
-      const next = arr[index + 1]?.attendanceRate ?? point.attendanceRate;
-      const isPeak = point.attendanceRate >= prev && point.attendanceRate >= next;
-      const isValley = point.attendanceRate <= prev && point.attendanceRate <= next;
-      return { ...point, movingAverage, isPeak, isValley };
-    });
-    return result;
-  };
-
-  // Generate streak analysis data
-  const generateStreakAnalysisData = () => {
-    const base = generateDynamicChartData();
-    if (!base || base.length === 0) return { data: [], stats: { maxGoodStreak: 0, maxPoorStreak: 0, currentStreak: 0, currentStreakType: 'none', totalGoodDays: 0, totalPoorDays: 0 } };
-
-    const threshold = 85; // Good attendance threshold
-    const result = [];
-    let currentStreak = 0;
-    let streakType = 'none';
-    let maxGoodStreak = 0;
-    let maxPoorStreak = 0;
-    let currentGoodStreak = 0;
-    let currentPoorStreak = 0;
-
-    for (let i = 0; i < base.length; i++) {
-      const point = base[i];
-      const isGood = (point.attendanceRate ?? 0) >= threshold;
-      
-      if (isGood) {
-        if (streakType === 'good' || streakType === 'none') {
-          currentGoodStreak++;
-          currentPoorStreak = 0;
-          streakType = 'good';
-        } else {
-          // Reset to good streak
-          currentGoodStreak = 1;
-          currentPoorStreak = 0;
-          streakType = 'good';
-        }
-        maxGoodStreak = Math.max(maxGoodStreak, currentGoodStreak);
-      } else {
-        if (streakType === 'poor' || streakType === 'none') {
-          currentPoorStreak++;
-          currentGoodStreak = 0;
-          streakType = 'poor';
-        } else {
-          // Reset to poor streak
-          currentPoorStreak = 1;
-          currentGoodStreak = 0;
-          streakType = 'poor';
-        }
-        maxPoorStreak = Math.max(maxPoorStreak, currentPoorStreak);
-      }
-
-      result.push({
-        ...point,
-        currentStreak: streakType === 'good' ? currentGoodStreak : -currentPoorStreak,
-        streakType,
-        isStreakBreak: i > 0 && 
-          ((isGood && base[i-1].attendanceRate < threshold) || 
-           (!isGood && base[i-1].attendanceRate >= threshold))
+      const params = new URLSearchParams({
+        type,
+        timeRange: timeRange?.preset || 'week',
+        ...(selectedDepartment !== 'all' && { departmentId: selectedDepartment }),
+        ...(selectedSubject !== 'all' && { subjectId: selectedSubject }),
+        ...(timeRange?.start && { startDate: timeRange.start.toISOString() }),
+        ...(timeRange?.end && { endDate: timeRange.end.toISOString() })
       });
-    }
 
-    return {
-      data: result,
-      stats: {
-        maxGoodStreak,
-        maxPoorStreak,
-        currentStreak: result[result.length - 1]?.currentStreak ?? 0,
-        currentStreakType: result[result.length - 1]?.streakType ?? 'none',
-        totalGoodDays: result.filter(r => r.attendanceRate >= threshold).length,
-        totalPoorDays: result.filter(r => r.attendanceRate < threshold).length
+      const response = await fetch(`/api/attendance/analytics?${params}`);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
-    };
+
+      const result = await response.json();
+      
+      if (result.success) {
+        setChartData(result.data);
+        setLoadingState(prev => ({
+          ...prev,
+          isLoading: false,
+          message: 'Data loaded successfully',
+          stage: 'rendering'
+        }));
+      } else {
+        throw new Error(result.error || 'Failed to fetch analytics data');
+      }
+    } catch (error) {
+      console.error('Error fetching analytics data:', error);
+      setError(error instanceof Error ? error.message : 'Failed to fetch analytics data');
+      setLoadingState(prev => ({
+        ...prev,
+        isLoading: false,
+        message: 'Error loading data',
+        stage: 'fetching'
+      }));
+    }
+  }, [type, timeRange, selectedDepartment, selectedSubject]);
+
+  // Fetch data when dependencies change
+  useEffect(() => {
+    fetchAnalyticsData();
+  }, [fetchAnalyticsData]);
+
+  // Generate dynamic chart data using real database data
+  const generateDynamicChartData = () => {
+    return chartData.timeBasedData || [];
   };
+
+  // Generate late arrival trend data using real database data
+  const generateLateArrivalData = () => {
+    return chartData.lateArrivalData || [];
+  };
+
+  // Generate pattern analysis data using real database data
+  const generatePatternAnalysisData = useMemo(() => {
+    return chartData.patternData || [];
+  }, [chartData.patternData]);
+
+  // Generate streak analysis data using real database data
+  const generateStreakAnalysisData = useMemo(() => {
+    return chartData.streakData || { data: [], stats: { maxGoodStreak: 0, maxPoorStreak: 0, currentStreak: 0, currentStreakType: 'none', totalGoodDays: 0, totalPoorDays: 0 } };
+  }, [chartData.streakData]);
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -2824,33 +2556,11 @@ export function AttendanceAnalytics({
   // Enhanced callback functions with performance optimizations
   const handleDepartmentChange = useCallback((value: string) => {
     setSelectedDepartment(value);
-    if (enableCrossFiltering) {
-      setCrossFilterState(prev => ({
-        ...prev,
-        activeFilters: { ...prev.activeFilters, department: value },
-        filterHistory: [...prev.filterHistory, {
-          timestamp: new Date(),
-          filter: { department: value },
-          source: 'department-selector'
-        }]
-      }));
-    }
-  }, [enableCrossFiltering]);
+  }, []);
 
   const handleRiskLevelChange = useCallback((value: string) => {
     setSelectedRiskLevel(value);
-    if (enableCrossFiltering) {
-      setCrossFilterState(prev => ({
-        ...prev,
-        activeFilters: { ...prev.activeFilters, riskLevel: value },
-        filterHistory: [...prev.filterHistory, {
-          timestamp: new Date(),
-          filter: { riskLevel: value },
-          source: 'risk-level-selector'
-        }]
-      }));
-    }
-  }, [enableCrossFiltering]);
+  }, []);
 
 
 
@@ -2883,11 +2593,51 @@ export function AttendanceAnalytics({
     }
   }, [enableDrillDown, onDrillDown]);
 
-  const handleExport = useCallback((format: 'pdf' | 'csv' | 'excel') => {
-    if (onExport) {
-      onExport(format);
+  const handleExport = useCallback(async (format: 'pdf' | 'csv' | 'excel') => {
+    try {
+      if (!analyticsData) {
+        throw new Error('No data available for export');
+      }
+
+      const exportData = {
+        type,
+        data: data || [],
+        filters: {
+          department: selectedDepartment,
+          riskLevel: selectedRiskLevel,
+          subject: selectedSubject,
+          course: selectedCourse,
+          section: selectedSection,
+          yearLevel: selectedYearLevel
+        },
+        timeRange
+      };
+
+      const options = {
+        format,
+        filename: `${type}-attendance-analytics-${new Date().toISOString().split('T')[0]}`,
+        includeCharts: true,
+        includeFilters: true
+      };
+
+      await ExportService.exportAnalytics(exportData, options);
+      
+      // Also call the parent export handler if provided
+      if (onExport) {
+        onExport(format);
+      }
+      
+      // Show success toast
+      setToast({ message: `${format.toUpperCase()} export completed successfully!`, type: 'success' });
+    } catch (error) {
+      console.error('Export failed:', error);
+      // Show error toast
+      setToast({ 
+        message: `Export failed: ${error instanceof Error ? error.message : 'Unknown error'}`, 
+        type: 'error' 
+      });
     }
-  }, [onExport]);
+  }, [analyticsData, type, data, selectedDepartment, selectedRiskLevel, selectedSubject, selectedCourse, selectedSection, selectedYearLevel, timeRange, onExport]);
 
   const toggleDetails = useCallback(() => {
     setShowDetails(prev => !prev);
@@ -2922,35 +2672,11 @@ export function AttendanceAnalytics({
     }
   }, []);
 
-  const handleCrossFilter = useCallback((filters: Record<string, any>) => {
-    setCrossFilterState(prev => ({
-      ...prev,
-      activeFilters: { ...prev.activeFilters, ...filters },
-      appliedFilters: { ...prev.appliedFilters, ...filters }
-    }));
-  }, []);
-
   const handleTimeRangeChange = useCallback((newRange: TimeRange) => {
     setTimeRange(newRange);
-    if (enableCrossFiltering) {
-      setCrossFilterState(prev => ({
-        ...prev,
-        activeFilters: { ...prev.activeFilters, timeRange: newRange },
-        filterHistory: [...prev.filterHistory, {
-          timestamp: new Date(),
-          filter: { timeRange: newRange },
-          source: 'time-range-selector'
-        }]
-      }));
-    }
-  }, [enableCrossFiltering]);
+  }, []);
 
   const handleResetFilters = useCallback(() => {
-    setCrossFilterState({
-      activeFilters: {},
-      appliedFilters: {},
-      filterHistory: []
-    });
     setDrillDownState({
       isActive: false,
       level: 'department',
@@ -2970,6 +2696,8 @@ export function AttendanceAnalytics({
             showDetails={showDetails}
             onToggleDetails={toggleDetails}
             onExport={handleExport}
+            onRefresh={onRefresh}
+            loading={loading}
           />
         )}
         <AnalyticsSkeleton />
@@ -2986,6 +2714,8 @@ export function AttendanceAnalytics({
             showDetails={showDetails}
             onToggleDetails={toggleDetails}
             onExport={handleExport}
+            onRefresh={onRefresh}
+            loading={loading}
           />
         )}
         <ErrorBoundary error={error} onRetry={handleRetry} />
@@ -2994,7 +2724,7 @@ export function AttendanceAnalytics({
   }
 
   // Early return only if there's no data at all (not filtered data)
-  if (!analyticsData) {
+  if (!analyticsData || analyticsData.totalCount === 0) {
     return (
       <div className="space-y-6">
         {showHeader && (
@@ -3003,6 +2733,8 @@ export function AttendanceAnalytics({
             showDetails={showDetails}
             onToggleDetails={toggleDetails}
             onExport={handleExport}
+            onRefresh={onRefresh}
+            loading={loading}
           />
         )}
         <div className="text-center py-12">
@@ -3011,7 +2743,7 @@ export function AttendanceAnalytics({
           </div>
           <h3 className="text-xl font-semibold text-gray-900 mb-3">No Analytics Data Available</h3>
           <p className="text-gray-600 mb-6 max-w-md mx-auto">
-            There's no attendance data to display. Check if data exists for the selected time period or contact your administrator.
+            There&apos;s no attendance data to display. Check if data exists for the selected time period or contact your administrator.
           </p>
         </div>
       </div>
@@ -3020,12 +2752,23 @@ export function AttendanceAnalytics({
 
   return (
     <div className="p-0">
+      {/* Toast Notifications */}
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
+      
       {showHeader && (
         <AnalyticsHeader
           type={type}
           showDetails={showDetails}
           onToggleDetails={toggleDetails}
           onExport={handleExport}
+          onRefresh={onRefresh}
+          loading={loading}
         />
       )}
 
@@ -3043,24 +2786,7 @@ export function AttendanceAnalytics({
               </div>
             )}
 
-            {/* Cross-filter Panel */}
-            {enableCrossFiltering && Object.keys(crossFilterState.activeFilters).length > 0 && (
-              <div className="bg-amber-50 border border-amber-200 rounded p-4">
-                <CrossFilterPanel
-                  activeFilters={crossFilterState.activeFilters}
-                  onApplyFilter={(key, value) => handleCrossFilter({ [key]: value })}
-                  onClearFilter={(key) => {
-                    const newFilters = { ...crossFilterState.activeFilters };
-                    delete newFilters[key];
-                    setCrossFilterState(prev => ({
-                      ...prev,
-                      activeFilters: newFilters
-                    }));
-                  }}
-                  onResetAll={handleResetFilters}
-                />
-              </div>
-            )}
+
           </div>
         )}
 
@@ -3101,8 +2827,8 @@ export function AttendanceAnalytics({
               <AnalyticsFilters
                 selectedDepartment={selectedDepartment}
                 selectedRiskLevel={selectedRiskLevel}
-                departmentStats={analyticsData.departmentStats.reduce((acc, dept) => {
-                  acc[dept.name] = dept;
+                departmentStats={chartData.departmentStats.reduce((acc: Record<string, any>, dept: any) => {
+                  acc[dept.name] = dept.attendanceRate || 0;
                   return acc;
                 }, {} as Record<string, any>)}
                 onDepartmentChange={handleDepartmentChange}
@@ -3116,8 +2842,28 @@ export function AttendanceAnalytics({
 
         {/* Dashboard Tab */}
         <TabsContent value="overview" className="space-y-8 mt-6">
+          {/* Summary header with collapse toggle */}
+          <div className="flex items-center justify-between">
+            <h4 className="text-sm font-semibold text-gray-800">Summary</h4>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 px-2 text-xs"
+              onClick={() => setShowOverviewCards(prev => !prev)}
+              aria-expanded={showOverviewCards}
+              aria-controls="overview-summary-cards"
+            >
+              {showOverviewCards ? (
+                <div className="flex items-center gap-1"><ChevronUp className="w-3 h-3" /><span>Hide</span></div>
+              ) : (
+                <div className="flex items-center gap-1"><ChevronDown className="w-3 h-3" /><span>Show</span></div>
+              )}
+            </Button>
+          </div>
+
           {/* Compact Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {showOverviewCards && (
+          <div id="overview-summary-cards" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {/* Total Count Card */}
             {analyticsData.totalCount > 0 ? (
             <div className="bg-white border border-gray-200 rounded p-4 shadow-sm hover:shadow-md transition-all duration-300">
@@ -3205,7 +2951,7 @@ export function AttendanceAnalytics({
             )}
 
             {/* Departments Card */}
-            {analyticsData.departmentStats.length > 0 ? (
+            {chartData.departmentStats.length > 0 ? (
             <div className="bg-white border border-gray-200 rounded p-4 shadow-sm hover:shadow-md transition-all duration-300">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-xs font-medium text-gray-600">Departments</h3>
@@ -3214,7 +2960,7 @@ export function AttendanceAnalytics({
                 </div>
               </div>
               <div className="mb-1">
-                <div className="text-xl font-bold text-gray-900">{analyticsData.departmentStats.length}</div>
+                <div className="text-xl font-bold text-gray-900">{chartData.departmentStats.length}</div>
                 <div className="text-xs text-gray-500">active departments</div>
               </div>
               <div className="flex items-center text-xs text-gray-500">
@@ -3247,7 +2993,7 @@ export function AttendanceAnalytics({
             )}
 
             {/* High Risk Card */}
-            {(analyticsData.riskLevelData?.find(r => r.level === 'high')?.count || 0) > 0 ? (
+            {(chartData.riskLevelData?.find((r: any) => r.level === 'high')?.count || 0) > 0 ? (
             <div className="bg-white border border-gray-200 rounded p-4 shadow-sm hover:shadow-md transition-all duration-300">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-xs font-medium text-gray-600">High Risk</h3>
@@ -3256,7 +3002,7 @@ export function AttendanceAnalytics({
                 </div>
               </div>
               <div className="mb-1">
-                  <div className="text-xl font-bold text-gray-900">{analyticsData.riskLevelData?.find(r => r.level === 'high')?.count || 0}</div>
+                  <div className="text-xl font-bold text-gray-900">{chartData.riskLevelData?.find((r: any) => r.level === 'high')?.count || 0}</div>
                 <div className="text-xs text-gray-500">high risk cases</div>
               </div>
               <div className="flex items-center text-xs text-red-600">
@@ -3288,14 +3034,15 @@ export function AttendanceAnalytics({
               />
             )}
           </div>
+          )}
 
           {/* Combined Row: Attendance Distribution and Department Performance */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Compact Attendance Distribution Card */}
-            <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all duration-300">
+            <div className="bg-white border border-gray-200 rounded-2xl p-8 shadow-sm hover:shadow-md transition-all duration-300">
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h4 className="text-xl font-bold text-gray-900 mb-1">Attendance Distribution</h4>
+                  <h4 className="text-xl font-bold text-blue-900 mb-1">Attendance Distribution</h4>
                   <p className="text-sm text-gray-600">Quick overview of attendance status</p>
                 </div>
                 <TooltipProvider>
@@ -3307,9 +3054,13 @@ export function AttendanceAnalytics({
                         totalAbsent={analyticsData.absentClasses}
                         type={type}
                         onExport={handleExport}
+                        selectedSubject={selectedSubject}
+                        onSubjectChange={onSubjectChange || (() => {})}
+                        subjects={subjects}
+                        loading={loading}
                         trigger={
-                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-gray-100">
-                            <Maximize2 className="w-4 h-4" />
+                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-gray-100 rounded-xl">
+                            <Maximize2 className="w-4 h-4 text-gray-400" />
                           </Button>
                         }
                       />
@@ -3365,14 +3116,13 @@ export function AttendanceAnalytics({
                           />
                         ))}
                       </Pie>
-                      <RechartsTooltip
-                        contentStyle={{
-                          backgroundColor: 'white',
-                          border: '1px solid #e5e7eb',
-                          borderRadius: '8px',
-                          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-                          padding: '8px 12px'
-                        }}
+                      <RechartsTooltip 
+                      contentStyle={{
+                        backgroundColor: 'white',
+                        border: '1px solid #e5e7eb',
+                        borderRadius: '8px',
+                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                      }}
                         formatter={(value: any, name: any) => [
                           `${value.toLocaleString()} (${((value / (analyticsData.attendedClasses + analyticsData.absentClasses + analyticsData.lateClasses)) * 100).toFixed(1)}%)`, 
                           name
@@ -3395,7 +3145,7 @@ export function AttendanceAnalytics({
               )}
               
               {/* Horizontal Legend */}
-              <div className="flex items-center justify-center mb-4">
+              <div className="flex items-center justify-center mb-4 mt-8">
                 <div className="flex items-center gap-6">
                   <div className="flex items-center gap-2">
                     <div className="w-3 h-3 bg-blue-700 rounded-sm"></div>
@@ -3419,19 +3169,22 @@ export function AttendanceAnalytics({
             <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all duration-300">
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h4 className="text-xl font-bold text-gray-900 mb-1">Department Performance</h4>
+                  <h4 className="text-xl font-bold text-blue-900 mb-1">Department Performance</h4>
                   <p className="text-sm text-gray-600">Attendance rates by department</p>
                 </div>
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <FullscreenDepartmentPerformanceModal
-                        departmentStats={analyticsData.departmentStats}
+                        departmentStats={chartData.departmentStats}
                         type={type}
                         onExport={handleExport}
+                        selectedSubject={selectedSubject}
+                        onSubjectChange={onSubjectChange || (() => {})}
+                        subjects={subjects}
                         trigger={
-                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-gray-100">
-                            <Maximize2 className="w-4 h-4" />
+                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-gray-100 rounded-xl">
+                            <Maximize2 className="w-4 h-4 text-gray-400" />
                           </Button>
                         }
                       />
@@ -3446,7 +3199,7 @@ export function AttendanceAnalytics({
               {/* Simple Bar Chart */}
               <div className={`transition-all duration-300 ${expandedCharts.has("department-performance-overview") ? 'h-96' : 'h-80'}`}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={analyticsData.departmentStats}>
+                  <BarChart data={chartData.departmentStats}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
                     <XAxis 
                       dataKey="code" 
@@ -3457,6 +3210,7 @@ export function AttendanceAnalytics({
                       tick={{ fontSize: 11, fill: '#6b7280' }}
                       axisLine={{ stroke: '#e5e7eb' }}
                       tickFormatter={(value) => `${value}%`}
+                      domain={[0, 100]}
                     />
                     <RechartsTooltip 
                       contentStyle={{
@@ -3471,6 +3225,19 @@ export function AttendanceAnalytics({
                       dataKey="attendanceRate" 
                       fill="#1e40af"
                       radius={[4, 4, 0, 0]}
+                    />
+                    <ReferenceLine 
+                      y={85} 
+                      stroke="#0ea5e9" 
+                      strokeDasharray="5 5" 
+                      strokeWidth={2}
+                      label={{ 
+                        value: "Target 85%", 
+                        position: "insideTopRight",
+                        fill: "#0ea5e9",
+                        fontSize: 11,
+                        fontWeight: "bold"
+                      }}
                     />
                   </BarChart>
                 </ResponsiveContainer>
@@ -3505,7 +3272,7 @@ export function AttendanceAnalytics({
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-3">
                   <div>
-                    <h4 className="text-lg font-bold text-gray-900">Attendance Trend Analysis</h4>
+                    <h4 className="text-lg font-bold text-blue-900">Attendance Trend Analysis</h4>
                     <p className="text-sm text-gray-600">
                       Complete trend analysis for {type === 'instructor' ? 'instructors' : 'students'}
                       {showComparison && (
@@ -3547,21 +3314,12 @@ export function AttendanceAnalytics({
                           onExport={handleExport}
                           getXAxisConfig={getXAxisConfig}
                           showComparison={showComparison}
-                          selectedCourse={selectedCourse}
-                          selectedSection={selectedSection}
                           selectedSubject={selectedSubject}
-                          selectedYearLevel={selectedYearLevel}
-                          onCourseChange={setSelectedCourse}
-                          onSectionChange={setSelectedSection}
-                          onSubjectChange={setSelectedSubject}
-                          onYearLevelChange={setSelectedYearLevel}
-                          courses={[]} // TODO: Add actual course data
-                          sections={[]} // TODO: Add actual section data
-                          subjects={[]} // TODO: Add actual subject data
-                          yearLevels={[]} // TODO: Add actual year level data
+                          onSubjectChange={onSubjectChange || (() => {})}
+                          subjects={subjects}
                           trigger={
-                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-gray-100">
-                              <Maximize2 className="w-4 h-4" />
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-gray-100 rounded-xl">
+                              <Maximize2 className="w-4 h-4 text-gray-400" />
                             </Button>
                           }
                         />
@@ -3587,6 +3345,7 @@ export function AttendanceAnalytics({
                       tick={{ fontSize: 12, fill: '#6b7280' }}
                       axisLine={{ stroke: '#e5e7eb' }}
                       tickFormatter={(value) => `${value}%`}
+                      domain={[0, 100]}
                     />
                     <RechartsTooltip 
                       contentStyle={{
@@ -3660,7 +3419,7 @@ export function AttendanceAnalytics({
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-3">
                   <div>
-                    <h4 className="text-lg font-bold text-gray-900">Late Arrival Trends</h4>
+                    <h4 className="text-lg font-bold text-blue-900">Late Arrival Trends</h4>
                     <p className="text-sm text-gray-600">
                       Late arrival trend analysis for {type === 'instructor' ? 'instructors' : 'students'}
                       {showLateComparison && (
@@ -3702,21 +3461,12 @@ export function AttendanceAnalytics({
                           onExport={handleExport}
                           getXAxisConfig={getXAxisConfig}
                           showComparison={showLateComparison}
-                          selectedCourse={selectedCourse}
-                          selectedSection={selectedSection}
                           selectedSubject={selectedSubject}
-                          selectedYearLevel={selectedYearLevel}
-                          onCourseChange={setSelectedCourse}
-                          onSectionChange={setSelectedSection}
-                          onSubjectChange={setSelectedSubject}
-                          onYearLevelChange={setSelectedYearLevel}
-                          courses={[]} // TODO: Add actual course data
-                          sections={[]} // TODO: Add actual section data
-                          subjects={[]} // TODO: Add actual subject data
-                          yearLevels={[]} // TODO: Add actual year level data
+                          onSubjectChange={onSubjectChange || (() => {})}
+                          subjects={subjects}
                           trigger={
-                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-gray-100">
-                              <Maximize2 className="w-4 h-4" />
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-gray-100 rounded-xl">
+                              <Maximize2 className="w-4 h-4 text-gray-400" />
                             </Button>
                           }
                         />
@@ -3816,11 +3566,6 @@ export function AttendanceAnalytics({
 
         {/* Patterns Tab */}
         <TabsContent value="advanced" className="space-y-8 mt-6">
-          {/* Section Header */}
-          <div className="space-y-2">
-            <h4 className="text-lg font-semibold text-gray-900">Time-Based Patterns</h4>
-            <p className="text-sm text-gray-600">Daily and weekly attendance patterns analysis</p>
-          </div>
           {/* Additional Charts for Advanced Features */}
           {enableAdvancedFeatures && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -3829,7 +3574,7 @@ export function AttendanceAnalytics({
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
                 <div>
-                  <h4 className="text-lg font-bold text-gray-900">Attendance Pattern Analysis</h4>
+                  <h4 className="text-lg font-bold text-blue-900">Attendance Pattern Analysis</h4>
                   <p className="text-sm text-gray-600">Moving average and peak/low pattern detection</p>
                 </div>
               </div>
@@ -3838,25 +3583,17 @@ export function AttendanceAnalytics({
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <FullscreenPatternAnalysisModal
-                        patternData={generatePatternAnalysisData()}
+                        patternData={generatePatternAnalysisData}
                         type={type}
                         onExport={handleExport}
                         getXAxisConfig={getXAxisConfig}
                         selectedCourse={selectedCourse}
-                        selectedSection={selectedSection}
                         selectedSubject={selectedSubject}
-                        selectedYearLevel={selectedYearLevel}
-                        onCourseChange={setSelectedCourse}
-                        onSectionChange={setSelectedSection}
-                        onSubjectChange={setSelectedSubject}
-                        onYearLevelChange={setSelectedYearLevel}
-                        courses={[]} // TODO: Add actual course data
-                        sections={[]} // TODO: Add actual section data
-                        subjects={[]} // TODO: Add actual subject data
-                        yearLevels={[]} // TODO: Add actual year level data
+                        onSubjectChange={onSubjectChange || (() => {})}
+                        subjects={subjects}
                         trigger={
-                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-gray-100">
-                            <Maximize2 className="w-4 h-4" />
+                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-gray-100 rounded-xl">
+                            <Maximize2 className="w-4 h-4 text-gray-400" />
                           </Button>
                         }
                       />
@@ -3870,7 +3607,7 @@ export function AttendanceAnalytics({
             </div>
             <div className={`transition-all duration-300 ${expandedCharts.has("pattern-analysis") ? 'h-96' : 'h-80'}`}>
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={generatePatternAnalysisData()}>
+                                    <LineChart data={generatePatternAnalysisData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
                   <XAxis 
                     dataKey={getXAxisConfig().dataKey}
@@ -3882,6 +3619,7 @@ export function AttendanceAnalytics({
                     tick={{ fontSize: 12, fill: '#6b7280' }}
                     axisLine={{ stroke: '#e5e7eb' }}
                     tickFormatter={(value) => `${value}%`}
+                    domain={[0, 100]}
                   />
                   <RechartsTooltip 
                     contentStyle={{
@@ -3931,7 +3669,7 @@ export function AttendanceAnalytics({
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
                 <div>
-                  <h4 className="text-lg font-bold text-gray-900">Streak Analysis</h4>
+                  <h4 className="text-lg font-bold text-blue-900">Streak Analysis</h4>
                   <p className="text-sm text-gray-600">Consecutive days of good/poor attendance patterns</p>
                 </div>
               </div>
@@ -3940,25 +3678,16 @@ export function AttendanceAnalytics({
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <FullscreenStreakAnalysisModal
-                        streakData={generateStreakAnalysisData()}
+                        streakData={generateStreakAnalysisData}
                         type={type}
                         onExport={handleExport}
                         getXAxisConfig={getXAxisConfig}
-                        selectedCourse={selectedCourse}
-                        selectedSection={selectedSection}
                         selectedSubject={selectedSubject}
-                        selectedYearLevel={selectedYearLevel}
-                        onCourseChange={setSelectedCourse}
-                        onSectionChange={setSelectedSection}
-                        onSubjectChange={setSelectedSubject}
-                        onYearLevelChange={setSelectedYearLevel}
-                        courses={[]} // TODO: Add actual course data
-                        sections={[]} // TODO: Add actual section data
-                        subjects={[]} // TODO: Add actual subject data
-                        yearLevels={[]} // TODO: Add actual year level data
+                        onSubjectChange={onSubjectChange || (() => {})}
+                        subjects={subjects}
                         trigger={
-                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-gray-100">
-                            <Maximize2 className="w-4 h-4" />
+                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-gray-100 rounded-xl">
+                            <Maximize2 className="w-4 h-4 text-gray-400" />
                           </Button>
                         }
                       />
@@ -3973,9 +3702,9 @@ export function AttendanceAnalytics({
             
 
 
-            <div className="h-64">
+            <div className={`transition-all duration-300 ${expandedCharts.has("streak-analysis") ? 'h-96' : 'h-80'}`}>
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={generateStreakAnalysisData().data}>
+                                  <BarChart data={generateStreakAnalysisData.data}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
                   <XAxis 
                     dataKey={getXAxisConfig().dataKey}
@@ -4020,7 +3749,7 @@ export function AttendanceAnalytics({
                     fill="#6b7280"
                     radius={[2, 2, 0, 0]}
                   >
-                    {generateStreakAnalysisData().data.map((entry: any, index: number) => (
+                    {generateStreakAnalysisData.data.map((entry: any, index: number) => (
                       <Cell 
                         key={`cell-${index}`}
                         fill={entry.currentStreak > 0 ? '#22c55e' : entry.currentStreak < 0 ? '#ef4444' : '#6b7280'}

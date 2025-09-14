@@ -3,10 +3,11 @@ import { Status } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 
 // GET a single department by ID
-export async function GET(request: Request, { params }: { params: { id: string } }) {
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   try {
     const department = await prisma.department.findUnique({
-      where: { departmentId: parseInt(params.id) },
+      where: { departmentId: parseInt(id) },
       include: {
         CourseOffering: true,
         // Any other relations you want to include
@@ -25,13 +26,14 @@ export async function GET(request: Request, { params }: { params: { id: string }
 }
 
 // PATCH (update) a department by ID
-export async function PATCH(request: Request, { params }: { params: { id: string } }) {
+export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   try {
     const body = await request.json();
     const { name, code, headOfDepartment, description, status, courseOfferings, logo } = body;
 
     const department = await prisma.department.update({
-      where: { departmentId: parseInt(params.id) },
+      where: { departmentId: parseInt(id) },
       data: {
         departmentName: name,
         departmentCode: code,
@@ -49,7 +51,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
       // Get all courses currently assigned to this department
       const currentCourses = await prisma.courseOffering.findMany({
         where: {
-          departmentId: parseInt(params.id)
+          departmentId: parseInt(id)
         },
         select: {
           courseId: true
@@ -80,7 +82,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
             courseId: { in: courseIds }
           },
           data: {
-            departmentId: parseInt(params.id)
+            departmentId: parseInt(id)
           }
         });
       }
@@ -94,11 +96,12 @@ export async function PATCH(request: Request, { params }: { params: { id: string
 }
 
 // DELETE a department by ID
-export async function DELETE(request: Request, { params }: { params: { id: string } }) {
+export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   try {
     // Optional: Check for related records before deleting
     const department = await prisma.department.findUnique({
-      where: { departmentId: parseInt(params.id) },
+      where: { departmentId: parseInt(id) },
       include: { 
         CourseOffering: true, 
         Instructor: true 
@@ -114,7 +117,7 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
     }
 
     await prisma.department.delete({
-      where: { departmentId: parseInt(params.id) },
+      where: { departmentId: parseInt(id) },
     });
 
     return NextResponse.json({ success: true, message: 'Department deleted successfully' });

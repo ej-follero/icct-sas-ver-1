@@ -1417,151 +1417,134 @@ function BulkActionsDialog<T = any>({
                 ))}
               </TabsList>
 
-              {/* Export Tab */}
-              <TabsContent value="export" className="space-y-4 mt-4">
+              {/* Simplified Export Tab */}
+              <TabsContent value="export" className="space-y-6 mt-6">
                 <Card className="border-blue-200 bg-white">
-                  <CardContent className="p-2">
-                    <div className="space-y-4">
+                  <CardContent className="p-6">
+                    <div className="space-y-6">
                       <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <div className="space-y-2">
-                            <h3 className="text-xl font-bold text-blue-900">Export Configuration</h3>
-                            <p className="text-sm text-blue-600">Choose format and columns to export {editableSelectedItems.length} {entityLabel}</p>
-                          </div>
-                          <Badge variant="outline" className="text-xs font-semibold px-3 py-1">
-                            {exportConfig.selectedColumns.length} columns selected
-                          </Badge>
+                        <div className="space-y-2">
+                          <h3 className="text-xl font-bold text-blue-900">Export Data</h3>
+                          <p className="text-sm text-blue-600">Export {editableSelectedItems.length} selected {entityLabel}</p>
                         </div>
                         <Separator className="bg-blue-200" />
                       </div>
 
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {/* Format Selection */}
-                    <div className="space-y-4">
-                      <Label className="text-base font-bold">Export Format</Label>
-                      <div className="grid grid-cols-1 gap-3">
-                        {Object.entries(EXPORT_FORMATS).map(([key, format]) => (
-                          <div
-                            key={key}
-                            className={`
-                              p-4 border-2 rounded cursor-pointer transition-all duration-200
-                              ${exportConfig.format === key 
-                                ? 'border-blue-300 bg-blue-50' 
-                                : 'border-gray-200 bg-white hover:border-gray-300'
-                              }
-                            `}
-                            onClick={() => setExportConfig(prev => ({ ...prev, format: key }))}
+                      {/* Simple Form */}
+                      <div className="space-y-4">
+                        {/* Format Selection */}
+                        <div className="space-y-2">
+                          <Label className="text-sm font-medium text-blue-900">Export Format</Label>
+                          <Select 
+                            value={exportConfig.format} 
+                            onValueChange={(value) => setExportConfig(prev => ({ ...prev, format: value }))}
                           >
-                            <div className="flex items-center gap-3">
-                              <div className={`
-                                p-2 rounded ${exportConfig.format === key ? 'bg-blue-100 text-blue-600' : 'bg-blue-50 text-blue-600'}
-                              `}>
-                                {format.icon}
-                              </div>
-                              <div className="flex-1">
-                                <div className="font-medium text-blue-900">{format.label}</div>
-                                <div className="text-sm text-blue-600">{format.description}</div>
-                              </div>
-                              {exportConfig.format === key && (
-                                <CheckCircle className="w-5 h-5 text-blue-600" />
-                              )}
+                            <SelectTrigger className="w-full">
+                              <SelectValue placeholder="Select format" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {Object.entries(EXPORT_FORMATS).map(([key, format]) => (
+                                <SelectItem key={key} value={key}>
+                                  <div className="flex items-center gap-2">
+                                    {format.icon}
+                                    <span>{format.label}</span>
+                                  </div>
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        {/* Column Selection */}
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <Label className="text-sm font-medium text-blue-900">Columns to Export</Label>
+                            <div className="flex items-center gap-2">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={handleSelectAllColumns}
+                                className="text-xs h-7 px-2"
+                              >
+                                All
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={handleDeselectAllColumns}
+                                className="text-xs h-7 px-2"
+                              >
+                                None
+                              </Button>
                             </div>
                           </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Column Selection */}
-                    <div className="space-y-4">
-                      <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                          <Label className="text-base font-bold text-blue-800">Select Columns</Label>
-                          <div className="flex items-center gap-2">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={handleSelectAllColumns}
-                              className="text-xs rounded border-blue-200 text-blue-700 hover:bg-blue-50"
-                            >
-                              Select All
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={handleDeselectAllColumns}
-                              className="text-xs rounded border-gray-200 text-gray-600 hover:bg-gray-50"
-                            >
-                              Clear All
-                            </Button>
+                          <div className="grid grid-cols-2 gap-2 max-h-32 overflow-y-auto border rounded p-3">
+                            {entityConfig.availableColumns?.map((column) => (
+                              <div key={column.key} className="flex items-center space-x-2">
+                                <Checkbox
+                                  id={`column-${column.key}`}
+                                  checked={exportConfig.selectedColumns.includes(column.key)}
+                                  onCheckedChange={() => handleColumnToggle(column.key)}
+                                />
+                                <Label
+                                  htmlFor={`column-${column.key}`}
+                                  className="text-sm cursor-pointer"
+                                >
+                                  {column.label}
+                                </Label>
+                              </div>
+                            ))}
                           </div>
                         </div>
 
-                        {/* Additional Options */}
-                        <div className="flex items-center justify-end p-2 bg-gray-50 rounded border border-gray-100">
-                          <div className="flex items-center space-x-2">
-                            <Checkbox
-                              id="include-headers"
-                              checked={exportConfig.includeHeaders}
-                              onCheckedChange={(checked) => setExportConfig(prev => ({ ...prev, includeHeaders: checked as boolean }))}
-                            />
-                            <Label htmlFor="include-headers" className="text-sm font-medium text-gray-700">
-                              Include column headers
-                            </Label>
-                          </div>
+                        {/* File Name */}
+                        <div className="space-y-2">
+                          <Label htmlFor="file-name" className="text-sm font-medium text-blue-900">File Name</Label>
+                          <Input
+                            id="file-name"
+                            value={exportConfig.fileName}
+                            onChange={(e) => setExportConfig(prev => ({ ...prev, fileName: e.target.value }))}
+                            placeholder={`${entityLabel}_export_${new Date().toISOString().split('T')[0]}`}
+                            className="w-full"
+                          />
                         </div>
-                      </div>
 
-                      <div className="grid grid-cols-1 gap-2 max-h-32 overflow-y-auto border rounded p-3">
-                        {entityConfig.availableColumns?.map((column) => (
-                          <div key={column.key} className="flex items-center space-x-2">
-                            <Checkbox
-                              id={`column-${column.key}`}
-                              checked={exportConfig.selectedColumns.includes(column.key)}
-                              onCheckedChange={() => handleColumnToggle(column.key)}
-                            />
-                            <Label
-                              htmlFor={`column-${column.key}`}
-                              className="text-sm font-normal cursor-pointer"
-                            >
-                              {column.label}
-                            </Label>
+                        {/* Include Headers Option */}
+                        <div className="flex items-center space-x-2">
+                          <Checkbox
+                            id="include-headers"
+                            checked={exportConfig.includeHeaders}
+                            onCheckedChange={(checked) => setExportConfig(prev => ({ ...prev, includeHeaders: checked as boolean }))}
+                          />
+                          <Label htmlFor="include-headers" className="text-sm text-gray-700">
+                            Include column headers
+                          </Label>
+                        </div>
+
+                        {/* Validation Message */}
+                        {exportConfig.selectedColumns.length === 0 && (
+                          <div className="text-sm text-amber-600 bg-amber-50 p-3 rounded border border-amber-200">
+                            <div className="flex items-center gap-2">
+                              <AlertTriangle className="w-4 h-4" />
+                              <span>Please select at least one column to export.</span>
+                            </div>
                           </div>
-                        ))}
-                      </div>
+                        )}
 
-                      {/* File Name at bottom */}
-                      <div className="space-y-2 mt-8">
-                        <Label htmlFor="file-name" className="text-base font-bold">File Name</Label>
-                        <Input
-                          id="file-name"
-                          value={exportConfig.fileName}
-                          onChange={(e) => setExportConfig(prev => ({ ...prev, fileName: e.target.value }))}
-                          placeholder={`${entityLabel}_export_${new Date().toISOString().split('T')[0]}`}
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {exportConfig.selectedColumns.length === 0 && (
-                    <div className="text-sm text-amber-600 bg-amber-50 p-3 rounded border border-amber-200">
-                      <div className="flex items-center gap-2">
-                        <AlertTriangle className="w-4 h-4" />
-                        <span>Please select at least one column to export.</span>
+                        {/* Export Button */}
+                        <Button 
+                          onClick={() => handleTabAction('export')}
+                          disabled={exportConfig.selectedColumns.length === 0 || isProcessing}
+                          className="w-full"
+                        >
+                          <Download className="w-4 h-4 mr-2" />
+                          Export {editableSelectedItems.length} {entityLabel}
+                          {isProcessing && <Loader2 className="w-4 h-4 ml-2 animate-spin" />}
+                        </Button>
                       </div>
                     </div>
-                  )}
-
-                  <Button 
-                    onClick={() => handleTabAction('export')}
-                    disabled={exportConfig.selectedColumns.length === 0 || isProcessing}
-                    className="w-full rounded"
-                  >
-                    <Download className="w-4 h-4 mr-2" />
-                    Export {editableSelectedItems.length} {entityLabel}
-                  </Button>
-                </div>
                   </CardContent>
                 </Card>
               </TabsContent>
@@ -1635,503 +1618,102 @@ function BulkActionsDialog<T = any>({
                 </Card>
               </TabsContent>
 
-              {/* Enhanced Notification Tab */}
+              {/* Simplified Notification Tab */}
               <TabsContent value="notification" className="space-y-6 mt-6">
-                <Card className="border-blue-200 bg-white shadow-sm">
-                  <CardContent className="p-2">
-                    {/* Enhanced Header with Gradient */}
-                    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 px-6 py-4 border-b border-blue-100">
-                        <div className="flex items-center gap-4">
-                        <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg">
-                          <Bell className="w-7 h-7 text-white" />
-                          </div>
-                        <div className="flex-1">
-                          <h3 className="text-2xl font-bold text-blue-900 mb-1">Send Notifications</h3>
-                          <div className="flex items-center gap-4 text-sm text-blue-600">
-                            <span className="flex items-center gap-2">
-                              <Users className="w-4 h-4" />
-                              {editableSelectedItems.length} {entityLabel}
-                            </span>
-                            <span className="flex items-center gap-2">
-                              <MessageSquare className="w-4 h-4" />
-                              Bulk notification
-                            </span>
-                          </div>
+                <Card className="border-blue-200 bg-white">
+                  <CardContent className="p-6">
+                    <div className="space-y-6">
+                      <div className="space-y-3">
+                        <div className="space-y-2">
+                          <h3 className="text-xl font-bold text-blue-900">Send Notifications</h3>
+                          <p className="text-sm text-blue-600">Send notification to {editableSelectedItems.length} selected {entityLabel}</p>
                         </div>
-                        <div className="text-right">
-                          <Badge variant="outline" className="bg-white/80 text-blue-700 border-blue-200">
-                            <Clock className="w-3 h-3 mr-1" />
-                            Instant delivery
-                          </Badge>
-                        </div>
-                      </div>
+                        <Separator className="bg-blue-200" />
                       </div>
 
-                    <div className="p-6 space-y-8">
-                      {/* Enhanced Notification Form with Message Composition */}
-                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                        {/* Main Content - 2/3 width */}
-                        <div className="lg:col-span-2 space-y-6">
-                          {/* Template Selection */}
-                        <div className="space-y-3">
-                            <div className="flex items-center justify-between">
-                              <Label className="text-base font-semibold text-blue-900 flex items-center gap-2">
-                                <FileText className="w-4 h-4 text-blue-600" />
-                                Quick Templates
-                              </Label>
-                              <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700">
-                                Optional
-                              </Badge>
-                            </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                              {NOTIFICATION_TEMPLATES[entityType as keyof typeof NOTIFICATION_TEMPLATES]?.map((template) => (
-                                <div
-                                  key={template.id}
-                                  className={`
-                                    p-3 border-2 rounded-lg cursor-pointer transition-all duration-200 hover:shadow-md
-                                    ${notificationConfig.template === template.id 
-                                      ? 'border-blue-300 bg-blue-50 shadow-md' 
-                                      : 'border-gray-200 bg-white hover:border-gray-300'
-                                    }
-                                  `}
-                                  onClick={() => {
-                                    setNotificationConfig(prev => ({
-                                      ...prev,
-                                      template: template.id,
-                                      subject: template.subject,
-                                      message: template.message,
-                                      priority: template.priority
-                                    }));
-                                  }}
-                                >
-                                  <div className="flex items-start gap-3">
-                                    <div className={`
-                                      p-1.5 rounded ${notificationConfig.template === template.id ? 'bg-blue-100' : 'bg-gray-100'}
-                                    `}>
-                                      <FileText className="w-3 h-3 text-blue-600" />
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                      <div className="font-medium text-sm text-blue-900 truncate">{template.name}</div>
-                                      <div className="text-xs text-gray-600 mt-1 line-clamp-2">{template.subject}</div>
-                                    </div>
-                                    {notificationConfig.template === template.id && (
-                                      <CheckCircle className="w-4 h-4 text-blue-600 flex-shrink-0" />
-                                    )}
-                                  </div>
-                                </div>
-                              )) || NOTIFICATION_TEMPLATES.general.map((template) => (
-                                <div
-                                  key={template.id}
-                                  className={`
-                                    p-3 border-2 rounded-lg cursor-pointer transition-all duration-200 hover:shadow-md
-                                    ${notificationConfig.template === template.id 
-                                      ? 'border-blue-300 bg-blue-50 shadow-md' 
-                                      : 'border-gray-200 bg-white hover:border-gray-300'
-                                    }
-                                  `}
-                                  onClick={() => {
-                                    setNotificationConfig(prev => ({
-                                      ...prev,
-                                      template: template.id,
-                                      subject: template.subject,
-                                      message: template.message,
-                                      priority: template.priority
-                                    }));
-                                  }}
-                                >
-                                  <div className="flex items-start gap-3">
-                                    <div className={`
-                                      p-1.5 rounded ${notificationConfig.template === template.id ? 'bg-blue-100' : 'bg-gray-100'}
-                                    `}>
-                                      <FileText className="w-3 h-3 text-blue-600" />
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                      <div className="font-medium text-sm text-blue-900 truncate">{template.name}</div>
-                                      <div className="text-xs text-gray-600 mt-1 line-clamp-2">{template.subject}</div>
-                                    </div>
-                                    {notificationConfig.template === template.id && (
-                                      <CheckCircle className="w-4 h-4 text-blue-600 flex-shrink-0" />
-                                    )}
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2 text-sm text-gray-600">
-                                <Info className="w-4 h-4 text-blue-500" />
-                                <span>Select a template to quickly populate your notification, or start from scratch</span>
-                              </div>
-                              {notificationConfig.template && (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => setNotificationConfig(prev => ({ ...prev, template: '' }))}
-                                  className="text-xs h-7 px-2"
-                                >
-                                  Clear Template
-                                </Button>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Subject Field with Enhanced Styling */}
-                          <div className="space-y-3">
-                            <div className="flex items-center justify-between">
-                              <Label htmlFor="notification-subject" className="text-base font-semibold text-blue-900 flex items-center gap-2">
-                                <MessageSquare className="w-4 h-4 text-blue-600" />
+                      {/* Simple Form */}
+                      <div className="space-y-4">
+                        {/* Subject Field */}
+                        <div className="space-y-2">
+                          <Label htmlFor="notification-subject" className="text-sm font-medium text-blue-900">
                             Subject Line
                           </Label>
-                              <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700">
-                                Required
-                              </Badge>
-                            </div>
-                                                         <div className="relative group">
-                            <Input
-                              id="notification-subject"
-                              value={notificationConfig.subject}
-                              onChange={(e) => setNotificationConfig(prev => ({ ...prev, subject: e.target.value }))}
-                                 placeholder="Enter a compelling subject line that grabs attention..."
-                                 className={`pl-12 pr-4 py-4 text-base border-2 rounded-xl transition-all duration-300 group-hover:border-blue-300 focus:ring-4 focus:ring-blue-500/10 ${
-                                   notificationConfig.subject.length > 60 
-                                     ? 'border-red-300 focus:border-red-500 focus:ring-red-500/10' 
-                                     : notificationConfig.subject.length > 50 
-                                     ? 'border-yellow-300 focus:border-yellow-500 focus:ring-yellow-500/10'
-                                     : 'border-gray-200 focus:border-blue-500'
-                                 }`}
-                               />
-                               <MessageSquare className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-blue-500 group-hover:text-blue-600 transition-colors" />
-                               <div className="absolute right-4 top-1/2 transform -translate-y-1/2">
-                                 <Badge variant="outline" className={`text-xs ${
-                                   notificationConfig.subject.length > 60 
-                                     ? 'bg-red-50 text-red-700 border-red-200' 
-                                     : notificationConfig.subject.length > 50 
-                                     ? 'bg-yellow-50 text-yellow-700 border-yellow-200'
-                                     : 'bg-green-50 text-green-700 border-green-200'
-                                 }`}>
-                                   {notificationConfig.subject.length}/60
-                                 </Badge>
-                          </div>
-                             </div>
-                            <div className="flex items-center gap-2 text-sm text-gray-600">
-                              <Info className="w-4 h-4 text-blue-500" />
-                              <span>Keep it under 60 characters for better mobile display</span>
-                            </div>
+                          <Input
+                            id="notification-subject"
+                            value={notificationConfig.subject}
+                            onChange={(e) => setNotificationConfig(prev => ({ ...prev, subject: e.target.value }))}
+                            placeholder="Enter notification subject..."
+                            className="w-full"
+                          />
                         </div>
 
-                          {/* Enhanced Message Field */}
-                        <div className="space-y-3">
-                            <div className="flex items-center justify-between">
-                              <Label htmlFor="notification-message" className="text-base font-semibold text-blue-900 flex items-center gap-2">
-                                <FileText className="w-4 h-4 text-blue-600" />
+                        {/* Message Field */}
+                        <div className="space-y-2">
+                          <Label htmlFor="notification-message" className="text-sm font-medium text-blue-900">
                             Message Content
                           </Label>
-                              <div className="flex items-center gap-2">
-                                <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700">
-                                  Required
-                                </Badge>
-                                <Badge variant="outline" className={`text-xs ${notificationConfig.message.length > 400 ? 'bg-red-50 text-red-700 border-red-200' : 'bg-green-50 text-green-700 border-green-200'}`}>
-                                  {notificationConfig.message.length}/500
-                                </Badge>
-                              </div>
-                            </div>
-                                                         <div className="relative group">
-                            <textarea
-                              id="notification-message"
-                              value={notificationConfig.message}
-                              onChange={(e) => setNotificationConfig(prev => ({ ...prev, message: e.target.value }))}
-                                 placeholder="Write your notification message here. Be clear, concise, and actionable..."
-                                 className={`w-full min-h-[160px] p-5 pl-12 text-base border-2 rounded-xl resize-none focus:outline-none focus:ring-4 transition-all duration-300 group-hover:border-blue-300 leading-relaxed ${
-                                   notificationConfig.message.length > 500 
-                                     ? 'border-red-300 focus:border-red-500 focus:ring-red-500/10' 
-                                     : notificationConfig.message.length > 400 
-                                     ? 'border-yellow-300 focus:border-yellow-500 focus:ring-yellow-500/10'
-                                     : 'border-gray-200 focus:border-blue-500 focus:ring-blue-500/10'
-                                 }`}
-                               />
-                               <FileText className="absolute left-4 top-5 w-5 h-5 text-blue-500 group-hover:text-blue-600 transition-colors" />
-                          </div>
-                            <div className="flex items-center gap-2 text-sm text-gray-600">
-                              <Info className="w-4 h-4 text-blue-500" />
-                              <span>Include a clear call-to-action and relevant details</span>
-                            </div>
-                          </div>
+                          <textarea
+                            id="notification-message"
+                            value={notificationConfig.message}
+                            onChange={(e) => setNotificationConfig(prev => ({ ...prev, message: e.target.value }))}
+                            placeholder="Enter your notification message..."
+                            className="w-full min-h-[120px] p-3 border border-gray-300 rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          />
                         </div>
 
-                        {/* Settings Panel - 1/3 width */}
-                        <div className="space-y-6">
-                          {/* Priority Selection */}
-                          <div className="space-y-4">
-                            <Label className="text-base font-semibold text-blue-900 flex items-center gap-2">
-                              <AlertTriangle className="w-4 h-4 text-blue-600" />
-                              Priority Level
-                            </Label>
-                          <div className="space-y-3">
-                              {[
-                                { 
-                                  value: 'low', 
-                                  label: 'Low Priority', 
-                                  description: 'Informational updates',
-                                  color: 'from-green-50 to-emerald-50 border-green-200 text-green-700',
-                                  icon: <Clock className="w-4 h-4" />,
-                                  bgColor: 'bg-green-100'
-                                },
-                                { 
-                                  value: 'medium', 
-                                  label: 'Medium Priority', 
-                                  description: 'Important notices',
-                                  color: 'from-yellow-50 to-orange-50 border-yellow-200 text-yellow-700',
-                                  icon: <AlertTriangle className="w-4 h-4" />,
-                                  bgColor: 'bg-yellow-100'
-                                },
-                                { 
-                                  value: 'high', 
-                                  label: 'High Priority', 
-                                  description: 'Urgent alerts',
-                                  color: 'from-red-50 to-pink-50 border-red-200 text-red-700',
-                                  icon: <AlertTriangle className="w-4 h-4" />,
-                                  bgColor: 'bg-red-100'
-                                }
-                              ].map((priority) => (
-                                <div
-                                  key={priority.value}
-                                  className={`
-                                    p-4 border-2 rounded-xl cursor-pointer transition-all duration-300 group hover:shadow-md
-                                    ${notificationConfig.priority === priority.value 
-                                      ? `bg-gradient-to-r ${priority.color} shadow-lg scale-[1.02]` 
-                                      : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'
-                                    }
-                                  `}
-                                  onClick={() => setNotificationConfig(prev => ({ ...prev, priority: priority.value as 'low' | 'medium' | 'high' }))}
-                                >
-                                  <div className="flex items-start gap-3">
-                                    <div className={`
-                                      p-2 rounded-lg ${notificationConfig.priority === priority.value ? priority.bgColor : 'bg-gray-100'}
-                                      group-hover:scale-110 transition-transform duration-200
-                                    `}>
-                                    {priority.icon}
-                                    </div>
-                                    <div className="flex-1">
-                                      <div className="font-semibold text-sm">{priority.label}</div>
-                                      <div className="text-xs opacity-75">{priority.description}</div>
-                                    </div>
-                                    {notificationConfig.priority === priority.value && (
-                                      <CheckCircle className="w-5 h-5 text-green-600 animate-pulse" />
-                                    )}
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-
-                          {/* Additional Options */}
-                          <div className="space-y-4">
-                            <Label className="text-base font-semibold text-blue-900 flex items-center gap-2">
-                              <Settings className="w-4 h-4 text-blue-600" />
-                              Additional Options
-                            </Label>
-                          <div className="space-y-3">
-                              <div className="flex items-start gap-3 p-4 border-2 border-gray-200 rounded-xl bg-gray-50/50 hover:bg-gray-50 transition-colors">
-                                <Checkbox
-                                  id="include-attachments"
-                                  checked={notificationConfig.includeAttachments}
-                                  onCheckedChange={(checked) => setNotificationConfig(prev => ({ ...prev, includeAttachments: checked as boolean }))}
-                                  className="mt-1"
-                                />
-                                <div className="flex-1">
-                                  <Label htmlFor="include-attachments" className="text-sm font-semibold text-blue-900 cursor-pointer">
-                                    Include attachments
-                                  </Label>
-                                  <p className="text-xs text-gray-600 mt-1">Attach relevant files, documents, or images</p>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-
-                                      {/* Quick Stats */}
-            <div className="space-y-4">
-              <Label className="text-base font-semibold text-blue-900 flex items-center gap-2">
-                <Activity className="w-4 h-4 text-blue-600" />
-                Notification Stats
-              </Label>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
-                  <div className="text-2xl font-bold text-blue-700">{editableSelectedItems.length}</div>
-                  <div className="text-xs text-blue-600">Recipients</div>
-                </div>
-                <div className="p-3 bg-green-50 rounded-lg border border-green-200">
-                  <div className="text-2xl font-bold text-green-700">
-                    {notificationConfig.subject && notificationConfig.message ? 'Ready' : 'Draft'}
-                  </div>
-                  <div className="text-xs text-green-600">Status</div>
-                </div>
-              </div>
-              
-              {/* Progress Indicator */}
-              {isProcessing && (
-                <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
-                    <span className="text-sm font-medium text-blue-900">Sending notifications...</span>
-                  </div>
-                  <Progress 
-                    value={
-                      Object.values(actionProgress).reduce((sum, p) => sum + p.progress, 0) / editableSelectedItems.length
-                    } 
-                    className="w-full h-2" 
-                  />
-                  <div className="text-xs text-blue-600 mt-1">
-                    {Object.values(actionProgress).filter(p => p.status === 'completed').length} of {editableSelectedItems.length} completed
-                  </div>
-                </div>
-              )}
-            </div>
-                          </div>
+                        {/* Priority Selection */}
+                        <div className="space-y-2">
+                          <Label className="text-sm font-medium text-blue-900">Priority</Label>
+                          <Select 
+                            value={notificationConfig.priority} 
+                            onValueChange={(value) => setNotificationConfig(prev => ({ ...prev, priority: value as 'low' | 'medium' | 'high' }))}
+                          >
+                            <SelectTrigger className="w-full">
+                              <SelectValue placeholder="Select priority" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="low">Low Priority</SelectItem>
+                              <SelectItem value="medium">Medium Priority</SelectItem>
+                              <SelectItem value="high">High Priority</SelectItem>
+                            </SelectContent>
+                          </Select>
                         </div>
 
-                      {/* Enhanced Preview Section */}
+                        {/* Simple Preview */}
                         {notificationConfig.subject && notificationConfig.message && (
-                        <div className="space-y-4">
-                          <div className="flex items-center justify-between">
-                            <Label className="text-base font-semibold text-blue-900 flex items-center gap-2">
-                              <Eye className="w-4 h-4 text-blue-600" />
-                              Message Preview
-                            </Label>
-                            <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-                              Live Preview
-                            </Badge>
-                          </div>
-                          <div className="border-2 border-gray-200 rounded-xl p-6 bg-gradient-to-br from-gray-50 to-white shadow-inner">
-                            <div className="space-y-4">
-                              <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center">
-                                  <Bell className="w-5 h-5 text-white" />
-                                </div>
-                                <div className="flex-1">
-                                  <div className="flex items-center gap-2 mb-1">
-                                    <Badge 
-                                      variant="outline" 
-                                      className={`text-xs ${
-                                        notificationConfig.priority === 'high' ? 'bg-red-50 text-red-700 border-red-200' :
-                                        notificationConfig.priority === 'medium' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' :
-                                        'bg-green-50 text-green-700 border-green-200'
-                                      }`}
-                                    >
+                          <div className="space-y-2">
+                            <Label className="text-sm font-medium text-blue-900">Preview</Label>
+                            <div className="p-4 border border-gray-200 rounded-md bg-gray-50">
+                              <div className="space-y-2">
+                                <div className="flex items-center gap-2">
+                                  <Badge 
+                                    variant="outline" 
+                                    className={`text-xs ${
+                                      notificationConfig.priority === 'high' ? 'bg-red-50 text-red-700 border-red-200' :
+                                      notificationConfig.priority === 'medium' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' :
+                                      'bg-green-50 text-green-700 border-green-200'
+                                    }`}
+                                  >
                                     {notificationConfig.priority} priority
                                   </Badge>
-                                    <span className="text-xs text-gray-500">• Just now</span>
                                 </div>
-                                  <div className="font-bold text-lg text-blue-900">{notificationConfig.subject}</div>
-                                </div>
-                              </div>
-                              <div className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap bg-white p-4 rounded-lg border border-gray-100">
-                                {notificationConfig.message}
-                              </div>
-                              {notificationConfig.includeAttachments && (
-                                <div className="flex items-center gap-2 text-xs text-gray-500">
-                                  <FileText className="w-3 h-3" />
-                                  <span>Attachments will be included</span>
-                                </div>
-                              )}
+                                <div className="font-medium text-blue-900">{notificationConfig.subject}</div>
+                                <div className="text-sm text-gray-700">{notificationConfig.message}</div>
                               </div>
                             </div>
                           </div>
                         )}
 
-                                             {/* Validation Summary */}
-                       <div className="space-y-3">
-                         <div className="flex items-center justify-between">
-                           <Label className="text-base font-semibold text-blue-900 flex items-center gap-2">
-                             <CheckCircle className="w-4 h-4 text-blue-600" />
-                             Validation Summary
-                           </Label>
-                           <Badge variant="outline" className={`text-xs ${
-                             (!notificationConfig.subject || !notificationConfig.message || 
-                              notificationConfig.subject.length > 60 || notificationConfig.message.length > 500)
-                               ? 'bg-red-50 text-red-700 border-red-200'
-                               : 'bg-green-50 text-green-700 border-green-200'
-                           }`}>
-                             {(!notificationConfig.subject || !notificationConfig.message || 
-                               notificationConfig.subject.length > 60 || notificationConfig.message.length > 500)
-                               ? 'Issues Found' : 'Ready to Send'}
-                           </Badge>
-                         </div>
-                         
-                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                           <div className={`p-3 rounded-lg border-2 ${
-                             !notificationConfig.subject 
-                               ? 'bg-red-50 border-red-200' 
-                               : notificationConfig.subject.length > 60 
-                               ? 'bg-yellow-50 border-yellow-200'
-                               : 'bg-green-50 border-green-200'
-                           }`}>
-                             <div className="flex items-center gap-2">
-                               {!notificationConfig.subject ? (
-                                 <X className="w-4 h-4 text-red-600" />
-                               ) : notificationConfig.subject.length > 60 ? (
-                                 <AlertTriangle className="w-4 h-4 text-yellow-600" />
-                               ) : (
-                                 <CheckCircle className="w-4 h-4 text-green-600" />
-                               )}
-                               <span className="text-sm font-medium">Subject Line</span>
-                             </div>
-                             <div className="text-xs mt-1">
-                               {!notificationConfig.subject 
-                                 ? 'Subject is required' 
-                                 : notificationConfig.subject.length > 60 
-                                 ? 'Subject is too long (max 60 characters)'
-                                 : 'Subject looks good'
-                               }
-                             </div>
-                           </div>
-                           
-                           <div className={`p-3 rounded-lg border-2 ${
-                             !notificationConfig.message 
-                               ? 'bg-red-50 border-red-200' 
-                               : notificationConfig.message.length > 500 
-                               ? 'bg-yellow-50 border-yellow-200'
-                               : 'bg-green-50 border-green-200'
-                           }`}>
-                             <div className="flex items-center gap-2">
-                               {!notificationConfig.message ? (
-                                 <X className="w-4 h-4 text-red-600" />
-                               ) : notificationConfig.message.length > 500 ? (
-                                 <AlertTriangle className="w-4 h-4 text-yellow-600" />
-                               ) : (
-                                 <CheckCircle className="w-4 h-4 text-green-600" />
-                               )}
-                               <span className="text-sm font-medium">Message Content</span>
-                             </div>
-                             <div className="text-xs mt-1">
-                               {!notificationConfig.message 
-                                 ? 'Message is required' 
-                                 : notificationConfig.message.length > 500 
-                                 ? 'Message is too long (max 500 characters)'
-                                 : 'Message looks good'
-                               }
-                             </div>
-                           </div>
-                         </div>
-                       </div>
-
-                       {/* Enhanced Send Button */}
-                       <div className="pt-4 border-t border-gray-200">
-                                                <Button 
+                        {/* Send Button */}
+                        <Button 
                           onClick={() => handleTabAction('notification')}
-                          disabled={isProcessing || !notificationConfig.subject || !notificationConfig.message || 
-                                   notificationConfig.subject.length > 60 || notificationConfig.message.length > 500}
-                          className="w-full h-14 text-lg font-bold rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
-                          aria-label={`Send notification to ${editableSelectedItems.length} selected ${entityLabel}`}
+                          disabled={isProcessing || !notificationConfig.subject || !notificationConfig.message}
+                          className="w-full"
                         >
-                          <div className="flex items-center gap-3">
-                            <Bell className="w-6 h-6" />
-                            <span>Send Notification</span>
-                            {isProcessing && <Loader2 className="w-5 h-5 animate-spin" />}
-                          </div>
+                          <Bell className="w-4 h-4 mr-2" />
+                          Send Notification to {editableSelectedItems.length} {entityLabel}
+                          {isProcessing && <Loader2 className="w-4 h-4 ml-2 animate-spin" />}
                         </Button>
-                         <div className="flex items-center justify-center gap-2 mt-3 text-xs text-gray-500">
-                           <Shield className="w-3 h-3" />
-                           <span>All notifications are logged for audit purposes</span>
-                         </div>
                       </div>
                     </div>
                   </CardContent>
@@ -2463,7 +2045,7 @@ function BulkActionsDialog<T = any>({
           
           <div className="space-y-4">
             {/* Simple Preview */}
-            <div className="border border-gray-200 rounded-lg p-4 bg-gray-50/30">
+            <div className="border border-gray-200 rounded p-4 bg-gray-50/30">
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
                   <Badge 
@@ -2483,7 +2065,7 @@ function BulkActionsDialog<T = any>({
             </div>
 
             {/* Recipients */}
-            <div className="flex items-center gap-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+            <div className="flex items-center gap-3 p-3 bg-blue-50 rounded border border-blue-200">
               <Users className="w-5 h-5 text-blue-600" />
               <div>
                 <div className="font-medium text-blue-900">

@@ -16,7 +16,7 @@ import { Settings, Plus, Trash2, Printer, Loader2, MoreHorizontal, Upload, List,
 import { ImportDialog } from "@/components/reusable/Dialogs/ImportDialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ExportDialog } from '@/components/reusable/Dialogs/ExportDialog';
-import { SortDialog, SortFieldOption } from '@/components/reusable/Dialogs/SortDialog';
+import { SortDialog } from '@/components/reusable/Dialogs/SortDialog';
 import BulkActionsBar from '@/components/reusable/BulkActionsBar';
 import { PrintLayout } from '@/components/PrintLayout';
 import { TableCardView } from '@/components/reusable/Table/TableCardView';
@@ -93,7 +93,7 @@ interface FuseResult<T> {
   }>;
 }
 
-const courseSortFieldOptions: SortFieldOption<string>[] = [
+const courseSortFieldOptions = [
   { value: 'name', label: 'Course Name' },
   { value: 'code', label: 'Course Code' },
   { value: 'department', label: 'Department' },
@@ -1603,36 +1603,34 @@ export default function CourseListPage() {
       <SortDialog
         open={sortDialogOpen}
         onOpenChange={setSortDialogOpen}
-        sortField={sortField}
-        setSortField={field => setSortField(field as CourseSortField)}
-        sortOrder={sortOrder}
-        setSortOrder={setSortOrder}
-        sortFieldOptions={courseSortFieldOptions}
-        onApply={() => {
-          setSortFields([{ field: sortField as SortField, order: sortOrder }]);
-          setSortDialogOpen(false);
-        }}
-        onReset={() => {
-          setSortField('name');
-          setSortOrder('asc');
-          setSortFields([{ field: 'name' as SortField, order: 'asc' }]);
-          setSortDialogOpen(false);
+        sortOptions={courseSortFieldOptions}
+        currentSort={{ field: sortField, order: sortOrder }}
+        onSortChange={(field: string, order: 'asc' | 'desc') => {
+          setSortField(field as CourseSortField);
+          setSortOrder(order as CourseSortOrder);
+          setSortFields([{ field: field as SortField, order }]);
         }}
         title="Sort Courses"
-        tooltip="Sort courses by different fields. Choose the field and order to organize your list."
+        description="Sort courses by different fields. Choose the field and order to organize your list."
+        entityType="courses"
       />
 
       <ExportDialog
         open={exportDialogOpen}
         onOpenChange={setExportDialogOpen}
-        exportableColumns={exportableColumnsForExport}
-        exportColumns={exportColumns}
-        setExportColumns={setExportColumns}
-        exportFormat={exportFormat}
-        setExportFormat={setExportFormat}
-        onExport={handleExport}
-        title="Export Courses"
-        tooltip="Export course data in various formats. Choose your preferred export options."
+        selectedItems={selectedCourses}
+        entityType="course"
+        entityLabel="course"
+        exportColumns={exportableColumnsForExport.map(col => ({
+          id: col.key,
+          label: col.label,
+          default: true
+        }))}
+        onExport={(options) => {
+          setExportFormat(options.format.toLowerCase() as 'pdf' | 'excel' | 'csv');
+          setExportColumns(options.columns);
+          handleExport();
+        }}
       />
 
       <ColumnFilterDialog

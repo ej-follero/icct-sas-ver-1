@@ -5,10 +5,11 @@ import { prisma } from '@/lib/prisma';
 // GET single user
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
-    const userId = parseInt(params.id);
+    const userId = parseInt(id);
     
     if (isNaN(userId)) {
       return NextResponse.json(

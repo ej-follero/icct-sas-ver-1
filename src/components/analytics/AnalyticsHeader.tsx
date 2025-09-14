@@ -2,20 +2,25 @@
 
 import { Button } from '@/components/ui/button';
 import { CardHeader } from '@/components/ui/card';
-import { BarChart3, Download, Eye, EyeOff } from 'lucide-react';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+import { BarChart3, Download, Eye, EyeOff, RefreshCw } from 'lucide-react';
 
 interface AnalyticsHeaderProps {
   type: 'instructor' | 'student';
   showDetails: boolean;
   onToggleDetails: () => void;
   onExport: (format: 'pdf' | 'csv' | 'excel') => void;
+  onRefresh?: () => void;
+  loading?: boolean;
 }
 
 export function AnalyticsHeader({ 
   type, 
   showDetails, 
   onToggleDetails, 
-  onExport 
+  onExport,
+  onRefresh,
+  loading = false
 }: AnalyticsHeaderProps) {
   return (
     <CardHeader className="p-0">
@@ -33,6 +38,29 @@ export function AnalyticsHeader({
                 </h3>
                 <p className="text-blue-100 text-xs sm:text-sm">Real-time attendance insights and trends</p>
               </div>
+            </div>
+            
+            {/* Action Buttons */}
+            <div className="flex items-center gap-2">
+              {onRefresh && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={onRefresh}
+                      disabled={loading}
+                      aria-label="Refresh analytics"
+                      className="h-9 w-9 p-0 rounded-full text-white hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/40 disabled:opacity-60"
+                    >
+                      <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">
+                    <p>Refresh analytics</p>
+                  </TooltipContent>
+                </Tooltip>
+              )}
             </div>
           </div>
         </div>

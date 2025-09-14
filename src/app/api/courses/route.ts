@@ -6,20 +6,7 @@ export async function GET() {
   try {
     console.log("Fetching courses from database...");
     
-    // Ensure the client is connected
-    try {
-      await prisma.$connect();
-      console.log("Database connection successful");
-    } catch (connectionError) {
-      console.error("Database connection failed:", connectionError);
-      return NextResponse.json(
-        { 
-          error: "Database connection failed",
-          details: process.env.NODE_ENV === 'development' ? connectionError : undefined
-        },
-        { status: 503 }
-      );
-    }
+
     
     // Check if the CourseOffering table exists by trying to count records
     try {
@@ -117,12 +104,6 @@ export async function GET() {
       },
       { status: statusCode }
     );
-  } finally {
-    try {
-      await prisma.$disconnect();
-    } catch (disconnectError) {
-      console.error("Error disconnecting from database:", disconnectError);
-    }
   }
 }
 

@@ -33,6 +33,9 @@ interface ImportRecord {
   departmentDescription?: string;
   departmentStatus?: "ACTIVE" | "INACTIVE";
   
+  // Allow arbitrary fields for other entity templates (emails, etc.)
+  [key: string]: any;
+  
   // Section fields
   sectionName?: string;
   sectionCapacity?: number;
@@ -73,6 +76,10 @@ interface ImportDialogProps {
   acceptedFileTypes?: string[];
   maxFileSize?: number; // in MB
   currentUserRole?: string; // For role-based validation
+  /** Optional custom requirements renderer for the File Requirements box */
+  fileRequirements?: React.ReactNode;
+  /** Optional custom template builder. If provided, used instead of built-ins. */
+  templateBuilder?: () => void;
 }
 
 function ImportDialog({
@@ -83,7 +90,9 @@ function ImportDialog({
   templateUrl,
   acceptedFileTypes = [".csv", ".xlsx", ".xls"],
   maxFileSize = 5,
-  currentUserRole
+  currentUserRole,
+  fileRequirements,
+  templateBuilder
 }: ImportDialogProps) {
   const [file, setFile] = useState<File | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -491,7 +500,99 @@ function ImportDialog({
     console.log('Validation: Received data with keys:', data.length > 0 ? Object.keys(data[0]) : 'No data');
     console.log('Validation: First row sample:', data.length > 0 ? data[0] : 'No data');
 
-    if (entityName.toLowerCase() === 'rooms') {
+    if (entityName.toLowerCase() === 'emails') {
+      // Emails schema validation
+      return data.map((row) => {
+        const errors: string[] = [];
+        const record: any = {
+          subject: '',
+          sender: '',
+          recipient: '',
+          recipients: '',
+          to: '',
+          cc: '',
+          bcc: '',
+          content: '',
+          priority: 'NORMAL',
+          folder: 'INBOX',
+          status: 'PENDING',
+          isRead: 'false',
+          isStarred: 'false',
+          attachments: '',
+          attachmentNames: ''
+        };
+
+        const getValue = (obj: any, key: string): string => {
+          const lowerKey = key.toLowerCase();
+          const upperKey = key.toUpperCase();
+          if (obj[key] !== undefined) return obj[key];
+          if (obj[lowerKey] !== undefined) return obj[lowerKey];
+          if (obj[upperKey] !== undefined) return obj[upperKey];
+          return '';
+        };
+
+        const subject = getValue(row, 'subject');
+        if (!subject) {
+          errors.push('Subject is missing - will use "No subject"');
+          record.subject = 'No subject';
+        } else {
+          record.subject = subject;
+        }
+
+        const sender = getValue(row, 'sender') || getValue(row, 'from');
+        if (!sender) {
+          errors.push('Sender is missing - will use admin@icct.edu');
+          record.sender = 'admin@icct.edu';
+        } else {
+          record.sender = sender;
+        }
+
+        const primaryRecipient = getValue(row, 'recipient');
+        const toCombined = getValue(row, 'recipients') || getValue(row, 'to');
+        const toList = (toCombined || '')
+          .split(',')
+          .map((s: string) => s.trim())
+          .filter(Boolean);
+        if (!primaryRecipient && toList.length === 0) {
+          errors.push('No recipient specified - record may fail on import');
+        }
+        record.recipient = primaryRecipient || (toList[0] || '');
+        record.recipients = toCombined;
+        record.to = getValue(row, 'to');
+
+        const content = getValue(row, 'content') || getValue(row, 'body');
+        record.content = content;
+
+        const priority = (getValue(row, 'priority') || 'NORMAL').toUpperCase();
+        const validPriorities = ['LOW', 'NORMAL', 'HIGH', 'URGENT'];
+        record.priority = (validPriorities.includes(priority) ? priority : 'NORMAL') as any;
+        if (!validPriorities.includes(priority)) errors.push('Invalid priority - defaulting to NORMAL');
+
+        const folder = (getValue(row, 'folder') || getValue(row, 'type') || 'INBOX').toUpperCase();
+        const validFolders = ['INBOX', 'SENT', 'DRAFT', 'SPAM', 'TRASH'];
+        record.folder = (validFolders.includes(folder) ? folder : 'INBOX') as any;
+        if (!validFolders.includes(folder)) errors.push('Invalid folder - defaulting to INBOX');
+
+        const status = (getValue(row, 'status') || 'PENDING').toUpperCase();
+        const validStatus = ['PENDING', 'SENT', 'DELIVERED', 'READ', 'FAILED', 'DRAFT'];
+        record.status = (validStatus.includes(status) ? status : 'PENDING') as any;
+        if (!validStatus.includes(status)) errors.push('Invalid status - defaulting to PENDING');
+
+        const isRead = getValue(row, 'isRead');
+        if (isRead !== '') record.isRead = isRead;
+        const isStarred = getValue(row, 'isStarred');
+        if (isStarred !== '') record.isStarred = isStarred;
+
+        record.cc = getValue(row, 'cc');
+        record.bcc = getValue(row, 'bcc');
+        record.attachments = getValue(row, 'attachments');
+        record.attachmentNames = getValue(row, 'attachmentNames');
+
+        record.errors = errors;
+        record.isValid = true;
+        return record;
+      });
+    } else if (entityName.toLowerCase() === 'rooms') {
       // Room schema validation
       return data.map((row, index) => {
         const errors: string[] = [];
@@ -855,6 +956,190 @@ function ImportDialog({
       });
     }
 
+    if (entityName.toLowerCase() === 'events') {
+      // Event schema validation
+      return data.map((row, index) => {
+        const errors: string[] = [];
+        const record: any = {
+          title: '',
+          description: '',
+          date: '',
+          startTime: '09:00',
+          endTime: '10:00',
+          location: '',
+          eventType: 'LECTURE',
+          status: 'DRAFT',
+          priority: 'NORMAL',
+          capacity: null,
+          isPublic: true,
+          requiresRegistration: false,
+          contactEmail: '',
+          contactPhone: '',
+          imageUrl: ''
+        };
+
+        // Helper function to get value regardless of case
+        const getValue = (obj: any, key: string): string => {
+          const lowerKey = key.toLowerCase();
+          const upperKey = key.toUpperCase();
+          if (obj[key] !== undefined) return obj[key];
+          if (obj[lowerKey] !== undefined) return obj[lowerKey];
+          if (obj[upperKey] !== undefined) return obj[upperKey];
+          return '';
+        };
+
+        // title (required)
+        const title = getValue(row, 'title');
+        if (!title || title.trim() === '') {
+          errors.push('Event title is missing - will use placeholder');
+          record.title = `Event ${index + 1}`;
+        } else {
+          record.title = title.trim();
+          if (record.title.length < 2) {
+            errors.push('Event title is too short (min 2 characters)');
+          }
+          if (record.title.length > 200) {
+            errors.push('Event title is too long (max 200 characters)');
+          }
+        }
+
+        // date (required)
+        const date = getValue(row, 'date') || getValue(row, 'eventDate');
+        if (!date || date.trim() === '') {
+          errors.push('Event date is missing - will use today\'s date');
+          record.date = new Date().toISOString().split('T')[0];
+        } else {
+          // Validate date format
+          const dateObj = new Date(date);
+          if (isNaN(dateObj.getTime())) {
+            errors.push('Invalid date format - will use today\'s date');
+            record.date = new Date().toISOString().split('T')[0];
+          } else {
+            record.date = dateObj.toISOString().split('T')[0];
+          }
+        }
+
+        // startTime (optional)
+        const startTime = getValue(row, 'startTime') || getValue(row, 'start_time');
+        if (startTime) {
+          const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
+          if (timeRegex.test(startTime)) {
+            record.startTime = startTime;
+          } else {
+            errors.push('Invalid start time format - will use 09:00');
+            record.startTime = '09:00';
+          }
+        }
+
+        // endTime (optional)
+        const endTime = getValue(row, 'endTime') || getValue(row, 'end_time');
+        if (endTime) {
+          const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
+          if (timeRegex.test(endTime)) {
+            record.endTime = endTime;
+          } else {
+            errors.push('Invalid end time format - will use 10:00');
+            record.endTime = '10:00';
+          }
+        }
+
+        // description (optional)
+        const description = getValue(row, 'description');
+        if (description) {
+          record.description = description.trim();
+        }
+
+        // location (optional)
+        const location = getValue(row, 'location');
+        if (location) {
+          record.location = location.trim();
+        }
+
+        // eventType (optional)
+        const eventType = getValue(row, 'eventType') || getValue(row, 'event_type') || getValue(row, 'type');
+        const validEventTypes = ['LECTURE', 'LABORATORY', 'CONFERENCE', 'MEETING', 'EXAM', 'OTHER'];
+        if (eventType && validEventTypes.includes(eventType.toUpperCase())) {
+          record.eventType = eventType.toUpperCase();
+        } else if (eventType) {
+          errors.push('Invalid event type - will default to LECTURE');
+          record.eventType = 'LECTURE';
+        }
+
+        // status (optional)
+        const status = getValue(row, 'status');
+        const validStatuses = ['DRAFT', 'SCHEDULED', 'ONGOING', 'COMPLETED', 'CANCELLED', 'POSTPONED'];
+        if (status && validStatuses.includes(status.toUpperCase())) {
+          record.status = status.toUpperCase();
+        } else if (status) {
+          errors.push('Invalid status - will default to DRAFT');
+          record.status = 'DRAFT';
+        }
+
+        // priority (optional)
+        const priority = getValue(row, 'priority');
+        const validPriorities = ['LOW', 'NORMAL', 'HIGH', 'URGENT'];
+        if (priority && validPriorities.includes(priority.toUpperCase())) {
+          record.priority = priority.toUpperCase();
+        } else if (priority) {
+          errors.push('Invalid priority - will default to NORMAL');
+          record.priority = 'NORMAL';
+        }
+
+        // capacity (optional)
+        const capacity = getValue(row, 'capacity');
+        if (capacity) {
+          const cap = parseInt(capacity);
+          if (!isNaN(cap) && cap > 0) {
+            record.capacity = cap;
+          } else {
+            errors.push('Invalid capacity - will be set to null');
+            record.capacity = null;
+          }
+        }
+
+        // isPublic (optional)
+        const isPublic = getValue(row, 'isPublic') || getValue(row, 'is_public');
+        if (isPublic !== '') {
+          const value = isPublic.toLowerCase().trim();
+          record.isPublic = value === 'true' || value === '1' || value === 'yes';
+        }
+
+        // requiresRegistration (optional)
+        const requiresRegistration = getValue(row, 'requiresRegistration') || getValue(row, 'requires_registration');
+        if (requiresRegistration !== '') {
+          const value = requiresRegistration.toLowerCase().trim();
+          record.requiresRegistration = value === 'true' || value === '1' || value === 'yes';
+        }
+
+        // contactEmail (optional)
+        const contactEmail = getValue(row, 'contactEmail') || getValue(row, 'contact_email');
+        if (contactEmail) {
+          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+          if (emailRegex.test(contactEmail)) {
+            record.contactEmail = contactEmail.trim();
+          } else {
+            errors.push('Invalid contact email format');
+          }
+        }
+
+        // contactPhone (optional)
+        const contactPhone = getValue(row, 'contactPhone') || getValue(row, 'contact_phone');
+        if (contactPhone) {
+          record.contactPhone = contactPhone.trim();
+        }
+
+        // imageUrl (optional)
+        const imageUrl = getValue(row, 'imageUrl') || getValue(row, 'image_url');
+        if (imageUrl) {
+          record.imageUrl = imageUrl.trim();
+        }
+
+        record.errors = errors;
+        record.isValid = true;
+        return record;
+      });
+    }
+
     if (entityName.toLowerCase() === 'users') {
       // User schema validation
       return data.map((row, index) => {
@@ -1129,10 +1414,210 @@ function ImportDialog({
     console.log('ImportDialog: Downloading template, templateUrl:', templateUrl);
     
     if (!templateUrl) {
+      // Use custom builder when provided
+      if (templateBuilder) {
+        templateBuilder();
+        return;
+      }
       // Create a template for rooms or departments
       let templateData;
       let headers;
       let sheetName;
+      if (entityName.toLowerCase() === 'emails') {
+        templateData = [
+          {
+            subject: "Welcome to ICCT",
+            sender: "admin@icct.edu",
+            recipient: "student1@icct.edu",
+            recipients: "student1@icct.edu, student2@icct.edu",
+            to: "student1@icct.edu, student2@icct.edu",
+            cc: "advisor@icct.edu",
+            bcc: "",
+            content: "Hello, this is a sample email.",
+            priority: "NORMAL", // LOW, NORMAL, HIGH, URGENT
+            folder: "INBOX", // INBOX, SENT, DRAFT, SPAM, TRASH
+            status: "PENDING", // PENDING, SENT, DELIVERED, READ, FAILED, DRAFT
+            isRead: "false",
+            isStarred: "false",
+            attachments: "/uploads/example1.png,/uploads/example2.png", // comma-separated URLs
+            attachmentNames: "example1.png,example2.png"
+          }
+        ];
+        headers = [
+          'subject', 'sender', 'recipient', 'recipients', 'to', 'cc', 'bcc', 'content',
+          'priority', 'folder', 'status', 'isRead', 'isStarred',
+          'attachments', 'attachmentNames'
+        ];
+        sheetName = 'Emails Template';
+        const ws = XLSX.utils.json_to_sheet(templateData, { header: headers });
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, sheetName);
+        XLSX.writeFile(wb, `emails-import-template.xlsx`);
+        return;
+      }
+      if (entityName.toLowerCase() === 'events') {
+        templateData = [
+          {
+            title: "Computer Science Lecture",
+            description: "Introduction to Programming Concepts",
+            date: "2024-02-15",
+            startTime: "09:00",
+            endTime: "10:30",
+            location: "Room 101",
+            eventType: "LECTURE",
+            status: "SCHEDULED",
+            priority: "NORMAL",
+            capacity: 40,
+            isPublic: "true",
+            requiresRegistration: "false",
+            contactEmail: "instructor@icct.edu",
+            contactPhone: "+1234567890",
+            imageUrl: ""
+          },
+          {
+            title: "Database Lab Session",
+            description: "Hands-on SQL practice",
+            date: "2024-02-16",
+            startTime: "14:00",
+            endTime: "16:00",
+            location: "Lab 205",
+            eventType: "LABORATORY",
+            status: "SCHEDULED",
+            priority: "HIGH",
+            capacity: 25,
+            isPublic: "true",
+            requiresRegistration: "true",
+            contactEmail: "lab.instructor@icct.edu",
+            contactPhone: "+1234567891",
+            imageUrl: ""
+          },
+          {
+            title: "Faculty Meeting",
+            description: "Monthly faculty coordination meeting",
+            date: "2024-02-20",
+            startTime: "10:00",
+            endTime: "11:30",
+            location: "Conference Room A",
+            eventType: "MEETING",
+            status: "DRAFT",
+            priority: "NORMAL",
+            capacity: 20,
+            isPublic: "false",
+            requiresRegistration: "false",
+            contactEmail: "admin@icct.edu",
+            contactPhone: "+1234567892",
+            imageUrl: ""
+          }
+        ];
+        headers = ['title', 'description', 'date', 'startTime', 'endTime', 'location', 'eventType', 'status', 'priority', 'capacity', 'isPublic', 'requiresRegistration', 'contactEmail', 'contactPhone', 'imageUrl'];
+        sheetName = "Events Template";
+        
+        // Add instructions sheet
+        const instructionsData = [
+          {
+            field: "title",
+            description: "Required: Event title (2-200 characters)",
+            example: "Computer Science Lecture",
+            notes: "Main identifier for the event"
+          },
+          {
+            field: "date",
+            description: "Required: Event date (YYYY-MM-DD format)",
+            example: "2024-02-15",
+            notes: "Date when the event will occur"
+          },
+          {
+            field: "startTime",
+            description: "Optional: Start time (HH:MM format, defaults to 09:00)",
+            example: "09:00",
+            notes: "24-hour format preferred"
+          },
+          {
+            field: "endTime",
+            description: "Optional: End time (HH:MM format, defaults to 10:00)",
+            example: "10:30",
+            notes: "24-hour format preferred"
+          },
+          {
+            field: "description",
+            description: "Optional: Event description",
+            example: "Introduction to Programming Concepts",
+            notes: "Detailed information about the event"
+          },
+          {
+            field: "location",
+            description: "Optional: Event location",
+            example: "Room 101",
+            notes: "Where the event will take place"
+          },
+          {
+            field: "eventType",
+            description: "Optional: Type of event (defaults to LECTURE)",
+            example: "LECTURE",
+            notes: "Valid types: LECTURE, LABORATORY, CONFERENCE, MEETING, EXAM, OTHER"
+          },
+          {
+            field: "status",
+            description: "Optional: Event status (defaults to DRAFT)",
+            example: "SCHEDULED",
+            notes: "Valid statuses: DRAFT, SCHEDULED, ONGOING, COMPLETED, CANCELLED, POSTPONED"
+          },
+          {
+            field: "priority",
+            description: "Optional: Event priority (defaults to NORMAL)",
+            example: "NORMAL",
+            notes: "Valid priorities: LOW, NORMAL, HIGH, URGENT"
+          },
+          {
+            field: "capacity",
+            description: "Optional: Maximum attendees",
+            example: "40",
+            notes: "Number only, leave empty if no limit"
+          },
+          {
+            field: "isPublic",
+            description: "Optional: Public visibility (defaults to true)",
+            example: "true",
+            notes: "Use 'true' or 'false' (string)"
+          },
+          {
+            field: "requiresRegistration",
+            description: "Optional: Requires registration (defaults to false)",
+            example: "false",
+            notes: "Use 'true' or 'false' (string)"
+          },
+          {
+            field: "contactEmail",
+            description: "Optional: Contact email",
+            example: "instructor@icct.edu",
+            notes: "Must be valid email format"
+          },
+          {
+            field: "contactPhone",
+            description: "Optional: Contact phone number",
+            example: "+1234567890",
+            notes: "Any format accepted"
+          },
+          {
+            field: "imageUrl",
+            description: "Optional: Event image URL",
+            example: "",
+            notes: "URL to event image/thumbnail"
+          }
+        ];
+        
+        // Create main data sheet
+        const ws = XLSX.utils.json_to_sheet(templateData, { header: headers });
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, sheetName);
+        
+        // Add instructions sheet
+        const wsInstructions = XLSX.utils.json_to_sheet(instructionsData);
+        XLSX.utils.book_append_sheet(wb, wsInstructions, "Instructions");
+        
+        XLSX.writeFile(wb, `events-import-template.xlsx`);
+        return;
+      }
       if (entityName.toLowerCase() === 'rooms') {
         templateData = [
           {
@@ -1665,7 +2150,37 @@ function ImportDialog({
                 <div className="bg-gray-50 border border-gray-200 rounded p-4">
                   <h4 className="font-medium text-gray-900 mb-2">File Requirements</h4>
                   <ul className="text-sm text-gray-600 space-y-1">
-                    {entityName.toLowerCase() === 'courseoffering' ? (
+                    {fileRequirements ? (
+                      fileRequirements
+                    ) : entityName.toLowerCase() === 'emails' ? (
+                      <>
+                        <li>• File must be in CSV or Excel format</li>
+                        <li>• Maximum file size: {maxFileSize}MB</li>
+                        <li>• Required columns: <b>subject</b>, <b>sender</b>, <b>recipient</b> (or use <b>to</b>)</li>
+                        <li>• Optional columns: <b>to</b>, <b>cc</b>, <b>bcc</b>, <b>content</b>, <b>priority</b>, <b>folder</b>, <b>status</b>, <b>isRead</b>, <b>isStarred</b>, <b>attachments</b>, <b>attachmentNames</b></li>
+                        <li>• <b>priority</b> values: "LOW", "NORMAL", "HIGH", "URGENT" (defaults to "NORMAL")</li>
+                        <li>• <b>folder</b> values: "INBOX", "SENT", "DRAFT", "SPAM", "TRASH" (defaults to "INBOX")</li>
+                        <li>• <b>status</b> values: "PENDING", "SENT", "DELIVERED", "READ", "FAILED", "DRAFT" (defaults to "PENDING")</li>
+                        <li>• <b>isRead</b>/<b>isStarred</b>: "true" or "false"</li>
+                        <li>• <b>to</b>/<b>cc</b>/<b>bcc</b>: comma-separated emails (e.g., "a@icct.edu, b@icct.edu")</li>
+                        <li>• <b>attachments</b>: comma-separated URLs; <b>attachmentNames</b> (optional) provides matching display names</li>
+                      </>
+                    ) : entityName.toLowerCase() === 'events' ? (
+                      <>
+                        <li>• File must be in CSV or Excel format</li>
+                        <li>• Maximum file size: {maxFileSize}MB</li>
+                        <li>• Required columns: <b>title</b>, <b>date</b></li>
+                        <li>• Optional columns: <b>description</b>, <b>startTime</b>, <b>endTime</b>, <b>location</b>, <b>eventType</b>, <b>status</b>, <b>priority</b>, <b>capacity</b>, <b>isPublic</b>, <b>requiresRegistration</b>, <b>contactEmail</b>, <b>contactPhone</b>, <b>imageUrl</b></li>
+                        <li>• <b>date</b> format: YYYY-MM-DD (e.g., "2024-02-15")</li>
+                        <li>• <b>startTime</b>/<b>endTime</b> format: HH:MM (e.g., "09:00", "14:30")</li>
+                        <li>• <b>eventType</b> values: "LECTURE", "LABORATORY", "CONFERENCE", "MEETING", "EXAM", "OTHER"</li>
+                        <li>• <b>status</b> values: "DRAFT", "SCHEDULED", "ONGOING", "COMPLETED", "CANCELLED", "POSTPONED"</li>
+                        <li>• <b>priority</b> values: "LOW", "NORMAL", "HIGH", "URGENT"</li>
+                        <li>• <b>isPublic</b>/<b>requiresRegistration</b>: "true" or "false"</li>
+                        <li>• <b>capacity</b>: number only (leave empty if no limit)</li>
+                        <li>• <b>contactEmail</b>: must be valid email format</li>
+                      </>
+                    ) : entityName.toLowerCase() === 'courseoffering' ? (
                       <>
                         <li>• File must be in CSV or Excel format</li>
                         <li>• Maximum file size: {maxFileSize}MB</li>
@@ -1812,7 +2327,52 @@ function ImportDialog({
                         <h4 className="font-medium text-gray-900 mb-3">Data Preview</h4>
                         <div className="border border-gray-200 rounded overflow-hidden">
                           <div className="overflow-x-auto">
-                            {entityName.toLowerCase() === 'courseoffering' ? (
+                            {entityName.toLowerCase() === 'emails' ? (
+                              <table className="w-full text-sm">
+                                <thead className="bg-gray-50">
+                                  <tr>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Subject</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Sender</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Recipients</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Status</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Priority</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Folder</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Validation</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-200">
+                                  {importData.slice(0, 5).map((record, index) => (
+                                    <tr key={index} className={record.errors && record.errors.length > 0 ? 'bg-yellow-50' : 'bg-white'}>
+                                      <td className="px-4 py-2">{(record as any).subject}</td>
+                                      <td className="px-4 py-2">{(record as any).sender}</td>
+                                      <td className="px-4 py-2">
+                                        <div className="max-w-xs truncate" title={(record as any).recipients || (record as any).to || (record as any).recipient}>
+                                          {(record as any).recipients || (record as any).to || (record as any).recipient || '-'}
+                                        </div>
+                                      </td>
+                                      <td className="px-4 py-2">
+                                        <Badge variant={((record as any).status || 'PENDING') === 'FAILED' ? 'destructive' : 'secondary'}>
+                                          {(record as any).status || 'PENDING'}
+                                        </Badge>
+                                      </td>
+                                      <td className="px-4 py-2">
+                                        <Badge variant={((record as any).priority || 'NORMAL') === 'URGENT' ? 'destructive' : ((record as any).priority || 'NORMAL') === 'HIGH' ? 'secondary' : 'outline'}>
+                                          {(record as any).priority || 'NORMAL'}
+                                        </Badge>
+                                      </td>
+                                      <td className="px-4 py-2">{(record as any).folder || 'INBOX'}</td>
+                                      <td className="px-4 py-2">
+                                        {record.errors && record.errors.length > 0 ? (
+                                          <AlertTriangle className="h-4 w-4 text-yellow-600" />
+                                        ) : (
+                                          <CheckCircle className="h-4 w-4 text-green-600" />
+                                        )}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            ) : entityName.toLowerCase() === 'courseoffering' ? (
                               <table className="w-full text-sm">
                                 <thead className="bg-gray-50">
                                   <tr>
@@ -1903,6 +2463,81 @@ function ImportDialog({
                                       <td className="px-4 py-2">
                                         <Badge variant={record.roleStatus === 'ACTIVE' ? 'success' : record.roleStatus === 'INACTIVE' ? 'destructive' : 'secondary'}>
                                           {record.roleStatus}
+                                        </Badge>
+                                      </td>
+                                      <td className="px-4 py-2">
+                                        {record.errors && record.errors.length > 0 ? (
+                                          <AlertTriangle className="h-4 w-4 text-yellow-600" />
+                                        ) : (
+                                          <CheckCircle className="h-4 w-4 text-green-600" />
+                                        )}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            ) : entityName.toLowerCase() === 'events' ? (
+                              <table className="w-full text-sm">
+                                <thead className="bg-gray-50">
+                                  <tr>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Title</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Date</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Time</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Location</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Type</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Status</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Priority</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Validation</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-200">
+                                  {importData.slice(0, 5).map((record, index) => (
+                                    <tr key={index} className={record.errors && record.errors.length > 0 ? 'bg-yellow-50' : 'bg-white'}>
+                                      <td className="px-4 py-2">
+                                        <div className="max-w-xs truncate" title={(record as any).title}>
+                                          {(record as any).title}
+                                        </div>
+                                      </td>
+                                      <td className="px-4 py-2">{(record as any).date}</td>
+                                      <td className="px-4 py-2">{(record as any).startTime} - {(record as any).endTime}</td>
+                                      <td className="px-4 py-2">
+                                        <div className="max-w-xs truncate" title={(record as any).location}>
+                                          {(record as any).location || '-'}
+                                        </div>
+                                      </td>
+                                      <td className="px-4 py-2">
+                                        <Badge variant={
+                                          (record as any).eventType === 'LECTURE' ? 'default' :
+                                          (record as any).eventType === 'LABORATORY' ? 'secondary' :
+                                          (record as any).eventType === 'CONFERENCE' ? 'outline' :
+                                          (record as any).eventType === 'MEETING' ? 'success' :
+                                          (record as any).eventType === 'EXAM' ? 'destructive' :
+                                          'default'
+                                        }>
+                                          {(record as any).eventType}
+                                        </Badge>
+                                      </td>
+                                      <td className="px-4 py-2">
+                                        <Badge variant={
+                                          (record as any).status === 'SCHEDULED' ? 'default' :
+                                          (record as any).status === 'ONGOING' ? 'success' :
+                                          (record as any).status === 'COMPLETED' ? 'secondary' :
+                                          (record as any).status === 'CANCELLED' ? 'destructive' :
+                                          (record as any).status === 'POSTPONED' ? 'outline' :
+                                          'default'
+                                        }>
+                                          {(record as any).status}
+                                        </Badge>
+                                      </td>
+                                      <td className="px-4 py-2">
+                                        <Badge variant={
+                                          (record as any).priority === 'URGENT' ? 'destructive' :
+                                          (record as any).priority === 'HIGH' ? 'secondary' :
+                                          (record as any).priority === 'NORMAL' ? 'default' :
+                                          (record as any).priority === 'LOW' ? 'outline' :
+                                          'default'
+                                        }>
+                                          {(record as any).priority}
                                         </Badge>
                                       </td>
                                       <td className="px-4 py-2">

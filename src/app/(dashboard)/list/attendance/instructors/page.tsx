@@ -4,11 +4,11 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+ 
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
-import { Search, TrendingUp, TrendingDown, Users, Clock, AlertCircle, Filter, ChevronDown, BookOpen, Info, Printer, FileDown, FileText, ChevronUp, Mail, Phone, Send, Home, ChevronRight, Download, RefreshCw, Settings, Maximize2, Minimize2, CheckCircle, X, ChevronsLeft, ChevronLeft, ChevronsRight, Activity, BarChart3, Shield, Zap, AlertTriangle, Target, Building, GraduationCap, Check, User, Hash, Bell, Eye, Plus, Upload, Columns3, List, Edit, Trash2, Calendar } from 'lucide-react';
+import { Search, TrendingUp, TrendingDown, Users, Clock, AlertCircle, Filter, ChevronDown, BookOpen, Info, Printer, FileDown, FileText, ChevronUp, Mail, Phone, Send, Home, ChevronRight, Download, RefreshCw, Settings, Maximize2, Minimize2, CheckCircle, X, ChevronsLeft, ChevronLeft, ChevronsRight, Activity, BarChart3, Shield, Zap, AlertTriangle, Target, Building, GraduationCap, Check, User, Hash, Bell, Eye, Plus, Upload, Columns3, List, Edit, Trash2, Calendar, MoreVertical } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,7 +31,8 @@ import InstructorDetailModal from '@/components/InstructorDetailModal';
 import { 
   AttendanceRecordsDialog, 
   EditInstructorDialog, 
-  DeactivateInstructorDialog 
+  DeactivateInstructorDialog,
+  ManualAttendanceDialog
 } from '@/components/reusable/Dialogs';
 import { ICCT_CLASSES, getStatusColor, getAttendanceRateColor } from '@/lib/colors';
 import { 
@@ -42,17 +43,16 @@ import {
 } from '@/types/instructor-attendance';
 import { FilterChips } from '@/components/FilterChips';
 import { FilterDialog } from '@/components/FilterDialog';
-import { AttendanceAnalytics } from '@/components/AttendanceAnalytics';
-import { AttendanceSummaryCards } from '@/components/AttendanceSummaryCards';
+import { InstructorAttendanceAnalytics } from '@/components/InstructorAttendanceAnalytics';
 
-import { processRealTimeData, type AttendanceData } from '@/lib/analytics-utils';
+ 
 import { TableList, TableListColumn } from '@/components/reusable/Table/TableList';
 import { TableCardView } from '@/components/reusable/Table/TableCardView';
 import BulkActionsBar from '@/components/reusable/BulkActionsBar';
 import { TablePagination } from '@/components/reusable/Table/TablePagination';
 import { EmptyState } from '@/components/reusable';
 import PageHeader from '@/components/PageHeader/PageHeader';
-import SummaryCard from '@/components/SummaryCard';
+ 
 import { QuickActionsPanel } from '@/components/reusable/QuickActionsPanel';
 
 
@@ -176,7 +176,6 @@ export default function InstructorAttendancePage() {
   const [showInstructorDetail, setShowInstructorDetail] = useState(false);
   const [loading, setLoading] = useState(true);
   const [mounted, setMounted] = useState(false);
-  const [currentTime, setCurrentTime] = useState('');
   const [instructors, setInstructors] = useState<InstructorAttendance[]>([]);
   const [error, setError] = useState<string | null>(null);
   
@@ -187,6 +186,8 @@ export default function InstructorAttendancePage() {
   const [showEditInstructorModal, setShowEditInstructorModal] = useState(false);
   const [selectedInstructorForDelete, setSelectedInstructorForDelete] = useState<InstructorAttendance | null>(null);
   const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
+  const [showManualAttendance, setShowManualAttendance] = useState(false);
+  const [manualEntityId, setManualEntityId] = useState<number | undefined>(undefined);
   
   // Table state
   const [sortBy, setSortBy] = useState<{ field: string; order: 'asc' | 'desc' }>({ field: 'instructorName', order: 'asc' });
@@ -195,8 +196,37 @@ export default function InstructorAttendancePage() {
   const [pageSize, setPageSize] = useState(10);
   const [showBulkActions, setShowBulkActions] = useState(false);
   
+  // Subject filter state for analytics
+  const [selectedSubject, setSelectedSubject] = useState<string>('all');
+  
   const debouncedSearch = useDebounce(searchQuery, 300);
   
+  // Fetch subjects data
+  const fetchSubjects = useCallback(async () => {
+    try {
+      setSubjectsLoading(true);
+      const response = await fetch('/api/subjects?page=1&pageSize=1000&status=ACTIVE');
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      
+      if (data.error) {
+        throw new Error(data.error);
+      }
+      
+      console.log('Fetched subjects:', data.subjects);
+      setSubjects(data.subjects || []);
+    } catch (err) {
+      console.error('Error fetching subjects:', err);
+      setSubjects([]);
+    } finally {
+      setSubjectsLoading(false);
+    }
+  }, []);
+
   // Fetch instructor attendance data
   const fetchInstructorAttendance = useCallback(async () => {
     try {
@@ -222,6 +252,12 @@ export default function InstructorAttendancePage() {
         throw new Error(data.details || data.error);
       }
       
+      console.log('Fetched instructor data:', data);
+      console.log('Number of instructors:', Array.isArray(data) ? data.length : 0);
+      if (Array.isArray(data) && data.length > 0) {
+        console.log('Sample instructor data:', data[0]);
+      }
+      
       setInstructors(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Error fetching instructor attendance:', err);
@@ -234,16 +270,12 @@ export default function InstructorAttendancePage() {
 
   // Fetch data on component mount and when search changes
   useEffect(() => {
+    console.log('useEffect triggered - fetching data');
     fetchInstructorAttendance();
-  }, [fetchInstructorAttendance]);
+    fetchSubjects();
+  }, [fetchInstructorAttendance, fetchSubjects]);
 
-  // Update current time
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date().toLocaleTimeString());
-    }, 1000);
-    return () => clearInterval(timer);
-  }, []);
+  // Removed frequent timer re-render to prevent dropdown from closing unexpectedly
 
   // Set mounted state
   useEffect(() => {
@@ -253,9 +285,14 @@ export default function InstructorAttendancePage() {
   // Get unique filter options from data
   const departments = useMemo(() => [...new Set(instructors.map(s => s.department))], [instructors]);
   const instructorTypes = useMemo(() => [...new Set(instructors.map(s => s.instructorType))], [instructors]);
-  const subjects = useMemo(() => [...new Set(instructors.flatMap(s => s.subjects))], [instructors]);
   const riskLevels = useMemo(() => [...new Set(instructors.map(s => s.riskLevel).filter(Boolean))], [instructors]);
   const statuses = useMemo(() => [...new Set(instructors.map(s => s.status).filter(Boolean))], [instructors]);
+  
+  // Subject data state
+  const [subjects, setSubjects] = useState<Array<{ subjectId: number; subjectName: string; subjectCode: string }>>([]);
+  const [subjectsLoading, setSubjectsLoading] = useState(false);
+  
+
   
   // Function to get count for each filter option
   const getFilterCount = (filterType: string, option: string): number => {
@@ -273,7 +310,7 @@ export default function InstructorAttendancePage() {
         case 'riskLevels':
           return instructor.riskLevel === option;
         case 'subjects':
-          return instructor.subjects.includes(option);
+          return instructor.subjectCodes?.includes(option) || false;
         case 'statuses':
           return instructor.status === option;
         default:
@@ -324,9 +361,9 @@ export default function InstructorAttendancePage() {
       key: 'subjects',
       title: 'Subjects',
       options: subjects.map(subject => ({
-        value: subject,
-        label: subject,
-        count: getFilterCount('subjects', subject)
+        value: subject.subjectCode,
+        label: `${subject.subjectCode} - ${subject.subjectName}`,
+        count: getFilterCount('subjects', subject.subjectCode)
       }))
     },
     {
@@ -340,17 +377,41 @@ export default function InstructorAttendancePage() {
     }
   ], [departments, instructorTypes, riskLevels, subjects, statuses, getFilterCount]);
 
+  // Compute department rank for an instructor based on attendance rate (desc)
+  const getDepartmentRank = useCallback((currentInstructor: InstructorAttendance) => {
+    const peersInDepartment = instructors.filter(
+      (peer) => peer.department === currentInstructor.department
+    );
+
+    const peersSortedByAttendance = [...peersInDepartment].sort((a, b) => {
+      if (b.attendanceRate !== a.attendanceRate) {
+        return b.attendanceRate - a.attendanceRate;
+      }
+      // Tie-breaker: alphabetical by name for stable ordering
+      return a.instructorName.localeCompare(b.instructorName);
+    });
+
+    const currentRankIndex = peersSortedByAttendance.findIndex(
+      (peer) => peer.instructorId === currentInstructor.instructorId
+    );
+
+    return {
+      rank: currentRankIndex >= 0 ? currentRankIndex + 1 : peersSortedByAttendance.length,
+      total: peersInDepartment.length
+    };
+  }, [instructors]);
+
   // Table column definitions
   const instructorColumns: TableListColumn<InstructorAttendance>[] = [
     { 
       header: "Select", 
       accessor: "select", 
-      className: "w-12 text-center" 
+      className: "w-8 text-center" 
     },
     { 
       header: "", 
       accessor: "expander", 
-      className: "w-12 text-center",
+      className: "w-8 text-center",
       expandedContent: (instructor: InstructorAttendance) => (
         <TableCell colSpan={instructorColumns.length} className="p-0">
           <div className="bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 border-l-4 border-blue-400 mx-2 mb-2 rounded-r-xl shadow-sm transition-all duration-300">
@@ -360,15 +421,12 @@ export default function InstructorAttendancePage() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
                   <div className="relative">
-                    <Avatar className="h-14 w-14 ring-2 ring-white shadow-md">
-                      <AvatarImage src={instructor.avatarUrl} className="object-cover" />
-                      <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white font-bold text-lg">
-                        {instructor.instructorName.split(' ').map(name => name.charAt(0)).join('').slice(0, 2)}
-                      </AvatarFallback>
-                    </Avatar>
+                    <div className="h-14 w-14 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center ring-2 ring-white shadow-md">
+                      <User className="h-7 w-7 text-blue-600" />
+                    </div>
                     <div className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-white ${
                       instructor.status === 'ACTIVE' ? 'bg-green-500' : 
-                      instructor.status === 'ON_LEAVE' ? 'bg-yellow-500' : 'bg-gray-400'
+                      'bg-gray-400'
                     }`}></div>
                   </div>
                   <div>
@@ -390,12 +448,12 @@ export default function InstructorAttendancePage() {
                 </div>
                 
                 {/* Overall Performance Indicator */}
-                <div className="text-right">
-                  <div className="text-2xl font-bold text-slate-800">{instructor.attendanceRate}%</div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-slate-800 mt-4">{instructor.attendanceRate}%</div>
                   <div className="text-xs text-slate-600 mb-2">Overall Attendance</div>
                   <Progress 
                     value={instructor.attendanceRate} 
-                    className="w-24 h-2 bg-slate-200"
+                    className="w-24 h-2 bg-slate-200 mx-auto"
                   />
                   <div className="flex justify-center mt-1">
                     <Badge className={`text-xs px-2 py-1 ${
@@ -413,22 +471,22 @@ export default function InstructorAttendancePage() {
             {/* Main Content Tabs */}
             <div className="p-2 sm:p-4">
               <Tabs defaultValue="activity" className="w-full">
-                <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 bg-white/60 rounded-lg p-1 gap-1">
-                  <TabsTrigger value="activity" className="flex items-center justify-center gap-1 text-xs px-2 py-2">
+                <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 bg-blue-50/70 rounded p-1 gap-1 border border-blue-200">
+                  <TabsTrigger value="activity" className="flex items-center justify-center gap-1 text-xs px-2 py-2 rounded text-slate-700 hover:bg-blue-100 transition data-[state=active]:bg-white data-[state=active]:text-blue-700 data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-blue-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
                     <Clock className="w-3 h-3 flex-shrink-0" />
-                    <span className="hidden sm:inline">Activity</span>
+                    <span>Activity</span>
                   </TabsTrigger>
-                  <TabsTrigger value="schedule" className="flex items-center justify-center gap-1 text-xs px-2 py-2">
+                  <TabsTrigger value="schedule" className="flex items-center justify-center gap-1 text-xs px-2 py-2 rounded text-slate-700 hover:bg-blue-100 transition data-[state=active]:bg-white data-[state=active]:text-blue-700 data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-blue-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
                     <Calendar className="w-3 h-3 flex-shrink-0" />
-                    <span className="hidden sm:inline">Schedule</span>
+                    <span>Schedule</span>
                   </TabsTrigger>
-                  <TabsTrigger value="analytics" className="flex items-center justify-center gap-1 text-xs px-2 py-2">
+                  <TabsTrigger value="analytics" className="flex items-center justify-center gap-1 text-xs px-2 py-2 rounded text-slate-700 hover:bg-blue-100 transition data-[state=active]:bg-white data-[state=active]:text-blue-700 data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-blue-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
                     <BarChart3 className="w-3 h-3 flex-shrink-0" />
-                    <span className="hidden sm:inline">Analytics</span>
+                    <span>Analytics</span>
                   </TabsTrigger>
-                  <TabsTrigger value="actions" className="flex items-center justify-center gap-1 text-xs px-2 py-2">
+                  <TabsTrigger value="actions" className="flex items-center justify-center gap-1 text-xs px-2 py-2 rounded text-slate-700 hover:bg-blue-100 transition data-[state=active]:bg-white data-[state=active]:text-blue-700 data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-blue-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
                     <Settings className="w-3 h-3 flex-shrink-0" />
-                    <span className="hidden sm:inline">Actions</span>
+                    <span>Actions</span>
                   </TabsTrigger>
                 </TabsList>
 
@@ -444,36 +502,34 @@ export default function InstructorAttendancePage() {
                         </CardTitle>
                       </CardHeader>
                       <CardContent className="space-y-3">
-                        {[
-                          { day: 'Today', status: 'present', time: '8:00 AM' },
-                          { day: 'Yesterday', status: 'present', time: '8:05 AM' },
-                          { day: '2 days ago', status: 'late', time: '8:25 AM' },
-                          { day: '3 days ago', status: 'present', time: '7:58 AM' },
-                          { day: '4 days ago', status: 'absent', time: '--' },
-                          { day: '5 days ago', status: 'present', time: '8:02 AM' },
-                          { day: '6 days ago', status: 'present', time: '8:10 AM' }
-                        ].map((entry, index) => (
-                          <div key={index} className="flex items-center justify-between p-2 rounded-md bg-slate-50/50 border border-slate-200/30">
-                            <div className="flex items-center gap-3">
-                              <div className={`w-2 h-2 rounded-full ${
-                                entry.status === 'present' ? 'bg-emerald-500' :
-                                entry.status === 'late' ? 'bg-amber-500' :
-                                'bg-red-500'
-                              }`}></div>
-                              <span className="text-sm font-medium text-slate-700">{entry.day}</span>
+                        {instructor.recentActivity && instructor.recentActivity.length > 0 ? (
+                          instructor.recentActivity.map((entry, index) => (
+                            <div key={index} className="flex items-center justify-between p-2 rounded bg-slate-50/50 border border-slate-200/30">
+                              <div className="flex items-center gap-3">
+                                <div className={`w-2 h-2 rounded-full ${
+                                  entry.status === 'present' ? 'bg-emerald-500' :
+                                  entry.status === 'late' ? 'bg-amber-500' :
+                                  'bg-red-500'
+                                }`}></div>
+                                <span className="text-sm font-medium text-slate-700">{entry.day}</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-slate-500">{entry.time}</span>
+                                <Badge className={`text-xs px-2 py-0.5 ${
+                                  entry.status === 'present' ? 'bg-emerald-100 text-emerald-700' :
+                                  entry.status === 'late' ? 'bg-amber-100 text-amber-700' :
+                                  'bg-red-100 text-red-700'
+                                }`}>
+                                  {entry.status}
+                                </Badge>
+                              </div>
                             </div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs text-slate-500">{entry.time}</span>
-                              <Badge className={`text-xs px-2 py-0.5 ${
-                                entry.status === 'present' ? 'bg-emerald-100 text-emerald-700' :
-                                entry.status === 'late' ? 'bg-amber-100 text-amber-700' :
-                                'bg-red-100 text-red-700'
-                              }`}>
-                                {entry.status}
-                              </Badge>
-                            </div>
+                          ))
+                        ) : (
+                          <div className="text-center py-4 text-slate-500 text-sm">
+                            No recent activity data available
                           </div>
-                        ))}
+                        )}
                       </CardContent>
                     </Card>
 
@@ -490,28 +546,47 @@ export default function InstructorAttendancePage() {
                           <div className="flex justify-between items-center">
                             <span className="text-sm text-slate-600">Present Days</span>
                             <div className="flex items-center gap-2">
-                              <Progress value={80} className="w-16 h-2" />
-                              <span className="text-sm font-semibold text-emerald-700">4/5</span>
+                              <Progress 
+                                value={instructor.weeklyPerformance ? (instructor.weeklyPerformance.presentDays / instructor.weeklyPerformance.totalDays) * 100 : 0} 
+                                className="w-16 h-2" 
+                              />
+                              <span className="text-sm font-semibold text-emerald-700">
+                                {instructor.weeklyPerformance ? `${instructor.weeklyPerformance.presentDays}/${instructor.weeklyPerformance.totalDays}` : '0/0'}
+                              </span>
                             </div>
                           </div>
                           <div className="flex justify-between items-center">
                             <span className="text-sm text-slate-600">On-Time Rate</span>
                             <div className="flex items-center gap-2">
-                              <Progress value={75} className="w-16 h-2" />
-                              <span className="text-sm font-semibold text-blue-700">75%</span>
+                              <Progress 
+                                value={instructor.weeklyPerformance?.onTimeRate || 0} 
+                                className="w-16 h-2" 
+                              />
+                              <span className="text-sm font-semibold text-blue-700">
+                                {instructor.weeklyPerformance ? `${Math.round(instructor.weeklyPerformance.onTimeRate)}%` : '0%'}
+                              </span>
                             </div>
                           </div>
                           <div className="flex justify-between items-center">
                             <span className="text-sm text-slate-600">Current Streak</span>
-                            <span className="text-sm font-bold text-indigo-700 bg-indigo-100 px-2 py-1 rounded">12 days</span>
+                            <span className="text-sm font-bold text-indigo-700 bg-indigo-100 px-2 py-1 rounded">
+                              {instructor.weeklyPerformance?.currentStreak || 0} days
+                            </span>
                           </div>
                         </div>
                         
                         <Separator className="my-3" />
                         
                         <div className="text-center">
-                          <div className="text-lg font-bold text-slate-800">Rank #3</div>
-                          <div className="text-xs text-slate-500">out of 12 in department</div>
+                          {(() => {
+                            const { rank, total } = getDepartmentRank(instructor);
+                            return (
+                              <>
+                                <div className="text-lg font-bold text-slate-800">{`Rank #${rank}`}</div>
+                                <div className="text-xs text-slate-500">{`out of ${total} in department`}</div>
+                              </>
+                            );
+                          })()}
                         </div>
                       </CardContent>
                     </Card>
@@ -526,40 +601,41 @@ export default function InstructorAttendancePage() {
                       <CardHeader className="pb-3">
                         <CardTitle className="text-sm font-semibold text-slate-700 flex items-center gap-2">
                           <Clock className="w-4 h-4 text-blue-600" />
-                          Today's Classes
+                          Today&apos;s Classes
                         </CardTitle>
                       </CardHeader>
                       <CardContent className="space-y-3">
-                        {[
-                          { time: '8:00 AM', subject: 'Math 101', room: 'A-201', status: 'completed' },
-                          { time: '10:00 AM', subject: 'Math 102', room: 'A-201', status: 'in-progress' },
-                          { time: '2:00 PM', subject: 'Statistics', room: 'B-105', status: 'upcoming' },
-                          { time: '4:00 PM', subject: 'Algebra', room: 'A-203', status: 'upcoming' }
-                        ].map((entry, index) => (
-                          <div key={index} className="flex items-center justify-between p-3 rounded-lg bg-slate-50/50 border border-slate-200/30 hover:shadow-sm transition-shadow">
-                            <div className="flex items-center gap-3">
-                              <div className={`w-3 h-3 rounded-full ${
-                                entry.status === 'completed' ? 'bg-emerald-500' :
-                                entry.status === 'in-progress' ? 'bg-blue-500 animate-pulse' :
-                                'bg-slate-300'
-                              }`}></div>
-                              <div>
-                                <div className="font-medium text-slate-800">{entry.time}</div>
-                                <div className="text-sm text-slate-600">{entry.subject}</div>
+                        {instructor.todaySchedule && instructor.todaySchedule.length > 0 ? (
+                          instructor.todaySchedule.map((entry, index) => (
+                            <div key={index} className="flex items-center justify-between p-3 rounded bg-slate-50/50 border border-slate-200/30 hover:shadow-sm transition-shadow">
+                              <div className="flex items-center gap-3">
+                                <div className={`w-3 h-3 rounded-full ${
+                                  entry.status === 'completed' ? 'bg-emerald-500' :
+                                  entry.status === 'in-progress' ? 'bg-blue-500 animate-pulse' :
+                                  'bg-slate-300'
+                                }`}></div>
+                                <div>
+                                  <div className="font-medium text-slate-800">{entry.time}</div>
+                                  <div className="text-sm text-slate-600">{entry.subject}</div>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-sm font-medium text-slate-700">{entry.room}</div>
+                                <Badge className={`text-xs mt-1 ${
+                                  entry.status === 'completed' ? 'bg-emerald-100 text-emerald-700' :
+                                  entry.status === 'in-progress' ? 'bg-blue-100 text-blue-700' :
+                                  'bg-slate-100 text-slate-600'
+                                }`}>
+                                  {entry.status.replace('-', ' ')}
+                                </Badge>
                               </div>
                             </div>
-                            <div className="text-right">
-                              <div className="text-sm font-medium text-slate-700">{entry.room}</div>
-                              <Badge className={`text-xs mt-1 ${
-                                entry.status === 'completed' ? 'bg-emerald-100 text-emerald-700' :
-                                entry.status === 'in-progress' ? 'bg-blue-100 text-blue-700' :
-                                'bg-slate-100 text-slate-600'
-                              }`}>
-                                {entry.status.replace('-', ' ')}
-                              </Badge>
-                            </div>
+                          ))
+                        ) : (
+                          <div className="text-center py-4 text-slate-500 text-sm">
+                            No classes scheduled for today
                           </div>
-                        ))}
+                        )}
                       </CardContent>
                     </Card>
 
@@ -654,7 +730,7 @@ export default function InstructorAttendancePage() {
                         <Button 
                           size="sm" 
                           variant="outline" 
-                          className="w-full justify-start bg-white/80 hover:bg-blue-50 border-slate-300"
+                          className="w-full justify-start bg-white/80 hover:bg-blue-50 border-slate-300 rounded"
                           onClick={() => {
                             setSelectedInstructorForRecords(instructor);
                             setShowAttendanceRecordsModal(true);
@@ -666,7 +742,7 @@ export default function InstructorAttendancePage() {
                         <Button 
                           size="sm" 
                           variant="outline" 
-                          className="w-full justify-start bg-white/80 hover:bg-emerald-50 border-slate-300"
+                          className="w-full justify-start bg-white/80 hover:bg-emerald-50 border-slate-300 rounded"
                           onClick={() => {
                             setSelectedInstructorForEdit(instructor);
                             setShowEditInstructorModal(true);
@@ -678,7 +754,7 @@ export default function InstructorAttendancePage() {
                         <Button 
                           size="sm" 
                           variant="outline" 
-                          className="w-full justify-start bg-white/80 hover:bg-purple-50 border-slate-300"
+                          className="w-full justify-start bg-white/80 hover:bg-purple-50 border-slate-300 rounded"
                         >
                           <Mail className="w-4 h-4 mr-2 text-purple-600" />
                           Send Message
@@ -686,7 +762,20 @@ export default function InstructorAttendancePage() {
                         <Button 
                           size="sm" 
                           variant="outline" 
-                          className="w-full justify-start bg-white/80 hover:bg-orange-50 border-slate-300"
+                          className="w-full justify-start bg-white/80 hover:bg-blue-50 border-slate-300 rounded"
+                          onClick={() => {
+                            setManualEntityId(instructor.instructorId as unknown as number);
+                            setShowManualAttendance(true);
+                          }}
+                        >
+                          <CheckCircle className="w-4 h-4 mr-2 text-blue-600" />
+                          Manual Attendance
+                        </Button>
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          className="w-full justify-start bg-white/80 hover:bg-orange-50 border-slate-300 rounded
+                          "
                         >
                           <Bell className="w-4 h-4 mr-2 text-orange-600" />
                           Send Alert
@@ -733,29 +822,49 @@ export default function InstructorAttendancePage() {
       )
     },
     { 
+      header: "Photo", 
+      accessor: "photo", 
+      className: "w-16 text-center",
+      render: (instructor: InstructorAttendance) => (
+        <div className="flex items-center justify-center">
+          <div className="relative">
+            {instructor.avatarUrl ? (
+              <img
+                src={instructor.avatarUrl}
+                alt={`${instructor.instructorName} photo`}
+                className="h-10 w-10 rounded-full object-cover ring-1 ring-gray-200"
+                onError={(e) => {
+                  // Fallback to placeholder if image fails to load
+                  const target = e.target as HTMLImageElement;
+                  target.style.display = 'none';
+                  target.nextElementSibling?.classList.remove('hidden');
+                }}
+              />
+            ) : null}
+            <div className={`h-10 w-10 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center ring-1 ring-gray-200 ${instructor.avatarUrl ? 'hidden' : ''}`}>
+              <User className="h-5 w-5 text-blue-600" />
+            </div>
+            {instructor.status === InstructorStatus.ACTIVE && (
+              <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></div>
+            )}
+          </div>
+        </div>
+      )
+    },
+    { 
       header: "Instructor", 
       accessor: "instructorName", 
       className: "text-blue-900 align-middle", 
       sortable: true,
       render: (instructor: InstructorAttendance) => (
-        <div className="flex items-center gap-3">
-          <div className="relative">
-            <Avatar className="h-10 w-10 ring-1 ring-gray-200">
-              <AvatarImage src={instructor.avatarUrl} className="object-cover" />
-              <AvatarFallback className="bg-blue-100 text-blue-700 font-bold text-sm">
-                {instructor.instructorName.split(' ').map(name => name.charAt(0)).join('').slice(0, 2)}
-              </AvatarFallback>
-            </Avatar>
+        <div className="flex flex-col min-w-0 flex-1">
+          <div className="font-semibold text-gray-900 truncate flex items-center gap-1">
+            <span>{instructor.instructorName}</span>
             {instructor.status === InstructorStatus.ACTIVE && (
-              <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 rounded-full border border-white"></div>
+              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
             )}
           </div>
-          <div className="flex flex-col min-w-0 flex-1">
-            <div className="font-semibold text-gray-900 truncate flex items-center gap-1">
-              <span>{instructor.instructorName}</span>
-            </div>
-            <div className="text-sm text-gray-600 truncate">{instructor.employeeId}</div>
-          </div>
+          <div className="text-sm text-gray-600 truncate">{instructor.employeeId}</div>
         </div>
       )
     },
@@ -831,7 +940,7 @@ export default function InstructorAttendancePage() {
         const statusConfig = {
           'ACTIVE': { color: 'text-green-700', bg: 'bg-green-100', label: 'Active' },
           'INACTIVE': { color: 'text-gray-700', bg: 'bg-gray-100', label: 'Inactive' },
-          'ON_LEAVE': { color: 'text-blue-700', bg: 'bg-blue-100', label: 'On Leave' }
+  
         };
         const config = statusConfig[instructor.status as keyof typeof statusConfig] || statusConfig.INACTIVE;
         
@@ -847,87 +956,71 @@ export default function InstructorAttendancePage() {
     { 
       header: "Actions", 
       accessor: "actions", 
-      className: "text-center align-middle w-40",
+      className: "text-center align-middle w-16",
       render: (instructor: InstructorAttendance) => (
-        <div className="flex items-center justify-center gap-1">
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-          <Button
-            variant="ghost"
-            size="sm"
-                  className="h-8 w-8 p-0 hover:bg-blue-50"
-            onClick={(e) => {
-              e.stopPropagation();
-              handleInstructorClick(instructor);
-            }}
-          >
-            <Eye className="h-4 w-4 text-blue-600" />
-          </Button>
-              </TooltipTrigger>
-              <TooltipContent>View Details</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-          
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-          <Button
-            variant="ghost"
-            size="sm"
-                  className="h-8 w-8 p-0 hover:bg-orange-50"
-            onClick={(e) => {
-              e.stopPropagation();
-                    setSelectedInstructorForEdit(instructor);
-                    setShowEditInstructorModal(true);
-            }}
-          >
-                  <Edit className="h-4 w-4 text-orange-600" />
-          </Button>
-              </TooltipTrigger>
-              <TooltipContent>Edit Instructor</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-          
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8 w-8 p-0 hover:bg-red-50"
-            onClick={(e) => {
-              e.stopPropagation();
-                    setSelectedInstructorForDelete(instructor);
-                    setShowDeleteConfirmModal(true);
-            }}
-          >
-                  <Trash2 className="h-4 w-4 text-red-600" />
-          </Button>
-              </TooltipTrigger>
-              <TooltipContent>Delete Instructor</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-          
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-          <Button
-            variant="ghost"
-            size="sm"
-                  className="h-8 w-8 p-0 hover:bg-purple-50"
-            onClick={(e) => {
-              e.stopPropagation();
-                    setSelectedInstructorForRecords(instructor);
-                    setShowAttendanceRecordsModal(true);
-            }}
-          >
-                  <Calendar className="h-4 w-4 text-purple-600" />
-          </Button>
-              </TooltipTrigger>
-              <TooltipContent>View Attendance Records</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+        <div className="flex items-center justify-center">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0 hover:bg-gray-50"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <MoreVertical className="h-4 w-4 text-gray-600" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48 rounded overflow-hidden shadow-md">
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleInstructorClick(instructor);
+                }}
+                className="flex items-center gap-2 cursor-pointer hover:bg-blue-100 focus:bg-blue-100"
+              >
+                <Eye className="h-4 w-4 text-blue-600" />
+                <span>View Details</span>
+              </DropdownMenuItem>
+              
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedInstructorForEdit(instructor);
+                  setShowEditInstructorModal(true);
+                }}
+                className="flex items-center gap-2 cursor-pointer hover:bg-blue-100 focus:bg-blue-100"
+              >
+                <Edit className="h-4 w-4 text-orange-600" />
+                <span>Edit Instructor</span>
+              </DropdownMenuItem>
+              
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedInstructorForRecords(instructor);
+                  setShowAttendanceRecordsModal(true);
+                }}
+                className="flex items-center gap-2 cursor-pointer hover:bg-blue-100 focus:bg-blue-100"
+              >
+                <Calendar className="h-4 w-4 text-purple-600" />
+                <span>View Attendance Records</span>
+              </DropdownMenuItem>
+              
+              <DropdownMenuSeparator />
+              
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedInstructorForDelete(instructor);
+                  setShowDeleteConfirmModal(true);
+                }}
+                className="flex items-center gap-2 cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50 hover:bg-red-50"
+              >
+                <Trash2 className="h-4 w-4 text-red-600" />
+                <span>Delete Instructor</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       )
     }
@@ -994,13 +1087,25 @@ export default function InstructorAttendancePage() {
 
   const totalPages = Math.ceil(filteredInstructors.length / pageSize);
 
-  // Memoize analytics data based on ALL instructors (not filtered)
+  // Memoize analytics data based on subject filter
   const analyticsData = useMemo(() => {
-    return instructors.map(instructor => ({
+    // Filter instructors by selected subject
+    const filteredInstructors = selectedSubject === 'all' 
+      ? instructors 
+      : instructors.filter(instructor => {
+          // Check if instructor teaches the selected subject
+          return instructor.subjects?.some(subject => {
+            // Find the subject in our subjects list to get the ID
+            const subjectData = subjects.find(s => s.subjectName === subject);
+            return subjectData?.subjectId.toString() === selectedSubject;
+          }) || instructor.subjectCodes?.includes(selectedSubject);
+        });
+    
+    return filteredInstructors.map(instructor => ({
       id: instructor.instructorId,
       name: instructor.instructorName,
       department: instructor.department,
-      status: (instructor.status === 'ON_LEAVE' ? 'inactive' : instructor.status.toLowerCase()) as 'active' | 'inactive',
+              status: instructor.status.toLowerCase() as 'active' | 'inactive',
       riskLevel: (instructor.riskLevel || 'NONE').toLowerCase() as 'none' | 'low' | 'medium' | 'high',
       attendanceRate: instructor.attendanceRate,
       totalClasses: instructor.totalScheduledClasses,
@@ -1031,7 +1136,7 @@ export default function InstructorAttendancePage() {
       goalTracking: [], // Mock data - could be calculated from actual attendance records
       performanceRanking: [] // Mock data - could be calculated from actual attendance records
     }));
-  }, [instructors]);
+  }, [instructors, selectedSubject, subjects]);
 
   const handleInstructorClick = (instructor: InstructorAttendance) => {
     setSelectedInstructor(instructor);
@@ -1102,8 +1207,39 @@ export default function InstructorAttendancePage() {
     setPage(1);
   };
 
-  const handleRefresh = () => {
-    fetchInstructorAttendance();
+  const handleRefresh = async () => {
+    try {
+      console.log('Refreshing instructor attendance data...');
+      // Clear any existing error state
+      setError(null);
+      // Set loading state to show refresh is happening
+      setLoading(true);
+      // Clear current data to show fresh loading state
+      setInstructors([]);
+      
+      // Fetch fresh data without search parameters
+      const response = await fetch('/api/attendance/instructors');
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.details || `HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      
+      // Handle case where API returns an error object
+      if (data.error) {
+        throw new Error(data.details || data.error);
+      }
+      
+      console.log('Refresh successful, received data:', data);
+      setInstructors(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error('Error during refresh:', err);
+      setError(err instanceof Error ? err.message : 'An error occurred during refresh');
+    } finally {
+      setLoading(false);
+    }
   };
 
 
@@ -1156,52 +1292,6 @@ export default function InstructorAttendancePage() {
         />
 
         {/* Instructor Attendance Management - Main Content */}
-        {/* Summary Cards */}
-        {(() => {
-          const instructorData: AttendanceData[] = instructors.map(instructor => ({
-            id: instructor.instructorId,
-            name: instructor.instructorName,
-            department: instructor.department,
-            status: (instructor.status === 'ON_LEAVE' ? 'inactive' : instructor.status.toLowerCase()) as 'active' | 'inactive',
-            riskLevel: (instructor.riskLevel || 'NONE').toLowerCase() as 'none' | 'low' | 'medium' | 'high',
-            attendanceRate: instructor.attendanceRate,
-            totalClasses: instructor.totalScheduledClasses,
-            attendedClasses: instructor.attendedClasses,
-            absentClasses: instructor.absentClasses,
-            lateClasses: instructor.lateClasses,
-            lastAttendance: instructor.lastAttendance,
-            subjects: instructor.subjects,
-            // Instructor-specific fields
-            classesTaught: instructor.attendedClasses + instructor.lateClasses,
-            classesMissed: instructor.absentClasses,
-            complianceScore: instructor.attendanceRate,
-            notificationCount: Math.floor(instructor.absentClasses * 0.8), // Mock calculation
-            lastNotification: instructor.lastAttendance,
-            teachingLoad: instructor.totalScheduledClasses,
-            substituteRequired: instructor.absentClasses > 0,
-            // Mock data for charts - could be calculated from actual attendance records
-            weeklyData: [
-              { week: 'Week 1', attendanceRate: instructor.attendanceRate * 0.95, totalClasses: Math.floor(instructor.totalScheduledClasses * 0.25), attendedClasses: Math.floor((instructor.attendedClasses + instructor.lateClasses) * 0.25), absentClasses: Math.floor(instructor.absentClasses * 0.25), lateClasses: Math.floor(instructor.lateClasses * 0.25), trend: 'up' as const, change: 2 },
-              { week: 'Week 2', attendanceRate: instructor.attendanceRate * 0.98, totalClasses: Math.floor(instructor.totalScheduledClasses * 0.25), attendedClasses: Math.floor((instructor.attendedClasses + instructor.lateClasses) * 0.25), absentClasses: Math.floor(instructor.absentClasses * 0.25), lateClasses: Math.floor(instructor.lateClasses * 0.25), trend: 'up' as const, change: 1 },
-              { week: 'Week 3', attendanceRate: instructor.attendanceRate * 1.02, totalClasses: Math.floor(instructor.totalScheduledClasses * 0.25), attendedClasses: Math.floor((instructor.attendedClasses + instructor.lateClasses) * 0.25), absentClasses: Math.floor(instructor.absentClasses * 0.25), lateClasses: Math.floor(instructor.lateClasses * 0.25), trend: 'stable' as const, change: 0 },
-              { week: 'Week 4', attendanceRate: instructor.attendanceRate * 0.99, totalClasses: Math.floor(instructor.totalScheduledClasses * 0.25), attendedClasses: Math.floor((instructor.attendedClasses + instructor.lateClasses) * 0.25), absentClasses: Math.floor(instructor.absentClasses * 0.25), lateClasses: Math.floor(instructor.lateClasses * 0.25), trend: 'down' as const, change: -1 }
-            ],
-            historicalData: [], // Mock data - could be calculated from actual attendance records
-            timeOfDayData: [], // Mock data - could be calculated from actual attendance records
-            comparativeData: [], // Mock data - could be calculated from actual attendance records
-            subjectPerformance: [], // Mock data - could be calculated from actual attendance records
-            goalTracking: [], // Mock data - could be calculated from actual attendance records
-            performanceRanking: [] // Mock data - could be calculated from actual attendance records
-          }));
-
-          const analyticsData = processRealTimeData(instructorData, 'instructor');
-          
-          return (
-            <>
-              <AttendanceSummaryCards analyticsData={analyticsData} type="instructor" />
-            </>
-          );
-        })()}
           
           {/* Quick Actions Panel */}
         <div className="w-full pt-2 sm:pt-3 overflow-x-hidden">
@@ -1222,10 +1312,7 @@ export default function InstructorAttendancePage() {
                   label: 'Manual Attendance',
                   description: 'Manually record attendance',
                   icon: <CheckCircle className="w-5 h-5 text-white" />,
-                  onClick: () => {
-                    // TODO: Open manual attendance modal
-                    console.log('Manual attendance modal opened');
-                  }
+                  onClick: () => setShowManualAttendance(true)
                 },
                 {
                   id: 'export-attendance',
@@ -1273,64 +1360,122 @@ export default function InstructorAttendancePage() {
           </div>
 
                     {/* Analytics Dashboard */}
+
+          
           <Card className="border border-blue-200 shadow-lg rounded-xl overflow-hidden p-0 w-full">
-              <AttendanceAnalytics 
-                data={analyticsData} 
+              <InstructorAttendanceAnalytics 
+                data={instructors.map(instructor => ({
+                  instructorId: instructor.instructorId,
+                  instructorName: instructor.instructorName,
+                  department: instructor.department,
+                  totalScheduledClasses: instructor.totalScheduledClasses,
+                  attendedClasses: instructor.attendedClasses,
+                  absentClasses: instructor.absentClasses,
+                  lateClasses: instructor.lateClasses,
+                  attendanceRate: instructor.attendanceRate,
+                  riskLevel: instructor.riskLevel || 'NONE',
+                  lastAttendance: instructor.lastAttendance ? new Date(instructor.lastAttendance) : new Date(),
+                  status: instructor.status || 'ACTIVE',
+                  subjects: instructor.subjects || [],
+                  weeklyPattern: instructor.weeklyPattern || {
+                    monday: 85,
+                    tuesday: 88,
+                    wednesday: 90,
+                    thursday: 87,
+                    friday: 82,
+                    saturday: 0,
+                    sunday: 0
+                  },
+                  currentStreak: instructor.currentStreak || 0,
+                  consistencyRating: instructor.consistencyRating || 4,
+                  trend: instructor.trend || 0
+                }))} 
                 loading={loading} 
                 type="instructor"
                 enableAdvancedFeatures={true}
                 enableRealTime={false}
-                enableCrossFiltering={true}
+
                 enableDrillDown={true}
                 enableTimeRange={true}
                 showHeader={true}
+                showSecondaryFilters={true}
+                selectedSubject={selectedSubject}
+                onSubjectChange={setSelectedSubject}
+                subjects={subjects.map(subject => {
+                  return { id: subject.subjectId.toString(), name: subject.subjectCode };
+                })}
+
                 onDrillDown={(filter: { type: string; value: string }) => {
-                  console.log('Drill down:', filter);
                   // Handle drill down logic
                 }}
                 onExport={(format: 'pdf' | 'csv' | 'excel') => {
                   console.log('Export:', format);
                   // Handle export logic
                 }}
+                onRefresh={handleRefresh}
               />
           </Card>
           
           <Card className="border border-blue-200 shadow-lg rounded-xl overflow-hidden p-0 w-full">
-          <CardHeader className="p-0">
-            {/* Blue Gradient Header - flush to card edge, no rounded corners */}
-            <div className="bg-gradient-to-r from-[#1e40af] to-[#3b82f6] p-0">
-              <div className="w-full px-3 sm:px-4 lg:px-6 py-3 sm:py-4">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4">
-                  <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
-                    <div className="w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center flex-shrink-0">
-                      <Search className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+            <CardHeader className="p-0">
+              {/* Blue Gradient Header - flush to card edge, no rounded corners */}
+              <div className="bg-gradient-to-r from-[#1e40af] to-[#3b82f6] p-0">
+                <div className="w-full px-3 sm:px-4 lg:px-6 py-3 sm:py-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4">
+                    <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                      <div className="w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center flex-shrink-0">
+                        <Search className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <h3 className="text-sm sm:text-base lg:text-lg font-bold text-white truncate">Instructor Attendance Report</h3>
+                        <p className="text-blue-100 text-xs sm:text-sm truncate">Search, filter and manage instructor attendance records</p>
+                      </div>
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <h3 className="text-sm sm:text-base lg:text-lg font-bold text-white truncate">Instructor Attendance Report</h3>
-                      <p className="text-blue-100 text-xs sm:text-sm truncate">Search, filter and manage instructor attendance records</p>
+                    <div>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-9 w-9 rounded-full text-white hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/40"
+                            onClick={handleRefresh}
+                            disabled={loading}
+                            aria-label="Refresh data"
+                          >
+                            {loading ? (
+                              <RefreshCw className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <RefreshCw className="w-4 h-4" />
+                            )}
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="left">
+                          <p>Refresh data</p>
+                        </TooltipContent>
+                      </Tooltip>
                     </div>
                   </div>
                 </div>
               </div>
-            </div>
-          </CardHeader>
+            </CardHeader>
+            <CardContent className="p-0">
               {/* Enhanced Search and Filter Section */}
               <div className="border-b border-gray-200 shadow-sm p-3 sm:p-4 lg:p-6">
-                <div className="flex flex-col gap-3 sm:gap-4">
+                <div className="flex flex-col lg:flex-row gap-3 items-end justify-end">
                   {/* Search Bar */}
-                  <div className="relative w-full">
+                  <div className="relative w-full lg:w-80">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                     <input
                       type="text"
                       placeholder="Search instructors..."
                       value={searchQuery}
                       onChange={e => setSearchQuery(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2.5 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:outline-none"
+                      className="w-full pl-10 pr-4 py-2.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:outline-none"
                     />
                   </div>
-                  
+
                   {/* Quick Filter Dropdowns */}
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-3">
+                  <div className="flex flex-wrap gap-3 justify-end">
                     <Select value={filters.departments[0] || 'all'} onValueChange={(value) => {
                       if (value === 'all') {
                         setFilters({ ...filters, departments: [] });
@@ -1338,13 +1483,32 @@ export default function InstructorAttendancePage() {
                         setFilters({ ...filters, departments: [value] });
                       }
                     }}>
-                      <SelectTrigger className="w-full text-sm text-gray-700 min-w-0">
+                      <SelectTrigger className="w-full lg:w-40 text-sm text-gray-500 min-w-0 rounded border-gray-300 bg-white hover:bg-gray-50">
                         <SelectValue placeholder="Department" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">All Departments</SelectItem>
                         {departments.map(dept => (
                           <SelectItem key={dept} value={dept}>{dept}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+
+                    {/* Instructor Type Filter */}
+                    <Select value={filters.instructorTypes[0] || 'all'} onValueChange={(value) => {
+                      if (value === 'all') {
+                        setFilters({ ...filters, instructorTypes: [] });
+                      } else {
+                        setFilters({ ...filters, instructorTypes: [value] });
+                      }
+                    }}>
+                      <SelectTrigger className="w-full lg:w-40 text-sm text-gray-500 min-w-0 rounded border-gray-300 bg-white hover:bg-gray-50">
+                        <SelectValue placeholder="Instructor Type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Types</SelectItem>
+                        {instructorTypes.map(type => (
+                          <SelectItem key={type} value={type}>{type.replace('_', ' ')}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -1356,14 +1520,14 @@ export default function InstructorAttendancePage() {
                         setFilters({ ...filters, statuses: [value] });
                       }
                     }}>
-                      <SelectTrigger className="w-full text-sm text-gray-700 min-w-0">
+                      <SelectTrigger className="w-full lg:w-32 text-sm text-gray-500 min-w-0 rounded border-gray-300 bg-white hover:bg-gray-50">
                         <SelectValue placeholder="Status" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">All Status</SelectItem>
                         <SelectItem value="ACTIVE">Active</SelectItem>
                         <SelectItem value="INACTIVE">Inactive</SelectItem>
-                        <SelectItem value="ON_LEAVE">On Leave</SelectItem>
+
                       </SelectContent>
                     </Select>
                     
@@ -1374,7 +1538,7 @@ export default function InstructorAttendancePage() {
                         setFilters({ ...filters, attendanceRates: [value] });
                       }
                     }}>
-                      <SelectTrigger className="w-full text-sm text-gray-700 min-w-0">
+                      <SelectTrigger className="w-full lg:w-36 text-sm text-gray-500 min-w-0 rounded border-gray-300 bg-white hover:bg-gray-50">
                         <SelectValue placeholder="Attendance" />
                       </SelectTrigger>
                       <SelectContent>
@@ -1392,7 +1556,7 @@ export default function InstructorAttendancePage() {
                         setFilters({ ...filters, riskLevels: [value] });
                       }
                     }}>
-                      <SelectTrigger className="w-full text-sm text-gray-700 min-w-0">
+                      <SelectTrigger className="w-full lg:w-32 text-sm text-gray-500 min-w-0 rounded border-gray-300 bg-white hover:bg-gray-50">
                         <SelectValue placeholder="Risk Level" />
                       </SelectTrigger>
                       <SelectContent>
@@ -1409,7 +1573,7 @@ export default function InstructorAttendancePage() {
 
               {/* Active Filter Chips */}
               {Object.values(filters).some(arr => arr.length > 0) && (
-                <div className="p-3 bg-blue-50 rounded-lg border border-blue-200 mx-3 sm:mx-4 lg:mx-6">
+                <div className="p-3 bg-blue-50 rounded border border-blue-200 mx-3 sm:mx-4 lg:mx-6 mt-4">
                   <div className="flex flex-col sm:flex-row sm:items-center gap-2 text-sm mb-2">
                     <div className="flex items-center gap-2">
                       <Filter className="w-4 h-4 text-blue-600 flex-shrink-0" />
@@ -1494,7 +1658,7 @@ export default function InstructorAttendancePage() {
                           title="No instructors found"
                           description="Try adjusting your search criteria or filters to find the instructors you're looking for."
                           action={
-                            <Button onClick={handleClearFilters} className="bg-blue-600 hover:bg-blue-700">
+                            <Button onClick={handleClearFilters} className="bg-blue-600 hover:bg-blue-700 rounded">
                               Clear Filters
                             </Button>
                           }
@@ -1575,9 +1739,10 @@ export default function InstructorAttendancePage() {
                 onPageSizeChange={handlePageSizeChange}
                 pageSizeOptions={[5, 10, 20, 50]}
               />
-            </Card>
-          </div>
+            </CardContent>
+          </Card>
         </div>
+      </div>
 
       {/* Instructor Detail Modal */}
       {selectedInstructor && (
@@ -1591,47 +1756,63 @@ export default function InstructorAttendancePage() {
         />
       )}
 
-              {/* Attendance Records Modal */}
-        <AttendanceRecordsDialog
-          open={showAttendanceRecordsModal}
-          onOpenChange={setShowAttendanceRecordsModal}
-          instructor={selectedInstructorForRecords}
-          showCopyButton={true}
-          showPrintButton={true}
-          showExportButton={true}
-        />
+      {/* Attendance Records Modal */}
+      <AttendanceRecordsDialog
+        open={showAttendanceRecordsModal}
+        onOpenChange={setShowAttendanceRecordsModal}
+        instructor={selectedInstructorForRecords}
+        showCopyButton={true}
+        showPrintButton={true}
+        showExportButton={true}
+      />
 
-        {/* Edit Instructor Modal */}
-        <EditInstructorDialog
-          open={showEditInstructorModal}
-          onOpenChange={setShowEditInstructorModal}
-          instructor={selectedInstructorForEdit}
-          departments={departments}
-          subjects={subjects}
-          onSave={(data) => {
-            console.log('Save instructor changes:', data);
-            // TODO: Implement save functionality
-          }}
-          showCopyButton={true}
-          showPrintButton={true}
-        />
+      {/* Edit Instructor Modal */}
+      <EditInstructorDialog
+        open={showEditInstructorModal}
+        onOpenChange={setShowEditInstructorModal}
+        instructor={selectedInstructorForEdit}
+        onSave={async (payload) => {
+          if (!selectedInstructorForEdit?.instructorId) {
+            throw new Error('Missing instructorId');
+          }
+          const res = await fetch(`/api/instructors/${selectedInstructorForEdit.instructorId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err?.error || `Failed to update instructor (HTTP ${res.status})`);
+          }
+          await handleRefresh();
+        }}
+      />
 
-        {/* Delete Confirmation Modal */}
-        <DeactivateInstructorDialog
-          open={showDeleteConfirmModal}
-          onOpenChange={setShowDeleteConfirmModal}
-          instructor={selectedInstructorForDelete}
-          onDeactivate={(instructorId, reason) => {
-            console.log('Deactivate instructor:', instructorId, reason);
-            // TODO: Implement deactivate functionality
-          }}
-          onArchive={(instructorId, reason) => {
-            console.log('Archive instructor:', instructorId, reason);
-            // TODO: Implement archive functionality
-          }}
-          showCopyButton={true}
-          showPrintButton={true}
-        />
-      </TooltipProvider>
-    );
+      {/* Delete Confirmation Modal */}
+      <DeactivateInstructorDialog
+        open={showDeleteConfirmModal}
+        onOpenChange={setShowDeleteConfirmModal}
+        instructor={selectedInstructorForDelete}
+        onDeactivate={(instructorId, reason) => {
+          console.log('Deactivate instructor:', instructorId, reason);
+          // TODO: Implement deactivate functionality
+        }}
+        onArchive={(instructorId, reason) => {
+          console.log('Archive instructor:', instructorId, reason);
+          // TODO: Implement archive functionality
+        }}
+        showCopyButton={true}
+        showPrintButton={true}
+      />
+
+      {/* Manual Attendance Dialog */}
+      <ManualAttendanceDialog
+        open={showManualAttendance}
+        onOpenChange={setShowManualAttendance}
+        defaultEntityType="instructor"
+        defaultEntityId={manualEntityId}
+        onSuccess={handleRefresh}
+      />
+    </TooltipProvider>
+  );
 }

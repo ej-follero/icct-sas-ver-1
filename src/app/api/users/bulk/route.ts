@@ -4,7 +4,7 @@ import { z } from 'zod';
 import bcrypt from 'bcryptjs';
 import { UserStatus, Role } from '@prisma/client';
 
-// Schema for user import data
+// Schema for user import data (with optional role-specific fields)
 const userImportSchema = z.object({
   userName: z.string().min(1, "Username is required"),
   email: z.string().email("Invalid email address"),
@@ -13,6 +13,36 @@ const userImportSchema = z.object({
   isEmailVerified: z.boolean().optional().default(false),
   twoFactorEnabled: z.boolean().optional().default(false),
   passwordHash: z.string().optional(),
+  // shared personal
+  firstName: z.string().optional(),
+  middleName: z.string().optional(),
+  lastName: z.string().optional(),
+  phoneNumber: z.string().optional(),
+  gender: z.enum(["MALE", "FEMALE"]).optional(),
+  address: z.string().optional(),
+  // instructor
+  instructorType: z.enum(["FULL_TIME", "PART_TIME"]).optional(),
+  departmentId: z.number().optional(),
+  officeLocation: z.string().optional(),
+  officeHours: z.string().optional(),
+  specialization: z.string().optional(),
+  employeeId: z.string().optional(),
+  // student
+  studentIdNum: z.string().optional(),
+  studentType: z.enum(["REGULAR", "IRREGULAR"]).optional(),
+  yearLevel: z.enum(["FIRST_YEAR", "SECOND_YEAR", "THIRD_YEAR", "FOURTH_YEAR"]).optional(),
+  courseId: z.number().optional(),
+  birthDate: z.string().optional(),
+  nationality: z.string().optional(),
+  guardianId: z.number().optional(),
+  // guardian
+  guardianType: z.enum(["PARENT", "GUARDIAN"]).optional(),
+  occupation: z.string().optional(),
+  workplace: z.string().optional(),
+  emergencyContact: z.string().optional(),
+  relationshipToStudent: z.string().optional(),
+  // rfid
+  rfidTag: z.string().optional(),
 });
 
 const bulkImportSchema = z.object({
@@ -75,6 +105,145 @@ export async function POST(request: NextRequest) {
               data: updateData,
             });
             
+            // Update or create role-specific entity if sufficient fields are provided
+            try {
+              if (record.role === 'INSTRUCTOR' && record.firstName && record.lastName && record.phoneNumber && record.gender && record.instructorType && record.departmentId && record.employeeId) {
+                await prisma.instructor.upsert({
+                  where: { instructorId: existingUser.userId },
+                  update: {
+                    email: record.email,
+                    phoneNumber: record.phoneNumber,
+                    firstName: record.firstName,
+                    middleName: record.middleName ?? '',
+                    lastName: record.lastName,
+                    suffix: null,
+                    gender: record.gender as any,
+                    instructorType: record.instructorType as any,
+                    departmentId: record.departmentId,
+                    officeLocation: record.officeLocation ?? null,
+                    officeHours: record.officeHours ?? null,
+                    specialization: record.specialization ?? null,
+                    rfidTag: record.rfidTag ?? (existingUser.userId + '-' + Date.now()),
+                    employeeId: record.employeeId,
+                  },
+                  create: {
+                    instructorId: existingUser.userId,
+                    email: record.email,
+                    phoneNumber: record.phoneNumber,
+                    firstName: record.firstName,
+                    middleName: record.middleName ?? '',
+                    lastName: record.lastName,
+                    suffix: null,
+                    gender: record.gender as any,
+                    instructorType: record.instructorType as any,
+                    status: UserStatus.ACTIVE as any,
+                    departmentId: record.departmentId,
+                    officeLocation: record.officeLocation ?? null,
+                    officeHours: record.officeHours ?? null,
+                    specialization: record.specialization ?? null,
+                    rfidTag: record.rfidTag ?? (existingUser.userId + '-' + Date.now()),
+                    employeeId: record.employeeId,
+                  }
+                });
+              }
+              if (record.role === 'STUDENT' && record.firstName && record.lastName && record.phoneNumber && record.gender && record.studentIdNum && record.studentType && record.yearLevel && record.address) {
+                await prisma.student.upsert({
+                  where: { studentId: existingUser.userId },
+                  update: {
+                    studentIdNum: record.studentIdNum,
+                    rfidTag: record.rfidTag ?? (existingUser.userId + '-' + Date.now()),
+                    firstName: record.firstName,
+                    middleName: record.middleName ?? null,
+                    lastName: record.lastName,
+                    suffix: null,
+                    email: record.email,
+                    phoneNumber: record.phoneNumber,
+                    address: record.address,
+                    img: null,
+                    gender: record.gender as any,
+                    birthDate: record.birthDate ? new Date(record.birthDate) : null,
+                    nationality: record.nationality ?? null,
+                    studentType: record.studentType as any,
+                    yearLevel: record.yearLevel as any,
+                    courseId: record.courseId ?? null,
+                    departmentId: null,
+                    lastLogin: null,
+                    guardianId: record.guardianId ?? 0,
+                    userId: existingUser.userId,
+                  },
+                  create: {
+                    studentId: existingUser.userId,
+                    studentIdNum: record.studentIdNum,
+                    rfidTag: record.rfidTag ?? (existingUser.userId + '-' + Date.now()),
+                    firstName: record.firstName,
+                    middleName: record.middleName ?? null,
+                    lastName: record.lastName,
+                    suffix: null,
+                    email: record.email,
+                    phoneNumber: record.phoneNumber,
+                    address: record.address,
+                    img: null,
+                    gender: record.gender as any,
+                    birthDate: record.birthDate ? new Date(record.birthDate) : null,
+                    nationality: record.nationality ?? null,
+                    studentType: record.studentType as any,
+                    status: UserStatus.ACTIVE as any,
+                    yearLevel: record.yearLevel as any,
+                    courseId: record.courseId ?? null,
+                    departmentId: null,
+                    lastLogin: null,
+                    guardianId: record.guardianId ?? 0,
+                    userId: existingUser.userId,
+                  }
+                });
+              }
+              if (record.role === 'GUARDIAN' && record.firstName && record.lastName && record.phoneNumber && record.gender && record.guardianType && record.relationshipToStudent) {
+                await prisma.guardian.upsert({
+                  where: { guardianId: existingUser.userId },
+                  update: {
+                    email: record.email,
+                    phoneNumber: record.phoneNumber,
+                    firstName: record.firstName,
+                    middleName: record.middleName ?? null,
+                    lastName: record.lastName,
+                    suffix: null,
+                    address: record.address ?? '',
+                    img: null,
+                    gender: record.gender as any,
+                    guardianType: record.guardianType as any,
+                    occupation: record.occupation ?? null,
+                    workplace: record.workplace ?? null,
+                    emergencyContact: record.emergencyContact ?? null,
+                    relationshipToStudent: record.relationshipToStudent,
+                    totalStudents: undefined,
+                    lastLogin: null,
+                  },
+                  create: {
+                    guardianId: existingUser.userId,
+                    email: record.email,
+                    phoneNumber: record.phoneNumber,
+                    firstName: record.firstName,
+                    middleName: record.middleName ?? null,
+                    lastName: record.lastName,
+                    suffix: null,
+                    address: record.address ?? '',
+                    img: null,
+                    gender: record.gender as any,
+                    guardianType: record.guardianType as any,
+                    status: UserStatus.ACTIVE as any,
+                    occupation: record.occupation ?? null,
+                    workplace: record.workplace ?? null,
+                    emergencyContact: record.emergencyContact ?? null,
+                    relationshipToStudent: record.relationshipToStudent,
+                    totalStudents: 0,
+                    lastLogin: null,
+                  }
+                });
+              }
+            } catch (roleErr: any) {
+              results.errors.push(`Row ${i + 1}: ${roleErr?.message || 'Failed updating role entity'}`);
+            }
+            
             results.success++;
             continue;
           }
@@ -113,10 +282,85 @@ export async function POST(request: NextRequest) {
           userData.passwordHash = hashedPassword;
         }
 
-        await prisma.user.create({
+        const createdUser = await prisma.user.create({
           data: userData,
         });
-        
+        // Role-specific creation when fields present
+        if (record.role === 'INSTRUCTOR' && record.firstName && record.lastName && record.phoneNumber && record.gender && record.instructorType && record.departmentId && record.employeeId) {
+          await prisma.instructor.create({
+            data: {
+              instructorId: createdUser.userId,
+              email: record.email,
+              phoneNumber: record.phoneNumber,
+              firstName: record.firstName,
+              middleName: record.middleName ?? '',
+              lastName: record.lastName,
+              suffix: null,
+              gender: record.gender as any,
+              instructorType: record.instructorType as any,
+              status: UserStatus.ACTIVE as any,
+              departmentId: record.departmentId,
+              officeLocation: record.officeLocation ?? null,
+              officeHours: record.officeHours ?? null,
+              specialization: record.specialization ?? null,
+              rfidTag: record.rfidTag ?? `${createdUser.userId}-${Date.now()}`,
+              employeeId: record.employeeId,
+            }
+          });
+        }
+        if (record.role === 'STUDENT' && record.firstName && record.lastName && record.phoneNumber && record.gender && record.studentIdNum && record.studentType && record.yearLevel && record.address) {
+          await prisma.student.create({
+            data: {
+              studentId: createdUser.userId,
+              studentIdNum: record.studentIdNum,
+              rfidTag: record.rfidTag ?? `${createdUser.userId}-${Date.now()}`,
+              firstName: record.firstName,
+              middleName: record.middleName ?? null,
+              lastName: record.lastName,
+              suffix: null,
+              email: record.email,
+              phoneNumber: record.phoneNumber,
+              address: record.address,
+              img: null,
+              gender: record.gender as any,
+              birthDate: record.birthDate ? new Date(record.birthDate) : null,
+              nationality: record.nationality ?? null,
+              studentType: record.studentType as any,
+              status: UserStatus.ACTIVE as any,
+              yearLevel: record.yearLevel as any,
+              courseId: record.courseId ?? null,
+              departmentId: null,
+              lastLogin: null,
+              guardianId: record.guardianId ?? 0,
+              userId: createdUser.userId,
+            }
+          });
+        }
+        if (record.role === 'GUARDIAN' && record.firstName && record.lastName && record.phoneNumber && record.gender && record.guardianType && record.relationshipToStudent) {
+          await prisma.guardian.create({
+            data: {
+              guardianId: createdUser.userId,
+              email: record.email,
+              phoneNumber: record.phoneNumber,
+              firstName: record.firstName,
+              middleName: record.middleName ?? null,
+              lastName: record.lastName,
+              suffix: null,
+              address: record.address ?? '',
+              img: null,
+              gender: record.gender as any,
+              guardianType: record.guardianType as any,
+              status: UserStatus.ACTIVE as any,
+              occupation: record.occupation ?? null,
+              workplace: record.workplace ?? null,
+              emergencyContact: record.emergencyContact ?? null,
+              relationshipToStudent: record.relationshipToStudent,
+              totalStudents: 0,
+              lastLogin: null,
+            }
+          });
+        }
+         
         results.success++;
         
       } catch (error: any) {

@@ -342,23 +342,41 @@ export const studentsData: Student[] = [
 ];
 
 export interface Parent {
-  id: number;
+  id: string;
   name: string;
-  email?: string;
-  phone?: string;
-  address?: string;
-  username?: string;
-  firstName?: string;
-  lastName?: string;
-  bloodType?: string;
-  birthday?: string;
-  sex?: string;
+  email: string;
+  phoneNumber: string;
+  address: string;
+  firstName: string;
+  middleName?: string;
+  lastName: string;
+  suffix?: string;
+  img?: string;
+  gender: string;
+  guardianType: string;
+  status: 'active' | 'inactive';
   occupation?: string;
+  workplace?: string;
+  emergencyContact?: string;
+  relationshipToStudent: string;
+  totalStudents: number;
+  lastLogin?: string;
+  createdAt: string;
+  updatedAt: string;
   students: {
-    id: number;
+    id: string;
     name: string;
-    grade?: number;
-    class?: string;
+    studentIdNum: string;
+    yearLevel: string;
+    status: string;
+    course?: {
+      name: string;
+      code: string;
+    };
+    department?: {
+      name: string;
+      code: string;
+    };
   }[];
 }
 

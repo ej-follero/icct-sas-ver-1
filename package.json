@@ -25,7 +25,9 @@
     "db:stop": "docker-compose down",
     "db:reset": "docker-compose down -v && docker-compose up -d postgres",
     "db:migrate": "npx prisma migrate dev",
-    "db:generate": "npx prisma generate"
+    "db:generate": "npx prisma generate",
+    "test:email": "node scripts/test-email-functionality.js",
+    "test:email:help": "node scripts/test-email-functionality.js --help"
   },
   "dependencies": {
     "@faker-js/faker": "^9.9.0",
@@ -115,6 +117,7 @@
     "@types/extract-zip": "^2.0.0",
     "@types/jest": "^29.5.14",
     "@types/node": "^20.17.50",
+    "@types/nodemailer": "^7.0.1",
     "@types/react": "^18",
     "@types/react-calendar": "^3.9.0",
     "@types/react-dom": "^18",

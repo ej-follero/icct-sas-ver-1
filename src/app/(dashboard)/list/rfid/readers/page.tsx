@@ -1061,28 +1061,19 @@ export default function RFIDReadersPage() {
            open={bulkActionsDialogOpen}
            onOpenChange={setBulkActionsDialogOpen}
            selectedItems={selectedIds.map(id => readers.find(r => r.readerId.toString() === id)).filter(Boolean) as RFIDReader[]}
-           entityType="course"
+           entityType="reader"
            entityLabel="reader"
            availableActions={[
-             { type: 'status-update', title: 'Update Status', description: 'Update status of selected readers', icon: <Settings className="w-4 h-4" /> },
-             { type: 'notification', title: 'Send Notification', description: 'Send notification to administrators', icon: <Bell className="w-4 h-4" /> },
-             { type: 'export', title: 'Export Data', description: 'Export selected readers data', icon: <Download className="w-4 h-4" /> },
+             { id: 'status-update', label: 'Update Status', description: 'Update status of selected readers', icon: <Settings className="w-4 h-4" />, tabId: 'actions' },
+             { id: 'notification', label: 'Send Notification', description: 'Send notification to administrators', icon: <Bell className="w-4 h-4" />, tabId: 'actions' },
+             { id: 'export', label: 'Export Data', description: 'Export selected readers data', icon: <Download className="w-4 h-4" />, tabId: 'actions' },
            ]}
-           exportColumns={exportableColumns.map(col => ({ id: col.key, label: col.label, default: true }))}
-           notificationTemplates={[]}
-           stats={{
-             total: selectedIds.length,
-             active: selectedIds.filter(id => readers.find(r => r.readerId.toString() === id)?.status === 'ACTIVE').length,
-             inactive: selectedIds.filter(id => {
-               const reader = readers.find(r => r.readerId.toString() === id);
-               return reader && reader.status !== 'ACTIVE';
-             }).length
-           }}
            onActionComplete={handleBulkActionComplete}
            onCancel={handleBulkActionCancel}
            onProcessAction={handleProcessBulkAction}
-                     getItemDisplayName={(item: RFIDReader) => item.deviceName}
-          getItemStatus={(item: RFIDReader) => item.status}
+           getItemId={(item: RFIDReader) => item.readerId.toString()}
+           getItemDisplayName={(item: RFIDReader) => item.deviceName}
+           getItemStatus={(item: RFIDReader) => item.status}
          />
       </div>
     </div>

@@ -6,16 +6,14 @@ export async function GET() {
     console.log('Fetching instructors from database...');
     
     const instructors = await prisma.instructor.findMany({
-      select: {
-        instructorId: true,
-        firstName: true,
-        middleName: true,
-        lastName: true,
-        email: true,
-        status: true,
-      },
-      where: {
-        status: 'ACTIVE', // Only get active instructors
+      include: {
+        Department: {
+          select: {
+            departmentId: true,
+            departmentName: true,
+            departmentCode: true,
+          }
+        }
       },
       orderBy: {
         lastName: 'asc',
@@ -25,33 +23,85 @@ export async function GET() {
     console.log('Instructors found:', instructors.length);
     console.log('Sample instructor:', instructors[0]);
 
-    // Transform the data to match the expected format for DepartmentForm
-    const transformedInstructors = instructors.map(instructor => {
-      // Create full name with middle name if available
-      const fullName = [
-        instructor.firstName,
-        instructor.middleName,
-        instructor.lastName
-      ].filter(Boolean).join(' ').trim();
-      
-      return {
-        id: instructor.instructorId.toString(),
-        name: fullName,
-        firstName: instructor.firstName,
-        middleName: instructor.middleName,
-        lastName: instructor.lastName,
-        email: instructor.email,
-        status: instructor.status
-      };
-    });
-
-    console.log('Transformed instructors:', transformedInstructors.slice(0, 3));
-
-    return NextResponse.json(transformedInstructors);
+    return NextResponse.json({ data: instructors });
   } catch (error) {
     console.error('Error fetching instructors:', error);
     return NextResponse.json(
       { error: 'Failed to fetch instructors' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const body = await request.json();
+    
+    const {
+      firstName,
+      middleName,
+      lastName,
+      suffix,
+      email,
+      phoneNumber,
+      gender,
+      instructorType,
+      departmentId,
+      status,
+      rfidTag,
+      employeeId,
+      officeLocation,
+      officeHours,
+      specialization,
+    } = body;
+
+    // Create user first
+    const user = await prisma.user.create({
+      data: {
+        userName: email,
+        email: email,
+        passwordHash: 'temp_password_hash', // This should be properly hashed
+        role: 'INSTRUCTOR',
+        status: 'ACTIVE',
+      },
+    });
+
+    // Create instructor
+    const instructor = await prisma.instructor.create({
+      data: {
+        instructorId: user.userId,
+        firstName,
+        middleName,
+        lastName,
+        suffix,
+        email,
+        phoneNumber,
+        gender,
+        instructorType,
+        departmentId,
+        status,
+        rfidTag,
+        employeeId,
+        officeLocation,
+        officeHours,
+        specialization,
+      },
+      include: {
+        Department: {
+          select: {
+            departmentId: true,
+            departmentName: true,
+            departmentCode: true,
+          }
+        }
+      }
+    });
+
+    return NextResponse.json({ data: instructor });
+  } catch (error) {
+    console.error('Error creating instructor:', error);
+    return NextResponse.json(
+      { error: 'Failed to create instructor' },
       { status: 500 }
     );
   }

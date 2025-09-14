@@ -44,13 +44,13 @@ export const TablePagination: React.FC<TablePaginationProps> = ({
   const rangeEnd = Math.min(page * pageSize, totalItems);
 
   return (
-    <div className={`flex flex-col lg:flex-row lg:items-center lg:justify-between gap-8 px-6 py-6 ${className}`}>
+    <div className={`flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 lg:gap-8 px-4 lg:px-6 py-4 lg:py-6 ${className}`}>
       {/* Left Side - Page Size & Info (always row) */}
-      <div className="flex flex-row items-center gap-4">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
         <div className="flex items-center gap-3">
-          <span className="text-sm font-semibold text-blue-800 uppercase tracking-wide">Show:</span>
+          <span className="text-sm font-semibold text-blue-800 uppercase tracking-wide whitespace-nowrap">Show:</span>
           <Select value={String(pageSize)} onValueChange={v => onPageSizeChange(Number(v))}>
-            <SelectTrigger className="w-40 border-blue-300 rounded-xl text-blue-900 text-sm font-medium focus:ring-blue-500/30 focus:border-blue-500">
+            <SelectTrigger className="min-w-[120px] w-auto border-blue-300 rounded-xl text-blue-900 text-sm font-medium focus:ring-blue-500/30 focus:border-blue-500">
               <SelectValue />
             </SelectTrigger>
             <SelectContent className="rounded-xl">
@@ -60,18 +60,18 @@ export const TablePagination: React.FC<TablePaginationProps> = ({
             </SelectContent>
           </Select>
         </div>
-        <div className="text-sm text-blue-700 bg-blue-50 px-3 py-2 rounded-xl border border-blue-200">
+        <div className="text-sm text-blue-700 bg-blue-50 px-3 py-2 rounded-xl border border-blue-200 whitespace-nowrap">
           Showing <span className="font-bold text-blue-900">{rangeStart}–{rangeEnd}</span> of <span className="font-bold text-blue-900">{totalItems}</span> {pluralize(entityLabel, totalItems)}
         </div>
       </div>
       {/* Right Side - Navigation */}
-      <div className="flex items-center justify-center lg:justify-end gap-2">
+      <div className="flex items-center justify-center lg:justify-end gap-1 sm:gap-2">
         <Button
           onClick={() => onPageChange(1)}
           disabled={page === 1 || loading}
           variant="outline"
           size="sm"
-          className="border border-blue-300 text-blue-700 rounded-xl hover:bg-blue-50 hover:border-blue-400 disabled:opacity-40 disabled:cursor-not-allowed transition-all font-medium px-3 py-2"
+          className="border border-blue-300 text-blue-700 rounded-xl hover:bg-blue-50 hover:border-blue-400 disabled:opacity-40 disabled:cursor-not-allowed transition-all font-medium px-2 sm:px-3 py-2"
         >
           <ChevronsLeft className="w-4 h-4" />
         </Button>
@@ -80,22 +80,22 @@ export const TablePagination: React.FC<TablePaginationProps> = ({
           disabled={page === 1 || loading}
           variant="outline"
           size="sm"
-          className="border border-blue-300 text-blue-700 rounded-xl hover:bg-blue-50 hover:border-blue-400 disabled:opacity-40 disabled:cursor-not-allowed transition-all font-medium px-3 py-2"
+          className="border border-blue-300 text-blue-700 rounded-xl hover:bg-blue-50 hover:border-blue-400 disabled:opacity-40 disabled:cursor-not-allowed transition-all font-medium px-2 sm:px-3 py-2"
         >
           <ChevronLeft className="w-4 h-4" />
         </Button>
-        <div className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl shadow-sm border border-blue-500">
-          <span className="text-sm font-medium">Page</span>
-          <span className="font-bold">{page}</span>
-          <span className="text-blue-200">/</span>
-          <span className="font-bold">{totalPages}</span>
+        <div className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 bg-blue-600 text-white rounded-xl shadow-sm border border-blue-500 min-w-fit">
+          <span className="text-xs sm:text-sm font-medium whitespace-nowrap">Page</span>
+          <span className="font-bold text-sm sm:text-base">{page}</span>
+          <span className="text-blue-200 text-xs sm:text-sm">/</span>
+          <span className="font-bold text-sm sm:text-base">{totalPages}</span>
         </div>
         <Button
           onClick={() => onPageChange(Math.min(totalPages, page + 1))}
           disabled={page === totalPages || loading}
           variant="outline"
           size="sm"
-          className="border border-blue-300 rounded-xl text-blue-700 hover:bg-blue-50 hover:border-blue-400 disabled:opacity-40 disabled:cursor-not-allowed transition-all font-medium px-3 py-2"
+          className="border border-blue-300 rounded-xl text-blue-700 hover:bg-blue-50 hover:border-blue-400 disabled:opacity-40 disabled:cursor-not-allowed transition-all font-medium px-2 sm:px-3 py-2"
         >
           <ChevronRight className="w-4 h-4" />
         </Button>
@@ -104,7 +104,7 @@ export const TablePagination: React.FC<TablePaginationProps> = ({
           disabled={page === totalPages || loading}
           variant="outline"
           size="sm"
-          className="border border-blue-300 rounded-xl text-blue-700 hover:bg-blue-50 hover:border-blue-400 disabled:opacity-40 disabled:cursor-not-allowed transition-all font-medium px-3 py-2"
+          className="border border-blue-300 rounded-xl text-blue-700 hover:bg-blue-50 hover:border-blue-400 disabled:opacity-40 disabled:cursor-not-allowed transition-all font-medium px-2 sm:px-3 py-2"
         >
           <ChevronsRight className="w-4 h-4" />
         </Button>

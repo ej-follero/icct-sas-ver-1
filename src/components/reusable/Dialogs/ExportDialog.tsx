@@ -1,376 +1,375 @@
+"use client";
+
+import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { BadgeInfo, FileText, FileSpreadsheet, Download, X, RotateCw } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useEffect } from "react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Download, FileText, Table, FileSpreadsheet, X, Loader2 } from "lucide-react";
 
 interface ExportColumn {
-  key: string;
+  id: string;
   label: string;
+  default: boolean;
 }
 
 interface ExportDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  exportableColumns: ExportColumn[];
-  exportColumns: string[];
-  setExportColumns: (columns: string[]) => void;
-  exportFormat: 'pdf' | 'excel' | 'csv' | null;
-  setExportFormat: (format: 'pdf' | 'excel' | 'csv' | null) => void;
-  pdfOrientation?: 'portrait' | 'landscape';
-  setPdfOrientation?: (orientation: 'portrait' | 'landscape') => void;
-  includeLogos?: boolean;
-  setIncludeLogos?: (include: boolean) => void;
-  onExport: () => void;
-  title: string;
-  tooltip: string;
+  selectedItems?: any[];
+  entityType: string;
+  entityLabel: string;
+  exportColumns?: ExportColumn[];
+  onExport?: (options: ExportOptions) => void;
 }
 
-function ExportDialog({
-  open,
-  onOpenChange,
-  exportableColumns,
-  exportColumns,
-  setExportColumns,
-  exportFormat,
-  setExportFormat,
-  pdfOrientation = 'portrait',
-  setPdfOrientation,
-  includeLogos = false,
-  setIncludeLogos,
-  onExport,
-  title,
-  tooltip,
+interface ExportOptions {
+  format: 'CSV' | 'EXCEL' | 'PDF';
+  columns: string[];
+  includeHeaders: boolean;
+  dateRange?: {
+    start: string;
+    end: string;
+  };
+}
+
+export function ExportDialog({ 
+  open, 
+  onOpenChange, 
+  selectedItems = [], 
+  entityType, 
+  entityLabel, 
+  exportColumns = [],
+  onExport 
 }: ExportDialogProps) {
-  
-  // Handle dialog close with proper cleanup
-  const handleOpenChange = (newOpen: boolean) => {
-    if (!newOpen) {
-      // Reset focus to body when dialog closes
-      setTimeout(() => {
-        document.body.focus();
-        // Remove any potential overlay issues
-        const overlays = document.querySelectorAll('[data-radix-dialog-overlay]');
-        overlays.forEach(overlay => {
-          if (overlay instanceof HTMLElement) {
-            overlay.style.pointerEvents = 'none';
-          }
-        });
-      }, 100);
-    }
-    onOpenChange(newOpen);
+  const [exportOptions, setExportOptions] = useState<ExportOptions>({
+    format: 'CSV',
+    columns: exportColumns.filter(col => col.default).map(col => col.id),
+    includeHeaders: true,
+  });
+
+  const [isExporting, setIsExporting] = useState(false);
+
+  const formats = [
+    { value: 'CSV', label: 'CSV', icon: <FileText className="w-4 h-4" /> },
+    { value: 'EXCEL', label: 'Excel', icon: <FileSpreadsheet className="w-4 h-4" /> },
+    { value: 'PDF', label: 'PDF', icon: <Table className="w-4 h-4" /> },
+  ];
+
+  const handleColumnToggle = (columnId: string, checked: boolean) => {
+    setExportOptions(prev => ({
+      ...prev,
+      columns: checked 
+        ? [...prev.columns, columnId]
+        : prev.columns.filter(id => id !== columnId)
+    }));
   };
 
-  // Cleanup effect when component unmounts or dialog closes
-  useEffect(() => {
-    if (!open) {
-      // Ensure proper cleanup when dialog is closed
-      const cleanup = () => {
-        document.body.style.pointerEvents = 'auto';
-        document.body.style.overflow = 'auto';
-        // Remove any remaining focus traps
-        const focusTraps = document.querySelectorAll('[data-radix-focus-trap]');
-        focusTraps.forEach(trap => {
-          if (trap instanceof HTMLElement) {
-            trap.remove();
-          }
-        });
-      };
-      
-      // Run cleanup after a short delay to ensure dialog is fully closed
-      const timeoutId = setTimeout(cleanup, 150);
-      return () => clearTimeout(timeoutId);
+  const handleSelectAllColumns = (checked: boolean) => {
+    setExportOptions(prev => ({
+      ...prev,
+      columns: checked ? exportColumns.map(col => col.id) : []
+    }));
+  };
+
+  const handleExport = async () => {
+    if (exportOptions.columns.length === 0 || isExporting) {
+      return;
     }
-  }, [open]);
+
+    setIsExporting(true);
+    try {
+      // Simulate export process with progress
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Generate filename with timestamp
+      const timestamp = new Date().toISOString().split('T')[0];
+      const filename = `${entityLabel}s-export-${timestamp}`;
+      
+      // Prepare data for export
+      const exportData = selectedItems.map(item => {
+        const row: any = {};
+        exportOptions.columns.forEach(columnId => {
+          row[columnId] = item[columnId] || '';
+        });
+        return row;
+      });
+
+      // Generate file based on format
+      let fileContent: string;
+      let mimeType: string;
+      let fileExtension: string;
+
+      switch (exportOptions.format) {
+        case 'CSV':
+          fileContent = generateCSV(exportData, exportOptions.columns, exportOptions.includeHeaders);
+          mimeType = 'text/csv';
+          fileExtension = 'csv';
+          break;
+        case 'EXCEL':
+          // For Excel, we'll generate a CSV with .xlsx extension (simplified approach)
+          fileContent = generateCSV(exportData, exportOptions.columns, exportOptions.includeHeaders);
+          mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+          fileExtension = 'xlsx';
+          break;
+        case 'PDF':
+          // For PDF, we'll generate a simple text format
+          fileContent = generatePDF(exportData, exportOptions.columns, exportOptions.includeHeaders);
+          mimeType = 'application/pdf';
+          fileExtension = 'pdf';
+          break;
+        default:
+          throw new Error('Unsupported export format');
+      }
+
+      // Download the file only after progress is complete
+      downloadFile(fileContent, `${filename}.${fileExtension}`, mimeType);
+      
+      // Call the export handler if provided
+      onExport?.(exportOptions);
+      
+      // Close dialog after successful export
+      onOpenChange(false);
+    } catch (error) {
+      console.error('Export failed:', error);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const generateCSV = (data: any[], columns: string[], includeHeaders: boolean): string => {
+    const headers = columns.map(col => {
+      const column = exportColumns.find(c => c.id === col);
+      return column ? column.label : col;
+    });
+    
+    const csvRows = [];
+    
+    if (includeHeaders) {
+      csvRows.push(headers.join(','));
+    }
+    
+    data.forEach(row => {
+      const values = columns.map(col => {
+        const value = row[col] || '';
+        // Escape commas and quotes in CSV
+        if (typeof value === 'string' && (value.includes(',') || value.includes('"'))) {
+          return `"${value.replace(/"/g, '""')}"`;
+        }
+        return value;
+      });
+      csvRows.push(values.join(','));
+    });
+    
+    return csvRows.join('\n');
+  };
+
+  const generatePDF = (data: any[], columns: string[], includeHeaders: boolean): string => {
+    const headers = columns.map(col => {
+      const column = exportColumns.find(c => c.id === col);
+      return column ? column.label : col;
+    });
+    
+    let content = `${entityLabel}s Export Report\n`;
+    content += `Generated on: ${new Date().toLocaleDateString()}\n`;
+    content += `Total Records: ${data.length}\n\n`;
+    
+    if (includeHeaders) {
+      content += headers.join('\t') + '\n';
+    }
+    
+    data.forEach(row => {
+      const values = columns.map(col => row[col] || '');
+      content += values.join('\t') + '\n';
+    });
+    
+    return content;
+  };
+
+  const downloadFile = (content: string, filename: string, mimeType: string) => {
+    const blob = new Blob([content], { type: mimeType });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  };
+
+  const allColumnsSelected = exportOptions.columns.length === exportColumns.length;
+  const someColumnsSelected = exportOptions.columns.length > 0 && exportOptions.columns.length < exportColumns.length;
+
+  // Don't render if no export columns are available
+  if (!exportColumns || exportColumns.length === 0) {
+    return null;
+  }
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden bg-white/95 backdrop-blur-sm border border-blue-200 shadow-2xl rounded-2xl p-0 mx-2 my-1 sm:mx-4 sm:my-1 md:mx-6 md:my-1 lg:mx-8 lg:my-1 flex flex-col h-full">
-        {/* Header with gradient background - Fixed */}
-        <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-blue-800 rounded-t-2xl p-6 relative flex-shrink-0">
-          <div className="flex items-start gap-4 pr-24">
-            {/* Export Icon */}
-            <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
-              <Download className="w-6 h-6 text-white" />
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden rounded-xl flex flex-col p-0">
+        <DialogHeader className="p-0 flex-shrink-0">
+          <div className="bg-gradient-to-r from-[#1e40af] to-[#3b82f6] p-6 rounded-t-xl relative">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm">
+                <Download className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <DialogTitle className="text-lg font-bold text-white">
+                  Export {entityLabel}s
+                </DialogTitle>
+                <p className="text-blue-100 text-sm mt-1">
+                  Choose format and columns for your export
+                </p>
+              </div>
             </div>
-            <div className="flex-1">
-              <DialogTitle className="text-white text-2xl font-bold flex items-center gap-3">
-                {title}
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <span className="text-blue-200 cursor-pointer hover:text-white transition-colors">
-                        <BadgeInfo className="w-4 h-4" />
-                      </span>
-                    </TooltipTrigger>
-                    <TooltipContent side="right" className="bg-blue-900 text-white">
-                      {tooltip}
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              </DialogTitle>
-              <p className="text-blue-100 text-sm mt-1 font-medium">Configure your export settings and format</p>
-            </div>
+            
+            {/* Close Button */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute right-4 top-4 h-10 w-10 rounded-full hover:bg-white/20 text-white"
+              onClick={() => onOpenChange(false)}
+              aria-label="Close dialog"
+            >
+              <X className="h-6 w-6" />
+            </Button>
           </div>
+        </DialogHeader>
 
-          {/* Close button in header - Right side */}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="absolute right-4 top-4 h-10 w-10 rounded-full hover:bg-white/20 text-white"
-            onClick={() => handleOpenChange(false)}
-            aria-label="Close dialog"
-          >
-            <X className="h-6 w-6" />
-          </Button>
-        </div>
-        {/* Scrollable Content Area */}
-        <div className="flex-1 overflow-y-auto min-h-0">
-          <div className="p-6 space-y-6">
-            {/* Export Format Section */}
-            <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl border border-blue-200 overflow-hidden">
-              <div className="p-4 bg-gradient-to-r from-gray-100 to-gray-200 border-b border-blue-300 rounded-t-xl">
-                <h3 className="text-lg font-semibold text-blue-900 flex items-center gap-2">
-                  <FileText className="w-5 h-5 text-blue-600" />
-                  Export Format
-                </h3>
-                <p className="text-sm text-blue-700 mt-1">Choose your preferred export format</p>
+        <div className="flex flex-col flex-1 overflow-hidden">
+          {/* Content */}
+          <div className="flex-1 overflow-y-auto px-6 pt-6 pb-6">
+            <div className="space-y-6">
+              {/* Export Summary */}
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-sm text-blue-800">
+                  Exporting <strong>{selectedItems.length}</strong> selected {entityLabel}{selectedItems.length !== 1 ? 's' : ''}
+                </p>
               </div>
-              <div className="p-6">
-                <div className="grid grid-cols-3 gap-4">
-                  <Button
-                    variant={exportFormat === 'pdf' ? "default" : "outline"}
-                    size="default"
-                    className={`w-full flex flex-col items-center gap-2 py-4 h-auto transition-all duration-200 rounded ${
-                      exportFormat === 'pdf' 
-                        ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg' 
-                        : 'hover:bg-blue-50 hover:border-blue-300 hover:shadow-md'
-                    }`}
-                    onClick={() => setExportFormat('pdf')}
-                  >
-                    <FileText className={`h-6 w-6 ${exportFormat === 'pdf' ? 'text-white' : 'text-blue-600'}`} />
-                    <span className="font-medium">PDF</span>
-                    <span className="text-xs opacity-75">Document</span>
-                  </Button>
-                  <Button
-                    variant={exportFormat === 'excel' ? "default" : "outline"}
-                    size="default"
-                    className={`w-full flex flex-col items-center gap-2 py-4 h-auto transition-all duration-200 rounded ${
-                      exportFormat === 'excel' 
-                        ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg' 
-                        : 'hover:bg-blue-50 hover:border-blue-300 hover:shadow-md'
-                    }`}
-                    onClick={() => setExportFormat('excel')}
-                  >
-                    <FileSpreadsheet className={`h-6 w-6 ${exportFormat === 'excel' ? 'text-white' : 'text-blue-600'}`} />
-                    <span className="font-medium">Excel</span>
-                    <span className="text-xs opacity-75">Spreadsheet</span>
-                  </Button>
-                  <Button
-                    variant={exportFormat === 'csv' ? "default" : "outline"}
-                    size="default"
-                    className={`w-full flex flex-col items-center gap-2 py-4 h-auto transition-all duration-200 rounded ${
-                      exportFormat === 'csv' 
-                        ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg' 
-                        : 'hover:bg-blue-50 hover:border-blue-300 hover:shadow-md'
-                    }`}
-                    onClick={() => setExportFormat('csv')}
-                  >
-                    <FileSpreadsheet className={`h-6 w-6 ${exportFormat === 'csv' ? 'text-white' : 'text-blue-600'}`} />
-                    <span className="font-medium">CSV</span>
-                    <span className="text-xs opacity-75">Data File</span>
-                  </Button>
+
+              {/* Format Selection */}
+              <div className="space-y-3">
+                <Label className="text-sm font-medium text-gray-700">Export Format</Label>
+                <div className="grid grid-cols-3 gap-2">
+                  {formats.map((format) => (
+                    <Button
+                      key={format.value}
+                      variant={exportOptions.format === format.value ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setExportOptions(prev => ({ ...prev, format: format.value as any }))}
+                      className="flex items-center gap-2 h-10"
+                    >
+                      {format.icon}
+                      {format.label}
+                    </Button>
+                  ))}
                 </div>
               </div>
-            </div>
 
-            {/* PDF Orientation Section - Only show when PDF is selected */}
-            {exportFormat === 'pdf' && setPdfOrientation && (
-              <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl border border-blue-200 overflow-hidden">
-                <div className="p-4 bg-gradient-to-r from-gray-100 to-gray-200 border-b border-blue-300 rounded-t-xl">
-                  <h3 className="text-lg font-semibold text-blue-900 flex items-center gap-2">
-                    <RotateCw className="w-5 h-5 text-blue-600" />
-                    Page Orientation
-                  </h3>
-                  <p className="text-sm text-blue-700 mt-1">Choose the page orientation for your PDF</p>
-                </div>
-                <div className="p-6">
-                  <div className="grid grid-cols-2 gap-4">
-                    <Button
-                      variant={pdfOrientation === 'portrait' ? "default" : "outline"}
-                      size="default"
-                      className={`w-full flex flex-col items-center gap-2 py-4 h-auto transition-all duration-200 rounded ${
-                        pdfOrientation === 'portrait' 
-                          ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg' 
-                          : 'hover:bg-blue-50 hover:border-blue-300 hover:shadow-md'
-                      }`}
-                      onClick={() => setPdfOrientation('portrait')}
-                    >
-                      <div className="w-8 h-10 border-2 border-current rounded-sm flex items-center justify-center">
-                        <div className="w-4 h-6 bg-current rounded-sm"></div>
-                      </div>
-                      <span className="font-medium">Portrait</span>
-                      <span className="text-xs opacity-75">Taller pages</span>
-                    </Button>
-                    <Button
-                      variant={pdfOrientation === 'landscape' ? "default" : "outline"}
-                      size="default"
-                      className={`w-full flex flex-col items-center gap-2 py-4 h-auto transition-all duration-200 rounded ${
-                        pdfOrientation === 'landscape' 
-                          ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg' 
-                          : 'hover:bg-blue-50 hover:border-blue-300 hover:shadow-md'
-                      }`}
-                      onClick={() => setPdfOrientation('landscape')}
-                    >
-                      <div className="w-10 h-8 border-2 border-current rounded-sm flex items-center justify-center">
-                        <div className="w-6 h-4 bg-current rounded-sm"></div>
-                      </div>
-                      <span className="font-medium">Landscape</span>
-                      <span className="text-xs opacity-75">Wider pages</span>
-                    </Button>
+              {/* Column Selection */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm font-medium text-gray-700">Columns to Export</Label>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="select-all"
+                      checked={allColumnsSelected}
+                      onCheckedChange={handleSelectAllColumns}
+                    />
+                    <Label htmlFor="select-all" className="text-sm">
+                      Select All
+                    </Label>
                   </div>
                 </div>
-              </div>
-            )}
-
-            {/* Export Options Section */}
-            <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl border border-blue-200 overflow-hidden">
-              <div className="p-4 bg-gradient-to-r from-gray-100 to-gray-200 border-b border-blue-300 rounded-t-xl">
-                <h3 className="text-lg font-semibold text-blue-900 flex items-center gap-2">
-                  <Download className="w-5 h-5 text-blue-600" />
-                  Export Options
-                </h3>
-                <p className="text-sm text-blue-700 mt-1">Select which columns to include in your export</p>
-              </div>
-              <div className="p-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-60 overflow-y-auto">
-                  {exportableColumns.map((column) => (
-                    <div key={column.key} className="flex items-center space-x-3 p-3 bg-white rounded-lg border border-gray-200 hover:border-blue-300 hover:bg-blue-50 transition-all duration-200">
+                
+                <div className="space-y-2 max-h-48 overflow-y-auto border rounded-md p-3">
+                  {exportColumns.map((column) => (
+                    <div key={column.id} className="flex items-center space-x-2">
                       <Checkbox
-                        id={`export-${column.key}`}
-                        checked={exportColumns.includes(column.key)}
-                        onCheckedChange={(checked) => {
-                          if (checked) {
-                            setExportColumns([...exportColumns, column.key]);
-                          } else {
-                            setExportColumns(exportColumns.filter((c) => c !== column.key));
-                            // If logo column is deselected, also uncheck include logos
-                            if (column.key === 'logo' && setIncludeLogos) {
-                              setIncludeLogos(false);
-                            }
-                          }
-                        }}
-                        className="border-blue-200 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
+                        id={column.id}
+                        checked={exportOptions.columns.includes(column.id)}
+                        onCheckedChange={(checked) => handleColumnToggle(column.id, checked as boolean)}
                       />
-                      <Label
-                        htmlFor={`export-${column.key}`}
-                        className="text-sm font-medium text-blue-900 cursor-pointer flex-1"
-                      >
+                      <Label htmlFor={column.id} className="text-sm flex-1">
                         {column.label}
                       </Label>
                     </div>
                   ))}
                 </div>
-                
-                {/* Logo Option - Only show when PDF is selected */}
-                {exportFormat === 'pdf' && setIncludeLogos && (
-                  <div className="mt-6 pt-6 border-t border-blue-200">
-                    <div className={`flex items-center space-x-3 p-3 rounded border transition-all duration-200 ${
-                      exportColumns.includes('logo') 
-                        ? 'bg-white border-gray-200 hover:border-blue-300 hover:bg-blue-50' 
-                        : 'bg-gray-100 border-gray-300 opacity-60'
-                    }`}>
-                      <Checkbox
-                        id="export-include-logos"
-                        checked={includeLogos}
-                        onCheckedChange={(checked) => setIncludeLogos(checked)}
-                        disabled={!exportColumns.includes('logo')}
-                        className="border-blue-200 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600 disabled:opacity-50"
-                      />
-                      <Label
-                        htmlFor="export-include-logos"
-                        className={`text-sm font-medium cursor-pointer flex-1${
-                          exportColumns.includes('logo') 
-                            ? 'text-blue-900' 
-                            : 'text-gray-500 cursor-not-allowed'
-                        }`}
-                      >
-                        Include Logo Images
-                      </Label>
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <span className={`cursor-help ${
-                              exportColumns.includes('logo') 
-                                ? 'text-blue-400' 
-                                : 'text-gray-400'
-                            }`}>
-                              <BadgeInfo className="w-4 h-4" />
-                            </span>
-                          </TooltipTrigger>
-                          <TooltipContent side="top" className="bg-blue-900 text-white">
-                            {exportColumns.includes('logo') 
-                              ? 'Include department logos in the PDF. If no logo is available, a placeholder avatar will be shown.'
-                              : 'Enable the Logo column first to include logo images in the PDF.'
-                            }
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    </div>
-                    {!exportColumns.includes('logo') && (
-                      <p className="text-xs text-gray-500 mt-2 ml-6">
-                        Enable the Logo column above to include logo images
-                      </p>
-                    )}
-                  </div>
-                )}
               </div>
+
+              {/* Options */}
+              <div className="space-y-3">
+                <Label className="text-sm font-medium text-gray-700">Export Options</Label>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="include-headers"
+                    checked={exportOptions.includeHeaders}
+                    onCheckedChange={(checked) => 
+                      setExportOptions(prev => ({ ...prev, includeHeaders: checked as boolean }))
+                    }
+                  />
+                  <Label htmlFor="include-headers" className="text-sm">
+                    Include column headers
+                  </Label>
+                </div>
+              </div>
+
+              {/* Export Progress */}
+              {isExporting && (
+                <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <Loader2 className="w-5 h-5 text-blue-600 animate-spin" />
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-blue-800">Exporting data...</p>
+                      <p className="text-xs text-blue-600">Please wait while we prepare your file</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Validation */}
+              {exportOptions.columns.length === 0 && !isExporting && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-md">
+                  <p className="text-sm text-red-600">
+                    Please select at least one column to export.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
+
+          {/* Footer */}
+          <DialogFooter className="flex items-center justify-between pt-6 border-t border-gray-200 flex-shrink-0 px-6 mb-6">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-500">
+                Select format and columns to export
+              </span>
+            </div>
+            
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                onClick={() => onOpenChange(false)} 
+                disabled={isExporting}
+                className="rounded"
+              >
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleExport} 
+                disabled={isExporting || exportOptions.columns.length === 0}
+                className="bg-blue-600 hover:bg-blue-700 rounded"
+              >
+                {isExporting ? "Exporting..." : "Export"}
+              </Button>
+            </div>
+          </DialogFooter>
         </div>
-        {/* Footer with actions - Fixed */}
-        <DialogFooter className="!flex !justify-between gap-4 p-6 flex-shrink-0 border-t-2 border-blue-300 bg-blue-50/80 rounded-b-2xl shadow-inner">
-          <Button
-            variant="outline"
-            onClick={() => {
-              setExportFormat(null);
-              setExportColumns(exportableColumns.map(col => col.key));
-              if (setPdfOrientation) {
-                setPdfOrientation('portrait');
-              }
-              if (setIncludeLogos) {
-                setIncludeLogos(false);
-              }
-            }}
-            className="px-6 py-2 rounded-xl border-blue-300 text-blue-600 hover:bg-blue-50 hover:border-blue-400 transition-all duration-200"
-          >
-            Reset
-          </Button>
-          <div className="flex gap-3">
-            <Button
-              variant="outline"
-              onClick={() => handleOpenChange(false)}
-              className="px-6 py-2 rounded-xl transition-all duration-200"
-            >
-              Cancel
-            </Button>
-            <Button 
-              onClick={onExport}
-              disabled={!exportFormat}
-              className="px-6 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-lg hover:shadow-xl transition-all duration-200 flex items-center gap-2"
-            >
-              <Download className="w-4 h-4" />
-              Export
-            </Button>
-          </div>
-        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
-
-export { ExportDialog };
-export default ExportDialog; 

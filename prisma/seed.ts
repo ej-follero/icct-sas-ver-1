@@ -1,4 +1,4 @@
-import { PrismaClient, Prisma, RoomBuilding, RoomFloor, RoomType, RoomStatus, SemesterType, SemesterStatus, CourseType, CourseStatus, DepartmentType, SubjectType, SubjectStatus, ScheduleType, ScheduleStatus, AttendanceType, AttendanceVerification, Role, StudentType, InstructorType, GuardianType, UserGender, yearLevel, EnrollmentStatus, SectionStatus, TagType, RFIDStatus, ReaderStatus, ScanType, ScanStatus, RFIDEventType, LogSeverity, EventType, EventStatus, Priority, ReportType, ReportStatus, NotificationType, RecipientType, NotificationMethod, NotificationStatus, UserStatus, Status, AttendanceStatus } from '@prisma/client';
+import { PrismaClient, Prisma, RoomBuilding, RoomFloor, RoomType, RoomStatus, SemesterType, SemesterStatus, CourseType, CourseStatus, DepartmentType, SubjectType, SubjectStatus, ScheduleType, ScheduleStatus, AttendanceType, AttendanceVerification, Role, StudentType, InstructorType, GuardianType, UserGender, yearLevel, EnrollmentStatus, SectionStatus, TagType, RFIDStatus, ReaderStatus, ScanType, ScanStatus, RFIDEventType, LogSeverity, EventType, EventStatus, Priority, ReportType, ReportStatus, NotificationType, RecipientType, NotificationMethod, NotificationStatus, UserStatus, Status, AttendanceStatus, EmailStatus, EmailFolder, EmailRecipientType } from '@prisma/client';
 import { faker } from '@faker-js/faker';
 
 const prisma = new PrismaClient();
@@ -383,6 +383,8 @@ async function main() {
   await prisma.backupSchedule.deleteMany({});
   await prisma.backupSettings.deleteMany({});
   await prisma.user.deleteMany({});
+  await prisma.emailRecipient.deleteMany({});
+  await prisma.email.deleteMany({});
 
   const collegeData = generateRealisticCollegeData();
 
@@ -902,6 +904,10 @@ async function main() {
   console.log('📊 Generating attendance data for all trimesters...');
   const attendanceRecords = [];
   
+  // Define the date range: January 2024 to current date (August 2025)
+  const globalStartDate = new Date('2024-01-01');
+  const globalEndDate = new Date(); // Current date (August 2025)
+  
   for (const subjectSchedule of subjectSchedules) {
     // Get students enrolled in the same section as this subject schedule
     const scheduleStudents = studentSectionEnrollments
@@ -912,22 +918,65 @@ async function main() {
     const trimester = section ? createdTrimesters.find(t => t.semesterId === section.semesterId) : null;
     if (!trimester) continue;
     
-    // Generate attendance for the entire trimester duration
+    // Generate attendance for the entire global date range
     const dayName = subjectSchedule.day;
     const attendanceDates = generateAttendanceDates(
-      trimester.startDate,
-      trimester.endDate,
+      globalStartDate,
+      globalEndDate,
       [dayName]
     );
 
     for (const date of attendanceDates) {
+      // Create one instructor attendance per schedule occurrence (aligned with subject schedule)
+      const instructorForSchedule = instructors.find(i => i.instructorId === subjectSchedule.instructorId);
+      const isFullTimeInstructor = instructorForSchedule?.instructorType === InstructorType.FULL_TIME;
+      const instructorRandom = Math.random();
+      let instructorStatus: AttendanceStatus;
+      if (isFullTimeInstructor) {
+        instructorStatus = instructorRandom < 0.92 ? AttendanceStatus.PRESENT : instructorRandom < 0.96 ? AttendanceStatus.LATE : AttendanceStatus.ABSENT;
+      } else {
+        instructorStatus = instructorRandom < 0.85 ? AttendanceStatus.PRESENT : instructorRandom < 0.92 ? AttendanceStatus.LATE : AttendanceStatus.ABSENT;
+      }
+
+      // Skip some absences to avoid over-representation
+      if (instructorStatus === AttendanceStatus.ABSENT && Math.random() < 0.4) {
+        // no record for this occurrence
+      } else {
+        const instructorTimestamp = new Date(date);
+        instructorTimestamp.setHours(
+          parseInt(subjectSchedule.startTime.split(':')[0]),
+          parseInt(subjectSchedule.startTime.split(':')[1]),
+          0,
+          0
+        );
+        if (instructorStatus === AttendanceStatus.PRESENT) {
+          instructorTimestamp.setMinutes(instructorTimestamp.getMinutes() + faker.number.int({ min: -10, max: 5 }));
+        } else if (instructorStatus === AttendanceStatus.LATE) {
+          instructorTimestamp.setMinutes(instructorTimestamp.getMinutes() + faker.number.int({ min: 5, max: 30 }));
+        }
+
+        attendanceRecords.push({
+          subjectSchedId: subjectSchedule.subjectSchedId,
+          studentId: null,
+          instructorId: subjectSchedule.instructorId,
+          userId: subjectSchedule.instructorId,
+          userRole: Role.INSTRUCTOR,
+          status: instructorStatus,
+          attendanceType: AttendanceType.RFID_SCAN,
+          verification: AttendanceVerification.VERIFIED,
+          timestamp: instructorTimestamp,
+          semesterId: trimester.semesterId,
+        });
+      }
+
+      // Then create student attendance for the same occurrence
       for (const student of scheduleStudents) {
         const isRegularStudent = student.studentType === StudentType.REGULAR;
         const status = generateAttendanceStatus(student.studentId, date, isRegularStudent);
-        
+
         // Skip some dates to create realistic absence patterns
         if (status === AttendanceStatus.ABSENT && Math.random() < 0.3) continue;
-        
+
         const timestamp = new Date(date);
         timestamp.setHours(
           parseInt(subjectSchedule.startTime.split(':')[0]),
@@ -959,54 +1008,7 @@ async function main() {
     }
   }
 
-  // Generate instructor attendance for all trimesters
-  console.log('👨‍🏫 Generating instructor attendance for all trimesters...');
-  for (const subjectSchedule of subjectSchedules) {
-    const instructor = instructors.find(i => i.instructorId === subjectSchedule.instructorId);
-    if (!instructor) continue;
-    
-    const course = allCourseOfferings.find(c => c.courseId === sections.find(s => s.sectionId === subjectSchedule.sectionId)?.courseId);
-    const section = sections.find(s => s.sectionId === subjectSchedule.sectionId);
-    const trimester = section ? createdTrimesters.find(t => t.semesterId === section.semesterId) : null;
-    if (!trimester) continue;
-    
-    // Generate attendance for the entire trimester duration
-    const dayName = subjectSchedule.day;
-    const attendanceDates = generateAttendanceDates(
-      trimester.startDate,
-      trimester.endDate,
-      [dayName]
-    );
-
-    for (const date of attendanceDates) {
-      const status = Math.random() < 0.95 ? AttendanceStatus.PRESENT : Math.random() < 0.5 ? AttendanceStatus.LATE : AttendanceStatus.ABSENT;
-      
-      const timestamp = new Date(date);
-      timestamp.setHours(
-        parseInt(subjectSchedule.startTime.split(':')[0]),
-        parseInt(subjectSchedule.startTime.split(':')[1]),
-        0,
-        0
-      );
-
-      if (status === AttendanceStatus.LATE) {
-        timestamp.setMinutes(timestamp.getMinutes() + faker.number.int({ min: 5, max: 15 }));
-      }
-
-      attendanceRecords.push({
-        subjectSchedId: subjectSchedule.subjectSchedId,
-        studentId: null,
-        instructorId: instructor.instructorId,
-        userId: instructor.instructorId,
-        userRole: Role.INSTRUCTOR,
-        status: status,
-        attendanceType: AttendanceType.RFID_SCAN,
-        verification: AttendanceVerification.VERIFIED,
-        timestamp: timestamp,
-        semesterId: trimester.semesterId,
-      });
-    }
-  }
+  // Instructor attendance is now aligned to subject schedules above; no separate generation needed
 
   // Insert attendance records in batches
   const batchSize = 100;
@@ -1679,6 +1681,78 @@ async function main() {
     });
   }
 
+  // 18.5 Create some sample Emails
+  console.log('📧 Creating sample emails...');
+  const sampleEmails = [
+    {
+      subject: 'Welcome to ICCT Smart Attendance System',
+      sender: 'admin@icct.edu',
+      recipient: 'all-students@icct.edu',
+      content: 'Welcome to the new ICCT Smart Attendance System.',
+      status: EmailStatus.SENT,
+      priority: Priority.NORMAL,
+      type: EmailFolder.SENT,
+      isRead: true,
+      isStarred: false,
+      isImportant: true,
+      recipients: [
+        { address: 'all-students@icct.edu', rtype: EmailRecipientType.TO },
+      ],
+    },
+    {
+      subject: 'Attendance Report - Week 1',
+      sender: 'system@icct.edu',
+      recipient: 'instructors@icct.edu',
+      content: 'Weekly attendance report for all classes is now available.',
+      status: EmailStatus.DELIVERED,
+      priority: Priority.HIGH,
+      type: EmailFolder.INBOX,
+      isRead: false,
+      isStarred: true,
+      isImportant: false,
+      recipients: [
+        { address: 'instructors@icct.edu', rtype: EmailRecipientType.TO },
+      ],
+    },
+    {
+      subject: 'RFID Card Activation Required',
+      sender: 'it-support@icct.edu',
+      recipient: 'new-students@icct.edu',
+      content: 'Please activate your RFID card at the IT office before classes begin.',
+      status: EmailStatus.READ,
+      priority: Priority.URGENT,
+      type: EmailFolder.INBOX,
+      isRead: true,
+      isStarred: false,
+      isImportant: true,
+      recipients: [
+        { address: 'new-students@icct.edu', rtype: EmailRecipientType.TO },
+      ],
+    },
+  ];
+
+  for (const e of sampleEmails) {
+    await prisma.email.create({
+      data: {
+        subject: e.subject,
+        sender: e.sender,
+        recipient: e.recipient,
+        content: e.content,
+        status: e.status,
+        priority: e.priority,
+        type: e.type,
+        isRead: e.isRead,
+        isStarred: e.isStarred,
+        isImportant: e.isImportant,
+        recipients: {
+          createMany: {
+            data: e.recipients,
+          },
+        },
+      },
+    });
+  }
+
   // Instructor-created subject-specific announcements
   const instructorAnnouncements = [
     {
@@ -1853,7 +1927,7 @@ async function main() {
 
   // 24. Populate AttendanceNotification
   console.log('📋 Populating AttendanceNotification...');
-  const absences = await prisma.attendance.findMany({ where: { status: AttendanceStatus.ABSENT } });
+  const absences = await prisma.attendance.findMany({ where: { status: AttendanceStatus.ABSENT, NOT: { studentId: null } } });
   for (const absence of absences.slice(0, 30)) { // limit to 30 notifications
     await prisma.attendanceNotification.create({
       data: {
@@ -1904,12 +1978,15 @@ async function main() {
   }
 
   console.log('✅ Database seeding completed successfully!');
-  console.log(`📊 Created ${students.length} students with attendance data spanning all three trimesters`);
-  console.log(`👨‍🏫 Created ${instructors.length} instructors`);
+  console.log(`📊 Created ${students.length} students with attendance data spanning from January 2024 to current date`);
+  console.log(`👨‍🏫 Created ${instructors.length} instructors with comprehensive attendance data from January 2024 to current date`);
   console.log(`📚 Created ${subjects.length} subjects with ${subjectSchedules.length} schedules`);
   console.log(`📋 Created ${sections.length} sections across ${allCourseOfferings.length} courses`);
   console.log(`📚 Created ${studentSchedules.length} student enrollments in subject schedules`);
-  console.log(`📊 Generated ${attendanceRecords.length} attendance records across all trimesters`);
+  console.log(`📊 Generated ${attendanceRecords.length} attendance records from January 2024 to current date`);
+  console.log(`⏰ Instructor attendance includes 15 different time slots throughout the day (6:30 AM - 9:00 PM)`);
+  console.log(`📅 Comprehensive attendance data from January 1, 2024 to ${new Date().toLocaleDateString()}`);
+  console.log(`👥 Different work patterns for full-time vs part-time instructors`);
 }
 
 main()

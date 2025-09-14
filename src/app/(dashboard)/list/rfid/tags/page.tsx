@@ -903,26 +903,20 @@ export default function RFIDTagsPage() {
           open={bulkActionsDialogOpen}
           onOpenChange={setBulkActionsDialogOpen}
           selectedItems={selectedTagsForBulkAction}
-          entityType="course"
+          entityType="tag"
           entityLabel="tag"
           availableActions={[
-            { type: 'status-update', title: 'Update Status', description: 'Update status of selected tags', icon: <Settings className="w-4 h-4" /> },
-            { type: 'notification', title: 'Send Notification', description: 'Send notification to administrators', icon: <Bell className="w-4 h-4" /> },
-            { type: 'export', title: 'Export Data', description: 'Export selected tags data', icon: <Download className="w-4 h-4" /> },
+            { id: 'status-update', label: 'Update Status', description: 'Update status of selected tags', icon: <Settings className="w-4 h-4" />, tabId: 'actions' },
+            { id: 'notification', label: 'Send Notification', description: 'Send notification to administrators', icon: <Bell className="w-4 h-4" />, tabId: 'actions' },
+            { id: 'export', label: 'Export Data', description: 'Export selected tags data', icon: <Download className="w-4 h-4" />, tabId: 'actions' },
           ]}
-          exportColumns={tagColumns.map(col => ({ id: col.key, label: col.label, default: true }))}
-          notificationTemplates={[]}
-          stats={{
-            total: selectedTagsForBulkAction.length,
-            active: selectedTagsForBulkAction.filter(t => t.status === 'ACTIVE').length,
-            inactive: selectedTagsForBulkAction.filter(t => t.status === 'INACTIVE' || t.status === 'LOST' || t.status === 'DAMAGED').length
-          }}
           onActionComplete={() => {/* handleBulkActionComplete */}}
           onCancel={() => setBulkActionsDialogOpen(false)}
           onProcessAction={async (actionType: string, config: any) => {
             // Placeholder implementation
             return { success: true };
           }}
+          getItemId={(item: RFIDTag) => item.tagId.toString()}
           getItemDisplayName={(item: RFIDTag) => item.tagNumber}
           getItemStatus={(item: RFIDTag) => item.status}
         />

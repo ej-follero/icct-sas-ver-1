@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -37,6 +37,7 @@ import SummaryCard from '@/components/SummaryCard';
 import { EmptyState } from '@/components/reusable';
 import { QuickActionsPanel } from '@/components/reusable/QuickActionsPanel';
 import { TablePagination } from "@/components/reusable/Table/TablePagination";
+import { ConfirmDeleteDialog } from '@/components/ConfirmDeleteDialog';
 import { toast } from "sonner";
 
 interface CommunicationLog {
@@ -55,65 +56,7 @@ interface CommunicationLog {
   errorMessage?: string;
 }
 
-const mockCommunicationLogs: CommunicationLog[] = [
-  {
-    id: '1',
-    type: 'message',
-    title: 'Attendance Alert - John Doe',
-    sender: 'System',
-    recipient: 'Parent',
-    timestamp: '2025-01-15 08:30 AM',
-    status: 'delivered',
-    priority: 'high',
-    content: 'Your child was absent from Mathematics class today.',
-    readCount: 1,
-    totalRecipients: 1,
-    deliveryTime: 2.5
-  },
-  {
-    id: '2',
-    type: 'email',
-    title: 'Weekly Attendance Report',
-    sender: 'Admin',
-    recipient: 'Parent',
-    timestamp: '2025-01-14 05:00 PM',
-    status: 'read',
-    priority: 'normal',
-    content: 'Please find attached the weekly attendance report for your child.',
-    readCount: 45,
-    totalRecipients: 50,
-    deliveryTime: 1.8
-  },
-  {
-    id: '3',
-    type: 'announcement',
-    title: 'Parent-Teacher Meeting',
-    sender: 'Principal',
-    recipient: 'All Parents',
-    timestamp: '2025-01-13 10:00 AM',
-    status: 'sent',
-    priority: 'normal',
-    content: 'Parent-teacher meeting scheduled for next Friday at 3:00 PM.',
-    readCount: 120,
-    totalRecipients: 150,
-    deliveryTime: 3.2
-  },
-  {
-    id: '4',
-    type: 'notification',
-    title: 'Late Arrival Notice',
-    sender: 'System',
-    recipient: 'Parent',
-    timestamp: '2025-01-12 08:45 AM',
-    status: 'failed',
-    priority: 'urgent',
-    content: 'Your child arrived 15 minutes late to school today.',
-    readCount: 0,
-    totalRecipients: 1,
-    deliveryTime: 0,
-    errorMessage: 'Recipient email address not found'
-  }
-];
+// Real communication logs will be fetched from API
 
 const getStatusColor = (status: string) => {
   switch (status) {
@@ -169,10 +112,63 @@ export default function CommunicationLogsPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [communicationLogs, setCommunicationLogs] = useState<CommunicationLog[]>([]);
+  const [totalLogs, setTotalLogs] = useState(0);
+  const [stats, setStats] = useState({
+    totalLogs: 0,
+    sent: 0,
+    delivered: 0,
+    read: 0,
+    failed: 0,
+    successRate: '0.0',
+  });
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [selectedLog, setSelectedLog] = useState<CommunicationLog | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
-  // Filter logs based on search and filters
+  // Fetch communication logs from API
+  const fetchCommunicationLogs = async () => {
+    setIsLoading(true);
+    try {
+      const params = new URLSearchParams({
+        page: currentPage.toString(),
+        pageSize: itemsPerPage.toString(),
+        sortBy: 'timestamp',
+        sortOrder: 'desc',
+        search: searchQuery,
+        ...(filterStatus !== 'all' && { status: filterStatus }),
+        ...(filterPriority !== 'all' && { priority: filterPriority.toUpperCase() }),
+        ...(filterType !== 'all' && { type: filterType }),
+      });
+
+      const response = await fetch(`/api/communications/logs?${params}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch communication logs');
+      }
+
+      const data = await response.json();
+      setCommunicationLogs(data.items || []);
+      setTotalLogs(data.total || 0);
+      setStats(data.stats || stats);
+    } catch (error) {
+      console.error('Error fetching communication logs:', error);
+      toast.error('Failed to fetch communication logs. Please try again.');
+      setCommunicationLogs([]);
+      setTotalLogs(0);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Initial data fetch
+  useEffect(() => {
+    fetchCommunicationLogs();
+  }, [currentPage, itemsPerPage, searchQuery, filterStatus, filterType, filterPriority]);
+
+  // Filter logs based on search and filters (client-side filtering for additional refinement)
   const filteredLogs = useMemo(() => {
-    let filtered = mockCommunicationLogs;
+    let filtered = communicationLogs;
 
     // Apply search filter
     if (searchQuery) {
@@ -194,9 +190,9 @@ export default function CommunicationLogsPage() {
       filtered = filtered.filter(log => log.type === filterType);
     }
 
-    // Apply priority filter
+    // Apply priority filter (API already handles this, but keep for client-side refinement)
     if (filterPriority !== 'all') {
-      filtered = filtered.filter(log => log.priority === filterPriority);
+      filtered = filtered.filter(log => log.priority.toLowerCase() === filterPriority.toLowerCase());
     }
 
     return filtered;
@@ -233,19 +229,249 @@ export default function CommunicationLogsPage() {
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    setIsRefreshing(false);
-    toast.success("Logs refreshed successfully!");
+    try {
+      await fetchCommunicationLogs();
+      toast.success("Logs refreshed successfully!");
+    } catch (error) {
+      console.error('Error refreshing logs:', error);
+      toast.error('Failed to refresh logs');
+    } finally {
+      setIsRefreshing(false);
+    }
   };
 
-  const stats = {
-    totalLogs: mockCommunicationLogs.length,
-    sent: mockCommunicationLogs.filter(log => log.status === 'sent').length,
-    delivered: mockCommunicationLogs.filter(log => log.status === 'delivered').length,
-    read: mockCommunicationLogs.filter(log => log.status === 'read').length,
-    failed: mockCommunicationLogs.filter(log => log.status === 'failed').length,
-    successRate: ((mockCommunicationLogs.filter(log => log.status === 'read' || log.status === 'delivered').length / mockCommunicationLogs.length) * 100).toFixed(1)
+  const handleExportLogs = async () => {
+    try {
+      const logsToExport = selectedItems.length > 0 ? selectedItems : communicationLogs.map(log => log.id);
+      
+      if (logsToExport.length === 0) {
+        toast.error('No logs to export');
+        return;
+      }
+
+      const response = await fetch('/api/communications/logs', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'export',
+          logIds: logsToExport,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage = errorData.error || `HTTP ${response.status}: ${response.statusText}`;
+        throw new Error(errorMessage);
+      }
+
+      const data = await response.json();
+      
+      if (!data.exportData || !Array.isArray(data.exportData)) {
+        throw new Error('Invalid export data received from server');
+      }
+      
+      // Create CSV content
+      const csvContent = [
+        'ID,Type,Title,Sender,Recipient,Timestamp,Status,Priority,Content,Delivery Time,Error Message',
+        ...data.exportData.map((log: any) => [
+          log.id || '',
+          log.type || '',
+          `"${(log.title || '').replace(/"/g, '""')}"`,
+          `"${(log.sender || '').replace(/"/g, '""')}"`,
+          `"${(log.recipient || '').replace(/"/g, '""')}"`,
+          log.timestamp || '',
+          log.status || '',
+          log.priority || '',
+          `"${(log.content || '').replace(/"/g, '""')}"`,
+          log.deliveryTime || '',
+          log.errorMessage || ''
+        ].join(','))
+      ].join('\n');
+
+      // Download CSV file
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `communication-logs-export-${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+
+      toast.success(`Exported ${data.exportData.length} communication logs`);
+    } catch (error) {
+      console.error('Export error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      toast.error(`Failed to export logs: ${errorMessage}`);
+    }
   };
+
+  const handleArchiveLogs = async () => {
+    try {
+      const response = await fetch('/api/communications/logs', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'archive',
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to archive logs');
+      }
+
+      const data = await response.json();
+      toast.success(`Archived ${data.archivedEmails + data.archivedAnnouncements} old logs`);
+      fetchCommunicationLogs(); // Refresh the data
+    } catch (error) {
+      console.error('Archive error:', error);
+      toast.error('Failed to archive logs');
+    }
+  };
+
+  const handlePrintLogs = () => {
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      const printContent = `
+        <html>
+          <head>
+            <title>Communication Logs Report</title>
+            <style>
+              body { font-family: Arial, sans-serif; margin: 20px; }
+              h1 { color: #333; text-align: center; }
+              table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+              th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+              th { background-color: #f2f2f2; }
+              .header { margin-bottom: 20px; }
+              .date { font-size: 12px; color: #666; }
+            </style>
+          </head>
+          <body>
+            <div class="header">
+              <h1>Communication Logs Report</h1>
+              <p class="date">Generated on: ${new Date().toLocaleDateString()}</p>
+              <p>Total Logs: ${stats.totalLogs}</p>
+              <p>Success Rate: ${stats.successRate}%</p>
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th>Type</th>
+                  <th>Title</th>
+                  <th>Sender</th>
+                  <th>Recipient</th>
+                  <th>Timestamp</th>
+                  <th>Status</th>
+                  <th>Priority</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${communicationLogs.map(log => `
+                  <tr>
+                    <td>${log.type}</td>
+                    <td>${log.title}</td>
+                    <td>${log.sender}</td>
+                    <td>${log.recipient}</td>
+                    <td>${new Date(log.timestamp).toLocaleString()}</td>
+                    <td>${log.status}</td>
+                    <td>${log.priority}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </body>
+        </html>
+      `;
+      printWindow.document.write(printContent);
+      printWindow.document.close();
+      printWindow.print();
+      printWindow.close();
+    }
+  };
+
+  const handleDeleteLog = async () => {
+    if (!selectedLog) return;
+    
+    setIsDeleting(true);
+    try {
+      // Determine if it's an email or announcement based on the ID
+      const isEmail = selectedLog.id.startsWith('email-');
+      const entityId = selectedLog.id.replace(/^(email-|announcement-)/, '');
+      
+      if (isEmail) {
+        // Soft delete email by moving to trash
+        await fetch(`/api/emails/${entityId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'TRASH' })
+        });
+      } else {
+        // Soft delete announcement by setting to inactive
+        await fetch(`/api/announcements/${entityId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'INACTIVE' })
+        });
+      }
+      
+      toast.success('Log deleted successfully');
+      setDeleteModalOpen(false);
+      setSelectedLog(null);
+      
+      // Refresh the logs
+      await fetchCommunicationLogs();
+    } catch (error) {
+      console.error('Error deleting log:', error);
+      toast.error('Failed to delete log. Please try again.');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedItems.length === 0) return;
+    
+    setIsDeleting(true);
+    try {
+      const deletePromises = selectedItems.map(async (logId) => {
+        const isEmail = logId.startsWith('email-');
+        const entityId = logId.replace(/^(email-|announcement-)/, '');
+        
+        if (isEmail) {
+          return fetch(`/api/emails/${entityId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type: 'TRASH' })
+          });
+        } else {
+          return fetch(`/api/announcements/${entityId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: 'INACTIVE' })
+          });
+        }
+      });
+      
+      await Promise.all(deletePromises);
+      toast.success(`Successfully deleted ${selectedItems.length} logs`);
+      setSelectedItems([]);
+      
+      // Refresh the logs
+      await fetchCommunicationLogs();
+    } catch (error) {
+      console.error('Error deleting logs:', error);
+      toast.error('Failed to delete logs. Please try again.');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  // Stats are now managed in state and fetched from API
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#f8fafc] via-[#ffffff] to-[#f8fafc] p-0 overflow-x-hidden">
@@ -270,24 +496,24 @@ export default function CommunicationLogsPage() {
             sublabel="All communication logs"
           />
           <SummaryCard
-            icon={<CheckCircle className="text-green-500 w-5 h-5" />}
+            icon={<CheckCircle className="text-blue-500 w-5 h-5" />}
             label="Success Rate"
             value={`${stats.successRate}%`}
-            valueClassName="text-green-900"
+            valueClassName="text-blue-900"
             sublabel="Successfully delivered"
           />
           <SummaryCard
-            icon={<Activity className="text-purple-500 w-5 h-5" />}
+            icon={<Activity className="text-blue-500 w-5 h-5" />}
             label="Read"
             value={stats.read}
-            valueClassName="text-purple-900"
+            valueClassName="text-blue-900"
             sublabel="Communications read"
           />
           <SummaryCard
-            icon={<AlertTriangle className="text-red-500 w-5 h-5" />}
+            icon={<AlertTriangle className="text-blue-500 w-5 h-5" />}
             label="Failed"
             value={stats.failed}
-            valueClassName="text-red-900"
+            valueClassName="text-blue-900"
             sublabel="Failed deliveries"
           />
         </div>
@@ -309,21 +535,30 @@ export default function CommunicationLogsPage() {
                 label: 'Export Logs',
                 description: 'Export communication logs',
                 icon: <Download className="w-5 h-5 text-white" />,
-                onClick: () => toast.success("Export feature coming soon!")
+                onClick: () => handleExportLogs()
               },
               {
                 id: 'print-logs',
                 label: 'Print Logs',
                 description: 'Print log reports',
                 icon: <Printer className="w-5 h-5 text-white" />,
-                onClick: () => toast.success("Print feature coming soon!")
+                onClick: () => handlePrintLogs()
               },
               {
                 id: 'archive-logs',
                 label: 'Archive Logs',
                 description: 'Archive old logs',
                 icon: <Archive className="w-5 h-5 text-white" />,
-                onClick: () => toast.success("Archive feature coming soon!")
+                onClick: () => handleArchiveLogs()
+              },
+              {
+                id: 'delete-selected',
+                label: 'Delete Selected',
+                description: 'Delete selected logs',
+                icon: <Trash2 className="w-5 h-5 text-white" />,
+                onClick: () => handleBulkDelete(),
+                disabled: selectedItems.length === 0 || isDeleting,
+                loading: isDeleting
               },
               {
                 id: 'refresh-logs',
@@ -370,57 +605,79 @@ export default function CommunicationLogsPage() {
             </CardHeader>
             
             {/* Search and Filter Section */}
-            <div className="border-b border-gray-200 shadow-sm p-3 sm:p-4 lg:p-6">
-              <div className="flex flex-col xl:flex-row gap-2 sm:gap-3 items-start xl:items-center justify-end">
+            <div className="border-b border-gray-200 bg-gray-50/50 p-4">
+              <div className="flex items-center justify-between">
+                {/* Select All Checkbox */}
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    checked={isAllSelected}
+                    ref={(el) => {
+                      if (el) {
+                        const input = el.querySelector('input[type="checkbox"]') as HTMLInputElement;
+                        if (input) input.indeterminate = isIndeterminate;
+                      }
+                    }}
+                    onCheckedChange={handleSelectAll}
+                    aria-label="Select all logs"
+                    className="border-gray-300 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
+                  />
+                  <span className="text-sm text-gray-700 font-medium">
+                    Select All ({paginatedLogs.length})
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2">
                 {/* Search Bar */}
-                <div className="relative w-full xl:w-auto xl:min-w-[200px] xl:max-w-sm">
-                  <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                <div className="relative w-160">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                   <input
                     type="text"
                     placeholder="Search logs..."
                     value={searchQuery}
                     onChange={e => setSearchQuery(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:outline-none"
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded text-gray-600 placeholder-gray-400 focus:outline-none focus:border-gray-400"
                   />
                 </div>
-                {/* Quick Filter Dropdowns */}
-                <div className="flex flex-wrap gap-2 sm:gap-3 w-full xl:w-auto">
-                  <Select value={filterStatus} onValueChange={setFilterStatus}>
-                    <SelectTrigger className="w-full sm:w-28 lg:w-32 xl:w-28 text-gray-700">
-                      <SelectValue placeholder="Status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Status</SelectItem>
-                      <SelectItem value="sent">Sent</SelectItem>
-                      <SelectItem value="delivered">Delivered</SelectItem>
-                      <SelectItem value="read">Read</SelectItem>
-                      <SelectItem value="failed">Failed</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Select value={filterType} onValueChange={setFilterType}>
-                    <SelectTrigger className="w-full sm:w-28 lg:w-32 xl:w-28 text-gray-700">
-                      <SelectValue placeholder="Type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Types</SelectItem>
-                      <SelectItem value="message">Message</SelectItem>
-                      <SelectItem value="email">Email</SelectItem>
-                      <SelectItem value="announcement">Announcement</SelectItem>
-                      <SelectItem value="notification">Notification</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Select value={filterPriority} onValueChange={setFilterPriority}>
-                    <SelectTrigger className="w-full sm:w-28 lg:w-32 xl:w-28 text-gray-700">
-                      <SelectValue placeholder="Priority" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Priority</SelectItem>
-                      <SelectItem value="urgent">Urgent</SelectItem>
-                      <SelectItem value="high">High</SelectItem>
-                      <SelectItem value="normal">Normal</SelectItem>
-                      <SelectItem value="low">Low</SelectItem>
-                    </SelectContent>
-                  </Select>
+                
+                {/* Filter Dropdowns */}
+                <Select value={filterStatus} onValueChange={setFilterStatus}>
+                  <SelectTrigger className="w-32 border-gray-300 rounded text-gray-600 focus:border-gray-400 focus:ring-0">
+                    <SelectValue placeholder="All Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Status</SelectItem>
+                    <SelectItem value="sent">Sent</SelectItem>
+                    <SelectItem value="delivered">Delivered</SelectItem>
+                    <SelectItem value="read">Read</SelectItem>
+                    <SelectItem value="failed">Failed</SelectItem>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="inactive">Inactive</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Select value={filterType} onValueChange={setFilterType}>
+                  <SelectTrigger className="w-28 border-gray-300 rounded text-gray-600 focus:border-gray-400 focus:ring-0">
+                    <SelectValue placeholder="All Types" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Types</SelectItem>
+                    <SelectItem value="email">Email</SelectItem>
+                    <SelectItem value="announcement">Announcement</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Select value={filterPriority} onValueChange={setFilterPriority}>
+                  <SelectTrigger className="w-28 border-gray-300 rounded text-gray-600 focus:border-gray-400 focus:ring-0">
+                    <SelectValue placeholder="All Priority" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Priority</SelectItem>
+                    <SelectItem value="low">Low</SelectItem>
+                    <SelectItem value="normal">Normal</SelectItem>
+                    <SelectItem value="high">High</SelectItem>
+                    <SelectItem value="urgent">Urgent</SelectItem>
+                  </SelectContent>
+                </Select>
                 </div>
               </div>
             </div>
@@ -428,14 +685,14 @@ export default function CommunicationLogsPage() {
             {/* Table Content */}
             <div className="relative px-2 sm:px-3 lg:px-6 mt-3 sm:mt-4 lg:mt-6">
               <div className="overflow-x-auto bg-white/70 shadow-none relative">
-                {/* Loader overlay when refreshing */}
-                {isRefreshing && (
+                {/* Loader overlay when refreshing or loading */}
+                {(isRefreshing || isLoading) && (
                   <div className="absolute inset-0 bg-white/70 flex items-center justify-center z-20">
                     <RefreshCw className="h-12 w-12 text-blue-600 animate-spin" />
                   </div>
                 )}
                 <div className="print-content">
-                  {!isRefreshing && filteredLogs.length === 0 ? (
+                  {!isLoading && filteredLogs.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-8 px-4">
                       <EmptyState
                         icon={<FileText className="w-6 h-6 text-blue-400" />}
@@ -456,58 +713,150 @@ export default function CommunicationLogsPage() {
                       />
                     </div>
                   ) : (
-                    <div className="space-y-3">
+                    <div className="space-y-2">
                       {paginatedLogs.map((log) => (
                         <div
                           key={log.id}
-                          className="flex items-center gap-3 p-3 rounded-lg border hover:bg-gray-50 transition-colors"
+                          className="group relative bg-white border border-gray-200 rounded-xl p-4 hover:shadow-md hover:border-blue-200 transition-all duration-200 cursor-pointer"
                         >
-                          <Checkbox
-                            checked={selectedItems.includes(log.id)}
-                            onCheckedChange={() => handleSelectItem(log.id)}
-                            aria-label={`Select ${log.title}`}
-                          />
-                          <div className="flex items-center gap-2">
-                            {getTypeIcon(log.type)}
+                          {/* Selection Checkbox */}
+                          <div className="absolute top-4 left-4 z-10">
+                            <Checkbox
+                              checked={selectedItems.includes(log.id)}
+                              onCheckedChange={() => handleSelectItem(log.id)}
+                              aria-label={`Select ${log.title}`}
+                              className="border-gray-300 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
+                            />
                           </div>
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-1">
-                              <h4 className="font-medium">{log.title}</h4>
-                              <Badge className={`text-xs ${getPriorityColor(log.priority)}`}>
-                                {log.priority}
-                              </Badge>
+
+                          {/* Main Content */}
+                          <div className="ml-12 flex items-start gap-4">
+                            {/* Content Area */}
+                            <div className="flex-1 min-w-0">
+                              {/* Header Row */}
+                              <div className="flex items-start justify-between mb-2">
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <h4 className="font-semibold text-blue-600 truncate">
+                                      {log.title}
+                                    </h4>
+                                    <Badge className={`text-xs font-medium px-2 py-1 ${getPriorityColor(log.priority)} hover:${getPriorityColor(log.priority)}`}>
+                                      {log.priority.toUpperCase()}
+                                    </Badge>
+                                  </div>
+                                  <p className="text-sm text-gray-600 line-clamp-2 leading-relaxed">
+                                    {log.content}
+                                  </p>
+                                </div>
+                                
+                                {/* Status Badge */}
+                                <div className="flex-shrink-0 ml-4">
+                                  <Badge className={`text-xs font-medium px-3 py-1 ${getStatusColor(log.status)} hover:${getStatusColor(log.status)}`}>
+                                    {log.status.toUpperCase()}
+                                  </Badge>
+                                </div>
+                              </div>
+
+                              {/* Metadata Row */}
+                              <div className="flex items-center justify-between text-xs text-gray-500">
+                                <div className="flex items-center gap-4">
+                                  {/* Sender Info */}
+                                  <div className="flex items-center gap-1">
+                                    <span className="font-medium text-gray-700">{log.sender}</span>
+                                  </div>
+                                  
+                                  {/* Arrow */}
+                                  <span className="text-gray-400">→</span>
+                                  
+                                  {/* Recipient Info */}
+                                  <div className="flex items-center gap-1">
+                                    <span className="font-medium text-gray-700">{log.recipient}</span>
+                                  </div>
+                                </div>
+
+                                {/* Timestamp */}
+                                <div className="flex items-center gap-1 text-gray-500">
+                                  <span>{new Date(log.timestamp).toLocaleDateString('en-US', { 
+                                    month: 'short', 
+                                    day: 'numeric',
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                  })}</span>
+                                </div>
+                              </div>
+
+                              {/* Additional Info Row */}
+                              <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-100">
+                                <div className="flex items-center gap-4 text-xs text-gray-500">
+                                  {/* Type Badge */}
+                                  <div className="flex items-center gap-1">
+                                    <span className="capitalize">{log.type}</span>
+                                  </div>
+                                  
+                                  {/* Delivery Time (if available) */}
+                                  {log.deliveryTime && (
+                                    <div className="flex items-center gap-1">
+                                      <span>Delivery: {log.deliveryTime}s</span>
+                                    </div>
+                                  )}
+                                  
+                                  {/* Error Message (if available) */}
+                                  {log.errorMessage && (
+                                    <div className="flex items-center gap-1">
+                                      <span>Error: {log.errorMessage}</span>
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Action Buttons */}
+                                <div className="flex-shrink-0 flex items-center gap-1">
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          aria-label="View log details"
+                                          className="h-8 w-8 p-0 hover:bg-blue-50 hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        >
+                                          <Eye className="h-4 w-4" />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent side="top" align="center" className="bg-blue-900 text-white text-xs">
+                                        View details
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          aria-label="Delete log"
+                                          className="h-8 w-8 p-0 hover:bg-red-50 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setSelectedLog(log);
+                                            setDeleteModalOpen(true);
+                                          }}
+                                        >
+                                          <Trash2 className="h-4 w-4" />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent side="top" align="center" className="bg-blue-900 text-white text-xs">
+                                        Delete log
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                </div>
+                              </div>
                             </div>
-                            <p className="text-sm text-gray-600 line-clamp-2">{log.content}</p>
-                            <div className="flex items-center gap-4 text-xs text-gray-500 mt-1">
-                              <span>{log.sender} → {log.recipient}</span>
-                              <span>{log.timestamp}</span>
-                              {log.deliveryTime && (
-                                <span>Delivery: {log.deliveryTime}s</span>
-                              )}
-                            </div>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <Badge className={`text-xs ${getStatusColor(log.status)}`}>
-                              {log.status}
-                            </Badge>
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    aria-label="View log details"
-                                    className="hover:bg-blue-50"
-                                  >
-                                    <Eye className="h-4 w-4 text-blue-600" />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent side="top" align="center" className="bg-blue-900 text-white">
-                                  View details
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                          </div>
+
+                          {/* Hover Effect Border */}
+                          <div className="absolute inset-0 rounded-xl border-2 border-transparent group-hover:border-blue-200 transition-colors pointer-events-none"></div>
                         </div>
                       ))}
                     </div>
@@ -527,6 +876,21 @@ export default function CommunicationLogsPage() {
           </Card>
         </div>
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDeleteDialog
+        open={deleteModalOpen}
+        onOpenChange={(open) => {
+          setDeleteModalOpen(open);
+          if (!open) setSelectedLog(null);
+        }}
+        itemName={selectedLog?.title}
+        onDelete={handleDeleteLog}
+        onCancel={() => { setDeleteModalOpen(false); setSelectedLog(null); }}
+        canDelete={!isDeleting}
+        deleteError={undefined}
+        description={selectedLog ? `Are you sure you want to delete the log "${selectedLog.title}"? This action cannot be undone.` : undefined}
+      />
     </div>
   );
 } 

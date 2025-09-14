@@ -21,10 +21,11 @@ const subjectSchema = z.object({
 // GET handler for individual subject
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
-    const subjectId = parseInt(params.id);
+    const subjectId = parseInt(id);
     
     if (isNaN(subjectId)) {
       return NextResponse.json(

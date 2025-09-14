@@ -7,6 +7,79 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// Email/Communication models and enums for the Email Management module
+// These support composing, storing, and tracking email status and folders
+
+enum EmailStatus {
+  SENT
+  DELIVERED
+  READ
+  FAILED
+  DRAFT
+  PENDING
+}
+
+enum EmailFolder {
+  INBOX
+  SENT
+  DRAFT
+  SPAM
+  TRASH
+}
+
+enum EmailRecipientType {
+  TO
+  CC
+  BCC
+}
+
+model Email {
+  id           String        @id @default(cuid())
+  subject      String
+  sender       String
+  recipient    String
+  // ISO timestamp from UI maps to this
+  timestamp    DateTime      @default(now())
+  status       EmailStatus   @default(PENDING)
+  // Reuse existing Priority enum: LOW, NORMAL, HIGH, URGENT
+  priority     Priority      @default(NORMAL)
+  type         EmailFolder   @default(INBOX)
+  content      String
+  isRead       Boolean       @default(false)
+  isStarred    Boolean       @default(false)
+  isImportant  Boolean       @default(false)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  recipients   EmailRecipient[]
+  attachments  EmailAttachment[]
+
+  @@index([status, type])
+  @@index([timestamp])
+  @@index([priority])
+}
+
+model EmailRecipient {
+  id        Int                @id @default(autoincrement())
+  emailId   String
+  address   String
+  rtype     EmailRecipientType
+  createdAt DateTime           @default(now())
+  email     Email              @relation(fields: [emailId], references: [id], onDelete: Cascade)
+
+  @@index([emailId, rtype])
+}
+
+model EmailAttachment {
+  id        Int      @id @default(autoincrement())
+  emailId   String
+  name      String
+  url       String
+  createdAt DateTime @default(now())
+  email     Email    @relation(fields: [emailId], references: [id], onDelete: Cascade)
+
+  @@index([emailId])
+}
+
 model RoleManagement {
   id          Int      @id @default(autoincrement())
   name        String   @unique
@@ -466,6 +539,7 @@ model Event {
   imageUrl             String?
   contactEmail         String?
   contactPhone         String?
+  deletedAt            DateTime?    // Soft delete field
   createdAt            DateTime     @default(now())
   updatedAt            DateTime     @updatedAt
   Attendance           Attendance[]
@@ -475,6 +549,7 @@ model Event {
   @@index([eventType])
   @@index([status])
   @@index([createdBy, status])
+  @@index([deletedAt])
 }
 
 model RFIDTags {

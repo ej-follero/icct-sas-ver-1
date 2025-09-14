@@ -1,11 +1,16 @@
 export interface InstructorAttendance {
   instructorId: string;
-  instructorName: string;
+  instructorName: string; // Keep for backward compatibility, but prefer split names
+  firstName: string;
+  middleName: string;
+  lastName: string;
+  suffix?: string;
   employeeId: string;
   department: string;
   instructorType: 'FULL_TIME' | 'PART_TIME';
   specialization?: string;
   subjects: string[];
+  subjectCodes?: string[];
   schedules: ScheduleAttendance[];
   
   // Attendance Metrics
@@ -35,6 +40,34 @@ export interface InstructorAttendance {
   avatarUrl?: string;
   rfidTag: string;
   status: InstructorStatus;
+  
+  // Database-connected expandable row data
+  recentActivity?: RecentActivityEntry[];
+  todaySchedule?: TodayScheduleEntry[];
+  weeklyPerformance?: WeeklyPerformanceMetrics;
+  attendanceRecords?: any[];
+}
+
+export interface RecentActivityEntry {
+  day: string;
+  status: string;
+  time: string;
+  subject: string;
+  room: string;
+}
+
+export interface TodayScheduleEntry {
+  time: string;
+  subject: string;
+  room: string;
+  status: 'completed' | 'in-progress' | 'upcoming';
+}
+
+export interface WeeklyPerformanceMetrics {
+  presentDays: number;
+  totalDays: number;
+  onTimeRate: number;
+  currentStreak: number;
 }
 
 export interface ScheduleAttendance {
@@ -118,7 +151,7 @@ export enum AttendanceStatus {
   PRESENT = 'PRESENT',
   ABSENT = 'ABSENT',
   LATE = 'LATE',
-  ON_LEAVE = 'ON_LEAVE'
+  EXCUSED = 'EXCUSED'
 }
 
 export enum RiskLevel {
@@ -130,8 +163,7 @@ export enum RiskLevel {
 
 export enum InstructorStatus {
   ACTIVE = 'ACTIVE',
-  INACTIVE = 'INACTIVE',
-  ON_LEAVE = 'ON_LEAVE'
+  INACTIVE = 'INACTIVE'
 }
 
 export enum VerificationType {

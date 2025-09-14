@@ -1,234 +1,133 @@
 "use client";
 
-import { MoreHorizontal } from "lucide-react";
-import {
-  BarChart,
-  Bar,
-  LineChart,
-  Line,
-  PieChart,
-  Pie,
-  Cell,
-  RadialBarChart,
-  RadialBar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-} from "recharts";
+import React from 'react';
+import { PieChart, Pie, BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
 
-type ChartType = "bar" | "line" | "pie" | "radial";
-
-interface ChartData {
-  name?: string;
-  value?: number;
-  count?: number;
-  fill?: string;
+interface DataPoint {
+  name: string;
+  value: number;
   [key: string]: any;
 }
 
 interface DataChartProps {
-  type: ChartType;
-  data: ChartData[];
-  title: string;
-  showMoreIcon?: boolean;
-  height?: string;
-  className?: string;
+  data: DataPoint[];
+  type: 'pie' | 'bar' | 'line';
+  height?: number;
+  width?: number;
   colors?: string[];
-  showLegend?: boolean;
-  showGrid?: boolean;
+  title?: string;
+  xAxisDataKey?: string;
+  yAxisDataKey?: string;
+  className?: string;
+  interactive?: boolean;
+  onDataPointClick?: (data: DataPoint, index: number) => void;
   showTooltip?: boolean;
-  customTooltip?: (value: any) => string;
-  customLegend?: (value: string) => string;
-  dataKeys?: string[];
-  radialConfig?: {
-    innerRadius?: string;
-    outerRadius?: string;
-    barSize?: number;
-  };
-  pieConfig?: {
-    innerRadius?: number;
-    outerRadius?: number;
-    paddingAngle?: number;
-  };
+  showLegend?: boolean;
+  animate?: boolean;
+  responsive?: boolean;
 }
 
-const DataChart = ({
-  type,
+const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8', '#82CA9D'];
+
+export default function DataChart({
   data,
+  type,
+  height = 300,
+  width,
+  colors = COLORS,
   title,
-  showMoreIcon = true,
-  height = "90%",
-  className = "",
-  colors = ["#3B82F6", "#EF4444", "#F59E0B", "#8B5CF6"],
-  showLegend = true,
-  showGrid = true,
+  xAxisDataKey = 'name',
+  yAxisDataKey = 'value',
+  className = '',
+  interactive = true,
+  onDataPointClick,
   showTooltip = true,
-  customTooltip,
-  customLegend,
-  dataKeys,
-  radialConfig = {
-    innerRadius: "40%",
-    outerRadius: "100%",
-    barSize: 32,
-  },
-  pieConfig = {
-    innerRadius: 60,
-    outerRadius: 80,
-    paddingAngle: 5,
-  },
-}: DataChartProps) => {
+  showLegend = true,
+  animate = true,
+  responsive = true
+}: DataChartProps) {
   const renderChart = () => {
     switch (type) {
-      case "bar":
+      case 'pie':
         return (
-          <BarChart data={data} barSize={20}>
-            {showGrid && (
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#ddd" />
-            )}
-            <XAxis dataKey="name" axisLine={false} tick={{ fill: "#6B7280" }} tickLine={false} />
-            <YAxis axisLine={false} tick={{ fill: "#6B7280" }} tickLine={false} />
-            {showTooltip && (
-              <Tooltip
-                contentStyle={{ borderRadius: 10, borderColor: "lightgray" }}
-                formatter={customTooltip}
-              />
-            )}
-            {showLegend && (
-              <Legend
-                align="left"
-                verticalAlign="top"
-                wrapperStyle={{ paddingTop: 20, paddingBottom: 40 }}
-                formatter={customLegend}
-              />
-            )}
-            {dataKeys?.map((key, index) => (
-              <Bar
-                key={key}
-                dataKey={key}
-                fill={colors[index % colors.length]}
-                legendType="circle"
-                radius={[10, 10, 0, 0]}
-              />
-            ))}
-          </BarChart>
+          <ResponsiveContainer width="100%" height={height}>
+            <PieChart>
+              <Pie
+                data={data}
+                cx="50%"
+                cy="50%"
+                labelLine={false}
+                label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                outerRadius={80}
+                fill="#8884d8"
+                dataKey={yAxisDataKey}
+                onClick={interactive && onDataPointClick ? (data, index) => onDataPointClick(data, index) : undefined}
+                style={{ cursor: interactive ? 'pointer' : 'default' }}
+              >
+                {data.map((entry, index) => (
+                  <Cell 
+                    key={`cell-${index}`} 
+                    fill={colors[index % colors.length]}
+                    style={{ transition: animate ? 'fill 0.3s ease' : 'none' }}
+                  />
+                ))}
+              </Pie>
+              {showTooltip && <Tooltip />}
+              {showLegend && <Legend />}
+            </PieChart>
+          </ResponsiveContainer>
         );
-      case "line":
+
+      case 'bar':
         return (
-          <LineChart data={data} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-            {showGrid && <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />}
-            <XAxis
-              dataKey="name"
-              stroke="#6B7280"
-              tick={{ fontSize: 12 }}
-              tickFormatter={(value) => new Date(value).toLocaleDateString()}
-            />
-            <YAxis stroke="#6B7280" tick={{ fontSize: 12 }} allowDecimals={false} />
-            {showTooltip && (
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: "white",
-                  border: "1px solid #E5E7EB",
-                  borderRadius: "0.5rem",
-                  padding: "0.5rem",
-                }}
-                formatter={customTooltip}
-                labelFormatter={(label) => new Date(label).toLocaleDateString()}
+          <ResponsiveContainer width="100%" height={height}>
+            <BarChart data={data}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey={xAxisDataKey} tick={{ fill: '#1e3a8a' }} />
+              <YAxis tick={{ fill: '#1e3a8a' }} />
+              {showTooltip && <Tooltip />}
+              {showLegend && <Legend />}
+              <Bar 
+                dataKey={yAxisDataKey} 
+                fill="#8884d8"
+                onClick={interactive && onDataPointClick ? (data, index) => onDataPointClick(data, index) : undefined}
+                style={{ cursor: interactive ? 'pointer' : 'default' }}
               />
-            )}
-            {showLegend && <Legend verticalAlign="bottom" height={36} formatter={customLegend} />}
-            {dataKeys?.map((key, index) => (
-              <Line
-                key={key}
-                type="monotone"
-                dataKey={key}
-                name={key}
-                stroke={colors[index % colors.length]}
+            </BarChart>
+          </ResponsiveContainer>
+        );
+
+      case 'line':
+        return (
+          <ResponsiveContainer width="100%" height={height}>
+            <LineChart data={data}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey={xAxisDataKey} tick={{ fill: '#1e3a8a' }} />
+              <YAxis tick={{ fill: '#1e3a8a' }} />
+              {showTooltip && <Tooltip />}
+              {showLegend && <Legend />}
+              <Line 
+                type="monotone" 
+                dataKey={yAxisDataKey} 
+                stroke="#8884d8" 
                 strokeWidth={2}
-                dot={{ r: 4 }}
-                activeDot={{ r: 6 }}
+                style={{ cursor: interactive ? 'pointer' : 'default' }}
               />
-            ))}
-          </LineChart>
+            </LineChart>
+          </ResponsiveContainer>
         );
-      case "pie":
-        return (
-          <PieChart>
-            <Pie
-              data={data}
-              cx="50%"
-              cy="50%"
-              innerRadius={pieConfig.innerRadius}
-              outerRadius={pieConfig.outerRadius}
-              paddingAngle={pieConfig.paddingAngle}
-              dataKey="value"
-              nameKey="name"
-            >
-              {data.map((entry, index) => (
-                <Cell
-                  key={`cell-${index}`}
-                  fill={entry.fill || colors[index % colors.length]}
-                />
-              ))}
-            </Pie>
-            {showTooltip && (
-              <Tooltip
-                formatter={customTooltip}
-                contentStyle={{
-                  backgroundColor: "white",
-                  border: "1px solid #E5E7EB",
-                  borderRadius: "0.5rem",
-                  padding: "0.5rem",
-                }}
-              />
-            )}
-            {showLegend && <Legend verticalAlign="bottom" height={36} formatter={customLegend} />}
-          </PieChart>
-        );
-      case "radial":
-        return (
-          <RadialBarChart
-            cx="50%"
-            cy="50%"
-            innerRadius={radialConfig.innerRadius}
-            outerRadius={radialConfig.outerRadius}
-            barSize={radialConfig.barSize}
-            data={data}
-          >
-            <RadialBar background dataKey="count" />
-            {showLegend && <Legend />}
-          </RadialBarChart>
-        );
+
       default:
-        return <div />;
+        return null;
     }
   };
 
   return (
-    <div
-      className={`bg-white rounded-xl w-full h-full p-4 ${className}`}
-      aria-label={title}
-    >
-      <div className="flex justify-between items-center mb-4">
-        <h1 className="text-lg font-semibold">{title}</h1>
-        {showMoreIcon && (
-          <MoreHorizontal
-            className="w-5 h-5 cursor-pointer text-gray-600 hover:text-gray-900 transition-colors"
-            aria-label="More options"
-            role="button"
-            tabIndex={0}
-          />
-        )}
-      </div>
-      <div style={{ height }} className="relative w-full">
-        <ResponsiveContainer width="100%" height="100%">
-          {renderChart()}
-        </ResponsiveContainer>
-      </div>
+    <div className={`w-full ${className}`}>
+      {title && (
+        <h3 className="text-lg font-semibold text-blue-900 mb-4 text-center">{title}</h3>
+      )}
+      {renderChart()}
     </div>
   );
-};
-
-export default DataChart;
+}
