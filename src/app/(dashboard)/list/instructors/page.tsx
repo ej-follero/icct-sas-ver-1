@@ -262,12 +262,62 @@ const handlePrint = () => {
     setExportMenuAnchorEl(null);
   };
 
-  function handleDeleteInstructor(id: number) {
-    // TODO: Implement delete logic
-    setDeleteDialogOpen(false);
-    setInstructorToDelete(null);
+ // Replace the existing handleDeleteInstructor function with:
+const handleDeleteInstructor = (id: number) => {
+  setInstructors(prev => prev.filter(instructor => instructor.instructorId !== id));
+  setDeleteDialogOpen(false);
+  setInstructorToDelete(null);
+  toast.success("Instructor deleted successfully");
+};
+// Add this function above the return statement
+const handleSubmit = (e: React.FormEvent) => {
+  e.preventDefault();
+  const form = e.target as HTMLFormElement;
+  
+  if (modalInstructor) {
+    // Update existing instructor
+    setInstructors(prev => prev.map(instructor => 
+      instructor.instructorId === modalInstructor.instructorId
+        ? {
+            ...instructor,
+            firstName: (form.elements.namedItem('firstName') as HTMLInputElement).value,
+            middleName: (form.elements.namedItem('middleName') as HTMLInputElement).value || undefined,
+            lastName: (form.elements.namedItem('lastName') as HTMLInputElement).value,
+            suffix: (form.elements.namedItem('suffix') as HTMLInputElement).value || undefined,
+            email: (form.elements.namedItem('email') as HTMLInputElement).value,
+            phoneNumber: (form.elements.namedItem('phoneNumber') as HTMLInputElement).value,
+            gender: (form.elements.namedItem('gender') as HTMLSelectElement).value as UserGender,
+            instructorType: (form.elements.namedItem('instructorType') as HTMLSelectElement).value as InstructorType,
+            status: (form.elements.namedItem('status') as HTMLSelectElement).value as Status,
+          }
+        : instructor
+    ));
+    toast.success("Instructor updated successfully");
+  } else {
+    // Add new instructor
+    const newInstructor: Teacher = {
+      instructorId: Math.max(...instructors.map(i => i.instructorId), 0) + 1,
+      firstName: (form.elements.namedItem('firstName') as HTMLInputElement).value,
+      middleName: (form.elements.namedItem('middleName') as HTMLInputElement).value || undefined,
+      lastName: (form.elements.namedItem('lastName') as HTMLInputElement).value,
+      suffix: (form.elements.namedItem('suffix') as HTMLInputElement).value || undefined,
+      email: (form.elements.namedItem('email') as HTMLInputElement).value,
+      phoneNumber: (form.elements.namedItem('phoneNumber') as HTMLInputElement).value,
+      gender: (form.elements.namedItem('gender') as HTMLSelectElement).value as UserGender,
+      instructorType: (form.elements.namedItem('instructorType') as HTMLSelectElement).value as InstructorType,
+      status: (form.elements.namedItem('status') as HTMLSelectElement).value as Status,
+      departmentName: "Computer Science", // Default value
+      rfidTag: "",
+      rfidtagNumber: "",
+      createdAt: new Date(),
+    };
+    
+    setInstructors(prev => [...prev, newInstructor]);
+    toast.success("Instructor added successfully");
   }
-
+  
+  setModalOpen(false);
+};
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100/50">
       <div className="max-w-[1920px] mx-auto p-6">
@@ -352,9 +402,18 @@ const handlePrint = () => {
                     </TableCell>
                     <TableCell className="text-center">
                       <div className="flex items-center justify-center gap-1.5">
-                        <Button variant="ghost" size="icon" onClick={() => router.push(`/list/instructors/${instructor.instructorId}`)}>
-                          <Eye className="w-5 h-5 text-blue-600" />
-                        </Button>
+               
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            onClick={() => {
+                              setSelectedInstructor(instructor);
+                              setViewDialogOpen(true);
+                            }}
+                          >
+                            <Eye className="w-5 h-5 text-blue-600" />
+                          </Button>
+
                         <Button variant="ghost" size="icon" onClick={() => { setModalInstructor(instructor); setModalOpen(true); }}>
                           <Pencil className="w-5 h-5 text-green-600" />
                         </Button>
@@ -396,12 +455,15 @@ const handlePrint = () => {
                     </Button>
                   ))}
                 </div>
+
                 <Button
                   variant="outline"
                   size="sm"
                   disabled={currentPage === totalPages}
                   onClick={() => setCurrentPage(currentPage + 1)}
+                  
                 >
+                  
                   Next
                 </Button>
               </div>
@@ -432,7 +494,7 @@ const handlePrint = () => {
           <DialogHeader>
             <DialogTitle>{modalInstructor ? "Edit Instructor" : "Add New Instructor"}</DialogTitle>
           </DialogHeader>
-          <form className="space-y-4">
+          <form className="space-y-4" onSubmit={handleSubmit}>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="firstName">First Name</Label>

@@ -581,6 +581,22 @@ CREATE TABLE "Announcement" (
 );
 
 -- CreateTable
+CREATE TABLE "RFIDTagAssignmentLog" (
+    "id" SERIAL NOT NULL,
+    "tagId" INTEGER NOT NULL,
+    "action" TEXT NOT NULL,
+    "assignedToType" TEXT,
+    "assignedToId" INTEGER,
+    "assignedToName" TEXT,
+    "performedBy" INTEGER,
+    "performedByName" TEXT,
+    "timestamp" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "notes" TEXT,
+
+    CONSTRAINT "RFIDTagAssignmentLog_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "_InstructorToSubjects" (
     "A" INTEGER NOT NULL,
     "B" INTEGER NOT NULL,
@@ -1025,6 +1041,9 @@ ALTER TABLE "Announcement" ADD CONSTRAINT "Announcement_sectionId_fkey" FOREIGN 
 
 -- AddForeignKey
 ALTER TABLE "Announcement" ADD CONSTRAINT "Announcement_subjectId_fkey" FOREIGN KEY ("subjectId") REFERENCES "Subjects"("subjectId") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "RFIDTagAssignmentLog" ADD CONSTRAINT "RFIDTagAssignmentLog_tagId_fkey" FOREIGN KEY ("tagId") REFERENCES "RFIDTags"("tagId") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "_InstructorToSubjects" ADD CONSTRAINT "_InstructorToSubjects_A_fkey" FOREIGN KEY ("A") REFERENCES "Instructor"("instructorId") ON DELETE CASCADE ON UPDATE CASCADE;

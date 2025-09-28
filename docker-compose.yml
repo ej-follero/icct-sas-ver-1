@@ -2,13 +2,13 @@ version: '3.8'
 services:
   postgres:
     image: postgres:latest
-    container_name: icct-sas-db
+    container_name: blissful_jepsen
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: icct-sas
+      POSTGRES_USER: scheduleparent
+      POSTGRES_PASSWORD: parent123
+      POSTGRES_DB: schedule
     ports:
-      - "5433:5432"
+      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
