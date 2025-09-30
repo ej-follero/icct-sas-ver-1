@@ -65,7 +65,7 @@ export const commonSchemas = {
   security: z.object({
     token: z.string().min(1).max(500),
     password: z.string().min(8).max(128),
-    role: z.enum(['SUPER_ADMIN', 'ADMIN', 'DEPARTMENT_HEAD', 'INSTRUCTOR', 'STUDENT', 'GUARDIAN', 'SYSTEM_AUDITOR']),
+    role: z.enum(['SUPER_ADMIN', 'ADMIN', 'DEPARTMENT_HEAD', 'INSTRUCTOR', 'STUDENT', 'SYSTEM_AUDITOR']),
   }),
 
   // Date validation

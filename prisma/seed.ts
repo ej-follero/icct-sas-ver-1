@@ -92,19 +92,26 @@ function generateRealisticCollegeData() {
     'Salazar', 'Guzman', 'Vega', 'Velazquez', 'Rojas', 'Diaz', 'Reyes', 'Morales', 'Cruz', 'Ortiz'
   ];
 
-  // Philippine first names
+  // Philippine first names - expanded for uniqueness
   const philippineFirstNames = [
     // Male names
     'Jose', 'Juan', 'Antonio', 'Francisco', 'Manuel', 'Pedro', 'Carlos', 'Miguel', 'Luis', 'Ramon',
     'Fernando', 'Roberto', 'Eduardo', 'Alberto', 'Ricardo', 'Guillermo', 'Javier', 'Alejandro', 'Daniel', 'Andres',
     'Gabriel', 'Rafael', 'Santiago', 'Mateo', 'Sebastian', 'Diego', 'Adrian', 'Nicolas', 'Christian', 'David',
     'Jose Maria', 'Juan Carlos', 'Antonio Jose', 'Francisco Javier', 'Manuel Antonio', 'Pedro Jose', 'Carlos Miguel', 'Miguel Angel', 'Luis Fernando', 'Ramon Antonio',
+    'Emilio', 'Felipe', 'Ignacio', 'Leonardo', 'Marcelo', 'Octavio', 'Pablo', 'Quentin', 'Rodrigo', 'Sergio',
+    'Tomas', 'Ulises', 'Victor', 'Wilfredo', 'Xavier', 'Yuri', 'Zacarias', 'Abel', 'Benjamin', 'Cesar',
+    'Dario', 'Efren', 'Felix', 'Gregorio', 'Hector', 'Ismael', 'Joaquin', 'Kevin', 'Lorenzo', 'Marcos',
+    'Nestor', 'Oscar', 'Pascual', 'Quirino', 'Rolando', 'Samuel', 'Teodoro', 'Ulysses', 'Valentin', 'Wenceslao',
     
     // Female names
     'Maria', 'Ana', 'Carmen', 'Isabel', 'Rosa', 'Teresa', 'Elena', 'Patricia', 'Monica', 'Adriana',
     'Beatriz', 'Claudia', 'Diana', 'Eva', 'Gabriela', 'Helena', 'Iris', 'Julia', 'Laura', 'Natalia',
     'Olivia', 'Paula', 'Raquel', 'Sofia', 'Valentina', 'Wendy', 'Ximena', 'Yolanda', 'Zara', 'Angela',
-    'Maria Ana', 'Ana Maria', 'Carmen Elena', 'Isabel Rosa', 'Rosa Teresa', 'Teresa Elena', 'Elena Patricia', 'Patricia Monica', 'Monica Adriana', 'Adriana Beatriz'
+    'Maria Ana', 'Ana Maria', 'Carmen Elena', 'Isabel Rosa', 'Rosa Teresa', 'Teresa Elena', 'Elena Patricia', 'Patricia Monica', 'Monica Adriana', 'Adriana Beatriz',
+    'Bianca', 'Cristina', 'Dolores', 'Esperanza', 'Francisca', 'Gloria', 'Herminia', 'Imelda', 'Jocelyn', 'Katherine',
+    'Leticia', 'Magdalena', 'Nora', 'Ofelia', 'Pilar', 'Rosa', 'Sofia', 'Trinidad', 'Ursula', 'Victoria',
+    'Wanda', 'Xenia', 'Yvette', 'Zenaida', 'Alicia', 'Beatriz', 'Carmen', 'Dolores', 'Esperanza', 'Francisca'
   ];
 
   // Philippine middle names
@@ -329,22 +336,42 @@ function generateAttendanceDates(startDate: Date, endDate: Date, daysOfWeek: str
   return dates;
 }
 
-// Helper function to generate realistic attendance status with patterns
+// Helper function to generate realistic attendance status with patterns for semester
 function generateAttendanceStatus(studentId: number, date: Date, isRegularStudent: boolean): AttendanceStatus {
   const random = Math.random();
   
-  // Regular students have better attendance
+  // Add some variation based on day of week (better attendance on certain days)
+  const dayOfWeek = date.getDay();
+  const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+  
+  // Regular students have better attendance, especially on weekdays
   if (isRegularStudent) {
-    if (random < 0.85) return AttendanceStatus.PRESENT;
-    if (random < 0.92) return AttendanceStatus.LATE;
-    if (random < 0.95) return AttendanceStatus.EXCUSED;
-    return AttendanceStatus.ABSENT;
+    if (isWeekend) {
+      // Weekend classes have slightly lower attendance
+      if (random < 0.80) return AttendanceStatus.PRESENT;
+      if (random < 0.88) return AttendanceStatus.LATE;
+      if (random < 0.92) return AttendanceStatus.EXCUSED;
+      return AttendanceStatus.ABSENT;
+    } else {
+      // Weekday classes have better attendance
+      if (random < 0.88) return AttendanceStatus.PRESENT;
+      if (random < 0.94) return AttendanceStatus.LATE;
+      if (random < 0.97) return AttendanceStatus.EXCUSED;
+      return AttendanceStatus.ABSENT;
+    }
   } else {
     // Irregular students have more varied attendance
-    if (random < 0.70) return AttendanceStatus.PRESENT;
-    if (random < 0.80) return AttendanceStatus.LATE;
-    if (random < 0.85) return AttendanceStatus.EXCUSED;
-    return AttendanceStatus.ABSENT;
+    if (isWeekend) {
+      if (random < 0.65) return AttendanceStatus.PRESENT;
+      if (random < 0.75) return AttendanceStatus.LATE;
+      if (random < 0.80) return AttendanceStatus.EXCUSED;
+      return AttendanceStatus.ABSENT;
+    } else {
+      if (random < 0.75) return AttendanceStatus.PRESENT;
+      if (random < 0.85) return AttendanceStatus.LATE;
+      if (random < 0.90) return AttendanceStatus.EXCUSED;
+      return AttendanceStatus.ABSENT;
+    }
   }
 }
 
@@ -403,6 +430,8 @@ async function main() {
       }
     }));
   }
+
+  // System Auditor role removed; no action needed
 
   // 2. Create Departments
   console.log('🏢 Creating departments...');
@@ -593,7 +622,7 @@ async function main() {
 
   // 6. Create Guardians
   console.log('👨‍👩‍👧‍👦 Creating guardians...');
-  const guardians = [];
+  const guardians = [] as { guardianId: number }[];
   const guardianRelationships = ['Parent', 'Grandparent', 'Legal Guardian', 'Uncle', 'Aunt', 'Sibling', 'Other Relative'];
 
   for (let i = 0; i < 50; i++) {
@@ -606,22 +635,10 @@ async function main() {
     const occupation = collegeData.philippineOccupations[Math.floor(Math.random() * collegeData.philippineOccupations.length)];
     const workplace = collegeData.philippineWorkplaces[Math.floor(Math.random() * collegeData.philippineWorkplaces.length)];
     const relationship = guardianRelationships[Math.floor(Math.random() * guardianRelationships.length)];
-    
-    const user = await prisma.user.create({
-      data: {
-        userName: `guardian${i + 1}`,
-        email: `guardian${i + 1}@email.com`,
-        passwordHash: '$2b$10$hashedpassword',
-        role: Role.GUARDIAN,
-        status: UserStatus.ACTIVE,
-        isEmailVerified: true,
-      }
-    });
 
-    guardians.push(await prisma.guardian.create({
+    const guardian = await prisma.guardian.create({
       data: {
-        guardianId: user.userId,
-        email: user.email,
+        email: `guardian${i + 1}@email.com`,
         phoneNumber: phoneNumber,
         firstName: firstName,
         middleName: middleName,
@@ -636,18 +653,43 @@ async function main() {
         relationshipToStudent: relationship,
         totalStudents: 1,
       }
-    }));
+    });
+
+    guardians.push({ guardianId: guardian.guardianId });
   }
 
-  // 7. Create Students (enough for 20 per section * 5 sections * course offerings)
-  console.log('👨‍🎓 Creating students...');
+  // 7. Create Students with unique names and proper semester attendance
+  console.log('👨‍🎓 Creating students with unique names...');
   const students: any[] = [];
   const totalSections = allCourseOfferings.length * 5;
-  const totalStudents = totalSections * 20
+  const totalStudents = totalSections * 20; // 20 students per section
+  
+  console.log(`📊 Planning to create ${totalStudents} students for ${totalSections} sections`);
+  
+  // Track used names to ensure uniqueness
+  const usedNames = new Set<string>();
+  
   for (let i = 0; i < totalStudents; i++) {
-    const firstName = collegeData.philippineFirstNames[Math.floor(Math.random() * collegeData.philippineFirstNames.length)];
-    const lastName = collegeData.philippineSurnames[Math.floor(Math.random() * collegeData.philippineSurnames.length)];
-    const middleName = collegeData.philippineMiddleNames[Math.floor(Math.random() * collegeData.philippineMiddleNames.length)];
+    let firstName, lastName, middleName;
+    let fullName;
+    let attempts = 0;
+    
+    // Ensure unique names
+    do {
+      firstName = collegeData.philippineFirstNames[Math.floor(Math.random() * collegeData.philippineFirstNames.length)];
+      lastName = collegeData.philippineSurnames[Math.floor(Math.random() * collegeData.philippineSurnames.length)];
+      middleName = collegeData.philippineMiddleNames[Math.floor(Math.random() * collegeData.philippineMiddleNames.length)];
+      fullName = `${firstName} ${middleName} ${lastName}`;
+      attempts++;
+    } while (usedNames.has(fullName) && attempts < 100);
+    
+    if (attempts >= 100) {
+      // Fallback: add index to ensure uniqueness
+      fullName = `${firstName} ${middleName} ${lastName} ${i + 1}`;
+    }
+    
+    usedNames.add(fullName);
+    
     const address = collegeData.philippineAddresses[Math.floor(Math.random() * collegeData.philippineAddresses.length)];
     const phonePrefix = collegeData.phonePrefixes[Math.floor(Math.random() * collegeData.phonePrefixes.length)];
     // Guarantee unique phone number by appending index
@@ -655,8 +697,8 @@ async function main() {
     
     const user = await prisma.user.create({
       data: {
-        userName: `${firstName.toLowerCase()}${lastName.toLowerCase()}${i + 1}`,
-        email: `${firstName.toLowerCase()}.${lastName.toLowerCase()}${i + 1}@student.icct.edu.ph`,
+        userName: `${firstName.toLowerCase().replace(/\s+/g, '')}${lastName.toLowerCase().replace(/\s+/g, '')}${i + 1}`,
+        email: `${firstName.toLowerCase().replace(/\s+/g, '')}.${lastName.toLowerCase().replace(/\s+/g, '')}${i + 1}@student.icct.edu.ph`,
         passwordHash: '$2b$10$hashedpassword',
         role: Role.STUDENT,
         status: UserStatus.ACTIVE,
@@ -796,8 +838,10 @@ async function main() {
   const subjectSchedules: any[] = [];
   const timeSlots = [
     { start: '07:30', end: '09:30', label: 'MORNING' },
-    { start: '11:00', end: '13:00', label: 'NOON' },
-    { start: '17:00', end: '19:00', label: 'EVENING' },
+    { start: '10:00', end: '12:00', label: 'LATE_MORNING' },
+    { start: '13:00', end: '15:00', label: 'AFTERNOON' },
+    { start: '15:30', end: '17:30', label: 'LATE_AFTERNOON' },
+    { start: '18:00', end: '20:00', label: 'EVENING' },
   ];
   const daysOfWeek: ('MONDAY' | 'TUESDAY' | 'WEDNESDAY' | 'THURSDAY' | 'FRIDAY')[] = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY'];
   
@@ -823,25 +867,60 @@ async function main() {
       // Find a room that is not already booked for this day/time
       let availableRoom = null;
       for (const room of rooms) {
-        const overlap = subjectSchedules.find(s =>
+        // Check if this room is already booked for the same day and overlapping time
+        const hasOverlap = subjectSchedules.some(s =>
           s.roomId === room.roomId &&
           s.day === day &&
-          !(
-            timeSlot.end <= s.startTime || // ends before existing starts
-            timeSlot.start >= s.endTime    // starts after existing ends
+          (
+            (timeSlot.start < s.endTime && timeSlot.end > s.startTime) // times overlap
           )
         );
-        if (!overlap) {
+        
+        if (!hasOverlap) {
           availableRoom = room;
           break;
         }
       }
+      
+      // If no room found, try to find a room with different time slots
+      if (!availableRoom) {
+        // Try different time slots for the same day
+        const alternativeTimeSlots = [
+          { start: '08:00', end: '10:00' },
+          { start: '10:30', end: '12:30' },
+          { start: '13:30', end: '15:30' },
+          { start: '16:00', end: '18:00' },
+          { start: '18:30', end: '20:30' }
+        ];
+        
+        for (const altTimeSlot of alternativeTimeSlots) {
+          for (const room of rooms) {
+            const hasOverlap = subjectSchedules.some(s =>
+              s.roomId === room.roomId &&
+              s.day === day &&
+              (
+                (altTimeSlot.start < s.endTime && altTimeSlot.end > s.startTime)
+              )
+            );
+            
+            if (!hasOverlap) {
+              availableRoom = room;
+              timeSlot.start = altTimeSlot.start;
+              timeSlot.end = altTimeSlot.end;
+              break;
+            }
+          }
+          if (availableRoom) break;
+        }
+      }
+      
+      // If still no room found, skip this schedule
       if (!availableRoom) {
         console.warn('No available room for', day, timeSlot, 'skipping schedule');
         continue;
       }
 
-      subjectSchedules.push(await prisma.subjectSchedule.create({
+      const newSchedule = await prisma.subjectSchedule.create({
         data: {
           subject: { connect: { subjectId: subject.subjectId } },
           section: { connect: { sectionId: section.sectionId } },
@@ -859,7 +938,10 @@ async function main() {
           endDate: trimester.endDate,
           maxStudents: 100,
         }
-      }));
+      });
+      
+      subjectSchedules.push(newSchedule);
+      console.log(`✅ Created schedule: ${day} ${timeSlot.start}-${timeSlot.end} in Room ${availableRoom.roomNo}`);
     }
   }
 
@@ -876,11 +958,16 @@ async function main() {
     }
   });
   
+  console.log(`📊 Found ${studentSectionEnrollments.length} student-section enrollments`);
+  console.log(`📊 Found ${subjectSchedules.length} subject schedules`);
+  
   for (const subjectSchedule of subjectSchedules) {
     // Get students enrolled in the same section as this subject schedule
     const sectionStudents = studentSectionEnrollments
       .filter(enrollment => enrollment.sectionId === subjectSchedule.sectionId)
       .map(enrollment => enrollment.Student);
+    
+    console.log(`📚 Section ${subjectSchedule.sectionId} has ${sectionStudents.length} students`);
     
     // Enroll each student in this subject schedule
     for (const student of sectionStudents) {
@@ -900,13 +987,15 @@ async function main() {
     }
   }
 
-  // 13. Generate Attendance Data for all trimesters for all students and instructors
-  console.log('📊 Generating attendance data for all trimesters...');
+  // 13. Generate Attendance Data for a focused 3-month semester
+  console.log('📊 Generating comprehensive attendance data for 3-month semester...');
   const attendanceRecords = [];
   
-  // Define the date range: January 2024 to current date (August 2025)
-  const globalStartDate = new Date('2024-01-01');
-  const globalEndDate = new Date(); // Current date (August 2025)
+  // Define the focused semester date range: 3 months from current trimester
+  const semesterStartDate = currentTrimester.startDate;
+  const semesterEndDate = currentTrimester.endDate;
+  
+  console.log(`📅 Generating attendance from ${semesterStartDate.toLocaleDateString()} to ${semesterEndDate.toLocaleDateString()}`);
   
   for (const subjectSchedule of subjectSchedules) {
     // Get students enrolled in the same section as this subject schedule
@@ -918,11 +1007,11 @@ async function main() {
     const trimester = section ? createdTrimesters.find(t => t.semesterId === section.semesterId) : null;
     if (!trimester) continue;
     
-    // Generate attendance for the entire global date range
+    // Generate attendance for the focused semester period only
     const dayName = subjectSchedule.day;
     const attendanceDates = generateAttendanceDates(
-      globalStartDate,
-      globalEndDate,
+      semesterStartDate,
+      semesterEndDate,
       [dayName]
     );
 
@@ -1944,7 +2033,103 @@ async function main() {
     });
   }
 
-  // 25. Seed SecuritySettings if not present
+  // 25. Create RoleManagement entries for custom roles
+  console.log('👥 Creating custom roles...');
+  const customRoles = [
+    {
+      name: 'SUPER_ADMIN',
+      description: 'Highest level of system access with all permissions',
+      permissions: [
+        'View Users', 'Edit Users', 'Delete Users', 'Assign Roles',
+        'Manage Super Admins', 'Manage Admin Users', 'User Security Settings',
+        'View Attendance', 'Edit Attendance', 'Delete Attendance',
+        'Override Attendance', 'Verify Attendance', 'Export Attendance',
+        'Manage Courses', 'Manage Departments', 'Manage Subjects',
+        'Manage Sections', 'Manage Instructors', 'Manage Students',
+        'Manage Rooms', 'Manage Schedules',
+        'View Reports', 'Generate Reports', 'Export Data',
+        'View Analytics', 'System Analytics',
+        'System Settings', 'Database Management', 'Backup & Restore',
+        'Security Settings', 'API Management', 'System Monitoring',
+        'Audit Logs', 'Emergency Access',
+        'Manage RFID Tags', 'Manage RFID Readers',
+        'View RFID Logs', 'RFID Configuration',
+        'Send Announcements', 'Manage Communications',
+        'Email Management', 'Notification Settings',
+        'Department Management', 'Department Reports', 'Department Users'
+      ],
+      status: 'ACTIVE'
+    },
+    {
+      name: 'ADMIN',
+      description: 'General administrative tasks and oversight',
+      permissions: [
+        'View Users', 'Edit Users', 'Delete Users', 'Assign Roles',
+        'Manage Admin Users', 'User Security Settings',
+        'View Attendance', 'Edit Attendance', 'Delete Attendance',
+        'Override Attendance', 'Verify Attendance', 'Export Attendance',
+        'Manage Courses', 'Manage Departments', 'Manage Subjects',
+        'Manage Sections', 'Manage Instructors', 'Manage Students',
+        'Manage Rooms', 'Manage Schedules',
+        'View Reports', 'Generate Reports', 'Export Data',
+        'View Analytics',
+        'System Settings', 'Security Settings', 'System Monitoring',
+        'Manage RFID Tags', 'Manage RFID Readers',
+        'View RFID Logs', 'RFID Configuration',
+        'Send Announcements', 'Manage Communications',
+        'Email Management', 'Notification Settings',
+        'Department Management', 'Department Reports', 'Department Users'
+      ],
+      status: 'ACTIVE'
+    },
+    {
+      name: 'DEPARTMENT_HEAD',
+      description: 'Manage department-specific operations and users',
+      permissions: [
+        'View Users', 'Edit Users', 'Assign Roles',
+        'Manage Admin Users', 'User Security Settings',
+        'View Attendance', 'Edit Attendance', 'Override Attendance',
+        'Verify Attendance', 'Export Attendance',
+        'Manage Courses', 'Manage Departments', 'Manage Subjects',
+        'Manage Instructors', 'Manage Students',
+        'View Reports', 'Generate Reports', 'Export Data',
+        'Department Management', 'Department Reports', 'Department Users',
+        'Send Announcements', 'Manage Communications'
+      ],
+      status: 'ACTIVE'
+    },
+    {
+      name: 'INSTRUCTOR',
+      description: 'Manage classes and attendance',
+      permissions: [
+        'View Users', 'View Attendance', 'Edit Attendance',
+        'View Reports', 'Send Announcements'
+      ],
+      status: 'ACTIVE'
+    },
+    {
+      name: 'STUDENT',
+      description: 'View own attendance and schedule',
+      permissions: [
+        'View Attendance', 'View Reports'
+      ],
+      status: 'ACTIVE'
+    }
+  ];
+
+  for (const role of customRoles) {
+    await prisma.roleManagement.create({
+      data: {
+        name: role.name,
+        description: role.description,
+        permissions: role.permissions,
+        status: role.status,
+        totalUsers: 0
+      }
+    });
+  }
+
+  // 26. Seed SecuritySettings if not present
   const existingSecuritySettings = await prisma.securitySettings.findUnique({ where: { id: 1 } });
   if (!existingSecuritySettings) {
     await prisma.securitySettings.create({
@@ -1978,15 +2163,15 @@ async function main() {
   }
 
   console.log('✅ Database seeding completed successfully!');
-  console.log(`📊 Created ${students.length} students with attendance data spanning from January 2024 to current date`);
-  console.log(`👨‍🏫 Created ${instructors.length} instructors with comprehensive attendance data from January 2024 to current date`);
+  console.log(`📊 Created ${students.length} students with unique names and comprehensive semester attendance`);
+  console.log(`👨‍🏫 Created ${instructors.length} instructors across ${departments.length} departments`);
   console.log(`📚 Created ${subjects.length} subjects with ${subjectSchedules.length} schedules`);
   console.log(`📋 Created ${sections.length} sections across ${allCourseOfferings.length} courses`);
   console.log(`📚 Created ${studentSchedules.length} student enrollments in subject schedules`);
-  console.log(`📊 Generated ${attendanceRecords.length} attendance records from January 2024 to current date`);
-  console.log(`⏰ Instructor attendance includes 15 different time slots throughout the day (6:30 AM - 9:00 PM)`);
-  console.log(`📅 Comprehensive attendance data from January 1, 2024 to ${new Date().toLocaleDateString()}`);
-  console.log(`👥 Different work patterns for full-time vs part-time instructors`);
+  console.log(`📊 Generated ${attendanceRecords.length} attendance records for focused 3-month semester`);
+  console.log(`📅 Semester period: ${semesterStartDate.toLocaleDateString()} to ${semesterEndDate.toLocaleDateString()}`);
+  console.log(`🎯 Realistic attendance patterns with weekday/weekend variations`);
+  console.log(`👥 Students distributed across multiple courses and departments`);
 }
 
 main()

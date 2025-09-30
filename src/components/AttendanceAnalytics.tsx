@@ -446,11 +446,13 @@ export const FullscreenAttendanceDistributionModal = ({
               </div>
               <div className="bg-white border border-gray-100 rounded-xl p-6 pb-8 h-full min-h-[400px] flex flex-col shadow-sm hover:shadow-lg transition-all duration-300 relative overflow-hidden group">
                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-blue-600"></div>
-                <AttendanceDistributionChart
-                  totalPresent={totalPresent}
-                  totalLate={totalLate}
-                  totalAbsent={totalAbsent}
-                />
+                <div data-chart="attendance-distribution" className="w-full h-full">
+                  <AttendanceDistributionChart
+                    totalPresent={totalPresent}
+                    totalLate={totalLate}
+                    totalAbsent={totalAbsent}
+                  />
+                </div>
               </div>
             </div>
             
@@ -474,7 +476,11 @@ export const FullscreenAttendanceDistributionModal = ({
         
         {/* Footer with Export Button */}
         <div className="flex items-center justify-end gap-3 pt-6 border-t border-gray-200 sticky bottom-0 bg-white">
-          <DownloadDropdown onExport={onExport} />
+          <DownloadDropdown 
+            onExport={onExport} 
+            modalType="attendance-distribution"
+            chartData={[{ totalPresent, totalLate, totalAbsent }]}
+          />
         </div>
       </DialogContent>
     </Dialog>
@@ -584,8 +590,9 @@ export const FullscreenWeeklyTrendModal = ({
                   {weeklyData.length === 0 ? (
                     <NoDataState selectedSubject={localSelectedSubject} type={type} subjects={subjects} />
                   ) : (
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={weeklyData}>
+                    <div data-chart="weekly-trend" className="w-full h-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={weeklyData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
                       <XAxis 
                         dataKey={weeklyData.length > 0 ? Object.keys(weeklyData[0]).find(key => key !== 'attendanceRate' && key !== 'label') || 'week' : 'week'}
@@ -672,7 +679,8 @@ export const FullscreenWeeklyTrendModal = ({
                         wrapperStyle={{ paddingBottom: '10px' }}
                       />
                     </LineChart>
-                  </ResponsiveContainer>
+                      </ResponsiveContainer>
+                    </div>
                   )}
                 </div>
               </div>
@@ -709,19 +717,22 @@ export const FullscreenWeeklyTrendModal = ({
                     </h4>
                     {weeklyData.map((item, index) => {
                       const label = item.label || item.week || item.day || item.hour || item.month || item.date || `Item ${index + 1}`;
-                      const hasComparison = showComparison && item.previousAttendanceRate !== undefined;
-                      const change = hasComparison ? item.attendanceRate - item.previousAttendanceRate : 0;
-                      const changePercent = hasComparison ? ((change / item.previousAttendanceRate) * 100).toFixed(1) : null;
+                      // Add null checks and default values
+                      const attendanceRate = item.attendanceRate ?? 0;
+                      const previousAttendanceRate = item.previousAttendanceRate ?? 0;
+                      const hasComparison = showComparison && item.previousAttendanceRate !== undefined && item.previousAttendanceRate !== null;
+                      const change = hasComparison ? attendanceRate - previousAttendanceRate : 0;
+                      const changePercent = hasComparison && previousAttendanceRate > 0 ? ((change / previousAttendanceRate) * 100).toFixed(1) : null;
                       
                       return (
                         <div key={index} className={`p-3 rounded ${hasComparison ? 'bg-blue-50 border border-blue-200' : 'bg-gray-50'}`}>
                           <div className="flex items-center justify-between">
                             <span className="font-medium text-gray-700">{label}</span>
                             <div className="text-right">
-                              <span className="text-lg font-bold text-gray-900">{item.attendanceRate.toFixed(1)}%</span>
+                              <span className="text-lg font-bold text-gray-900">{attendanceRate.toFixed(1)}%</span>
                               {hasComparison && (
                                 <div className="flex items-center gap-2 text-sm">
-                                  <span className="text-gray-500">vs {item.previousAttendanceRate.toFixed(1)}%</span>
+                                  <span className="text-gray-500">vs {previousAttendanceRate.toFixed(1)}%</span>
                                   <span className={`font-medium ${change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                                     {change >= 0 ? '+' : ''}{changePercent}%
                                   </span>
@@ -741,7 +752,11 @@ export const FullscreenWeeklyTrendModal = ({
         
         {/* Footer with Export Button */}
         <div className="flex items-center justify-end gap-3 pt-6 border-t border-gray-200 sticky bottom-0 bg-white">
-          <DownloadDropdown onExport={onExport} />
+          <DownloadDropdown 
+            onExport={onExport} 
+            modalType="weekly-trend"
+            chartData={weeklyData}
+          />
         </div>
       </DialogContent>
     </Dialog>
@@ -853,8 +868,9 @@ export const FullscreenLateArrivalModal = ({
                   {lateData.length === 0 ? (
                     <NoDataState selectedSubject={localSelectedSubject} type={type} subjects={subjects} />
                   ) : (
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={lateData}>
+                    <div data-chart="late-arrival-trend" className="w-full h-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={lateData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
                       <XAxis 
                         dataKey={lateData.length > 0 ? Object.keys(lateData[0]).find(key => key !== 'lateRate' && key !== 'label' && key !== 'previousLateRate') || 'week' : 'week'}
@@ -939,19 +955,20 @@ export const FullscreenLateArrivalModal = ({
                         iconType="line"
                         wrapperStyle={{ paddingBottom: '10px' }}
                       />
-                    </LineChart>
-                  </ResponsiveContainer>
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
                   )}
                 </div>
               </div>
             </div>
             
             {/* Detailed Analysis Section */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-3">
-                <div className="w-1 h-5 bg-gradient-to-b from-blue-600 to-blue-800 rounded-full"></div>
-                <h3 className="text-lg font-bold text-blue-900">Late Arrival Analysis</h3>
-              </div>
+              <div className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-1 h-5 bg-gradient-to-b from-blue-600 to-blue-800 rounded-full"></div>
+                  <h3 className="text-lg font-bold text-blue-900">Late Arrival Analysis</h3>
+                </div>
               <div className="bg-white border border-gray-100 rounded-xl p-6 shadow-sm hover:shadow-lg transition-all duration-300 relative overflow-hidden group">
                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-blue-600"></div>
                 <div className="space-y-4">
@@ -977,19 +994,22 @@ export const FullscreenLateArrivalModal = ({
                     </h4>
                     {lateData.map((item, index) => {
                       const label = item.label || item.week || item.day || item.hour || item.month || item.date || `Item ${index + 1}`;
-                      const hasComparison = showComparison && item.previousLateRate !== undefined;
-                      const change = hasComparison ? item.lateRate - item.previousLateRate : 0;
-                      const changePercent = hasComparison ? ((change / item.previousLateRate) * 100).toFixed(1) : null;
+                      // Add null checks and default values
+                      const lateRate = item.lateRate ?? 0;
+                      const previousLateRate = item.previousLateRate ?? 0;
+                      const hasComparison = showComparison && item.previousLateRate !== undefined && item.previousLateRate !== null;
+                      const change = hasComparison ? lateRate - previousLateRate : 0;
+                      const changePercent = hasComparison && previousLateRate > 0 ? ((change / previousLateRate) * 100).toFixed(1) : null;
                       
                       return (
                         <div key={index} className={`p-3 rounded ${hasComparison ? 'bg-red-50 border border-red-200' : 'bg-gray-50'}`}>
                           <div className="flex items-center justify-between">
                             <span className="font-medium text-gray-700">{label}</span>
                             <div className="text-right">
-                              <span className="text-lg font-bold text-gray-900">{item.lateRate.toFixed(1)}%</span>
+                              <span className="text-lg font-bold text-gray-900">{lateRate.toFixed(1)}%</span>
                               {hasComparison && (
                                 <div className="flex items-center gap-2 text-sm">
-                                  <span className="text-gray-500">vs {item.previousLateRate.toFixed(1)}%</span>
+                                  <span className="text-gray-500">vs {previousLateRate.toFixed(1)}%</span>
                                   <span className={`font-medium ${change <= 0 ? 'text-green-600' : 'text-red-600'}`}>
                                     {change <= 0 ? '' : '+'}{changePercent}%
                                   </span>
@@ -1009,7 +1029,11 @@ export const FullscreenLateArrivalModal = ({
         
         {/* Footer with Export Button */}
         <div className="flex items-center justify-end gap-3 pt-6 border-t border-gray-200 sticky bottom-0 bg-white">
-          <DownloadDropdown onExport={onExport} />
+          <DownloadDropdown 
+            onExport={onExport} 
+            modalType="late-arrival-trend"
+            chartData={lateData}
+          />
         </div>
       </DialogContent>
     </Dialog>
@@ -1099,8 +1123,9 @@ export const FullscreenRiskDistributionModal = ({
               <h3 className="text-lg font-semibold text-gray-900">Risk Visualization</h3>
               <div className="bg-white border border-gray-200 rounded-xl p-6">
                 <div className="h-96">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
+                  <div data-chart="risk-level-distribution" className="w-full h-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
                       <Pie
                         data={riskLevelData}
                         cx="50%"
@@ -1128,8 +1153,9 @@ export const FullscreenRiskDistributionModal = ({
                         iconType="circle"
                         wrapperStyle={{ paddingTop: '10px' }}
                       />
-                    </PieChart>
-                  </ResponsiveContainer>
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1182,7 +1208,11 @@ export const FullscreenRiskDistributionModal = ({
         
         {/* Footer with Export Button */}
         <div className="flex items-center justify-end gap-3 pt-6 border-t border-gray-200 sticky bottom-0 bg-white">
-          <DownloadDropdown onExport={onExport} />
+          <DownloadDropdown 
+            onExport={onExport} 
+            modalType="risk-level-distribution"
+            chartData={riskLevelData}
+          />
         </div>
       </DialogContent>
     </Dialog>
@@ -1280,8 +1310,9 @@ export const FullscreenDepartmentPerformanceModal = ({
               <div className="bg-white border border-gray-100 rounded-xl p-6 shadow-sm hover:shadow-lg transition-all duration-300 relative overflow-hidden group">
                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-blue-600"></div>
                 <div className="h-96">
-                  <ResponsiveContainer width="100%" height="100%">
-                                  <BarChart data={departmentStats}>
+                  <div data-chart="department-performance" className="w-full h-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={departmentStats}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
                 <XAxis 
                   dataKey="code" 
@@ -1325,8 +1356,9 @@ export const FullscreenDepartmentPerformanceModal = ({
                           fontWeight: "bold"
                         }}
                       />
-                    </BarChart>
-                  </ResponsiveContainer>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1353,25 +1385,33 @@ export const FullscreenDepartmentPerformanceModal = ({
                   
                   <div className="space-y-3">
                     <h4 className="font-semibold text-gray-900">Department Breakdown</h4>
-                    {departmentStats.map((dept, index) => (
-                      <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded">
-                        <span className="font-medium text-gray-700">{dept.name}</span>
-                        <div className="text-right">
-                          <div className="text-lg font-bold text-gray-900">{dept.attendanceRate.toFixed(1)}%</div>
-                          <div className="text-sm text-gray-600">{dept.count} {type === 'instructor' ? 'instructors' : 'students'}</div>
+                    {departmentStats.map((dept, index) => {
+                      const attendanceRate = dept.attendanceRate ?? 0;
+                      const count = dept.count ?? 0;
+                      return (
+                        <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded">
+                          <span className="font-medium text-gray-700">{dept.name}</span>
+                          <div className="text-right">
+                            <div className="text-lg font-bold text-gray-900">{attendanceRate.toFixed(1)}%</div>
+                            <div className="text-sm text-gray-600">{count} {type === 'instructor' ? 'instructors' : 'students'}</div>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
-
+        
         {/* Footer with Export Button */}
         <div className="flex items-center justify-end gap-3 pt-6 border-t border-gray-200 sticky bottom-0 bg-white">
-          <DownloadDropdown onExport={onExport} />
+          <DownloadDropdown 
+            onExport={onExport} 
+            modalType="department-performance"
+            chartData={departmentStats}
+          />
         </div>
       </DialogContent>
     </Dialog>
@@ -1388,6 +1428,8 @@ export const AttendanceDistributionChart = ({
   totalLate: number;
   totalAbsent: number;
 }) => {
+  console.log('📊 AttendanceDistributionChart data:', { totalPresent, totalLate, totalAbsent });
+  
   const chartData = [
     { name: 'Present', value: totalPresent, color: '#1e40af', icon: '✓' },
     { name: 'Late', value: totalLate, color: '#0ea5e9', icon: '⏰' },
@@ -1396,6 +1438,22 @@ export const AttendanceDistributionChart = ({
 
   const total = totalPresent + totalLate + totalAbsent;
   const attendanceRate = total === 0 ? 0 : (totalPresent / total) * 100;
+  
+  console.log('📈 Chart data:', chartData);
+  console.log('📊 Total:', total, 'Attendance rate:', attendanceRate);
+
+  // If no data, show a message instead of blank chart
+  if (total === 0) {
+    return (
+      <div className="w-full h-[280px] flex items-center justify-center bg-gray-50 rounded-lg">
+        <div className="text-center">
+          <div className="text-gray-400 text-4xl mb-2">📊</div>
+          <div className="text-gray-600 font-medium">No attendance data available</div>
+          <div className="text-gray-500 text-sm">Please check your data source</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full">
@@ -1590,31 +1648,104 @@ const SecondaryFilters = ({
   );
 };
 
-// Reusable Download Dropdown Component
-const DownloadDropdown = ({ onExport }: { onExport?: (format: 'pdf' | 'csv' | 'excel') => void }) => (
-  <DropdownMenu>
-    <DropdownMenuTrigger asChild>
-      <Button variant="outline" size="lg" className="h-8 px-3 text-sm rounded bg-blue-600 text-white border-blue-600 hover:bg-blue-700 hover:text-white hover:border-blue-700">
-        <Download className="w-3 h-3 mr-1" />
-        Export
-      </Button>
-    </DropdownMenuTrigger>
-    <DropdownMenuContent align="end" className="w-40 text-sm">
-      <DropdownMenuItem onClick={() => onExport?.('pdf')}>
-        <FileText className="w-3 h-3 mr-2" />
-        PDF
-      </DropdownMenuItem>
-      <DropdownMenuItem onClick={() => onExport?.('csv')}>
-        <FileSpreadsheet className="w-3 h-3 mr-2" />
-        CSV
-      </DropdownMenuItem>
-      <DropdownMenuItem onClick={() => onExport?.('excel')}>
-        <FileSpreadsheet className="w-3 h-3 mr-2" />
-        Excel
-      </DropdownMenuItem>
-    </DropdownMenuContent>
-  </DropdownMenu>
-);
+// Reusable Download Dropdown Component with modal-specific export
+const DownloadDropdown = ({ 
+  onExport, 
+  modalType, 
+  chartData 
+}: { 
+  onExport?: (format: 'pdf' | 'csv' | 'excel') => void;
+  modalType?: string;
+  chartData?: any;
+}) => {
+  const handleModalExport = async (format: 'pdf' | 'csv' | 'excel') => {
+    try {
+      console.log(`🎯 Modal export triggered for ${modalType} with format ${format}`);
+      
+      // Wait for modal to be fully rendered and visible
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Capture chart elements from within the modal context
+      const modalChartElements = {
+        attendanceDistribution: document.querySelector('[data-chart="attendance-distribution"]') as HTMLElement,
+        weeklyTrend: document.querySelector('[data-chart="weekly-trend"]') as HTMLElement,
+        lateArrivalTrend: document.querySelector('[data-chart="late-arrival-trend"]') as HTMLElement,
+        riskLevelDistribution: document.querySelector('[data-chart="risk-level-distribution"]') as HTMLElement,
+        departmentPerformance: document.querySelector('[data-chart="department-performance"]') as HTMLElement,
+        patternAnalysis: document.querySelector('[data-chart="pattern-analysis"]') as HTMLElement,
+        streakAnalysis: document.querySelector('[data-chart="streak-analysis"]') as HTMLElement
+      };
+
+      // Debug: Log which modal charts are found with detailed info
+      console.log('🔍 Modal chart elements found:', Object.entries(modalChartElements)
+        .map(([key, element]) => ({
+          key,
+          found: !!element,
+          tagName: element?.tagName,
+          hasContent: element ? element.innerHTML.length > 0 : false,
+          dimensions: element ? `${element.offsetWidth}x${element.offsetHeight}` : 'N/A',
+          hasRecharts: element ? !!element.querySelector('.recharts-wrapper') : false
+        }))
+      );
+
+      // Create export data with modal-specific information
+      const exportData = {
+        type: 'student' as const,
+        data: chartData || [],
+        filters: {
+          modalType: modalType || 'unknown',
+          exportSource: 'modal'
+        },
+        timeRange: {
+          start: new Date('2025-04-01'),
+          end: new Date('2025-06-30'),
+          preset: 'semester' as const
+        }
+      };
+
+      const options = {
+        format,
+        filename: `${modalType}-${format}-${new Date().toISOString().split('T')[0]}`,
+        includeCharts: true,
+        includeFilters: true,
+        chartElements: modalChartElements
+      };
+
+      await ExportService.exportAnalytics(exportData, options);
+      
+      // Show success toast
+      console.log(`✅ Modal export completed for ${modalType}`);
+    } catch (error) {
+      console.error('Modal export failed:', error);
+      throw error;
+    }
+  };
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="outline" size="lg" className="h-8 px-3 text-sm rounded bg-blue-600 text-white border-blue-600 hover:bg-blue-700 hover:text-white hover:border-blue-700">
+          <Download className="w-3 h-3 mr-1" />
+          Export
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-40 text-sm">
+        <DropdownMenuItem onClick={() => handleModalExport('pdf')}>
+          <FileText className="w-3 h-3 mr-2" />
+          PDF
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => handleModalExport('csv')}>
+          <FileSpreadsheet className="w-3 h-3 mr-2" />
+          CSV
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => handleModalExport('excel')}>
+          <FileSpreadsheet className="w-3 h-3 mr-2" />
+          Excel
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+};
 
 const ErrorBoundary = ({ error, onRetry }: { error: string; onRetry: () => void }) => (
   <div className="text-center py-8">
@@ -1753,7 +1884,8 @@ export const FullscreenPatternAnalysisModal = ({
                   {patternData.length === 0 ? (
                     <NoDataState selectedSubject={localSelectedSubject} type={type} subjects={subjects} />
                   ) : (
-                    <ResponsiveContainer width="100%" height="100%">
+                    <div data-chart="pattern-analysis" className="w-full h-full">
+                      <ResponsiveContainer width="100%" height="100%">
                       <LineChart data={patternData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
                       <XAxis 
@@ -1823,6 +1955,7 @@ export const FullscreenPatternAnalysisModal = ({
                       />
                     </LineChart>
                   </ResponsiveContainer>
+                    </div>
                   )}
                 </div>
               </div>
@@ -1902,9 +2035,13 @@ export const FullscreenPatternAnalysisModal = ({
           </div>
         </div>
         
- {/* Footer with Export Button */}
- <div className="flex items-center justify-end gap-3 pt-6 border-t border-gray-200 sticky bottom-0 bg-white">
-          <DownloadDropdown onExport={onExport} />
+        {/* Footer with Export Button */}
+        <div className="flex items-center justify-end gap-3 pt-6 border-t border-gray-200 sticky bottom-0 bg-white">
+          <DownloadDropdown 
+            onExport={onExport} 
+            modalType="pattern-analysis"
+            chartData={patternData}
+          />
         </div>
       </DialogContent>
     </Dialog>
@@ -2031,7 +2168,8 @@ export const FullscreenStreakAnalysisModal = ({
               {streakData.data.length === 0 ? (
                 <NoDataState selectedSubject={localSelectedSubject} type={type} subjects={subjects} />
               ) : (
-                <ResponsiveContainer width="100%" height="100%">
+                <div data-chart="streak-analysis" className="w-full h-full">
+                  <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={streakData.data}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
                   <XAxis 
@@ -2086,6 +2224,7 @@ export const FullscreenStreakAnalysisModal = ({
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
+                </div>
               )}
             </div>
           </div>
@@ -2166,7 +2305,11 @@ export const FullscreenStreakAnalysisModal = ({
 
         {/* Footer with Export Button */}
         <div className="flex items-center justify-end gap-3 pt-6 border-t border-gray-200 sticky bottom-0 bg-white">
-          <DownloadDropdown onExport={onExport} />
+          <DownloadDropdown 
+            onExport={onExport} 
+            modalType="streak-analysis"
+            chartData={streakData}
+          />
         </div>
       </DialogContent>
     </Dialog>
@@ -2191,6 +2334,13 @@ export function AttendanceAnalytics({
   onSubjectChange,
   subjects = []
 }: AttendanceAnalyticsProps) {
+  console.log('🎯 AttendanceAnalytics received data:', {
+    dataLength: data?.length,
+    data: data,
+    loading: loading,
+    type: type,
+    hasData: data && data.length > 0
+  });
   // Enhanced state management for advanced interactivity
   const [selectedDepartment, setSelectedDepartment] = useState('all');
   const [selectedRiskLevel, setSelectedRiskLevel] = useState('all');
@@ -2265,8 +2415,11 @@ export function AttendanceAnalytics({
         filteredData = filteredData.filter(item => item.riskLevel === selectedRiskLevel);
       }
 
-      // Apply time range filter
-      if (timeRange && timeRange.preset !== 'custom') {
+      // Apply time range filter - DISABLED for now to show all data
+      // TODO: Implement proper time range filtering later
+      console.log('🕒 Time range filtering DISABLED - showing all data');
+      
+      if (false && timeRange && timeRange.preset !== 'custom') {
         const now = new Date();
         let startDate: Date;
         let endDate: Date = now;
@@ -2292,12 +2445,41 @@ export function AttendanceAnalytics({
             startDate = new Date(0); // Beginning of time
         }
 
-        filteredData = filteredData.filter(item => {
-          if (!item.lastAttendance) return false;
-          const attendanceDate = new Date(item.lastAttendance);
-          return attendanceDate >= startDate && attendanceDate <= endDate;
+        console.log('🕒 Time range filtering:', {
+          preset: timeRange.preset,
+          startDate: startDate.toISOString(),
+          endDate: endDate.toISOString(),
+          dataLength: filteredData.length
         });
-      } else if (timeRange && timeRange.preset === 'custom') {
+
+        filteredData = filteredData.filter(item => {
+          // If no lastAttendance, include the item (don't filter out)
+          if (!item.lastAttendance) return true;
+          
+          try {
+            const attendanceDate = new Date(item.lastAttendance);
+            console.log('🔍 Checking attendance date:', {
+              itemName: item.name,
+              lastAttendance: item.lastAttendance,
+              attendanceDate: attendanceDate.toISOString(),
+              startDate: startDate.toISOString(),
+              endDate: endDate.toISOString(),
+              isInRange: attendanceDate >= startDate && attendanceDate <= endDate
+            });
+            return attendanceDate >= startDate && attendanceDate <= endDate;
+          } catch (error) {
+            console.log('❌ Date parsing error for item:', item.name, error);
+            // If date parsing fails, include the item
+            return true;
+          }
+        });
+
+        console.log('🕒 After time range filtering:', {
+          originalLength: data.length,
+          filteredLength: filteredData.length,
+          removed: data.length - filteredData.length
+        });
+      } else if (false && timeRange && timeRange.preset === 'custom') {
         // Custom date range filtering - more lenient approach
         if (timeRange.start && timeRange.end) {
           const startDate = new Date(timeRange.start);
@@ -2613,11 +2795,35 @@ export function AttendanceAnalytics({
         timeRange
       };
 
+      // Capture chart elements for export with enhanced detection
+      const chartElements = {
+        // Main dashboard charts
+        attendanceTrend: document.querySelector('[data-chart="attendance-trend"]') as HTMLElement,
+        departmentStats: document.querySelector('[data-chart="department-stats"]') as HTMLElement,
+        riskLevelChart: document.querySelector('[data-chart="risk-level"]') as HTMLElement,
+        lateArrivalChart: document.querySelector('[data-chart="late-arrival"]') as HTMLElement,
+        // Expanded modal charts
+        attendanceDistribution: document.querySelector('[data-chart="attendance-distribution"]') as HTMLElement,
+        weeklyTrend: document.querySelector('[data-chart="weekly-trend"]') as HTMLElement,
+        lateArrivalTrend: document.querySelector('[data-chart="late-arrival-trend"]') as HTMLElement,
+        riskLevelDistribution: document.querySelector('[data-chart="risk-level-distribution"]') as HTMLElement,
+        departmentPerformance: document.querySelector('[data-chart="department-performance"]') as HTMLElement,
+        patternAnalysis: document.querySelector('[data-chart="pattern-analysis"]') as HTMLElement,
+        streakAnalysis: document.querySelector('[data-chart="streak-analysis"]') as HTMLElement
+      };
+
+      // Debug: Log which charts are found
+      console.log('🔍 Chart elements found:', Object.entries(chartElements)
+        .filter(([key, element]) => element !== null)
+        .map(([key, element]) => `${key}: ${element?.tagName}`)
+      );
+
       const options = {
         format,
         filename: `${type}-attendance-analytics-${new Date().toISOString().split('T')[0]}`,
         includeCharts: true,
-        includeFilters: true
+        includeFilters: true,
+        chartElements
       };
 
       await ExportService.exportAnalytics(exportData, options);
@@ -2723,8 +2929,13 @@ export function AttendanceAnalytics({
     );
   }
 
-  // Early return only if there's no data at all (not filtered data)
-  if (!analyticsData || analyticsData.totalCount === 0) {
+  // Debug: Check what analyticsData looks like
+  console.log('Analytics data check:', analyticsData);
+  console.log('Has totalCount?', analyticsData?.totalCount);
+  console.log('Data array length:', data?.length);
+
+  // Show analytics even when there's no data, but with a helpful message
+  if (!data || data.length === 0) {
     return (
       <div className="space-y-6">
         {showHeader && (
@@ -2773,8 +2984,21 @@ export function AttendanceAnalytics({
       )}
 
       <div className="px-6 py-6">
+        {/* Show loading or empty state when analyticsData is null */}
+        {!analyticsData && (
+          <div className="flex flex-col items-center justify-center py-12">
+            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+              <BarChart3 className="w-8 h-8 text-gray-400" />
+            </div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">No Data Available</h3>
+            <p className="text-gray-500 text-center max-w-md">
+              {loading ? 'Loading analytics data...' : 'No attendance data found. Please check your data source.'}
+            </p>
+          </div>
+        )}
+
         {/* Advanced Interactivity Features */}
-        {enableAdvancedFeatures && (
+        {enableAdvancedFeatures && analyticsData && (
           <div className="space-y-4">
             {/* Drill-down Breadcrumbs */}
             {drillDownState.isActive && (
@@ -2791,6 +3015,7 @@ export function AttendanceAnalytics({
         )}
 
       {/* Tabbed Analytics Interface */}
+      {analyticsData && (
       <div className="space-y-6 pt-4">
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
@@ -2862,7 +3087,7 @@ export function AttendanceAnalytics({
           </div>
 
           {/* Compact Stats Cards */}
-          {showOverviewCards && (
+          {showOverviewCards && analyticsData && (
           <div id="overview-summary-cards" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {/* Total Count Card */}
             {analyticsData.totalCount > 0 ? (
@@ -2907,7 +3132,7 @@ export function AttendanceAnalytics({
             )}
 
             {/* Attendance Rate Card */}
-            {(analyticsData.attendedClasses + analyticsData.absentClasses + analyticsData.lateClasses) > 0 ? (
+            {analyticsData && (analyticsData.attendedClasses + analyticsData.absentClasses + analyticsData.lateClasses) > 0 ? (
             <div className="bg-white border border-gray-200 rounded p-4 shadow-sm hover:shadow-md transition-all duration-300">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-xs font-medium text-gray-600">Attendance Rate</h3>
@@ -3073,7 +3298,7 @@ export function AttendanceAnalytics({
               </div>
               
               {/* Donut Chart */}
-              {(analyticsData.attendedClasses + analyticsData.absentClasses + analyticsData.lateClasses) > 0 ? (
+              {analyticsData && (analyticsData.attendedClasses + analyticsData.absentClasses + analyticsData.lateClasses) > 0 ? (
               <div className="flex items-center justify-center mb-6">
                 <div className="relative w-56 h-56">
                   <ResponsiveContainer width="100%" height="100%">
@@ -3767,6 +3992,7 @@ export function AttendanceAnalytics({
 
         </Tabs>
       </div>
+      )}
       </div>
     </div>
   );

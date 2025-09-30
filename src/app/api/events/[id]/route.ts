@@ -76,6 +76,106 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   }
 }
 
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    // Authorization: allow ADMIN and INSTRUCTOR
+    const role = request.headers.get('x-user-role');
+    const isDev = process.env.NODE_ENV !== 'production';
+    if (!isDev) {
+      if (!role || (role !== 'ADMIN' && role !== 'INSTRUCTOR')) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+    }
+
+    const { id } = await params;
+    const body = await request.json();
+    const {
+      title,
+      description,
+      eventType,
+      eventDate,
+      endDate,
+      location,
+      capacity,
+      isPublic,
+      requiresRegistration,
+      priority,
+      status,
+      imageUrl,
+      contactEmail,
+      contactPhone,
+    } = body;
+
+    // Validate required fields
+    if (!title || !description || !eventType || !eventDate) {
+      return NextResponse.json(
+        { error: 'Title, description, event type, and event date are required' },
+        { status: 400 }
+      );
+    }
+
+    // Validate event type
+    const validEventTypes = Object.values(EventType);
+    if (!validEventTypes.includes(eventType)) {
+      return NextResponse.json(
+        { error: 'Invalid event type' },
+        { status: 400 }
+      );
+    }
+
+    // Validate priority
+    const validPriorities = Object.values(Priority);
+    if (priority && !validPriorities.includes(priority)) {
+      return NextResponse.json(
+        { error: 'Invalid priority' },
+        { status: 400 }
+      );
+    }
+
+    // Validate status
+    const validStatuses = Object.values(EventStatus);
+    if (status && !validStatuses.includes(status)) {
+      return NextResponse.json(
+        { error: 'Invalid status' },
+        { status: 400 }
+      );
+    }
+
+    const event = await prisma.event.update({
+      where: { eventId: parseInt(id) },
+      data: {
+        title,
+        description,
+        eventType,
+        eventDate: new Date(eventDate),
+        endDate: endDate ? new Date(endDate) : null,
+        location,
+        capacity: capacity ? parseInt(capacity) : null,
+        isPublic: isPublic ?? true,
+        requiresRegistration: requiresRegistration ?? false,
+        priority: priority || Priority.NORMAL,
+        status: status || EventStatus.DRAFT,
+        imageUrl,
+        contactEmail,
+        contactPhone,
+      },
+      include: {
+        createdByAdmin: {
+          select: {
+            userName: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+    return NextResponse.json(event);
+  } catch (error) {
+    console.error('PUT /api/events/[id] error', error);
+    return NextResponse.json({ error: 'Failed to update event' }, { status: 500 });
+  }
+}
+
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     // Authorization: allow ADMIN and INSTRUCTOR

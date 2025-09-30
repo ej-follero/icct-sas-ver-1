@@ -17,7 +17,7 @@ import { Settings, Plus, Trash2, Printer, Loader2, MoreHorizontal, Upload, List,
 import { ImportDialog } from "@/components/reusable/Dialogs/ImportDialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ExportDialog } from '@/components/reusable/Dialogs/ExportDialog';
-import { SortDialog, SortFieldOption } from '@/components/reusable/Dialogs/SortDialog';
+import { SortDialog } from '@/components/reusable/Dialogs/SortDialog';
 import BulkActionsBar from '@/components/reusable/BulkActionsBar';
 import { PrintLayout } from '@/components/PrintLayout';
 import { TableCardView } from '@/components/reusable/Table/TableCardView';
@@ -910,17 +910,6 @@ export default function RoomsPage() {
 
   const selectedRooms = rooms.filter(room => selectedIds.includes(String(room.id)));
 
-  // Sort field options
-  const roomSortFieldOptions: SortFieldOption<RoomSortField>[] = [
-    { value: 'roomNo', label: 'Room Number' },
-    { value: 'roomType', label: 'Type' },
-    { value: 'roomCapacity', label: 'Capacity' },
-    { value: 'roomBuildingLoc', label: 'Building' },
-    { value: 'roomFloorLoc', label: 'Floor' },
-    { value: 'status', label: 'Status' },
-    { value: 'totalSchedules', label: 'Schedules' },
-    { value: 'totalAssignments', label: 'Assignments' },
-  ];
 
   // Handler for bulk assignment
   const handleBulkAssignment = async () => {
@@ -1506,6 +1495,28 @@ export default function RoomsPage() {
         open={importDialogOpen}
         onOpenChange={setImportDialogOpen}
         entityName="rooms"
+        templateUrl="/api/rooms/template"
+        acceptedFileTypes={[".csv", ".xlsx", ".xls"]}
+        maxFileSize={5}
+        fileRequirements={
+          <>
+            <li>• File must be in CSV or Excel format</li>
+            <li>• Maximum file size: 5MB</li>
+            <li>• Required columns: <b>roomNo</b>, <b>roomType</b>, <b>roomCapacity</b>, <b>readerId</b>, <b>roomBuildingLoc</b>, <b>roomFloorLoc</b></li>
+            <li>• Optional columns: <b>status</b>, <b>isActive</b>, <b>lastMaintenance</b>, <b>nextMaintenance</b>, <b>notes</b></li>
+            <li>• <b>roomNo</b>: Must be unique (e.g., "101", "LAB-1", "CONF-A")</li>
+            <li>• <b>roomType</b>: "LECTURE", "LABORATORY", "CONFERENCE", "OFFICE", or "OTHER"</li>
+            <li>• <b>roomCapacity</b>: Must be positive number (e.g., 30, 50)</li>
+            <li>• <b>readerId</b>: Must be unique RFID reader identifier</li>
+            <li>• <b>roomBuildingLoc</b>: "BuildingA", "BuildingB", "BuildingC", "BuildingD", or "BuildingE"</li>
+            <li>• <b>roomFloorLoc</b>: "F1", "F2", "F3", "F4", "F5", or "F6"</li>
+            <li>• <b>status</b>: "AVAILABLE", "OCCUPIED", "MAINTENANCE", "RESERVED", or "INACTIVE" (defaults to "AVAILABLE")</li>
+            <li>• <b>isActive</b>: "true" or "false" (defaults to "true")</li>
+            <li>• <b>lastMaintenance</b>: Date in YYYY-MM-DD format (optional)</li>
+            <li>• <b>nextMaintenance</b>: Date in YYYY-MM-DD format (optional)</li>
+            <li>• <b>notes</b>: Additional room information (optional)</li>
+          </>
+        }
         onImport={async (data) => {
           try {
             const res = await fetch('/api/rooms/bulk', {
@@ -1531,45 +1542,39 @@ export default function RoomsPage() {
             return { success: 0, failed: data.length, errors: ['Failed to import rooms'] };
           }
         }}
-        acceptedFileTypes={['.csv', '.xlsx', '.xls']}
       />
 
       <ExportDialog
         open={exportDialogOpen}
         onOpenChange={setExportDialogOpen}
-        exportableColumns={exportableColumnsForExport}
-        exportColumns={exportColumns}
-        setExportColumns={setExportColumns}
-        exportFormat={exportFormat}
-        setExportFormat={(format) => {
-          if (format) setExportFormat(format);
-        }}
-        onExport={() => {
-          console.log("ExportDialog onExport called");
+        onExport={async (format: 'pdf' | 'excel' | 'csv', options?: any) => {
+          setExportFormat(format);
           handleExport();
         }}
-        title="Export Rooms"
-        tooltip="Export room data in various formats. Choose your preferred export options."
+        dataCount={rooms.length}
+        entityType="student"
       />
 
       <SortDialog
         open={sortDialogOpen}
         onOpenChange={setSortDialogOpen}
-        sortField={sortField}
-        setSortField={field => setSortField(field as RoomSortField)}
-        sortOrder={sortOrder}
-        setSortOrder={setSortOrder}
-        sortFieldOptions={roomSortFieldOptions}
-        onApply={() => {
-          setSortFields([{ field: sortField as SortField, order: sortOrder }]);
-        }}
-        onReset={() => {
-          setSortField('roomNo');
-          setSortOrder('asc');
-          setSortFields([{ field: 'roomNo' as SortField, order: 'asc' }]);
+        sortOptions={[
+          { value: 'roomNo', label: 'Room Number' },
+          { value: 'roomType', label: 'Type' },
+          { value: 'roomCapacity', label: 'Capacity' },
+          { value: 'roomBuildingLoc', label: 'Building' },
+          { value: 'roomFloorLoc', label: 'Floor' },
+          { value: 'status', label: 'Status' },
+          { value: 'totalSchedules', label: 'Schedules' },
+          { value: 'totalAssignments', label: 'Assignments' },
+        ]}
+        currentSort={{ field: sortField, order: sortOrder }}
+        onSortChange={(field: string, order: 'asc' | 'desc') => {
+          setSortField(field as RoomSortField);
+          setSortOrder(order);
         }}
         title="Sort Rooms"
-        tooltip="Sort rooms by different fields. Choose the field and order to organize your list."
+        description="Sort rooms by different fields. Choose the field and order to organize your list."
       />
 
       <VisibleColumnsDialog

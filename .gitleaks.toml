@@ -1,0 +1,17 @@
+title = "gitleaks config"
+
+[allowlist]
+description = "allow benign placeholders"
+regexes = [
+  "<your-16-char-app-password>",
+  "<your-app-password>",
+  "<your-email>@gmail.com",
+  "<username>:<password>",
+  "<your-secure-password-here>",
+  "<generate-with-openssl-or-node>",
+  "change-me",
+]
+
+[rules]
+# Use default built-in rules
+

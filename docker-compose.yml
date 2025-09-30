@@ -4,8 +4,8 @@ services:
     image: postgres:latest
     container_name: icct-sas-db
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-admin}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-admin123}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
       POSTGRES_DB: ${POSTGRES_DB:-icct-sas}
       # Performance optimizations
       POSTGRES_MAX_CONNECTIONS: 100

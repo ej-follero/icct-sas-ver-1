@@ -1,10 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { School, Users, ShieldCheck, BarChart2, ArrowRight, Quote } from "lucide-react";
+import { School, Users, ShieldCheck, BarChart2, ArrowRight, Quote, Send, CheckCircle, AlertCircle } from "lucide-react";
 import React, { useRef, useEffect, useState } from "react";
 import { motion } from "framer-motion";
+import { toast } from "sonner";
 
 const fadeInUp = {
   initial: { opacity: 0, y: 30 },
@@ -13,6 +15,83 @@ const fadeInUp = {
 };
 
 export default function Home() {
+  const router = useRouter();
+  const [activeSection, setActiveSection] = useState('features');
+  const [contactForm, setContactForm] = useState({
+    name: '',
+    email: '',
+    message: ''
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error'>('idle');
+
+  // Smooth scrolling for navigation links
+  const scrollToSection = (sectionId: string) => {
+    const element = document.getElementById(sectionId);
+    if (element) {
+      element.scrollIntoView({ 
+        behavior: 'smooth',
+        block: 'start'
+      });
+    }
+  };
+
+  // Scroll spy for active navigation
+  useEffect(() => {
+    const handleScroll = () => {
+      const sections = ['features', 'stats', 'testimonials', 'contact'];
+      const scrollPosition = window.scrollY + 100;
+
+      for (const section of sections) {
+        const element = document.getElementById(section);
+        if (element) {
+          const { offsetTop, offsetHeight } = element;
+          if (scrollPosition >= offsetTop && scrollPosition < offsetTop + offsetHeight) {
+            setActiveSection(section);
+            break;
+          }
+        }
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  // Handle Get Started button
+  const handleGetStarted = () => {
+    router.push('/login');
+  };
+
+  // Handle contact form submission
+  const handleContactSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    setSubmitStatus('idle');
+
+    try {
+      const response = await fetch('/api/contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(contactForm)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to send message');
+      }
+
+      setSubmitStatus('success');
+      setContactForm({ name: '', email: '', message: '' });
+      toast.success('Message sent successfully! We\'ll get back to you soon.');
+    } catch (error) {
+      setSubmitStatus('error');
+      toast.error(error instanceof Error ? error.message : 'Failed to send message. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-b from-blue-50 via-white to-white">
       {/* Header */}
@@ -23,10 +102,30 @@ export default function Home() {
             <span className="font-bold text-xl text-blue-700 tracking-tight">ICCT Smart Attendance</span>
           </div>
           <nav className="hidden md:flex gap-8 text-blue-700 font-medium">
-            <Link href="#features" className="hover:text-blue-900 transition">Features</Link>
-            <Link href="#stats" className="hover:text-blue-900 transition">Why Us</Link>
-            <Link href="#testimonials" className="hover:text-blue-900 transition">Testimonials</Link>
-            <Link href="#contact" className="hover:text-blue-900 transition">Contact</Link>
+            <button 
+              onClick={() => scrollToSection('features')}
+              className={`hover:text-blue-900 transition ${activeSection === 'features' ? 'text-blue-900 font-semibold' : ''}`}
+            >
+              Features
+            </button>
+            <button 
+              onClick={() => scrollToSection('stats')}
+              className={`hover:text-blue-900 transition ${activeSection === 'stats' ? 'text-blue-900 font-semibold' : ''}`}
+            >
+              Why Us
+            </button>
+            <button 
+              onClick={() => scrollToSection('testimonials')}
+              className={`hover:text-blue-900 transition ${activeSection === 'testimonials' ? 'text-blue-900 font-semibold' : ''}`}
+            >
+              Testimonials
+            </button>
+            <button 
+              onClick={() => scrollToSection('contact')}
+              className={`hover:text-blue-900 transition ${activeSection === 'contact' ? 'text-blue-900 font-semibold' : ''}`}
+            >
+              Contact
+            </button>
           </nav>
           <Button asChild className="ml-4 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-md shadow">
             <Link href="/login">Sign In</Link>
@@ -43,7 +142,10 @@ export default function Home() {
           <p className="max-w-xl text-lg md:text-2xl text-[color:var(--icctSAS-gray-dark)] mb-10">
             Secure, unified access for students, teachers, and schools. Accelerate learning with seamless digital identity and smart attendance.
           </p>
-          <Button className="bg-[color:var(--icctSAS-blue)] hover:bg-[color:var(--icctSAS-blue-dark)] text-white font-semibold px-10 py-4 text-xl rounded-md shadow-xl transition-transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-[color:var(--icctSAS-blue-light)]">
+          <Button 
+            onClick={handleGetStarted}
+            className="bg-[color:var(--icctSAS-blue)] hover:bg-[color:var(--icctSAS-blue-dark)] text-white font-semibold px-10 py-4 text-xl rounded-md shadow-xl transition-transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-[color:var(--icctSAS-blue-light)]"
+          >
             Get Started
           </Button>
         </div>
@@ -131,12 +233,83 @@ export default function Home() {
       <section id="contact" className="bg-[color:var(--icctSAS-blue-light)] py-16 px-4">
         <div className="max-w-2xl mx-auto rounded-2xl shadow-lg bg-white p-8 border border-[color:var(--icctSAS-blue-light)]">
           <h2 className="text-2xl md:text-3xl font-bold text-[color:var(--icctSAS-blue)] mb-6 text-center">Contact Us</h2>
-          <form className="flex flex-col gap-4">
-            <input type="text" placeholder="Your Name" className="border border-[color:var(--icctSAS-gray)] rounded-md px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[color:var(--icctSAS-blue)]" />
-            <input type="email" placeholder="Your Email" className="border border-[color:var(--icctSAS-gray)] rounded-md px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[color:var(--icctSAS-blue)]" />
-            <textarea placeholder="Your Message" rows={4} className="border border-[color:var(--icctSAS-gray)] rounded-md px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[color:var(--icctSAS-blue)]" />
-            <Button className="bg-[color:var(--icctSAS-blue)] hover:bg-[color:var(--icctSAS-blue-dark)] text-white px-6 py-2 rounded-md mt-2">Send Message</Button>
-          </form>
+          
+          {submitStatus === 'success' ? (
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="text-center py-8"
+            >
+              <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
+              <h3 className="text-xl font-semibold text-green-700 mb-2">Message Sent Successfully!</h3>
+              <p className="text-gray-600">We'll get back to you within 24 hours.</p>
+              <Button 
+                onClick={() => setSubmitStatus('idle')}
+                variant="outline" 
+                className="mt-4"
+              >
+                Send Another Message
+              </Button>
+            </motion.div>
+          ) : (
+            <form onSubmit={handleContactSubmit} className="flex flex-col gap-4">
+              <div>
+                <input 
+                  type="text" 
+                  placeholder="Your Name" 
+                  value={contactForm.name}
+                  onChange={(e) => setContactForm(prev => ({ ...prev, name: e.target.value }))}
+                  required
+                  className="w-full border border-[color:var(--icctSAS-gray)] rounded-md px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[color:var(--icctSAS-blue)]" 
+                />
+              </div>
+              <div>
+                <input 
+                  type="email" 
+                  placeholder="Your Email" 
+                  value={contactForm.email}
+                  onChange={(e) => setContactForm(prev => ({ ...prev, email: e.target.value }))}
+                  required
+                  className="w-full border border-[color:var(--icctSAS-gray)] rounded-md px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[color:var(--icctSAS-blue)]" 
+                />
+              </div>
+              <div>
+                <textarea 
+                  placeholder="Your Message" 
+                  rows={4} 
+                  value={contactForm.message}
+                  onChange={(e) => setContactForm(prev => ({ ...prev, message: e.target.value }))}
+                  required
+                  className="w-full border border-[color:var(--icctSAS-gray)] rounded-md px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[color:var(--icctSAS-blue)]" 
+                />
+              </div>
+              
+              {submitStatus === 'error' && (
+                <div className="flex items-center gap-2 text-red-600 text-sm">
+                  <AlertCircle className="w-4 h-4" />
+                  <span>Failed to send message. Please try again.</span>
+                </div>
+              )}
+              
+              <Button 
+                type="submit"
+                disabled={isSubmitting}
+                className="bg-[color:var(--icctSAS-blue)] hover:bg-[color:var(--icctSAS-blue-dark)] text-white px-6 py-2 rounded-md mt-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isSubmitting ? (
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Sending...
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <Send className="w-4 h-4" />
+                    Send Message
+                  </div>
+                )}
+              </Button>
+            </form>
+          )}
         </div>
       </section>
 
@@ -163,10 +336,11 @@ const WaveDivider = ({ color }: { color: string }) => (
   </div>
 );
 
-// Parallax Image
+// Parallax Image with enhanced animations
 function ParallaxHeroImage() {
   const ref = useRef<HTMLDivElement>(null);
   const [offset, setOffset] = useState(0);
+  const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -174,26 +348,47 @@ function ParallaxHeroImage() {
       const rect = ref.current.getBoundingClientRect();
       if (rect.top < window.innerHeight && rect.bottom > 0) {
         setOffset((window.scrollY || 0) * 0.08);
+        setIsVisible(true);
+      } else {
+        setIsVisible(false);
       }
     };
+    
+    // Initial check
+    handleScroll();
     window.addEventListener("scroll", handleScroll, { passive: true });
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
   return (
-    <div
+    <motion.div
       ref={ref}
       className="flex-1 flex justify-center md:justify-end z-10 mt-10 md:mt-0"
       style={{ transform: `translateY(${offset}px)`, transition: "transform 0.2s linear" }}
       aria-hidden="true"
+      initial={{ opacity: 0, scale: 0.8, rotate: -5 }}
+      animate={{ 
+        opacity: isVisible ? 1 : 0.7, 
+        scale: isVisible ? 1 : 0.95,
+        rotate: isVisible ? 0 : -2
+      }}
+      transition={{ duration: 0.8, ease: "easeOut" }}
     >
-      <img
+      <motion.img
         src="/hero-illustration.svg"
         alt="Smart Attendance Illustration"
         className="w-80 md:w-[32rem] drop-shadow-2xl select-none pointer-events-none"
         draggable="false"
+        animate={{
+          y: [0, -10, 0],
+        }}
+        transition={{
+          duration: 4,
+          repeat: Infinity,
+          ease: "easeInOut"
+        }}
       />
-    </div>
+    </motion.div>
   );
 }
 

@@ -1,7 +1,17 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Disable CSP in development to prevent chunk loading issues
+  ...(process.env.NODE_ENV === 'development' && {
+    async headers() {
+      return [];
+    },
+  }),
   images: {
-    remotePatterns: [{ hostname: "images.pexels.com" }],
+    // Restrict to explicit allowlist (adjust as needed)
+    remotePatterns: [
+      { hostname: "images.pexels.com" },
+      // { protocol: 'https', hostname: 'icct.edu.ph' },
+    ],
     dangerouslyAllowSVG: true,
     contentDispositionType: 'attachment',
     contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
@@ -13,7 +23,7 @@ const nextConfig = {
   // Enable compression
   compress: true,
   // Optimize bundle size
-  swcMinify: true,
+  // swcMinify removed (defaults enabled in current Next versions)
   // Suppress development server startup messages
   onDemandEntries: {
     maxInactiveAge: 25 * 1000,
@@ -74,11 +84,11 @@ const nextConfig = {
             key: 'Content-Security-Policy',
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-inline' 'unsafe-eval'", // Required for React/Next.js
+              "script-src 'self' 'unsafe-inline' 'unsafe-eval' 'unsafe-hashes'", // Required for React/Next.js
               "style-src 'self' 'unsafe-inline'", // Required for CSS-in-JS
               "img-src 'self' data: https: blob:",
               "font-src 'self' data:",
-              "connect-src 'self'",
+              "connect-src 'self' ws: wss:",
               "media-src 'self'",
               "object-src 'none'",
               "child-src 'self'",

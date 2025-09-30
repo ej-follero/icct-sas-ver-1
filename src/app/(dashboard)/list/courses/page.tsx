@@ -252,7 +252,6 @@ export default function CourseListPage() {
   const [sortField, setSortField] = useState<CourseSortField>('name');
   const [sortOrder, setSortOrder] = useState<CourseSortOrder>('asc');
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
-  const [exportFormat, setExportFormat] = useState<'pdf' | 'excel' | 'csv' | null>(null);
   const [sortFields, setSortFields] = useState<MultiSortField[]>([
     { field: 'name', order: 'asc' }
   ]);
@@ -266,7 +265,6 @@ export default function CourseListPage() {
     maxInstructors: ''
   });
   const [isDeleting, setIsDeleting] = useState(false);
-  const [isExporting, setIsExporting] = useState(false);
   const [isPrinting, setIsPrinting] = useState(false);
   const [isFiltering, setIsFiltering] = useState(false);
   const [isSorting, setIsSorting] = useState(false);
@@ -793,10 +791,8 @@ export default function CourseListPage() {
     });
   };
 
-  // Export to CSV handler
-  const handleExport = async () => {
-    if (!exportFormat) return;
-
+  // Export handler
+  const handleExport = async (format: 'pdf' | 'excel' | 'csv') => {
     try {
       const selectedCourses = selectedIds.length > 0 
         ? courses.filter(course => selectedIds.includes(course.id))
@@ -804,7 +800,7 @@ export default function CourseListPage() {
 
       const visibleColumns = courseColumns.filter(col => exportColumns.includes(col.key));
 
-      switch (exportFormat) {
+      switch (format) {
         case 'pdf':
           await handleExportPDF(selectedCourses, visibleColumns);
           break;
@@ -816,10 +812,11 @@ export default function CourseListPage() {
           break;
       }
 
-      toast.success(`Courses exported to ${exportFormat.toUpperCase()} successfully.`);
-      setExportDialogOpen(false);
+      toast.success(`Courses exported to ${format.toUpperCase()} successfully.`);
     } catch (error) {
+      console.error('Export error:', error);
       toast.error("Failed to export courses. Please try again.");
+      throw error; // Re-throw to let ExportDialog handle the error state
     }
   };
 
@@ -924,9 +921,16 @@ export default function CourseListPage() {
     // Create and trigger download
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
+    const url = URL.createObjectURL(blob);
+    link.href = url;
     link.download = 'courses-list.csv';
+    link.style.display = 'none';
+    document.body.appendChild(link);
     link.click();
+    
+    // Clean up
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   // Print handler
@@ -1155,12 +1159,22 @@ export default function CourseListPage() {
       toast.error('No courses selected for export');
       return;
     }
+    
+    // Simple debounce to prevent rapid clicking
+    const now = Date.now();
+    if (now - lastExportTime < 2000) { // 2 second debounce
+      toast.error('Please wait before exporting again');
+      return;
+    }
+    
+    setLastExportTime(now);
     handleExportCSV(selectedCourses, courseColumns);
   };
 
   const selectedCourses = courses.filter(course => selectedIds.includes(course.id));
 
   const [exportColumns, setExportColumns] = useState<string[]>(exportableColumns.map(col => col.accessor));
+  const [lastExportTime, setLastExportTime] = useState<number>(0);
 
   // Get unique department codes for filter dropdown
   const departmentOptions = useMemo(() => {
@@ -1618,18 +1632,10 @@ export default function CourseListPage() {
       <ExportDialog
         open={exportDialogOpen}
         onOpenChange={setExportDialogOpen}
-        selectedItems={selectedCourses}
-        entityType="course"
-        entityLabel="course"
-        exportColumns={exportableColumnsForExport.map(col => ({
-          id: col.key,
-          label: col.label,
-          default: true
-        }))}
-        onExport={(options) => {
-          setExportFormat(options.format.toLowerCase() as 'pdf' | 'excel' | 'csv');
-          setExportColumns(options.columns);
-          handleExport();
+        dataCount={selectedCourses.length}
+        entityType="student"
+        onExport={async (format, options) => {
+          await handleExport(format);
         }}
       />
 

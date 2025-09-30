@@ -10,11 +10,14 @@ import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 
 const rfidReaderFormSchema = z.object({
-  deviceId: z.string().min(1, "Device ID is required"),
-  deviceName: z.string().min(1, "Device name is required"),
-  ipAddress: z.string().ip({ version: "v4", message: "Invalid IP address" }),
-  status: z.enum(["ACTIVE", "INACTIVE", "MAINTENANCE"]),
-  roomId: z.number().nullable(),
+  deviceId: z.string().min(1, "Device ID is required").max(50, "Device ID must be less than 50 characters"),
+  deviceName: z.string().optional().or(z.literal("")),
+  ipAddress: z.string().ip({ version: "v4", message: "Invalid IP address" }).optional().or(z.literal("")),
+  status: z.enum(["ACTIVE","INACTIVE","TESTING","CALIBRATION","REPAIR","OFFLINE","ERROR"], {
+    required_error: "Status is required"
+  }),
+  roomId: z.number({ required_error: "Room is required" }).int().min(1, "Room ID must be a positive integer"),
+  notes: z.string().optional().or(z.literal("")),
 });
 
 type RFIDReaderFormData = z.infer<typeof rfidReaderFormSchema>;
@@ -24,17 +27,19 @@ interface RFIDReaderFormProps {
   data?: RFIDReaderFormData;
   id?: number;
   onSuccess: (data: RFIDReaderFormData) => void;
+  showFooter?: boolean;
 }
 
-const RFIDReaderForm: React.FC<RFIDReaderFormProps> = ({ type, data, id, onSuccess }) => {
+const RFIDReaderForm: React.FC<RFIDReaderFormProps> = ({ type, data, id, onSuccess, showFooter = true }) => {
   const form = useForm<RFIDReaderFormData>({
     resolver: zodResolver(rfidReaderFormSchema),
     defaultValues: data || {
       deviceId: "",
-      deviceName: "",
-      ipAddress: "",
+      deviceName: undefined,
+      ipAddress: undefined,
       status: "ACTIVE",
-      roomId: null,
+      roomId: 0,
+      notes: undefined,
     },
   });
 
@@ -47,24 +52,35 @@ const RFIDReaderForm: React.FC<RFIDReaderFormProps> = ({ type, data, id, onSucce
   const onSubmit = async (formData: RFIDReaderFormData) => {
     try {
       const url = type === 'update' ? `/api/rfid/readers/${id}` : '/api/rfid/readers';
-      const method = type === 'update' ? 'PUT' : 'POST';
+      const method = type === 'update' ? 'PATCH' : 'POST';
+      
+      // Clean up the data before sending
+      const cleanData = {
+        deviceId: formData.deviceId.trim(),
+        deviceName: formData.deviceName?.trim() || null,
+        ipAddress: formData.ipAddress?.trim() || null,
+        status: formData.status,
+        roomId: formData.roomId,
+        notes: formData.notes?.trim() || null,
+      };
       
       const response = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(cleanData),
       });
 
       if (!response.ok) {
-        throw new Error(`Failed to ${type} RFID reader`);
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || errorData.message || `Failed to ${type} RFID reader`);
       }
 
       const result = await response.json();
       toast.success(`RFID Reader ${type === 'create' ? 'created' : 'updated'} successfully!`);
       onSuccess(result);
-    } catch (error) {
+    } catch (error: any) {
       console.error(`Error ${type}ing reader:`, error);
-      toast.error(`Failed to ${type} RFID reader.`);
+      toast.error(error.message || `Failed to ${type} RFID reader.`);
     }
   };
 
@@ -126,7 +142,11 @@ const RFIDReaderForm: React.FC<RFIDReaderFormProps> = ({ type, data, id, onSucce
                   <SelectContent>
                     <SelectItem value="ACTIVE">Active</SelectItem>
                     <SelectItem value="INACTIVE">Inactive</SelectItem>
-                    <SelectItem value="MAINTENANCE">Maintenance</SelectItem>
+                    <SelectItem value="TESTING">Testing</SelectItem>
+                    <SelectItem value="CALIBRATION">Calibration</SelectItem>
+                    <SelectItem value="REPAIR">Repair</SelectItem>
+                    <SelectItem value="OFFLINE">Offline</SelectItem>
+                    <SelectItem value="ERROR">Error</SelectItem>
                   </SelectContent>
                 </Select>
                 <FormMessage />
@@ -138,31 +158,33 @@ const RFIDReaderForm: React.FC<RFIDReaderFormProps> = ({ type, data, id, onSucce
             name="roomId"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Assigned Room (Optional)</FormLabel>
+                <FormLabel>Assigned Room *</FormLabel>
                 <FormControl>
-                  {/* This should ideally be a searchable select of rooms */}
                   <Input 
                     type="number"
-                    placeholder="Enter Room ID" 
+                    placeholder="Enter Room ID (must exist in database)" 
                     {...field} 
-                    onChange={e => field.onChange(e.target.value === '' ? null : Number(e.target.value))}
-                    value={field.value ?? ''}
+                    onChange={e => field.onChange(e.target.value === '' ? 0 : Number(e.target.value))}
+                    value={field.value || ''}
                   />
                 </FormControl>
                 <FormMessage />
+                <p className="text-xs text-gray-500">Room ID must reference an existing room in the database</p>
               </FormItem>
             )}
           />
         </div>
-        <div className="flex justify-end gap-4">
-          <Button type="button" variant="outline" onClick={() => form.reset()}>
-            Cancel
-          </Button>
-          <Button type="submit" disabled={form.formState.isSubmitting}>
-            {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {type === "create" ? "Create Reader" : "Save Changes"}
-          </Button>
-        </div>
+        {showFooter && (
+          <div className="flex justify-end gap-4">
+            <Button type="button" variant="outline" onClick={() => form.reset()}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={form.formState.isSubmitting}>
+              {form.formState.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {type === "create" ? "Create Reader" : "Save Changes"}
+            </Button>
+          </div>
+        )}
       </form>
     </Form>
   );

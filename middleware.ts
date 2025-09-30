@@ -7,7 +7,7 @@ import { getRateLimiterForPath } from '@/lib/rate-limiter';
 
 // Define protected routes and their required roles
 const protectedRoutes = {
-  '/dashboard': ['ADMIN', 'INSTRUCTOR', 'STUDENT', 'GUARDIAN'],
+  '/dashboard': ['ADMIN', 'INSTRUCTOR', 'STUDENT'],
   '/list': ['ADMIN', 'INSTRUCTOR'],
   '/reports': ['ADMIN', 'INSTRUCTOR'],
   '/analytics': ['ADMIN', 'INSTRUCTOR'],
@@ -15,8 +15,7 @@ const protectedRoutes = {
   '/rfid': ['ADMIN'],
   '/api/emails': ['ADMIN', 'INSTRUCTOR'],
   '/api/announcements': ['ADMIN', 'INSTRUCTOR'],
-  '/api/communications': ['ADMIN', 'INSTRUCTOR'],
-  '/api/communications/logs': ['ADMIN', 'INSTRUCTOR'],
+  // Removed messaging APIs
   '/api/users': ['ADMIN'],
   '/api/roles': ['ADMIN'],
   '/api/departments': ['ADMIN'],
@@ -111,6 +110,10 @@ export async function middleware(request: NextRequest) {
 
     // Check role-based access
     const userRole = decoded.role;
+    // Hard-block System Auditor role from accessing the app
+    if (userRole === 'SYSTEM_AUDITOR') {
+      return NextResponse.redirect(new URL('/login', request.url));
+    }
     const allowedRoles = Object.entries(protectedRoutes)
       .find(([route]) => pathname.startsWith(route))?.[1] || [];
 

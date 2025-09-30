@@ -24,20 +24,20 @@ export async function GET() {
             lastName: true,
             studentIdNum: true,
             status: true,
+            Guardian: {
+              select: {
+                guardianId: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+                status: true,
+              },
+            },
           },
         },
         Instructor: {
           select: {
             instructorId: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-            status: true,
-          },
-        },
-        Guardian: {
-          select: {
-            guardianId: true,
             firstName: true,
             lastName: true,
             email: true,
@@ -60,7 +60,6 @@ export async function GET() {
       // Get related entity info
       const studentInfo = user.Student?.[0];
       const instructorInfo = user.Instructor?.[0];
-      const guardianInfo = user.Guardian;
       const departmentHeadInfo = user.DepartmentHead?.[0];
 
       // Determine user type and related info
@@ -75,6 +74,12 @@ export async function GET() {
           id: studentInfo.studentId,
           studentIdNum: studentInfo.studentIdNum,
           status: studentInfo.status,
+          guardian: studentInfo.Guardian ? {
+            id: studentInfo.Guardian.guardianId,
+            name: `${studentInfo.Guardian.firstName} ${studentInfo.Guardian.lastName}`.trim(),
+            email: studentInfo.Guardian.email,
+            status: studentInfo.Guardian.status,
+          } : null,
         };
       } else if (instructorInfo) {
         userType = 'Instructor';
@@ -83,14 +88,6 @@ export async function GET() {
           id: instructorInfo.instructorId,
           email: instructorInfo.email,
           status: instructorInfo.status,
-        };
-      } else if (guardianInfo) {
-        userType = 'Guardian';
-        fullName = `${guardianInfo.firstName} ${guardianInfo.lastName}`.trim();
-        relatedInfo = {
-          id: guardianInfo.guardianId,
-          email: guardianInfo.email,
-          status: guardianInfo.status,
         };
       } else if (departmentHeadInfo) {
         userType = 'Department Head';

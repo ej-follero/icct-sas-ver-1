@@ -1,249 +1,212 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
-// Map role names to Role enum values
-const roleNameToEnumMap: { [key: string]: string } = {
-  'Super Admin': 'SUPER_ADMIN',
-  'Admin': 'ADMIN',
-  'Department Head': 'DEPARTMENT_HEAD',
-  'Instructor': 'INSTRUCTOR',
-  'Student': 'STUDENT',
-  'Parent': 'GUARDIAN',
-  'System Auditor': 'SYSTEM_AUDITOR',
-};
-
-// GET /api/roles/[id] - Get a specific role
 export async function GET(
-  request: Request,
+  request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    const { id } = params;
+    // Authorization: allow ADMIN and SUPER_ADMIN
+    const role = request.headers.get('x-user-role');
+    const isDev = process.env.NODE_ENV !== 'production';
     
-    if (!id || isNaN(parseInt(id))) {
-      return NextResponse.json(
-        { error: "Invalid role ID" },
-        { status: 400 }
-      );
+    if (!isDev) {
+      if (!role || (role !== 'ADMIN' && role !== 'SUPER_ADMIN')) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
     }
 
-    const role = await prisma.roleManagement.findUnique({
-      where: {
-        id: parseInt(id),
-      },
+    const roleId = parseInt(params.id);
+    if (isNaN(roleId)) {
+      return NextResponse.json({ error: 'Invalid role ID' }, { status: 400 });
+    }
+
+    const roleData = await prisma.roleManagement.findUnique({
+      where: { id: roleId },
+      include: {
+        _count: {
+          select: {
+            users: true
+          }
+        }
+      }
     });
 
-    if (!role) {
-      return NextResponse.json(
-        { error: "Role not found" },
-        { status: 404 }
-      );
+    if (!roleData) {
+      return NextResponse.json({ error: 'Role not found' }, { status: 404 });
     }
 
-    // Get user count for this role based on the role field in User table
-    const enumRole = roleNameToEnumMap[role.name];
-    const userCount = enumRole ? await prisma.user.count({
-      where: {
-        role: enumRole as any, // Cast to the Role enum type
-      },
-    }) : 0;
-
-    const formattedRole = {
-      id: role.id.toString(),
-      name: role.name,
-      description: role.description || '',
-      permissions: role.permissions as string[],
-      status: role.status,
-      totalUsers: userCount,
-      createdAt: role.createdAt.toISOString(),
-      updatedAt: role.updatedAt.toISOString(),
+    // Transform the response
+    const transformedRole = {
+      id: roleData.id.toString(),
+      name: roleData.name,
+      description: roleData.description || '',
+      permissions: Array.isArray(roleData.permissions) ? roleData.permissions : [],
+      status: roleData.status,
+      totalUsers: roleData._count.users,
+      createdAt: roleData.createdAt.toISOString(),
+      updatedAt: roleData.updatedAt.toISOString()
     };
 
-    return NextResponse.json({ data: formattedRole });
+    return NextResponse.json({ data: transformedRole });
   } catch (error) {
-    console.error('Error fetching role:', error);
-    return NextResponse.json(
-      { 
-        error: "Failed to fetch role",
-        details: process.env.NODE_ENV === 'development' ? error : undefined
-      },
-      { status: 500 }
-    );
+    console.error('GET /api/roles/[id] error', error);
+    return NextResponse.json({ 
+      error: 'Failed to fetch role',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    }, { status: 500 });
   }
 }
 
-// PUT /api/roles/[id] - Update a role
 export async function PUT(
-  request: Request,
+  request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    const { id } = params;
-    const body = await request.json();
-    const { name, description, permissions, status } = body;
+    // Authorization: allow ADMIN and SUPER_ADMIN
+    const role = request.headers.get('x-user-role');
+    const isDev = process.env.NODE_ENV !== 'production';
+    
+    if (!isDev) {
+      if (!role || (role !== 'ADMIN' && role !== 'SUPER_ADMIN')) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+    }
 
-    if (!id || isNaN(parseInt(id))) {
-      return NextResponse.json(
-        { error: "Invalid role ID" },
-        { status: 400 }
-      );
+    const roleId = parseInt(params.id);
+    if (isNaN(roleId)) {
+      return NextResponse.json({ error: 'Invalid role ID' }, { status: 400 });
+    }
+
+    const data = await request.json();
+
+    // Check if role exists
+    const existingRole = await prisma.roleManagement.findUnique({
+      where: { id: roleId }
+    });
+
+    if (!existingRole) {
+      return NextResponse.json({ error: 'Role not found' }, { status: 404 });
+    }
+
+    // Check if name is being changed and if it conflicts with existing roles
+    if (data.name && data.name !== existingRole.name) {
+      const nameConflict = await prisma.roleManagement.findFirst({
+        where: { 
+          name: { 
+            equals: data.name, 
+            mode: "insensitive" 
+          },
+          id: { not: roleId }
+        }
+      });
+
+      if (nameConflict) {
+        return NextResponse.json({ 
+          error: "Role name already exists" 
+        }, { status: 400 });
+      }
+    }
+
+    const updatedRole = await prisma.roleManagement.update({
+      where: { id: roleId },
+      data: {
+        ...(data.name && { name: data.name.trim() }),
+        ...(data.description !== undefined && { description: data.description?.trim() || null }),
+        ...(data.permissions && { permissions: data.permissions }),
+        ...(data.status && { status: data.status }),
+      },
+      include: {
+        _count: {
+          select: {
+            users: true
+          }
+        }
+      }
+    });
+
+    // Transform the response
+    const transformedRole = {
+      id: updatedRole.id.toString(),
+      name: updatedRole.name,
+      description: updatedRole.description || '',
+      permissions: Array.isArray(updatedRole.permissions) ? updatedRole.permissions : [],
+      status: updatedRole.status,
+      totalUsers: updatedRole._count.users,
+      createdAt: updatedRole.createdAt.toISOString(),
+      updatedAt: updatedRole.updatedAt.toISOString()
+    };
+
+    return NextResponse.json({ data: transformedRole });
+  } catch (error: any) {
+    console.error('Error updating role:', error);
+    
+    // Handle specific Prisma errors
+    if (error.code === 'P2002') {
+      return NextResponse.json({ 
+        error: "Role name already exists. Please use a unique name." 
+      }, { status: 400 });
+    }
+    
+    return NextResponse.json({ 
+      error: error.message || "Failed to update role" 
+    }, { status: 500 });
+  }
+}
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    // Authorization: allow ADMIN and SUPER_ADMIN
+    const role = request.headers.get('x-user-role');
+    const isDev = process.env.NODE_ENV !== 'production';
+    
+    if (!isDev) {
+      if (!role || (role !== 'ADMIN' && role !== 'SUPER_ADMIN')) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+    }
+
+    const roleId = parseInt(params.id);
+    if (isNaN(roleId)) {
+      return NextResponse.json({ error: 'Invalid role ID' }, { status: 400 });
     }
 
     // Check if role exists
     const existingRole = await prisma.roleManagement.findUnique({
-      where: {
-        id: parseInt(id),
-      },
+      where: { id: roleId },
+      include: {
+        _count: {
+          select: {
+            users: true
+          }
+        }
+      }
     });
 
     if (!existingRole) {
-      return NextResponse.json(
-        { error: "Role not found" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: 'Role not found' }, { status: 404 });
     }
 
-    // Check if new name conflicts with existing role (excluding current role)
-    if (name && name !== existingRole.name) {
-      const nameConflict = await prisma.roleManagement.findUnique({
-        where: {
-          name: name.trim(),
-        },
-      });
-
-      if (nameConflict) {
-        return NextResponse.json(
-          { error: "Role name already exists" },
-          { status: 409 }
-        );
-      }
+    // Check if role has users assigned
+    if (existingRole._count.users > 0) {
+      return NextResponse.json({ 
+        error: 'Cannot delete role with assigned users' 
+      }, { status: 400 });
     }
 
-    // Update role
-    const updatedRole = await prisma.roleManagement.update({
-      where: {
-        id: parseInt(id),
-      },
-      data: {
-        name: name?.trim() || existingRole.name,
-        description: description?.trim() || existingRole.description,
-        permissions: permissions || existingRole.permissions,
-        status: status || existingRole.status,
-      },
+    await prisma.roleManagement.delete({
+      where: { id: roleId }
     });
 
-    console.log('Updated role:', updatedRole.name);
-
-    // Get user count for the updated role
-    const enumRole = roleNameToEnumMap[updatedRole.name];
-    const userCount = enumRole ? await prisma.user.count({
-      where: {
-        role: enumRole as any, // Cast to the Role enum type
-      },
-    }) : 0;
-
-    const formattedRole = {
-      id: updatedRole.id.toString(),
-      name: updatedRole.name,
-      description: updatedRole.description || '',
-      permissions: updatedRole.permissions as string[],
-      status: updatedRole.status,
-      totalUsers: userCount,
-      createdAt: updatedRole.createdAt.toISOString(),
-      updatedAt: updatedRole.updatedAt.toISOString(),
-    };
-
-    return NextResponse.json(
-      { 
-        data: formattedRole, 
-        message: 'Role updated successfully' 
-      }
-    );
-  } catch (error) {
-    console.error('Error updating role:', error);
-    return NextResponse.json(
-      { 
-        error: "Failed to update role",
-        details: process.env.NODE_ENV === 'development' ? error : undefined
-      },
-      { status: 500 }
-    );
+    return NextResponse.json({ message: 'Role deleted successfully' });
+  } catch (error: any) {
+    console.error('Error deleting role:', error);
+    
+    return NextResponse.json({ 
+      error: error.message || "Failed to delete role" 
+    }, { status: 500 });
   }
 }
-
-// DELETE /api/roles/[id] - Delete a role
-export async function DELETE(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
-  try {
-    const { id } = params;
-
-    if (!id || isNaN(parseInt(id))) {
-      return NextResponse.json(
-        { error: "Invalid role ID" },
-        { status: 400 }
-      );
-    }
-
-    // Check if role exists and has users
-    const role = await prisma.roleManagement.findUnique({
-      where: {
-        id: parseInt(id),
-      },
-    });
-
-    if (!role) {
-      return NextResponse.json(
-        { error: "Role not found" },
-        { status: 404 }
-      );
-    }
-
-    // Check if role has users assigned based on the role field
-    const enumRole = roleNameToEnumMap[role.name];
-    const userCount = enumRole ? await prisma.user.count({
-      where: {
-        role: enumRole as any, // Cast to the Role enum type
-      },
-    }) : 0;
-
-    if (userCount > 0) {
-      return NextResponse.json(
-        { 
-          error: "Cannot delete role that has users assigned",
-          userCount: userCount
-        },
-        { status: 409 }
-      );
-    }
-
-    // Delete role
-    await prisma.roleManagement.delete({
-      where: {
-        id: parseInt(id),
-      },
-    });
-
-    console.log('Deleted role:', role.name);
-
-    return NextResponse.json(
-      { 
-        message: 'Role deleted successfully',
-        deletedRole: {
-          id: role.id.toString(),
-          name: role.name,
-        }
-      }
-    );
-  } catch (error) {
-    console.error('Error deleting role:', error);
-    return NextResponse.json(
-      { 
-        error: "Failed to delete role",
-        details: process.env.NODE_ENV === 'development' ? error : undefined
-      },
-      { status: 500 }
-    );
-  }
-} 

@@ -436,6 +436,7 @@ const CalendarView = ({
             views={['week', 'day']}
             view={view === 'work_week' ? 'week' : view}
             onView={handleOnChangeView}
+            onSelectEvent={(event) => setDialogEvent(event)}
             min={getTime('min')}
             max={getTime('max')}
             className="rounded-xl"

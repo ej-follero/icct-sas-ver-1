@@ -347,12 +347,7 @@ export default function SubjectsPage() {
 
 
 
-  const handleExport = () => {
-    if (!exportFormat) {
-      toast.error("Please select an export format");
-      return;
-    }
-
+  const handleExport = async (format: 'pdf' | 'excel' | 'csv', options?: any) => {
     const selectedColumns = exportableColumnsForExport.filter(col => exportColumns.includes(col.key));
     const headers = selectedColumns.map(col => col.label);
     const rows = (subjects || []).map((subject) =>
@@ -366,7 +361,7 @@ export default function SubjectsPage() {
       })
     );
 
-    switch (exportFormat) {
+    switch (format) {
       case 'csv':
         handleExportToCSV();
         break;
@@ -1156,7 +1151,7 @@ export default function SubjectsPage() {
             loading={loading}
           />
           <SummaryCard
-            icon={<CheckCircle className="text-green-600 w-5 h-5" />}
+            icon={<CheckCircle className="text-blue-600 w-5 h-5" />}
             label="Active Subjects"
             value={activeSubjectsCount}
             valueClassName="text-blue-900"
@@ -1164,7 +1159,7 @@ export default function SubjectsPage() {
             loading={loading}
           />
           <SummaryCard
-            icon={<XCircle className="text-yellow-600 w-5 h-5" />}
+            icon={<XCircle className="text-blue-600 w-5 h-5" />}
             label="Inactive Subjects"
             value={inactiveSubjectsCount}
             valueClassName="text-blue-900"
@@ -1172,7 +1167,7 @@ export default function SubjectsPage() {
             loading={loading}
           />
           <SummaryCard
-            icon={<Calculator className="text-purple-600 w-5 h-5" />}
+            icon={<Calculator className="text-blue-600 w-5 h-5" />}
             label="Total Units"
             value={totalUnitsCount}
             valueClassName="text-blue-900"
@@ -1562,25 +1557,16 @@ export default function SubjectsPage() {
         <ExportDialog
           open={exportDialogOpen}
           onOpenChange={setExportDialogOpen}
-          exportableColumns={exportableColumnsForExport}
-          exportColumns={exportColumns}
-          setExportColumns={setExportColumns}
-          exportFormat={exportFormat}
-          setExportFormat={setExportFormat}
           onExport={handleExport}
-          title="Export Subjects"
-          tooltip="Export subject data in various formats. Choose your preferred export options."
+          dataCount={subjects.length}
+          entityType="student"
         />
 
         {/* Sort Dialog */}
         <SortDialog
           open={sortDialogOpen}
           onOpenChange={setSortDialogOpen}
-          sortField={sortField}
-          setSortField={field => setSortField(field as SortField)}
-          sortOrder={sortOrder}
-          setSortOrder={setSortOrder}
-          sortFieldOptions={[
+          sortOptions={[
             { value: 'subjectName', label: 'Subject Name' },
             { value: 'subjectCode', label: 'Subject Code' },
             { value: 'subjectType', label: 'Type' },
@@ -1589,16 +1575,15 @@ export default function SubjectsPage() {
             { value: 'academicYear', label: 'Academic Year' },
             { value: 'department', label: 'Department' },
           ]}
-          onApply={() => {
-            setSortFields([{ field: sortField, order: sortOrder }]);
-          }}
-          onReset={() => {
-            setSortField('subjectName');
-            setSortOrder('asc');
-            setSortFields([{ field: 'subjectName', order: 'asc' }]);
+          currentSort={{ field: sortField, order: sortOrder }}
+          onSortChange={(field: string, order: 'asc' | 'desc') => {
+            setSortField(field as SortField);
+            setSortOrder(order as SortOrder);
+            setSortFields([{ field: field as SortField, order }]);
           }}
           title="Sort Subjects"
-          tooltip="Sort subjects by different fields. Choose the field and order to organize your list."
+          description="Sort subjects by different fields. Choose the field and order to organize your list."
+          entityType="subjects"
         />
 
         {/* Visible Columns Dialog */}
@@ -1756,6 +1741,25 @@ export default function SubjectsPage() {
           templateUrl="/api/subjects/template"
           acceptedFileTypes={[".csv", ".xlsx", ".xls"]}
           maxFileSize={5}
+          fileRequirements={
+            <>
+              <li>• File must be in CSV or Excel format</li>
+              <li>• Maximum file size: 5MB</li>
+              <li>• Required columns: <b>subjectName</b>, <b>subjectCode</b>, <b>subjectType</b>, <b>courseId</b>, <b>departmentId</b>, <b>academicYear</b>, <b>semester</b>, <b>totalHours</b></li>
+              <li>• Optional columns: <b>description</b>, <b>lectureUnits</b>, <b>labUnits</b>, <b>creditedUnits</b>, <b>prerequisites</b>, <b>maxStudents</b>, <b>status</b></li>
+              <li>• <b>subjectName</b>: Full subject name (e.g., "Introduction to Programming")</li>
+              <li>• <b>subjectCode</b>: Must be unique (e.g., "CS101", "MATH201")</li>
+              <li>• <b>subjectType</b> values: "LECTURE", "LABORATORY", "HYBRID", "THESIS", "RESEARCH", "INTERNSHIP"</li>
+              <li>• <b>courseId</b>: Must match an existing course ID in the system</li>
+              <li>• <b>departmentId</b>: Must match an existing department ID in the system</li>
+              <li>• <b>academicYear</b>: Academic year (e.g., "2024-2025")</li>
+              <li>• <b>semester</b> values: "FIRST_SEMESTER", "SECOND_SEMESTER", "THIRD_SEMESTER"</li>
+              <li>• <b>totalHours</b>: Must be a positive number</li>
+              <li>• <b>status</b> values: "ACTIVE", "INACTIVE", "ARCHIVED", "PENDING_REVIEW" (defaults to "ACTIVE")</li>
+              <li>• <b>lectureUnits</b> and <b>labUnits</b>: Required for HYBRID subjects</li>
+              <li>• <b>creditedUnits</b>: Total credit units (defaults to lectureUnits + labUnits if not specified)</li>
+            </>
+          }
         />
 
         {/* Bulk Actions Dialog */}

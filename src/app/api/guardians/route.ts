@@ -114,22 +114,10 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    
-    // Create user first
-    const user = await prisma.user.create({
-      data: {
-        userName: body.email.split('@')[0], // Use email prefix as username
-        email: body.email,
-        passwordHash: '$2b$10$default.hash.for.new.users', // You should hash this properly
-        role: 'GUARDIAN',
-        status: 'ACTIVE',
-      }
-    });
 
-    // Create guardian
+    // Create guardian (no user account)
     const guardian = await prisma.guardian.create({
       data: {
-        guardianId: user.userId,
         email: body.email,
         phoneNumber: body.phoneNumber,
         firstName: body.firstName,

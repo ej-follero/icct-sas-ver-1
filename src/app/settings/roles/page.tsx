@@ -57,7 +57,7 @@ import { ViewDialog } from '@/components/reusable/Dialogs/ViewDialog';
 
 import { VisibleColumnsDialog, ColumnOption } from '@/components/reusable/Dialogs/VisibleColumnsDialog';
 import { ImportDialog } from '@/components/reusable/Dialogs/ImportDialog';
-import { SortDialog, SortFieldOption } from '@/components/reusable/Dialogs/SortDialog';
+import { SortDialog } from '@/components/reusable/Dialogs/SortDialog';
 import { BulkActionsDialog } from '@/components/reusable/Dialogs/BulkActionsDialog';
 import { PrintLayout } from '@/components/PrintLayout';
 import RoleForm from '@/components/forms/RoleForm';
@@ -166,16 +166,6 @@ const STUDENT_PERMISSIONS = [
   'View Attendance', 'View Reports',
 ];
 
-// GUARDIAN permissions - parent access
-const GUARDIAN_PERMISSIONS = [
-  'View Users', 'View Attendance', 'View Reports',
-];
-
-// SYSTEM_AUDITOR permissions - read-only access
-const SYSTEM_AUDITOR_PERMISSIONS = [
-  'View Users', 'View Attendance', 'View Reports',
-  'Audit Logs', 'System Analytics',
-];
 
 const initialRoles: Role[] = [
   { 
@@ -228,26 +218,7 @@ const initialRoles: Role[] = [
     createdAt: '2024-01-15T10:00:00Z',
     updatedAt: '2024-01-15T10:00:00Z'
   },
-  { 
-    id: '6', 
-    name: 'GUARDIAN', 
-    description: 'View student attendance and reports', 
-    permissions: GUARDIAN_PERMISSIONS,
-    status: 'ACTIVE',
-    totalUsers: 150,
-    createdAt: '2024-01-15T10:00:00Z',
-    updatedAt: '2024-01-15T10:00:00Z'
-  },
-  { 
-    id: '7', 
-    name: 'SYSTEM_AUDITOR', 
-    description: 'Read-only access for compliance and audit purposes', 
-    permissions: SYSTEM_AUDITOR_PERMISSIONS,
-    status: 'ACTIVE',
-    totalUsers: 2,
-    createdAt: '2024-01-15T10:00:00Z',
-    updatedAt: '2024-01-15T10:00:00Z'
-  },
+  
 ];
 
 // Column definitions with optimized widths
@@ -335,7 +306,7 @@ const COLUMN_OPTIONS: ColumnOption[] = roleColumns.map(col => ({
   required: col.key === 'name' || col.key === 'description',
 }));
 
-const roleSortFieldOptions: SortFieldOption<string>[] = [
+const roleSortFieldOptions = [
   { value: 'name', label: 'Role Name' },
   { value: 'description', label: 'Description' },
   { value: 'permissions', label: 'Permissions Count' },
@@ -405,7 +376,7 @@ export default function RolesPage() {
     
     // DEPARTMENT_HEAD can only manage roles at their level and below
     if (currentUserRole === 'DEPARTMENT_HEAD') {
-      const roleHierarchy = ['SUPER_ADMIN', 'ADMIN', 'DEPARTMENT_HEAD', 'INSTRUCTOR', 'STUDENT', 'GUARDIAN', 'SYSTEM_AUDITOR'];
+      const roleHierarchy = ['SUPER_ADMIN', 'ADMIN', 'DEPARTMENT_HEAD', 'INSTRUCTOR', 'STUDENT', 'SYSTEM_AUDITOR'];
       const currentUserIndex = roleHierarchy.indexOf(currentUserRole);
       const roleIndex = roleHierarchy.indexOf(role.name);
       return roleIndex >= currentUserIndex;
@@ -1065,29 +1036,29 @@ export default function RolesPage() {
               </div>
             )}
             
-                         {/* Search and Filter Section */}
-             <div className="border-b border-gray-200 shadow-sm p-2 sm:p-3 md:p-4 lg:p-6">
-               <div className="flex flex-col lg:flex-row gap-2 sm:gap-3 items-start lg:items-center justify-between">
-                                 {/* Search Bar */}
-                 <div className="relative w-full lg:w-auto lg:min-w-[200px] lg:max-w-xs xl:max-w-sm">
+            {/* Search and Filter Section */}
+            <div className="border-b border-gray-200 shadow-sm p-2 sm:p-3 md:p-4 lg:p-6">
+              <div className="flex flex-col lg:flex-row gap-2 sm:gap-3 items-start lg:items-center justify-end">
+                {/* Search Bar */}
+                <div className="relative w-full lg:w-auto lg:min-w-[200px] lg:max-w-xs xl:max-w-sm">
                   <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                                     <input
-                     type="text"
-                     placeholder="Search roles..."
-                     value={searchInput}
-                     onChange={e => setSearchInput(e.target.value)}
-                     className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:outline-none text-gray-500"
-                     aria-label="Search roles by name or description"
-                     aria-describedby="search-help"
-                   />
+                  <input
+                    type="text"
+                    placeholder="Search roles..."
+                    value={searchInput}
+                    onChange={e => setSearchInput(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:outline-none text-gray-500"
+                    aria-label="Search roles by name or description"
+                    aria-describedby="search-help"
+                  />
                   <div id="search-help" className="sr-only">
                     Use Ctrl+F to quickly focus this search box
                   </div>
                 </div>
-                                 {/* Quick Filter Dropdowns */}
-                 <div className="flex flex-wrap gap-2 sm:gap-3 w-full lg:w-auto">
+                {/* Quick Filter Dropdowns */}
+                <div className="flex flex-wrap gap-2 sm:gap-3 w-full lg:w-auto">
                   <Select value={statusFilter} onValueChange={setStatusFilter}>
-                                         <SelectTrigger className="w-full sm:w-28 md:w-32 lg:w-28 text-gray-500 rounded">
+                    <SelectTrigger className="w-full sm:w-28 md:w-32 lg:w-28 text-gray-500 rounded">
                       <SelectValue placeholder="Status" />
                     </SelectTrigger>
                     <SelectContent>
@@ -1378,21 +1349,18 @@ export default function RolesPage() {
         <SortDialog
           open={sortDialogOpen}
           onOpenChange={setSortDialogOpen}
-          sortField={sortField}
-          setSortField={field => setSortField(field as RoleSortField)}
-          sortOrder={sortOrder}
-          setSortOrder={setSortOrder}
-          sortFieldOptions={roleSortFieldOptions}
-          onApply={() => {
-            setSortDialogOpen(false);
+          sortOptions={roleSortFieldOptions}
+          currentSort={{
+            field: sortField,
+            order: sortOrder
           }}
-          onReset={() => {
-            setSortField('name');
-            setSortOrder('asc');
-            setSortDialogOpen(false);
+          onSortChange={(field: string, order: 'asc' | 'desc') => {
+            setSortField(field as RoleSortField);
+            setSortOrder(order);
           }}
           title="Sort Roles"
-          tooltip="Sort roles by different fields. Choose the field and order to organize your list."
+          description="Sort roles by different fields. Choose the field and order to organize your list."
+          entityType="roles"
         />
 
 

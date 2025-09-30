@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "sonner";
+import { useRouter } from "next/navigation";
 
 import PageHeader from "@/components/PageHeader/PageHeader";
 import SummaryCard from "@/components/SummaryCard";
@@ -23,6 +24,7 @@ import { EmptyState } from '@/components/reusable';
 import { SummaryCardSkeleton, PageSkeleton } from '@/components/reusable/Skeleton';
 import { QuickActionsPanel } from '@/components/reusable/QuickActionsPanel';
 import { useDebounce } from '@/hooks/use-debounce';
+import { NotificationDialog } from '@/components/reusable/Dialogs/NotificationDialog';
 
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell, Legend, Tooltip as RechartsTooltip
@@ -426,8 +428,10 @@ const SystemHealthWidget: React.FC<{ health: DashboardData['systemHealth'] }> = 
 
 // Main Dashboard Component
 export default function AdminDashboardPage() {
+  const router = useRouter();
   const [period, setPeriod] = useState('7d');
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [showNotificationDialog, setShowNotificationDialog] = useState(false);
   const { data, loading, error, refetch } = useDashboardData(period);
 
   const handleRefresh = useCallback(async () => {
@@ -441,6 +445,32 @@ export default function AdminDashboardPage() {
       setIsRefreshing(false);
     }
   }, [refetch]);
+
+  // Quick Actions handlers
+  const handleAddStudent = () => {
+    router.push('/list/attendance/students');
+  };
+
+  const handleMarkAttendance = () => {
+    router.push('/list/attendance/students');
+  };
+
+  const handleAddCourse = () => {
+    router.push('/list/courses');
+  };
+
+  const handleGenerateReports = () => {
+    router.push('/reports');
+  };
+
+  const handleSendNotifications = () => {
+    setShowNotificationDialog(true);
+  };
+
+  const handleSystemSettings = () => {
+    // Navigate to RFID config as the closest settings page
+    router.push('/list/rfid/config');
+  };
 
   if (loading) {
     return <PageSkeleton />;
@@ -620,42 +650,42 @@ export default function AdminDashboardPage() {
               label: 'Add Student',
               description: 'Register new student',
               icon: <UserPlus className="w-5 h-5 text-white" />,
-              onClick: () => toast.success('Opening student registration form')
+              onClick: handleAddStudent
             },
             {
               id: 'mark-attendance',
               label: 'Mark Attendance',
               description: 'Manual attendance entry',
               icon: <CalendarCheck className="w-5 h-5 text-white" />,
-              onClick: () => toast.success('Opening attendance marking form')
+              onClick: handleMarkAttendance
             },
             {
               id: 'add-course',
               label: 'Add Course',
               description: 'Create new course',
               icon: <BookOpen className="w-5 h-5 text-white" />,
-              onClick: () => toast.success('Opening course creation form')
+              onClick: handleAddCourse
             },
             {
               id: 'generate-reports',
               label: 'Generate Reports',
               description: 'Export analytics data',
               icon: <FileText className="w-5 h-5 text-white" />,
-              onClick: () => toast.success('Opening report generator')
+              onClick: handleGenerateReports
             },
             {
               id: 'send-notifications',
               label: 'Send Notifications',
               description: 'Alert instructors & students',
               icon: <Bell className="w-5 h-5 text-white" />,
-              onClick: () => toast.success('Opening notification center')
+              onClick: handleSendNotifications
             },
             {
               id: 'system-settings',
               label: 'System Settings',
               description: 'Configure system preferences',
               icon: <Settings className="w-5 h-5 text-white" />,
-              onClick: () => toast.success('Opening system settings')
+              onClick: handleSystemSettings
             }
           ]}
           lastActionTime="2 minutes ago"
@@ -663,8 +693,15 @@ export default function AdminDashboardPage() {
           collapsible={true}
           defaultCollapsed={false}
           onCollapseChange={(collapsed) => {
-            console.log('Quick Actions Panel collapsed:', collapsed);
+            // Handle panel collapse state if needed
+            // Could save to localStorage or update user preferences
           }}
+        />
+
+        {/* Notification Dialog */}
+        <NotificationDialog 
+          open={showNotificationDialog}
+          onOpenChange={setShowNotificationDialog}
         />
       </div>
     </div>

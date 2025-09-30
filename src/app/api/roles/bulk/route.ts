@@ -1,23 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
-interface ImportRoleData {
-  roleName: string;
-  roleDescription?: string;
-  rolePermissions: string[] | string;
-  roleStatus: 'ACTIVE' | 'INACTIVE' | 'ARCHIVED';
-}
-
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { data }: { data: ImportRoleData[] } = body;
+    // Authorization: allow ADMIN and SUPER_ADMIN
+    const role = request.headers.get('x-user-role');
+    const isDev = process.env.NODE_ENV !== 'production';
+    
+    if (!isDev) {
+      if (!role || (role !== 'ADMIN' && role !== 'SUPER_ADMIN')) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+    }
 
-    if (!data || !Array.isArray(data) || data.length === 0) {
-      return NextResponse.json(
-        { error: 'No data provided or invalid data format' },
-        { status: 400 }
-      );
+    const { data: rolesData } = await request.json();
+    
+    if (!Array.isArray(rolesData) || rolesData.length === 0) {
+      return NextResponse.json({ 
+        error: "Invalid data format. Expected array of roles." 
+      }, { status: 400 });
     }
 
     const results = {
@@ -28,54 +29,30 @@ export async function POST(request: NextRequest) {
     };
 
     // Process each role
-    for (let i = 0; i < data.length; i++) {
-      const roleData = data[i];
+    for (let i = 0; i < rolesData.length; i++) {
+      const roleData = rolesData[i];
       
       try {
         // Validate required fields
-        if (!roleData.roleName || roleData.roleName.trim() === '') {
-          results.errors.push(`Row ${i + 1}: Role name is required`);
+        if (!roleData.roleName || !roleData.rolePermissions || !Array.isArray(roleData.rolePermissions)) {
           results.failed++;
-          continue;
-        }
-
-        // Handle rolePermissions - could be string or array
-        let permissions: string[] = [];
-        if (roleData.rolePermissions) {
-          if (typeof roleData.rolePermissions === 'string') {
-            // Handle comma-separated string or JSON string
-            try {
-              const parsed = JSON.parse(roleData.rolePermissions);
-              if (Array.isArray(parsed)) {
-                permissions = parsed;
-              } else {
-                permissions = roleData.rolePermissions.split(',').map(p => p.trim()).filter(p => p);
-              }
-            } catch {
-              // If JSON parsing fails, treat as comma-separated string
-              permissions = roleData.rolePermissions.split(',').map(p => p.trim()).filter(p => p);
-            }
-          } else if (Array.isArray(roleData.rolePermissions)) {
-            permissions = roleData.rolePermissions;
-          }
-        }
-
-        if (permissions.length === 0) {
-          results.errors.push(`Row ${i + 1}: At least one permission is required`);
-          results.failed++;
+          results.errors.push(`Row ${i + 1}: Missing required fields (roleName, rolePermissions)`);
           continue;
         }
 
         // Check if role name already exists
         const existingRole = await prisma.roleManagement.findFirst({
-          where: {
-            name: roleData.roleName.trim()
+          where: { 
+            name: { 
+              equals: roleData.roleName, 
+              mode: "insensitive" 
+            } 
           }
         });
 
         if (existingRole) {
-          results.errors.push(`Row ${i + 1}: Role name "${roleData.roleName}" already exists`);
           results.failed++;
+          results.errors.push(`Row ${i + 1}: Role name "${roleData.roleName}" already exists`);
           continue;
         }
 
@@ -83,46 +60,49 @@ export async function POST(request: NextRequest) {
         const newRole = await prisma.roleManagement.create({
           data: {
             name: roleData.roleName.trim(),
-            description: roleData.roleDescription?.trim() || '',
-            permissions: permissions,
+            description: roleData.roleDescription?.trim() || null,
+            permissions: roleData.rolePermissions,
             status: roleData.roleStatus || 'ACTIVE',
-            totalUsers: 0
+          },
+          include: {
+            _count: {
+              select: {
+                users: true
+              }
+            }
           }
         });
 
-        // Format the response
-        const formattedRole = {
+        // Transform the created role
+        const transformedRole = {
           id: newRole.id.toString(),
           name: newRole.name,
           description: newRole.description || '',
-          permissions: newRole.permissions as string[],
+          permissions: Array.isArray(newRole.permissions) ? newRole.permissions : [],
           status: newRole.status,
-          totalUsers: newRole.totalUsers,
+          totalUsers: newRole._count.users,
           createdAt: newRole.createdAt.toISOString(),
-          updatedAt: newRole.updatedAt.toISOString(),
+          updatedAt: newRole.updatedAt.toISOString()
         };
 
-        results.createdRoles.push(formattedRole);
         results.success++;
+        results.createdRoles.push(transformedRole);
 
-      } catch (error) {
-        console.error(`Error processing role ${i + 1}:`, error);
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        results.errors.push(`Row ${i + 1}: ${errorMessage}`);
+      } catch (error: any) {
         results.failed++;
+        const errorMessage = error.code === 'P2002' 
+          ? `Row ${i + 1}: Role name "${roleData.roleName}" already exists`
+          : `Row ${i + 1}: ${error.message || 'Unknown error'}`;
+        results.errors.push(errorMessage);
       }
     }
 
-    return NextResponse.json({
-      message: `Import completed: ${results.success} roles created, ${results.failed} failed`,
-      results
-    });
-
-  } catch (error) {
-    console.error('Bulk import error:', error);
-    return NextResponse.json(
-      { error: 'Failed to process bulk import' },
-      { status: 500 }
-    );
+    return NextResponse.json({ results });
+  } catch (error: any) {
+    console.error('Error bulk importing roles:', error);
+    
+    return NextResponse.json({ 
+      error: error.message || "Failed to bulk import roles" 
+    }, { status: 500 });
   }
-} 
+}

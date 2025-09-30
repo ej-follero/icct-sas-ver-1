@@ -42,7 +42,7 @@ interface ImportRecord {
   sectionStatus?: "ACTIVE" | "INACTIVE";
   yearLevel?: number;
   courseId?: number;
-  academicYear?: string;
+  sectionAcademicYear?: string;
   semester?: string;
   roomAssignment?: string;
   scheduleNotes?: string;
@@ -56,11 +56,26 @@ interface ImportRecord {
   // User fields
   userName?: string;
   email?: string;
-  role?: "SUPER_ADMIN" | "ADMIN" | "DEPARTMENT_HEAD" | "INSTRUCTOR" | "STUDENT" | "GUARDIAN" | "SYSTEM_AUDITOR";
-  status?: "active" | "inactive" | "suspended" | "pending" | "blocked";
+  role?: "SUPER_ADMIN" | "ADMIN" | "DEPARTMENT_HEAD" | "INSTRUCTOR" | "STUDENT";
+  userStatus?: "active" | "inactive" | "suspended" | "pending" | "blocked";
   isEmailVerified?: boolean;
   twoFactorEnabled?: boolean;
   passwordHash?: string;
+  
+  // Schedule fields
+  subjectId?: number;
+  sectionId?: number;
+  instructorId?: number;
+  roomId?: number;
+  day?: "MONDAY" | "TUESDAY" | "WEDNESDAY" | "THURSDAY" | "FRIDAY" | "SATURDAY" | "SUNDAY";
+  startTime?: string;
+  endTime?: string;
+  scheduleType?: "REGULAR" | "MAKEUP" | "SPECIAL" | "REVIEW" | "EXAM";
+  scheduleStatus?: "ACTIVE" | "CANCELLED" | "POSTPONED" | "COMPLETED" | "CONFLICT";
+  semesterId?: number;
+  scheduleAcademicYear?: string;
+  maxStudents?: number;
+  notes?: string;
   
   // Common fields
   errors?: string[];
@@ -780,7 +795,7 @@ function ImportDialog({
         // academicYear (optional)
         const academicYear = getValue(row, 'academicYear');
         if (academicYear) {
-          record.academicYear = academicYear.trim();
+          record.sectionAcademicYear = academicYear.trim();
         }
 
         // semester (optional)
@@ -1195,7 +1210,7 @@ function ImportDialog({
 
         // role (required)
         const role = getValue(row, 'role').toUpperCase();
-        const validRoles = ['SUPER_ADMIN', 'ADMIN', 'DEPARTMENT_HEAD', 'INSTRUCTOR', 'STUDENT', 'GUARDIAN', 'SYSTEM_AUDITOR'];
+        const validRoles = ['SUPER_ADMIN', 'ADMIN', 'DEPARTMENT_HEAD', 'INSTRUCTOR', 'STUDENT'];
         if (!role || !validRoles.includes(role)) {
           errors.push('Invalid or missing role - will default to STUDENT');
           record.role = 'STUDENT';
@@ -1207,10 +1222,10 @@ function ImportDialog({
         const status = getValue(row, 'status').toLowerCase();
         const validStatuses = ['active', 'inactive', 'suspended', 'pending', 'blocked'];
         if (status && validStatuses.includes(status)) {
-          record.status = status;
+          record.userStatus = status;
         } else if (status) {
           errors.push('Invalid status - will default to active');
-          record.status = 'active';
+          record.userStatus = 'active';
         }
 
         // isEmailVerified (optional)
@@ -1229,6 +1244,362 @@ function ImportDialog({
 
         record.errors = errors;
         record.isValid = true;
+        return record;
+      });
+    }
+
+    if (entityName.toLowerCase() === 'schedule') {
+      // Schedule schema validation
+      return data.map((row, index) => {
+        const errors: string[] = [];
+        const record: any = {
+          subjectId: 0,
+          sectionId: 0,
+          instructorId: 0,
+          roomId: 0,
+          day: 'MONDAY',
+          startTime: '08:00',
+          endTime: '10:00',
+          scheduleType: 'REGULAR',
+          status: 'ACTIVE',
+          semesterId: 0,
+          academicYear: '2024-2025',
+          maxStudents: 30,
+          notes: ''
+        };
+
+        // Helper function to get value regardless of case
+        const getValue = (obj: any, key: string): string => {
+          const lowerKey = key.toLowerCase();
+          const upperKey = key.toUpperCase();
+          if (obj[key] !== undefined) return obj[key];
+          if (obj[lowerKey] !== undefined) return obj[lowerKey];
+          if (obj[upperKey] !== undefined) return obj[upperKey];
+          return '';
+        };
+
+        // Required fields validation
+        const subjectId = getValue(row, 'subjectId');
+        if (!subjectId || isNaN(Number(subjectId))) {
+          errors.push('Subject ID is required and must be a number');
+        } else {
+          record.subjectId = Number(subjectId);
+        }
+
+        const sectionId = getValue(row, 'sectionId');
+        if (!sectionId || isNaN(Number(sectionId))) {
+          errors.push('Section ID is required and must be a number');
+        } else {
+          record.sectionId = Number(sectionId);
+        }
+
+        const instructorId = getValue(row, 'instructorId');
+        if (!instructorId || isNaN(Number(instructorId))) {
+          errors.push('Instructor ID is required and must be a number');
+        } else {
+          record.instructorId = Number(instructorId);
+        }
+
+        const roomId = getValue(row, 'roomId');
+        if (!roomId || isNaN(Number(roomId))) {
+          errors.push('Room ID is required and must be a number');
+        } else {
+          record.roomId = Number(roomId);
+        }
+
+        const day = getValue(row, 'day');
+        const validDays = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
+        if (!day || !validDays.includes(day.toUpperCase())) {
+          errors.push(`Day must be one of: ${validDays.join(', ')}`);
+        } else {
+          record.day = day.toUpperCase();
+        }
+
+        const startTime = getValue(row, 'startTime');
+        if (!startTime || !/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/.test(startTime)) {
+          errors.push('Start time must be in HH:MM format (24-hour)');
+        } else {
+          record.startTime = startTime;
+        }
+
+        const endTime = getValue(row, 'endTime');
+        if (!endTime || !/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/.test(endTime)) {
+          errors.push('End time must be in HH:MM format (24-hour)');
+        } else {
+          record.endTime = endTime;
+        }
+
+        // Optional fields with defaults
+        const scheduleType = getValue(row, 'scheduleType');
+        const validScheduleTypes = ['REGULAR', 'MAKEUP', 'SPECIAL', 'REVIEW', 'EXAM'];
+        if (scheduleType && !validScheduleTypes.includes(scheduleType.toUpperCase())) {
+          errors.push(`Schedule type must be one of: ${validScheduleTypes.join(', ')}`);
+        } else if (scheduleType) {
+          record.scheduleType = scheduleType.toUpperCase();
+        }
+
+        const status = getValue(row, 'status');
+        const validStatuses = ['ACTIVE', 'CANCELLED', 'POSTPONED', 'COMPLETED', 'CONFLICT'];
+        if (status && !validStatuses.includes(status.toUpperCase())) {
+          errors.push(`Status must be one of: ${validStatuses.join(', ')}`);
+        } else if (status) {
+          record.status = status.toUpperCase();
+        }
+
+        const semesterId = getValue(row, 'semesterId');
+        if (semesterId && !isNaN(Number(semesterId))) {
+          record.semesterId = Number(semesterId);
+        }
+
+        const academicYear = getValue(row, 'academicYear');
+        if (academicYear) {
+          record.scheduleAcademicYear = academicYear;
+        }
+
+        const maxStudents = getValue(row, 'maxStudents');
+        if (maxStudents && !isNaN(Number(maxStudents))) {
+          record.maxStudents = Number(maxStudents);
+        }
+
+        const notes = getValue(row, 'notes');
+        if (notes) {
+          record.notes = notes;
+        }
+
+        record.errors = errors;
+        record.isValid = errors.length === 0;
+        return record;
+      });
+    }
+
+    if (entityName.toLowerCase() === 'rfidreader' || entityName.toLowerCase() === 'rfidreaders') {
+      // RFID Reader schema validation
+      return data.map((row, index) => {
+        const errors: string[] = [];
+        const record: any = {
+          deviceId: '',
+          deviceName: '',
+          roomId: null,
+          status: 'ACTIVE',
+          ipAddress: '',
+          notes: ''
+        };
+
+        // Helper function to get value regardless of case
+        const getValue = (obj: any, key: string): string => {
+          const lowerKey = key.toLowerCase();
+          const upperKey = key.toUpperCase();
+          
+          // Try exact match first
+          if (obj[key] !== undefined) return obj[key];
+          
+          // Try lowercase
+          if (obj[lowerKey] !== undefined) return obj[lowerKey];
+          
+          // Try uppercase
+          if (obj[upperKey] !== undefined) return obj[upperKey];
+          
+          return '';
+        };
+
+        // Validate required fields
+        const deviceId = getValue(row, 'deviceId');
+        if (!deviceId || deviceId.trim() === '') {
+          errors.push('Device ID is missing - this field is required');
+          record.deviceId = `READER-${String(index + 1).padStart(3, '0')}`; // Provide default
+        } else {
+          record.deviceId = deviceId.trim();
+          if (record.deviceId.length < 2) {
+            errors.push('Device ID is too short (min 2 characters)');
+          }
+          if (record.deviceId.length > 50) {
+            errors.push('Device ID is too long (max 50 characters)');
+          }
+        }
+
+        // Validate required roomId field
+        const roomId = getValue(row, 'roomId');
+        if (!roomId || roomId.trim() === '') {
+          errors.push('Room ID is missing - this field is required');
+          record.roomId = null;
+        } else {
+          const roomIdNum = Number(roomId);
+          if (isNaN(roomIdNum) || roomIdNum < 1) {
+            errors.push('Invalid room ID - must be a positive number');
+            record.roomId = null;
+          } else {
+            record.roomId = roomIdNum;
+          }
+        }
+
+        // Optional fields
+        const deviceName = getValue(row, 'deviceName');
+        if (deviceName) {
+          record.deviceName = deviceName.trim();
+        }
+
+
+        const status = getValue(row, 'status');
+        if (status) {
+          const validStatuses = ['ACTIVE', 'INACTIVE', 'TESTING', 'CALIBRATION', 'REPAIR', 'OFFLINE', 'ERROR'];
+          const statusUpper = status.toUpperCase().trim();
+          if (validStatuses.includes(statusUpper)) {
+            record.status = statusUpper;
+          } else {
+            errors.push(`Invalid status "${status}" - will default to "ACTIVE"`);
+            record.status = 'ACTIVE';
+          }
+        }
+
+        const ipAddress = getValue(row, 'ipAddress');
+        if (ipAddress) {
+          // Basic IP validation
+          const ipRegex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+          if (ipRegex.test(ipAddress.trim())) {
+            record.ipAddress = ipAddress.trim();
+          } else {
+            errors.push(`Invalid IP address format "${ipAddress}" - will be ignored`);
+            record.ipAddress = '';
+          }
+        }
+
+        const notes = getValue(row, 'notes');
+        if (notes) {
+          record.notes = notes.trim();
+        }
+
+        record.errors = errors;
+        record.isValid = errors.length === 0;
+
+        return record;
+      });
+    }
+
+    if (entityName.toLowerCase() === 'rfidtag' || entityName.toLowerCase() === 'rfidtags') {
+      // RFID Tag validation
+      return data.map((row, index) => {
+        const errors: string[] = [];
+        const warnings: string[] = [];
+        const record: any = {
+          tagNumber: '',
+          tagType: 'STUDENT_CARD',
+          status: 'ACTIVE',
+          notes: '',
+          studentId: null,
+          instructorId: null,
+          assignedBy: null,
+          assignmentReason: '',
+          expiresAt: null
+        };
+
+        const getValue = (obj: any, key: string): string => {
+          const lowerKey = key.toLowerCase();
+          const upperKey = key.toUpperCase();
+          
+          if (obj[key] !== undefined) return obj[key];
+          if (obj[lowerKey] !== undefined) return obj[lowerKey];
+          if (obj[upperKey] !== undefined) return obj[upperKey];
+          
+          return '';
+        };
+
+        // Required field validation
+        const tagNumber = getValue(row, 'tagNumber');
+        if (!tagNumber || tagNumber.trim() === '') {
+          errors.push('Tag number is required');
+        } else {
+          record.tagNumber = tagNumber.trim();
+        }
+
+        // Tag type validation
+        const tagType = getValue(row, 'tagType');
+        if (tagType) {
+          const validTypes = ['STUDENT_CARD', 'INSTRUCTOR_CARD', 'TEMPORARY_PASS', 'VISITOR_PASS', 'MAINTENANCE', 'TEST'];
+          const typeUpper = tagType.toUpperCase().trim();
+          if (validTypes.includes(typeUpper)) {
+            record.tagType = typeUpper;
+          } else {
+            errors.push(`Invalid tag type "${tagType}" - will default to "STUDENT_CARD"`);
+            record.tagType = 'STUDENT_CARD';
+          }
+        }
+
+        // Status validation
+        const status = getValue(row, 'status');
+        if (status) {
+          const validStatuses = ['ACTIVE', 'INACTIVE', 'LOST', 'DAMAGED', 'EXPIRED', 'REPLACED', 'RESERVED'];
+          const statusUpper = status.toUpperCase().trim();
+          if (validStatuses.includes(statusUpper)) {
+            record.status = statusUpper;
+          } else {
+            errors.push(`Invalid status "${status}" - will default to "ACTIVE"`);
+            record.status = 'ACTIVE';
+          }
+        }
+
+        // Student/Instructor ID validation (at least one should be provided)
+        const studentId = getValue(row, 'studentId');
+        const instructorId = getValue(row, 'instructorId');
+        if (studentId) {
+          const studentIdNum = Number(studentId);
+          if (isNaN(studentIdNum) || studentIdNum < 1) {
+            errors.push('Invalid student ID - must be a positive number');
+            record.studentId = null;
+          } else {
+            record.studentId = studentIdNum;
+          }
+        }
+        if (instructorId) {
+          const instructorIdNum = Number(instructorId);
+          if (isNaN(instructorIdNum) || instructorIdNum < 1) {
+            errors.push('Invalid instructor ID - must be a positive number');
+            record.instructorId = null;
+          } else {
+            record.instructorId = instructorIdNum;
+          }
+        }
+        if (!studentId && !instructorId) {
+          warnings.push('Either student ID or instructor ID should be provided');
+        }
+
+        // Optional fields
+        const notes = getValue(row, 'notes');
+        if (notes) {
+          record.notes = notes.trim();
+        }
+
+        const assignedBy = getValue(row, 'assignedBy');
+        if (assignedBy) {
+          const assignedByNum = Number(assignedBy);
+          if (isNaN(assignedByNum) || assignedByNum < 1) {
+            errors.push('Invalid assigned by ID - must be a positive number');
+            record.assignedBy = null;
+          } else {
+            record.assignedBy = assignedByNum;
+          }
+        }
+
+        const assignmentReason = getValue(row, 'assignmentReason');
+        if (assignmentReason) {
+          record.assignmentReason = assignmentReason.trim();
+        }
+
+        // Date validation for expiresAt
+        const expiresAt = getValue(row, 'expiresAt');
+        if (expiresAt) {
+          const date = new Date(expiresAt);
+          if (isNaN(date.getTime())) {
+            errors.push('Invalid expiry date format');
+            record.expiresAt = null;
+          } else {
+            record.expiresAt = date.toISOString();
+          }
+        }
+
+        record.errors = errors;
+        record.warnings = warnings;
+        record.isValid = errors.length === 0;
+
         return record;
       });
     }
@@ -1453,6 +1824,50 @@ function ImportDialog({
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, sheetName);
         XLSX.writeFile(wb, `emails-import-template.xlsx`);
+        return;
+      }
+      if (entityName.toLowerCase() === 'schedule') {
+        templateData = [
+          {
+            subjectId: 1,
+            sectionId: 1,
+            instructorId: 1,
+            roomId: 1,
+            day: "MONDAY",
+            startTime: "08:00",
+            endTime: "10:00",
+            scheduleType: "REGULAR",
+            status: "ACTIVE",
+            semesterId: 1,
+            academicYear: "2024-2025",
+            maxStudents: 30,
+            notes: "Introduction to Programming"
+          },
+          {
+            subjectId: 2,
+            sectionId: 2,
+            instructorId: 2,
+            roomId: 2,
+            day: "TUESDAY",
+            startTime: "10:00",
+            endTime: "12:00",
+            scheduleType: "REGULAR",
+            status: "ACTIVE",
+            semesterId: 1,
+            academicYear: "2024-2025",
+            maxStudents: 25,
+            notes: "Database Management"
+          }
+        ];
+        headers = [
+          'subjectId', 'sectionId', 'instructorId', 'roomId', 'day', 'startTime', 'endTime',
+          'scheduleType', 'status', 'semesterId', 'academicYear', 'maxStudents', 'notes'
+        ];
+        sheetName = 'Schedules Template';
+        const ws = XLSX.utils.json_to_sheet(templateData, { header: headers });
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, sheetName);
+        XLSX.writeFile(wb, `schedule-import-template.xlsx`);
         return;
       }
       if (entityName.toLowerCase() === 'events') {
@@ -1774,7 +2189,7 @@ function ImportDialog({
             field: "role",
             description: "Required: User role",
             example: "STUDENT",
-            notes: "Valid roles: SUPER_ADMIN, ADMIN, DEPARTMENT_HEAD, INSTRUCTOR, STUDENT, GUARDIAN, SYSTEM_AUDITOR"
+            notes: "Valid roles: SUPER_ADMIN, ADMIN, DEPARTMENT_HEAD, INSTRUCTOR, STUDENT"
           },
           {
             field: "status",
@@ -1875,6 +2290,214 @@ function ImportDialog({
         XLSX.utils.book_append_sheet(wb, wsInstructions, "Instructions");
         
         XLSX.writeFile(wb, `role-import-template.xlsx`);
+        return;
+      } else if (entityName.toLowerCase() === 'rfidreader' || entityName.toLowerCase() === 'rfidreaders') {
+        templateData = [
+          {
+            deviceId: "READER-001",
+            deviceName: "Main Entrance Reader",
+            roomId: 1,
+            status: "ACTIVE",
+            ipAddress: "192.168.1.10",
+            notes: "Main entrance RFID reader"
+          },
+          {
+            deviceId: "READER-002", 
+            deviceName: "Library Reader",
+            roomId: 2,
+            status: "ACTIVE",
+            ipAddress: "192.168.1.11",
+            notes: "Library entrance reader"
+          },
+          {
+            deviceId: "READER-003",
+            deviceName: "Lab Reader",
+            roomId: 3,
+            status: "TESTING",
+            ipAddress: "192.168.1.12",
+            notes: "Computer lab reader - under testing"
+          },
+          {
+            deviceId: "READER-004",
+            deviceName: "Office Reader",
+            roomId: 4,
+            status: "INACTIVE",
+            ipAddress: "192.168.1.13",
+            notes: "Office building reader - currently offline"
+          }
+        ];
+        headers = ['deviceId', 'deviceName', 'roomId', 'status', 'ipAddress', 'notes'];
+        sheetName = "RFID Readers Template";
+        
+        // Add instructions sheet
+        const instructionsData = [
+          {
+            field: "deviceId",
+            description: "Required: Unique device identifier",
+            example: "READER-001",
+            notes: "Must be unique across all readers"
+          },
+          {
+            field: "deviceName",
+            description: "Optional: Human-readable device name",
+            example: "Main Entrance Reader",
+            notes: "Descriptive name for the reader"
+          },
+          {
+            field: "roomId",
+            description: "Optional: Room ID where reader is located",
+            example: "1",
+            notes: "Must reference an existing room (numeric)"
+          },
+          {
+            field: "status",
+            description: "Optional: Reader status (defaults to ACTIVE)",
+            example: "ACTIVE",
+            notes: "Valid statuses: ACTIVE, INACTIVE, TESTING, CALIBRATION, REPAIR, OFFLINE, ERROR"
+          },
+          {
+            field: "ipAddress",
+            description: "Optional: IP address of the reader",
+            example: "192.168.1.10",
+            notes: "Network address for device communication"
+          },
+          {
+            field: "notes",
+            description: "Optional: Additional notes about the reader",
+            example: "Main entrance RFID reader",
+            notes: "Any additional information about the device"
+          }
+        ];
+        
+        // Create main data sheet
+        const ws = XLSX.utils.json_to_sheet(templateData, { header: headers });
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, sheetName);
+        
+        // Add instructions sheet
+        const wsInstructions = XLSX.utils.json_to_sheet(instructionsData);
+        XLSX.utils.book_append_sheet(wb, wsInstructions, "Instructions");
+        
+        XLSX.writeFile(wb, `rfid-readers-import-template.xlsx`);
+        return;
+      } else if (entityName.toLowerCase() === 'rfidtag' || entityName.toLowerCase() === 'rfidtags') {
+        templateData = [
+          {
+            tagNumber: "TAG-001",
+            tagType: "STUDENT_CARD",
+            status: "ACTIVE",
+            notes: "Student RFID card",
+            studentId: 1,
+            instructorId: "",
+            assignedBy: 1,
+            assignmentReason: "Initial assignment",
+            expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()
+          },
+          {
+            tagNumber: "TAG-002",
+            tagType: "INSTRUCTOR_CARD",
+            status: "ACTIVE",
+            notes: "Instructor RFID card",
+            studentId: "",
+            instructorId: 1,
+            assignedBy: 1,
+            assignmentReason: "Faculty assignment",
+            expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()
+          },
+          {
+            tagNumber: "TAG-003",
+            tagType: "TEMPORARY_PASS",
+            status: "ACTIVE",
+            notes: "Temporary visitor pass",
+            studentId: "",
+            instructorId: "",
+            assignedBy: 1,
+            assignmentReason: "Visitor access",
+            expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+          },
+          {
+            tagNumber: "TAG-004",
+            tagType: "STUDENT_CARD",
+            status: "LOST",
+            notes: "Lost student card",
+            studentId: 2,
+            instructorId: "",
+            assignedBy: 1,
+            assignmentReason: "Replacement needed",
+            expiresAt: ""
+          }
+        ];
+        headers = ['tagNumber', 'tagType', 'status', 'notes', 'studentId', 'instructorId', 'assignedBy', 'assignmentReason', 'expiresAt'];
+        sheetName = "RFID Tags Template";
+        
+        // Add instructions sheet
+        const instructionsData = [
+          {
+            field: "tagNumber",
+            description: "Required: Unique tag identifier",
+            example: "TAG-001",
+            notes: "Must be unique across all tags"
+          },
+          {
+            field: "tagType",
+            description: "Optional: Type of RFID tag (defaults to STUDENT_CARD)",
+            example: "STUDENT_CARD",
+            notes: "Valid types: STUDENT_CARD, INSTRUCTOR_CARD, TEMPORARY_PASS, VISITOR_PASS, MAINTENANCE, TEST"
+          },
+          {
+            field: "status",
+            description: "Optional: Tag status (defaults to ACTIVE)",
+            example: "ACTIVE",
+            notes: "Valid statuses: ACTIVE, INACTIVE, LOST, DAMAGED, EXPIRED, REPLACED, RESERVED"
+          },
+          {
+            field: "notes",
+            description: "Optional: Additional notes about the tag",
+            example: "Student RFID card",
+            notes: "Any additional information about the tag"
+          },
+          {
+            field: "studentId",
+            description: "Optional: Student ID if assigned to a student",
+            example: "1",
+            notes: "Must reference an existing student (numeric)"
+          },
+          {
+            field: "instructorId",
+            description: "Optional: Instructor ID if assigned to an instructor",
+            example: "1",
+            notes: "Must reference an existing instructor (numeric)"
+          },
+          {
+            field: "assignedBy",
+            description: "Optional: User ID who assigned the tag",
+            example: "1",
+            notes: "Must reference an existing user (numeric)"
+          },
+          {
+            field: "assignmentReason",
+            description: "Optional: Reason for tag assignment",
+            example: "Initial assignment",
+            notes: "Description of why the tag was assigned"
+          },
+          {
+            field: "expiresAt",
+            description: "Optional: Expiration date in ISO 8601 format",
+            example: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+            notes: "Leave empty for no expiration"
+          }
+        ];
+        
+        // Create main data sheet
+        const ws = XLSX.utils.json_to_sheet(templateData, { header: headers });
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, sheetName);
+        
+        // Add instructions sheet
+        const wsInstructions = XLSX.utils.json_to_sheet(instructionsData);
+        XLSX.utils.book_append_sheet(wb, wsInstructions, "Instructions");
+        
+        XLSX.writeFile(wb, `rfid-tags-import-template.xlsx`);
         return;
       } else {
         templateData = [
@@ -2199,6 +2822,55 @@ function ImportDialog({
                         <li>• <b>rolePermissions</b> can be comma-separated or JSON array format</li>
                         <li>• <b>roleStatus</b> values: "ACTIVE", "INACTIVE", or "ARCHIVED" (defaults to "ACTIVE")</li>
                         <li>• Available permissions: View Users, Edit Users, Delete Users, View Attendance, Edit Attendance, Manage Courses, etc.</li>
+                      </>
+                    ) : entityName.toLowerCase() === 'schedule' ? (
+                      <>
+                        <li>• File must be in CSV or Excel format</li>
+                        <li>• Maximum file size: {maxFileSize}MB</li>
+                        <li>• Required columns: <b>subjectId</b>, <b>sectionId</b>, <b>instructorId</b>, <b>roomId</b>, <b>day</b>, <b>startTime</b>, <b>endTime</b></li>
+                        <li>• Optional columns: <b>scheduleType</b>, <b>status</b>, <b>semesterId</b>, <b>academicYear</b>, <b>maxStudents</b>, <b>notes</b></li>
+                        <li>• <b>day</b> values: "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"</li>
+                        <li>• <b>startTime</b>/<b>endTime</b> format: HH:MM (24-hour format, e.g., "08:00", "14:30")</li>
+                        <li>• <b>scheduleType</b> values: "REGULAR", "MAKEUP", "SPECIAL", "REVIEW", "EXAM" (defaults to "REGULAR")</li>
+                        <li>• <b>status</b> values: "ACTIVE", "CANCELLED", "POSTPONED", "COMPLETED", "CONFLICT" (defaults to "ACTIVE")</li>
+                        <li>• <b>subjectId</b>, <b>sectionId</b>, <b>instructorId</b>, <b>roomId</b>, <b>semesterId</b> must be valid IDs from the database</li>
+                        <li>• <b>maxStudents</b> must be a number (defaults to 30)</li>
+                        <li>• <b>academicYear</b> format: "YYYY-YYYY" (e.g., "2024-2025")</li>
+                      </>
+                    ) : entityName.toLowerCase() === 'rfidlog' || entityName.toLowerCase() === 'rfidlogs' ? (
+                      <>
+                        <li>• File must be in CSV or Excel format</li>
+                        <li>• Maximum file size: {maxFileSize}MB</li>
+                        <li>• Required columns: <b>rfidTag</b>, <b>readerId</b>, <b>scanType</b>, <b>scanStatus</b>, <b>location</b>, <b>timestamp</b>, <b>userId</b>, <b>userRole</b></li>
+                        <li>• <b>scanType</b> values: "CHECK_IN", "CHECK_OUT", "VERIFICATION", "TEST_SCAN", "MAINTENANCE"</li>
+                        <li>• <b>scanStatus</b> values: "SUCCESS", "FAILED", "DUPLICATE", "INVALID_TAG", "EXPIRED_TAG", "UNAUTHORIZED", "SYSTEM_ERROR"</li>
+                        <li>• <b>timestamp</b> must be ISO 8601 (e.g., {new Date().toISOString()})</li>
+                        <li>• <b>readerId</b> and <b>userId</b> must be valid numeric IDs</li>
+                        <li>• <b>userRole</b> values: "SUPER_ADMIN", "ADMIN", "DEPARTMENT_HEAD", "INSTRUCTOR", "STUDENT"</li>
+                        <li>• You can download a template: <a className="text-blue-600 underline" href="/api/rfid/logs/template">rfid-logs-template.csv</a></li>
+                      </>
+                    ) : entityName.toLowerCase() === 'rfidreader' || entityName.toLowerCase() === 'rfidreaders' ? (
+                      <>
+                        <li>• File must be in CSV or Excel format</li>
+                        <li>• Maximum file size: {maxFileSize}MB</li>
+                        <li>• Required columns: <b>deviceId</b>, <b>roomId</b></li>
+                        <li>• Optional columns: <b>deviceName</b>, <b>status</b>, <b>ipAddress</b>, <b>notes</b></li>
+                        <li>• <b>status</b> values (ReaderStatus): "ACTIVE", "INACTIVE", "TESTING", "CALIBRATION", "REPAIR", "OFFLINE", "ERROR" (defaults to "ACTIVE")</li>
+                        <li>• <b>roomId</b> must reference an existing room (numeric) - this field is required</li>
+                        <li>• <b>deviceId</b> must be unique (2-50 characters)</li>
+                        <li>• You can download a template: <a className="text-blue-600 underline" href="/api/rfid/readers/template">rfid-readers-template.csv</a></li>
+                      </>
+                    ) : entityName.toLowerCase() === 'rfidtag' || entityName.toLowerCase() === 'rfidtags' ? (
+                      <>
+                        <li>• File must be in CSV or Excel format</li>
+                        <li>• Maximum file size: {maxFileSize}MB</li>
+                        <li>• Required columns: <b>tagNumber</b></li>
+                        <li>• Optional columns: <b>tagType</b>, <b>status</b>, <b>notes</b>, <b>studentId</b>, <b>instructorId</b>, <b>assignedBy</b>, <b>assignmentReason</b>, <b>expiresAt</b></li>
+                        <li>• <b>tagType</b> values: "STUDENT_CARD", "INSTRUCTOR_CARD", "TEMPORARY_PASS", "VISITOR_PASS", "MAINTENANCE", "TEST" (defaults to "STUDENT_CARD")</li>
+                        <li>• <b>status</b> values: "ACTIVE", "INACTIVE", "LOST", "DAMAGED", "EXPIRED", "REPLACED", "RESERVED" (defaults to "ACTIVE")</li>
+                        <li>• <b>studentId</b> and <b>instructorId</b> must reference existing users (numeric)</li>
+                        <li>• <b>expiresAt</b> must be ISO 8601 format (e.g., {new Date().toISOString()})</li>
+                        <li>• You can download a template: <a className="text-blue-600 underline" href="/api/rfid/tags/template">rfid-tags-template.csv</a></li>
                       </>
                     ) : (
                       <>
@@ -2576,7 +3248,7 @@ function ImportDialog({
                                           record.role === 'DEPARTMENT_HEAD' ? 'secondary' :
                                           record.role === 'INSTRUCTOR' ? 'outline' :
                                           record.role === 'STUDENT' ? 'success' :
-                                          record.role === 'GUARDIAN' ? 'secondary' :
+                                          record.role === 'SYSTEM_AUDITOR' ? 'secondary' :
                                           'default'
                                         }>
                                           {record.role}
@@ -2606,6 +3278,98 @@ function ImportDialog({
                                         ) : (
                                           <XCircle className="h-4 w-4 text-red-600" />
                                         )}
+                                      </td>
+                                      <td className="px-4 py-2">
+                                        {record.errors && record.errors.length > 0 ? (
+                                          <AlertTriangle className="h-4 w-4 text-yellow-600" />
+                                        ) : (
+                                          <CheckCircle className="h-4 w-4 text-green-600" />
+                                        )}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            ) : entityName.toLowerCase() === 'rfidreader' || entityName.toLowerCase() === 'rfidreaders' ? (
+                              <table className="w-full text-sm">
+                                <thead className="bg-gray-50">
+                                  <tr>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Device ID</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Device Name</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Room ID</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Status</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">IP Address</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Validation</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-200">
+                                  {importData.slice(0, 5).map((record, index) => (
+                                    <tr key={index} className={record.errors && record.errors.length > 0 ? 'bg-yellow-50' : 'bg-white'}>
+                                      <td className="px-4 py-2">{(record as any).deviceId}</td>
+                                      <td className="px-4 py-2">{(record as any).deviceName || '-'}</td>
+                                      <td className="px-4 py-2">{(record as any).roomId || '-'}</td>
+                                      <td className="px-4 py-2">
+                                        <Badge variant={(record as any).status === 'ACTIVE' ? 'success' : 'destructive'}>
+                                          {(record as any).status}
+                                        </Badge>
+                                      </td>
+                                      <td className="px-4 py-2">{(record as any).ipAddress || '-'}</td>
+                                      <td className="px-4 py-2">
+                                        {record.errors && record.errors.length > 0 ? (
+                                          <AlertTriangle className="h-4 w-4 text-yellow-600" />
+                                        ) : (
+                                          <CheckCircle className="h-4 w-4 text-green-600" />
+                                        )}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            ) : entityName.toLowerCase() === 'rfidtag' || entityName.toLowerCase() === 'rfidtags' ? (
+                              <table className="w-full text-sm">
+                                <thead className="bg-gray-50">
+                                  <tr>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Tag Number</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Tag Type</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Status</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Student ID</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Instructor ID</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Notes</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Validation</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-200">
+                                  {importData.slice(0, 5).map((record, index) => (
+                                    <tr key={index} className={record.errors && record.errors.length > 0 ? 'bg-yellow-50' : 'bg-white'}>
+                                      <td className="px-4 py-2">{(record as any).tagNumber}</td>
+                                      <td className="px-4 py-2">
+                                        <Badge variant={
+                                          (record as any).tagType === 'STUDENT_CARD' ? 'default' :
+                                          (record as any).tagType === 'INSTRUCTOR_CARD' ? 'secondary' :
+                                          (record as any).tagType === 'TEMPORARY_PASS' ? 'outline' :
+                                          (record as any).tagType === 'VISITOR_PASS' ? 'success' :
+                                          'default'
+                                        }>
+                                          {(record as any).tagType || '-'}
+                                        </Badge>
+                                      </td>
+                                      <td className="px-4 py-2">
+                                        <Badge variant={
+                                          (record as any).status === 'ACTIVE' ? 'success' :
+                                          (record as any).status === 'INACTIVE' ? 'secondary' :
+                                          (record as any).status === 'LOST' ? 'destructive' :
+                                          (record as any).status === 'DAMAGED' ? 'destructive' :
+                                          'default'
+                                        }>
+                                          {(record as any).status || 'ACTIVE'}
+                                        </Badge>
+                                      </td>
+                                      <td className="px-4 py-2">{(record as any).studentId || '-'}</td>
+                                      <td className="px-4 py-2">{(record as any).instructorId || '-'}</td>
+                                      <td className="px-4 py-2">
+                                        <div className="max-w-xs truncate" title={(record as any).notes}>
+                                          {(record as any).notes || '-'}
+                                        </div>
                                       </td>
                                       <td className="px-4 py-2">
                                         {record.errors && record.errors.length > 0 ? (
@@ -2740,19 +3504,7 @@ function ImportDialog({
           </div>
 
           {/* Footer */}
-          <DialogFooter className="flex items-center justify-between pt-6 border-t border-gray-200 flex-shrink-0 px-6">
-            <div className="flex items-center gap-2">
-              {templateUrl && (
-                <Button
-                  variant="outline"
-                  onClick={handleDownloadTemplate}
-                  className="border-blue-300 text-blue-700 hover:bg-blue-50 rounded"
-                >
-                  <Download className="h-4 w-4 mr-2" />
-                  Download Template
-                </Button>
-              )}
-            </div>
+          <DialogFooter className="flex items-center justify-end pt-6 border-t border-gray-200 flex-shrink-0 px-6">
             
             <div className="flex gap-2">
               <Button

@@ -8,7 +8,7 @@ import { UserStatus, Role } from '@prisma/client';
 const userImportSchema = z.object({
   userName: z.string().min(1, "Username is required"),
   email: z.string().email("Invalid email address"),
-  role: z.enum(["SUPER_ADMIN", "ADMIN", "DEPARTMENT_HEAD", "INSTRUCTOR", "STUDENT", "GUARDIAN", "SYSTEM_AUDITOR"]),
+  role: z.enum(["SUPER_ADMIN", "ADMIN", "DEPARTMENT_HEAD", "INSTRUCTOR", "STUDENT"]),
   status: z.enum(["active", "inactive", "suspended", "pending", "blocked"]).optional().default("active"),
   isEmailVerified: z.boolean().optional().default(false),
   twoFactorEnabled: z.boolean().optional().default(false),
@@ -197,49 +197,6 @@ export async function POST(request: NextRequest) {
                   }
                 });
               }
-              if (record.role === 'GUARDIAN' && record.firstName && record.lastName && record.phoneNumber && record.gender && record.guardianType && record.relationshipToStudent) {
-                await prisma.guardian.upsert({
-                  where: { guardianId: existingUser.userId },
-                  update: {
-                    email: record.email,
-                    phoneNumber: record.phoneNumber,
-                    firstName: record.firstName,
-                    middleName: record.middleName ?? null,
-                    lastName: record.lastName,
-                    suffix: null,
-                    address: record.address ?? '',
-                    img: null,
-                    gender: record.gender as any,
-                    guardianType: record.guardianType as any,
-                    occupation: record.occupation ?? null,
-                    workplace: record.workplace ?? null,
-                    emergencyContact: record.emergencyContact ?? null,
-                    relationshipToStudent: record.relationshipToStudent,
-                    totalStudents: undefined,
-                    lastLogin: null,
-                  },
-                  create: {
-                    guardianId: existingUser.userId,
-                    email: record.email,
-                    phoneNumber: record.phoneNumber,
-                    firstName: record.firstName,
-                    middleName: record.middleName ?? null,
-                    lastName: record.lastName,
-                    suffix: null,
-                    address: record.address ?? '',
-                    img: null,
-                    gender: record.gender as any,
-                    guardianType: record.guardianType as any,
-                    status: UserStatus.ACTIVE as any,
-                    occupation: record.occupation ?? null,
-                    workplace: record.workplace ?? null,
-                    emergencyContact: record.emergencyContact ?? null,
-                    relationshipToStudent: record.relationshipToStudent,
-                    totalStudents: 0,
-                    lastLogin: null,
-                  }
-                });
-              }
             } catch (roleErr: any) {
               results.errors.push(`Row ${i + 1}: ${roleErr?.message || 'Failed updating role entity'}`);
             }
@@ -333,30 +290,6 @@ export async function POST(request: NextRequest) {
               lastLogin: null,
               guardianId: record.guardianId ?? 0,
               userId: createdUser.userId,
-            }
-          });
-        }
-        if (record.role === 'GUARDIAN' && record.firstName && record.lastName && record.phoneNumber && record.gender && record.guardianType && record.relationshipToStudent) {
-          await prisma.guardian.create({
-            data: {
-              guardianId: createdUser.userId,
-              email: record.email,
-              phoneNumber: record.phoneNumber,
-              firstName: record.firstName,
-              middleName: record.middleName ?? null,
-              lastName: record.lastName,
-              suffix: null,
-              address: record.address ?? '',
-              img: null,
-              gender: record.gender as any,
-              guardianType: record.guardianType as any,
-              status: UserStatus.ACTIVE as any,
-              occupation: record.occupation ?? null,
-              workplace: record.workplace ?? null,
-              emergencyContact: record.emergencyContact ?? null,
-              relationshipToStudent: record.relationshipToStudent,
-              totalStudents: 0,
-              lastLogin: null,
             }
           });
         }

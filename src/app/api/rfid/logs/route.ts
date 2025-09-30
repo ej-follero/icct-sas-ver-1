@@ -1,58 +1,105 @@
-import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
+
+// Map Prisma enums to UI values
+function mapScanStatusToUi(status: string): 'success' | 'error' | 'unauthorized' | 'timeout' {
+  switch (status) {
+    case 'SUCCESS':
+      return 'success';
+    case 'UNAUTHORIZED':
+      return 'unauthorized';
+    // There is no TIMEOUT in schema; treat FAILED and others as error
+    case 'FAILED':
+    default:
+      return 'error';
+  }
+}
+
+function mapScanTypeToUi(type: string): 'entry' | 'exit' | 'attendance' | 'access' {
+  switch (type) {
+    case 'CHECK_IN':
+      return 'entry';
+    case 'CHECK_OUT':
+      return 'exit';
+    case 'VERIFICATION':
+      return 'access';
+    case 'TEST_SCAN':
+    case 'MAINTENANCE':
+    default:
+      return 'access';
+  }
+}
+
+function mapUiStatusToPrisma(status: string | null | undefined) {
+  if (!status) return undefined;
+  const s = status.toLowerCase();
+  if (s === 'success') return 'SUCCESS';
+  if (s === 'unauthorized') return 'UNAUTHORIZED';
+  if (s === 'error') return 'FAILED';
+  return undefined;
+}
+
+function mapUiScanTypeToPrisma(type: string | null | undefined) {
+  if (!type) return undefined;
+  const t = type.toLowerCase();
+  if (t === 'entry') return 'CHECK_IN';
+  if (t === 'exit') return 'CHECK_OUT';
+  if (t === 'access') return 'VERIFICATION';
+  // no direct mapping for 'attendance' in current enum -> treat as VERIFICATION
+  if (t === 'attendance') return 'VERIFICATION';
+  return undefined;
+}
 
 export async function GET(request: Request) {
   try {
-    const { searchParams } = new URL(request.url);
-    const page = parseInt(searchParams.get("page") || "1", 10);
-    const pageSize = parseInt(searchParams.get("pageSize") || "10", 10);
-    const search = searchParams.get("search") || "";
-    const severity = searchParams.get("severity") || "";
-    const eventType = searchParams.get("eventType") || "";
-    const readerId = searchParams.get("readerId") || "";
-    const startDate = searchParams.get("startDate") || "";
-    const endDate = searchParams.get("endDate") || "";
-    const sortBy = searchParams.get("sortBy") || "timestamp";
-    const sortDir = searchParams.get("sortDir") === "asc" ? "asc" : "desc";
+    const url = new URL(request.url);
+    const statusParam = url.searchParams.get('status');
+    const scanTypeParam = url.searchParams.get('scanType');
+    const locationParam = url.searchParams.get('location');
+    const dateParam = url.searchParams.get('date'); // YYYY-MM-DD (UTC day)
+    const startIso = url.searchParams.get('start'); // ISO string (client-local day start)
+    const endIso = url.searchParams.get('end');     // ISO string (client-local day end)
 
-    // Build where clause
     const where: any = {};
-    if (search) {
-      where.OR = [
-        { message: { contains: search, mode: "insensitive" } },
-        { ipAddress: { contains: search, mode: "insensitive" } },
-        { resolution: { contains: search, mode: "insensitive" } },
-      ];
-    }
-    if (severity) where.severity = severity;
-    if (eventType) where.eventType = eventType;
-    if (readerId) where.readerId = parseInt(readerId);
-    if (startDate && endDate) {
-      where.timestamp = {
-        gte: new Date(startDate),
-        lte: new Date(endDate),
-      };
+    const statusPrisma = mapUiStatusToPrisma(statusParam || undefined);
+    const typePrisma = mapUiScanTypeToPrisma(scanTypeParam || undefined);
+    if (statusPrisma) where.scanStatus = statusPrisma;
+    if (typePrisma) where.scanType = typePrisma;
+    if (locationParam && locationParam !== 'all') where.location = locationParam;
+    if (startIso && endIso) {
+      where.timestamp = { gte: new Date(startIso), lte: new Date(endIso) };
+    } else if (dateParam) {
+      const start = new Date(`${dateParam}T00:00:00.000Z`);
+      const end = new Date(`${dateParam}T23:59:59.999Z`);
+      where.timestamp = { gte: start, lte: end };
     }
 
-    const total = await prisma.rFIDReaderLogs.count({ where });
-    const logs = await prisma.rFIDReaderLogs.findMany({
+    const logs = await prisma.rFIDLogs.findMany({
       where,
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-      orderBy: { [sortBy]: sortDir },
+      orderBy: { timestamp: 'desc' },
+      take: 500,
       include: {
-        reader: {
-          select: {
-            readerId: true,
-            deviceId: true,
-            deviceName: true,
-            roomId: true,
-          },
-        },
+        user: true,
+        reader: true,
       },
     });
-    return NextResponse.json({ data: logs, total });
-  } catch (error) {
-    return NextResponse.json({ error: "Failed to fetch RFID reader logs" }, { status: 500 });
+
+    const data = logs.map((l) => ({
+      id: String(l.logsId),
+      tagId: l.rfidTag,
+      readerId: String(l.readerId),
+      studentId: undefined as string | undefined,
+      studentName: l.user ? `${l.user.userName}` : undefined,
+      location: l.location,
+      timestamp: l.timestamp.toISOString(),
+      status: mapScanStatusToUi(String(l.scanStatus)),
+      scanType: mapScanTypeToUi(String(l.scanType)),
+      duration: undefined as number | undefined,
+      notes: undefined as string | undefined,
+    }));
+
+    return NextResponse.json(data);
+  } catch (e: any) {
+    return NextResponse.json({ error: e?.message || 'Failed to fetch RFID logs' }, { status: 500 });
   }
-} 
+}

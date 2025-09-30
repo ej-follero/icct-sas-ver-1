@@ -40,7 +40,7 @@ const userSchema = z.object({
   // Basic user fields
   userName: z.string().min(1, "Username is required"),
   email: z.string().email("Invalid email address"),
-  role: z.enum(["SUPER_ADMIN", "ADMIN", "DEPARTMENT_HEAD", "INSTRUCTOR", "STUDENT", "GUARDIAN", "SYSTEM_AUDITOR"]),
+  role: z.enum(["SUPER_ADMIN", "ADMIN", "DEPARTMENT_HEAD", "INSTRUCTOR", "STUDENT"]),
   status: z.enum(["active", "inactive", "suspended", "pending", "blocked"]),
   isEmailVerified: z.boolean(),
   twoFactorEnabled: z.boolean(),
@@ -72,13 +72,6 @@ const userSchema = z.object({
   nationality: z.string().optional(),
   guardianId: z.number().optional(),
   
-  // Guardian
-  guardianType: z.enum(["PARENT", "GUARDIAN"]).optional(),
-  occupation: z.string().optional(),
-  workplace: z.string().optional(),
-  emergencyContact: z.string().optional(),
-  relationshipToStudent: z.string().optional(),
-  
   // RFID and system fields
   rfidTag: z.string().optional(),
 }).refine((data) => {
@@ -89,10 +82,6 @@ const userSchema = z.object({
   // Student required: studentIdNum, studentType, yearLevel, (courseId can be null), address, email, phoneNumber, rfidTag
   if (data.role === "STUDENT") {
     return !!(data.studentIdNum && data.studentType && data.yearLevel && (data.address && data.address.length > 0) && (data.rfidTag && data.rfidTag.length > 0));
-  }
-  // Guardian required: guardianType, relationshipToStudent
-  if (data.role === "GUARDIAN") {
-    return !!(data.guardianType && data.relationshipToStudent);
   }
   return true;
 }, {
@@ -129,11 +118,6 @@ const defaultValues: UserFormValues = {
   birthDate: "",
   nationality: "",
   guardianId: undefined,
-  guardianType: undefined,
-  occupation: "",
-  workplace: "",
-  emergencyContact: "",
-  relationshipToStudent: "",
   rfidTag: "",
 };
 
@@ -152,13 +136,14 @@ export function UserForm({ open, onOpenChange, type, data, id, onSuccess }: User
   const [departments, setDepartments] = useState<Array<{departmentId: number, departmentName: string}>>([]);
   const [courses, setCourses] = useState<Array<{courseId: number, courseName: string}>>([]);
   const [guardians, setGuardians] = useState<Array<{guardianId: number, firstName: string, lastName: string}>>([]);
+  const [rfidTags, setRfidTags] = useState<Array<{tagId: number, tagNumber: string, tagType: string, status: string}>>([]);
 
   const form = useForm<UserFormValues>({
     resolver: zodResolver(userSchema),
     defaultValues: data ? {
       userName: data.userName,
       email: data.email,
-      role: data.role as "SUPER_ADMIN" | "ADMIN" | "DEPARTMENT_HEAD" | "INSTRUCTOR" | "STUDENT" | "GUARDIAN" | "SYSTEM_AUDITOR",
+      role: data.role as "SUPER_ADMIN" | "ADMIN" | "DEPARTMENT_HEAD" | "INSTRUCTOR" | "STUDENT",
       status: data.status as "active" | "inactive" | "suspended" | "pending" | "blocked",
       isEmailVerified: data.isEmailVerified,
       twoFactorEnabled: data.twoFactorEnabled,
@@ -173,7 +158,7 @@ export function UserForm({ open, onOpenChange, type, data, id, onSuccess }: User
       form.reset({
         userName: data.userName,
         email: data.email,
-        role: data.role as "SUPER_ADMIN" | "ADMIN" | "DEPARTMENT_HEAD" | "INSTRUCTOR" | "STUDENT" | "GUARDIAN" | "SYSTEM_AUDITOR",
+        role: data.role as "SUPER_ADMIN" | "ADMIN" | "DEPARTMENT_HEAD" | "INSTRUCTOR" | "STUDENT" | "SYSTEM_AUDITOR",
         status: data.status as "active" | "inactive" | "suspended" | "pending" | "blocked",
         isEmailVerified: data.isEmailVerified,
         twoFactorEnabled: data.twoFactorEnabled,
@@ -189,7 +174,7 @@ export function UserForm({ open, onOpenChange, type, data, id, onSuccess }: User
         form.reset({
           userName: data.userName,
           email: data.email,
-          role: data.role as "SUPER_ADMIN" | "ADMIN" | "DEPARTMENT_HEAD" | "INSTRUCTOR" | "STUDENT" | "GUARDIAN" | "SYSTEM_AUDITOR",
+          role: data.role as "SUPER_ADMIN" | "ADMIN" | "DEPARTMENT_HEAD" | "INSTRUCTOR" | "STUDENT",
           status: data.status as "active" | "inactive" | "suspended" | "pending" | "blocked",
           isEmailVerified: data.isEmailVerified,
           twoFactorEnabled: data.twoFactorEnabled,
@@ -214,6 +199,7 @@ export function UserForm({ open, onOpenChange, type, data, id, onSuccess }: User
       fetchDepartments();
       fetchCourses();
       fetchGuardians();
+      fetchRfidTags();
     }
   }, [open]);
 
@@ -253,10 +239,22 @@ export function UserForm({ open, onOpenChange, type, data, id, onSuccess }: User
     }
   };
 
+  const fetchRfidTags = async () => {
+    try {
+      const response = await fetch('/api/rfid/tags');
+      if (response.ok) {
+        const data = await response.json();
+        setRfidTags(data.data || []);
+      }
+    } catch (error) {
+      console.error('Failed to fetch RFID tags:', error);
+    }
+  };
+
   // Step management
   const getTotalSteps = () => {
     const role = form.watch("role");
-    if (role === "INSTRUCTOR" || role === "STUDENT" || role === "GUARDIAN") {
+    if (role === "INSTRUCTOR" || role === "STUDENT") {
       return 3; // Basic info + Personal info + Role-specific info
     }
     return 2; // Basic info + Personal info
@@ -337,7 +335,7 @@ export function UserForm({ open, onOpenChange, type, data, id, onSuccess }: User
     form.reset(data ? {
       userName: data.userName,
       email: data.email,
-      role: data.role as "SUPER_ADMIN" | "ADMIN" | "DEPARTMENT_HEAD" | "INSTRUCTOR" | "STUDENT" | "GUARDIAN" | "SYSTEM_AUDITOR",
+      role: data.role as "SUPER_ADMIN" | "ADMIN" | "DEPARTMENT_HEAD" | "INSTRUCTOR" | "STUDENT" | "SYSTEM_AUDITOR",
       status: data.status as "active" | "inactive" | "suspended" | "pending" | "blocked",
       isEmailVerified: data.isEmailVerified,
       twoFactorEnabled: data.twoFactorEnabled,
@@ -447,32 +445,6 @@ export function UserForm({ open, onOpenChange, type, data, id, onSuccess }: User
               throw new Error(err.error || 'Failed to update student');
             }
           }
-          if (values.role === "GUARDIAN") {
-            const guardianPayload = {
-              email: values.email,
-              phoneNumber: values.phoneNumber,
-              firstName: values.firstName,
-              middleName: values.middleName ?? null,
-              lastName: values.lastName,
-              suffix: values.suffix ?? null,
-              address: values.address ?? '',
-              gender: values.gender,
-              guardianType: values.guardianType,
-              occupation: values.occupation ?? null,
-              workplace: values.workplace ?? null,
-              emergencyContact: values.emergencyContact ?? null,
-              relationshipToStudent: values.relationshipToStudent,
-            };
-            const gRes = await fetch(`/api/guardians/${data.id}`, {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(guardianPayload),
-            });
-            if (!gRes.ok) {
-              const err = await gRes.json().catch(() => ({}));
-              throw new Error(err.error || 'Failed to update guardian');
-            }
-          }
         }
       }
       
@@ -519,9 +491,6 @@ export function UserForm({ open, onOpenChange, type, data, id, onSuccess }: User
     }
     if (role === "STUDENT") {
       return [...baseFields, form.watch("studentIdNum"), form.watch("studentType"), form.watch("yearLevel"), form.watch("courseId")];
-    }
-    if (role === "GUARDIAN") {
-      return [...baseFields, form.watch("guardianType"), form.watch("relationshipToStudent")];
     }
     
     return baseFields;
@@ -691,7 +660,6 @@ export function UserForm({ open, onOpenChange, type, data, id, onSuccess }: User
                                       <SelectItem value="DEPARTMENT_HEAD">Department Head</SelectItem>
                                       <SelectItem value="INSTRUCTOR">Instructor</SelectItem>
                                       <SelectItem value="STUDENT">Student</SelectItem>
-                                      <SelectItem value="GUARDIAN">Guardian</SelectItem>
                                       <SelectItem value="SYSTEM_AUDITOR">System Auditor</SelectItem>
                                     </SelectContent>
                                   </Select>
@@ -981,7 +949,26 @@ export function UserForm({ open, onOpenChange, type, data, id, onSuccess }: User
                                 <FormItem>
                                   <FormLabel>RFID Tag</FormLabel>
                                   <FormControl>
-                                    <Input {...field} placeholder="Enter RFID tag number" className="focus:ring-blue-300 focus:border-blue-300 rounded" />
+                                    <Select value={field.value || ""} onValueChange={field.onChange}>
+                                      <SelectTrigger className="focus:ring-blue-300 focus:border-blue-300 rounded">
+                                        <SelectValue placeholder="Select RFID tag" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {rfidTags.length === 0 ? (
+                                          <SelectItem value="" disabled>
+                                            No available RFID tags
+                                          </SelectItem>
+                                        ) : (
+                                          rfidTags
+                                            .filter((tag) => tag && typeof tag.tagId === 'number' && tag.status === 'ACTIVE')
+                                            .map((tag) => (
+                                              <SelectItem key={tag.tagId} value={tag.tagNumber}>
+                                                {tag.tagNumber} ({tag.tagType})
+                                              </SelectItem>
+                                            ))
+                                        )}
+                                      </SelectContent>
+                                    </Select>
                                   </FormControl>
                                   <FormMessage />
                                 </FormItem>
@@ -1165,7 +1152,26 @@ export function UserForm({ open, onOpenChange, type, data, id, onSuccess }: User
                                 <FormItem>
                                   <FormLabel>RFID Tag</FormLabel>
                                   <FormControl>
-                                    <Input {...field} placeholder="Enter RFID tag number" className="focus:ring-blue-300 focus:border-blue-300 rounded" />
+                                    <Select value={field.value || ""} onValueChange={field.onChange}>
+                                      <SelectTrigger className="focus:ring-blue-300 focus:border-blue-300 rounded">
+                                        <SelectValue placeholder="Select RFID tag" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {rfidTags.length === 0 ? (
+                                          <SelectItem value="" disabled>
+                                            No available RFID tags
+                                          </SelectItem>
+                                        ) : (
+                                          rfidTags
+                                            .filter((tag) => tag && typeof tag.tagId === 'number' && tag.status === 'ACTIVE')
+                                            .map((tag) => (
+                                              <SelectItem key={tag.tagId} value={tag.tagNumber}>
+                                                {tag.tagNumber} ({tag.tagType})
+                                              </SelectItem>
+                                            ))
+                                        )}
+                                      </SelectContent>
+                                    </Select>
                                   </FormControl>
                                   <FormMessage />
                                 </FormItem>
@@ -1202,95 +1208,7 @@ export function UserForm({ open, onOpenChange, type, data, id, onSuccess }: User
                       </div>
                     )}
                     
-                    {/* Guardian-specific fields */}
-                    {form.watch("role") === "GUARDIAN" && (
-                      <div className="bg-white rounded-xl border border-blue-100 shadow-sm p-5">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Users className="w-5 h-5 text-blue-500" />
-                          <h3 className="text-md font-semibold text-blue-900">Guardian Information</h3>
-                        </div>
-                        <div className="h-px bg-blue-100 w-full mb-4"></div>
-                        <div className="space-y-4">
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <FormField
-                              control={form.control}
-                              name="guardianType"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormLabel>Guardian Type <span className="text-red-500">*</span></FormLabel>
-                                  <FormControl>
-                                    <Select value={field.value || ""} onValueChange={field.onChange} required>
-                                      <SelectTrigger className="focus:ring-blue-300 focus:border-blue-300 rounded">
-                                        <SelectValue placeholder="Select guardian type" />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        <SelectItem value="PARENT">Parent</SelectItem>
-                                        <SelectItem value="GUARDIAN">Guardian</SelectItem>
-                                      </SelectContent>
-                                    </Select>
-                                  </FormControl>
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
-                            <FormField
-                              control={form.control}
-                              name="relationshipToStudent"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormLabel>Relationship to Student <span className="text-red-500">*</span></FormLabel>
-                                  <FormControl>
-                                    <Input {...field} placeholder="e.g., Father, Mother, Legal Guardian" className="focus:ring-blue-300 focus:border-blue-300 rounded" />
-                                  </FormControl>
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
-                          </div>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <FormField
-                              control={form.control}
-                              name="occupation"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormLabel>Occupation</FormLabel>
-                                  <FormControl>
-                                    <Input {...field} placeholder="Enter occupation" className="focus:ring-blue-300 focus:border-blue-300 rounded" />
-                                  </FormControl>
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
-                            <FormField
-                              control={form.control}
-                              name="workplace"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormLabel>Workplace</FormLabel>
-                                  <FormControl>
-                                    <Input {...field} placeholder="Enter workplace" className="focus:ring-blue-300 focus:border-blue-300 rounded" />
-                                  </FormControl>
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
-                          </div>
-                          <FormField
-                            control={form.control}
-                            name="emergencyContact"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Emergency Contact</FormLabel>
-                                <FormControl>
-                                  <Input {...field} placeholder="Enter emergency contact number" className="focus:ring-blue-300 focus:border-blue-300 rounded" />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                        </div>
-                      </div>
-                    )}
+                    {/* Guardian-specific fields removed: guardians are not users */}
                   </div>
                 )}
               </div>

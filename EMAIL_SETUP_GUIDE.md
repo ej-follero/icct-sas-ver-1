@@ -13,22 +13,22 @@
 3. Select "Mail" and your device
 4. Copy the generated 16-character password
 
-### 1.3 Update .env File
-Update your `.env` file with the following values:
+### 1.3 Update .env File (do not commit)
+Create or update your local `.env` file with placeholders (never commit real credentials):
 
 ```bash
 # Email Configuration (SMTP) - Gmail Setup
 SMTP_HOST="smtp.gmail.com"
 SMTP_PORT="587"
-SMTP_USER="rfid.attendance.system.cainta@gmail.com"
-SMTP_PASS="lrbj ujfg xumt hugu"
+SMTP_USER="<your-gmail>@gmail.com"             # set locally in .env only
+SMTP_PASS="<your-16-char-app-password>"       # set locally in .env only
 SMTP_FROM="noreply@icct.edu.ph"
 ```
 
 **Important Notes:**
-- Replace `your-actual-gmail@gmail.com` with your real Gmail address
-- Replace `your-16-character-app-password` with the app password from Step 1.2
-- Use the app password, NOT your regular Gmail password
+- Do NOT commit real credentials. Keep them only in `.env` locally and in your secret manager in prod.
+- Replace `<your-gmail>@gmail.com` with your Gmail address.
+- Replace `<your-16-char-app-password>` with the app password from Step 1.2 (not your normal password).
 
 ## Step 2: Test Configuration
 

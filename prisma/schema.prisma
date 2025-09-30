@@ -121,7 +121,6 @@ model User {
   BackupScheduleLogs     BackupScheduleLog[]
   DepartmentHead         Department[]         @relation("DepartmentHead")
   Event                  Event[]
-  Guardian               Guardian?
   Instructor             Instructor?
   PasswordResetTokens    PasswordResetToken[]
   RFIDLogs               RFIDLogs[]
@@ -136,6 +135,8 @@ model User {
   SystemBackups          SystemBackup[]
   SystemLogs             SystemLogs[]
   CustomRole             RoleManagement?      @relation("UserRoles", fields: [customRoleId], references: [id])
+  Backups                Backup[]
+  Notifications          Notification[]
 
   @@index([email])
   @@index([role, status])
@@ -164,6 +165,8 @@ model Student {
   courseId                Int?
   departmentId            Int?
   lastLogin               DateTime?
+  deletedAt               DateTime?
+  deletionReason          String?
   createdAt               DateTime                 @default(now())
   updatedAt               DateTime                 @updatedAt
   guardianId              Int
@@ -207,7 +210,6 @@ model Guardian {
   notificationPreferences Json?
   createdAt               DateTime     @default(now())
   updatedAt               DateTime     @updatedAt
-  User                    User         @relation(fields: [guardianId], references: [userId])
   Student                 Student[]
 
   @@index([guardianType, status])
@@ -1030,8 +1032,6 @@ enum Role {
   DEPARTMENT_HEAD
   INSTRUCTOR
   STUDENT
-  GUARDIAN
-  SYSTEM_AUDITOR
 }
 
 enum StudentType {
@@ -1077,6 +1077,66 @@ enum CourseType {
   ELECTIVE
 }
 
+// Additional admin functionality models
+model Backup {
+  id                  Int      @id @default(autoincrement())
+  name                String
+  description         String?
+  type                String
+  status              String   @default("PENDING")
+  size                String?
+  location            String   @default("LOCAL")
+  filePath            String?
+  createdBy           Int
+  createdAt           DateTime @default(now())
+  completedAt         DateTime?
+  errorMessage        String?
+  restorePointsCount  Int      @default(0)
+  logsCount           Int      @default(0)
+  retentionDays       Int      @default(30)
+  user                User     @relation(fields: [createdBy], references: [userId])
+
+  @@index([createdAt])
+  @@map("backups")
+}
+
+model Notification {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  title     String
+  message   String?
+  type      String   @default("SYSTEM")
+  priority  String   @default("NORMAL")
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [userId])
+
+  @@index([userId])
+  @@map("notifications")
+}
+
+model Permission {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  description String?
+  category    String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  @@map("permissions")
+}
+
+model AccessRule {
+  id        Int      @id @default(autoincrement())
+  name      String
+  type      String
+  rules     Json?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@map("access_rules")
+}
+
 enum DayOfWeek {
   MONDAY
   TUESDAY
@@ -1116,6 +1176,7 @@ enum ReportType {
 enum Status {
   ACTIVE
   INACTIVE
+  ARCHIVED
 }
 
 enum RFIDStatus {

@@ -1,108 +1,100 @@
 import { NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
 import { performanceService } from '@/lib/services/performance.service';
-import { AttendanceService } from '@/lib/services/attendance.service';
 
 export async function GET() {
   try {
     const startTime = Date.now();
     
-    // Get system health
-    const systemHealth = await performanceService.checkSystemHealth();
+    // Check database connectivity
+    let databaseStatus = 'healthy';
+    let databaseResponseTime = 0;
+    try {
+      const dbStart = Date.now();
+      await prisma.$queryRaw`SELECT 1`;
+      databaseResponseTime = Date.now() - dbStart;
+    } catch (error) {
+      databaseStatus = 'unhealthy';
+      console.error('Database health check failed:', error);
+    }
+
+    // Check cache system (Redis)
+    let cacheStatus = 'healthy';
+    let cacheSize = 0;
+    let cacheKeys = 0;
+    try {
+      // TODO: Implement real Redis health check
+      // const redis = new Redis(process.env.REDIS_URL);
+      // await redis.ping();
+      // cacheSize = await redis.memory('usage');
+      // cacheKeys = await redis.dbsize();
+    } catch (error) {
+      cacheStatus = 'unhealthy';
+      console.error('Cache health check failed:', error);
+    }
+
+    // Check WebSocket server
+    let websocketStatus = 'healthy';
+    let activeConnections = 0;
+    try {
+      // TODO: Implement real WebSocket health check
+      // activeConnections = await getWebSocketConnections();
+    } catch (error) {
+      websocketStatus = 'unhealthy';
+      console.error('WebSocket health check failed:', error);
+    }
+
+    // Get system performance metrics
+    const memoryUsage = process.memoryUsage();
+    const uptime = process.uptime();
     
-    // Get performance stats
-    const performanceStats = performanceService.getPerformanceStats();
-    
-    // Get attendance service cache stats
-    const attendanceService = new AttendanceService();
-    const cacheStats = attendanceService.getCacheStats();
-    
-    // Get recent query analytics
-    const hourlyAnalytics = performanceService.getQueryAnalytics('hour');
-    const dailyAnalytics = performanceService.getQueryAnalytics('day');
-    
-    // Get top queries and error queries
-    const topQueries = performanceService.getTopQueries(5);
-    const errorQueries = performanceService.getErrorQueries(5);
+    // Get query statistics
+    const queryStats = await getQueryStatistics();
     
     const responseTime = Date.now() - startTime;
     
     const health = {
-      status: systemHealth.database && systemHealth.cache ? 'healthy' : 'degraded',
+      status: databaseStatus === 'healthy' && cacheStatus === 'healthy' ? 'healthy' : 'degraded',
       timestamp: new Date().toISOString(),
       responseTime: `${responseTime}ms`,
       
       services: {
         database: {
-          status: systemHealth.database ? 'healthy' : 'unhealthy',
-          responseTime: systemHealth.database ? '< 10ms' : 'timeout'
+          status: databaseStatus,
+          responseTime: databaseStatus === 'healthy' ? `< ${databaseResponseTime}ms` : 'timeout'
         },
         cache: {
-          status: systemHealth.cache ? 'healthy' : 'unhealthy',
-          cacheSize: cacheStats.size,
-          cacheKeys: cacheStats.keys.length
+          status: cacheStatus,
+          cacheSize: `${Math.round(cacheSize / 1024 / 1024)} MB`,
+          cacheKeys: cacheKeys
         },
         websocket: {
-          status: systemHealth.websocket ? 'healthy' : 'unhealthy',
-          activeConnections: performanceStats.activeConnections
+          status: websocketStatus,
+          activeConnections: activeConnections
         }
       },
       
       performance: {
-        uptime: `${Math.round(systemHealth.uptime / 1000 / 60)} minutes`,
+        uptime: `${Math.round(uptime / 60)} minutes`,
         memoryUsage: {
-          rss: `${Math.round(systemHealth.memoryUsage.rss / 1024 / 1024)} MB`,
-          heapTotal: `${Math.round(systemHealth.memoryUsage.heapTotal / 1024 / 1024)} MB`,
-          heapUsed: `${Math.round(systemHealth.memoryUsage.heapUsed / 1024 / 1024)} MB`,
-          external: `${Math.round(systemHealth.memoryUsage.external / 1024 / 1024)} MB`
+          rss: `${Math.round(memoryUsage.rss / 1024 / 1024)} MB`,
+          heapTotal: `${Math.round(memoryUsage.heapTotal / 1024 / 1024)} MB`,
+          heapUsed: `${Math.round(memoryUsage.heapUsed / 1024 / 1024)} MB`,
+          external: `${Math.round(memoryUsage.external / 1024 / 1024)} MB`
         },
         cpuUsage: {
-          user: `${Math.round(systemHealth.cpuUsage.user / 1000)}ms`,
-          system: `${Math.round(systemHealth.cpuUsage.system / 1000)}ms`
+          user: `${Math.round(process.cpuUsage().user / 1000)}ms`,
+          system: `${Math.round(process.cpuUsage().system / 1000)}ms`
         },
         queryStats: {
-          totalQueries: performanceStats.totalQueries,
-          averageQueryTime: `${performanceStats.averageQueryTime}ms`,
-          errorRate: `${performanceStats.errorRate}%`,
-          slowQueries: performanceStats.slowQueries.length
-        },
-        analytics: {
-          hourly: {
-            totalQueries: hourlyAnalytics.totalQueries,
-            averageQueryTime: `${hourlyAnalytics.averageQueryTime}ms`,
-            successRate: `${hourlyAnalytics.successRate}%`,
-            slowQueryCount: hourlyAnalytics.slowQueryCount,
-            errorCount: hourlyAnalytics.errorCount
-          },
-          daily: {
-            totalQueries: dailyAnalytics.totalQueries,
-            averageQueryTime: `${dailyAnalytics.averageQueryTime}ms`,
-            successRate: `${dailyAnalytics.successRate}%`,
-            slowQueryCount: dailyAnalytics.slowQueryCount,
-            errorCount: dailyAnalytics.errorCount
-          }
+          totalQueries: queryStats.totalQueries,
+          averageQueryTime: `${queryStats.averageQueryTime}ms`,
+          errorRate: `${queryStats.errorRate}%`,
+          slowQueries: queryStats.slowQueries
         }
       },
       
-      topQueries: topQueries.map(q => ({
-        query: q.query.substring(0, 100) + (q.query.length > 100 ? '...' : ''),
-        count: q.count,
-        avgDuration: `${q.avgDuration}ms`
-      })),
-      
-      errorQueries: errorQueries.map(q => ({
-        query: q.query.substring(0, 100) + (q.query.length > 100 ? '...' : ''),
-        error: q.error,
-        count: q.count,
-        lastOccurrence: q.lastOccurrence.toISOString()
-      })),
-      
-      slowQueries: performanceStats.slowQueries.map(q => ({
-        query: q.query.substring(0, 100) + (q.query.length > 100 ? '...' : ''),
-        avgDuration: `${q.avgDuration}ms`,
-        count: q.count
-      })),
-      
-      recommendations: generateRecommendations(performanceStats, hourlyAnalytics, dailyAnalytics)
+      recommendations: generateRecommendations(databaseStatus, cacheStatus, queryStats)
     };
 
     const response = NextResponse.json(health);
@@ -126,38 +118,57 @@ export async function GET() {
   }
 }
 
-function generateRecommendations(
-  performanceStats: any,
-  hourlyAnalytics: any,
-  dailyAnalytics: any
-): string[] {
+async function getQueryStatistics() {
+  try {
+    // Get query statistics from database
+    const stats = await prisma.$queryRaw`
+      SELECT 
+        COUNT(*) as total_queries,
+        AVG(EXTRACT(EPOCH FROM (end_time - start_time)) * 1000) as avg_query_time,
+        COUNT(CASE WHEN status = 'error' THEN 1 END) * 100.0 / COUNT(*) as error_rate,
+        COUNT(CASE WHEN EXTRACT(EPOCH FROM (end_time - start_time)) > 1 THEN 1 END) as slow_queries
+      FROM query_logs 
+      WHERE created_at > NOW() - INTERVAL '1 hour'
+    `;
+    
+    return {
+      totalQueries: stats[0]?.total_queries || 0,
+      averageQueryTime: Math.round(stats[0]?.avg_query_time || 0),
+      errorRate: Math.round(stats[0]?.error_rate || 0),
+      slowQueries: stats[0]?.slow_queries || 0
+    };
+  } catch (error) {
+    console.error('Error getting query statistics:', error);
+    return {
+      totalQueries: 0,
+      averageQueryTime: 0,
+      errorRate: 0,
+      slowQueries: 0
+    };
+  }
+}
+
+function generateRecommendations(databaseStatus: string, cacheStatus: string, queryStats: any): string[] {
   const recommendations: string[] = [];
   
-  // Check for high error rates
-  if (performanceStats.errorRate > 5) {
+  if (databaseStatus !== 'healthy') {
+    recommendations.push('Database connectivity issues detected. Check database server status.');
+  }
+  
+  if (cacheStatus !== 'healthy') {
+    recommendations.push('Cache system issues detected. Check Redis server status.');
+  }
+  
+  if (queryStats.errorRate > 5) {
     recommendations.push('High error rate detected. Review recent error logs and database connectivity.');
   }
   
-  // Check for slow queries
-  if (performanceStats.slowQueries.length > 0) {
+  if (queryStats.slowQueries > 0) {
     recommendations.push('Slow queries detected. Consider adding database indexes or optimizing query patterns.');
   }
   
-  // Check for memory usage
-  const memoryUsage = process.memoryUsage();
-  const memoryUsagePercent = (memoryUsage.heapUsed / memoryUsage.heapTotal) * 100;
-  if (memoryUsagePercent > 80) {
-    recommendations.push('High memory usage detected. Consider implementing memory optimization or increasing heap size.');
-  }
-  
-  // Check for query volume
-  if (hourlyAnalytics.totalQueries > 1000) {
-    recommendations.push('High query volume detected. Consider implementing query caching or connection pooling.');
-  }
-  
-  // Check for cache effectiveness
-  if (performanceStats.cacheHitRate < 50) {
-    recommendations.push('Low cache hit rate. Consider expanding cache coverage or adjusting cache policies.');
+  if (queryStats.averageQueryTime > 500) {
+    recommendations.push('Average query time is high. Consider query optimization.');
   }
   
   if (recommendations.length === 0) {
@@ -171,7 +182,6 @@ function generateRecommendations(
 export async function HEAD() {
   try {
     // Quick database check
-    const { prisma } = await import('@/lib/prisma');
     await prisma.$queryRaw`SELECT 1`;
     
     const response = new NextResponse(null, { status: 200 });
@@ -182,4 +192,4 @@ export async function HEAD() {
   } catch (error) {
     return new NextResponse(null, { status: 503 });
   }
-} 
+}

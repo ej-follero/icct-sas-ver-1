@@ -1,222 +1,188 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { Prisma, Status, Priority, Role } from '@prisma/client';
+import { z } from 'zod';
+
+const announcementSchema = z.object({
+  title: z.string().min(1).max(200),
+  content: z.string().min(1),
+  priority: z.enum(['LOW', 'NORMAL', 'HIGH', 'URGENT']).optional(),
+  targetAudience: z.enum(['ALL', 'STUDENTS', 'INSTRUCTORS', 'ADMINS']).optional(),
+  isPublished: z.boolean().optional(),
+  publishedAt: z.string().datetime().optional(),
+  attachments: z.array(z.object({
+    filename: z.string(),
+    url: z.string(),
+    size: z.number()
+  })).optional()
+});
 
 export async function GET(request: NextRequest) {
   try {
-    // Authorization: allow ADMIN and INSTRUCTOR
-    const role = request.headers.get('x-user-role');
-    const isDev = process.env.NODE_ENV !== 'production';
-    if (!isDev) {
-      if (!role || (role !== 'ADMIN' && role !== 'INSTRUCTOR')) {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    const { searchParams } = new URL(request.url);
+    const priority = searchParams.get('priority') || 'all';
+    const audience = searchParams.get('audience') || 'all';
+    const status = searchParams.get('status') || 'all';
+    const search = searchParams.get('search') || '';
+    const page = parseInt(searchParams.get('page') || '1');
+    const limit = parseInt(searchParams.get('limit') || '10');
+
+    const where: any = {};
+    
+    if (priority !== 'all') {
+      where.priority = priority;
+    }
+    
+    if (audience !== 'all') {
+      where.userType = audience;
+    }
+
+    if (status !== 'all') {
+      if (status === 'published') {
+        where.status = 'ACTIVE';
+      } else if (status === 'draft') {
+        where.status = 'INACTIVE';
       }
     }
 
-    const { searchParams } = new URL(request.url);
-    const search = (searchParams.get('search') || '').trim();
-    const status = searchParams.get('status') as Status | 'all' | null;
-    const priority = searchParams.get('priority') as Priority | 'all' | null;
-    const startDate = searchParams.get('startDate');
-    const endDate = searchParams.get('endDate');
-    const page = Math.max(parseInt(searchParams.get('page') || '1', 10), 1);
-    const pageSize = Math.min(Math.max(parseInt(searchParams.get('pageSize') || '20', 10), 1), 100);
-    const sortByParam = (searchParams.get('sortBy') || 'createdAt') as string;
-    const sortOrderParam = (searchParams.get('sortOrder') || 'desc') as 'asc' | 'desc';
+    if (search) {
+      where.OR = [
+        { title: { contains: search, mode: 'insensitive' } },
+        { content: { contains: search, mode: 'insensitive' } }
+      ];
+    }
 
-    const sortWhitelist: Record<string, true> = {
-      createdAt: true,
-      updatedAt: true,
-      title: true,
-      status: true,
-      priority: true,
+    const announcements = await prisma.announcement.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      skip: (page - 1) * limit,
+      take: limit,
+      include: {
+        admin: {
+          select: {
+            userId: true,
+            userName: true,
+            email: true
+          }
+        }
+      }
+    });
+
+    const total = await prisma.announcement.count({ where });
+
+    // Get statistics
+    const statistics = {
+      total: total,
+      published: announcements.filter(a => a.status === 'ACTIVE').length,
+      drafts: announcements.filter(a => a.status === 'INACTIVE').length,
+      urgent: announcements.filter(a => a.priority === 'URGENT').length,
+      normal: announcements.filter(a => a.priority === 'NORMAL').length
     };
-    const sortBy = sortWhitelist[sortByParam] ? (sortByParam as any) : 'createdAt';
-    const sortOrder = sortOrderParam === 'asc' ? 'asc' : 'desc';
-    const skip = (page - 1) * pageSize;
-
-    const where: Prisma.AnnouncementWhereInput = {
-      AND: [
-        // Search filter
-        search ? {
-          OR: [
-            { title: { contains: search, mode: 'insensitive' } },
-            { content: { contains: search, mode: 'insensitive' } },
-          ],
-        } : {},
-        // Status filter
-        status && status !== 'all' ? { status } : {},
-        // Priority filter
-        priority && priority !== 'all' ? { priority } : {},
-        // Date range filter
-        startDate || endDate ? {
-          createdAt: {
-            ...(startDate ? { gte: new Date(startDate) } : {}),
-            ...(endDate ? { lte: new Date(endDate) } : {}),
-          },
-        } : {},
-      ].filter(Boolean),
-    };
-
-    const [items, total] = await Promise.all([
-      prisma.announcement.findMany({
-        where,
-        orderBy: { [sortBy]: sortOrder },
-        take: pageSize,
-        skip,
-        include: {
-          admin: {
-            select: {
-              userName: true,
-              email: true,
-            },
-          },
-          instructor: {
-            select: {
-              firstName: true,
-              lastName: true,
-              email: true,
-            },
-          },
-          section: {
-            select: {
-              sectionName: true,
-            },
-          },
-          subject: {
-            select: {
-              subjectName: true,
-              subjectCode: true,
-            },
-          },
-        },
-      }),
-      prisma.announcement.count({ where }),
-    ]);
-
-    // Transform the data to match frontend expectations
-    const transformedItems = items.map((item) => ({
-      id: item.announcementId,
-      title: item.title,
-      description: item.content,
-      class: item.section?.sectionName || item.subject?.subjectName || 'General',
-      date: item.createdAt.toISOString().split('T')[0],
-      status: item.status.toLowerCase() as 'normal' | 'important' | 'archived',
-      priority: item.priority.toLowerCase(),
-      createdAt: item.createdAt.toISOString(),
-      updatedAt: item.updatedAt.toISOString(),
-      createdBy: item.admin?.userName || (item.instructor ? `${item.instructor.firstName} ${item.instructor.lastName}`.trim() : 'Unknown'),
-      isGeneral: item.isGeneral,
-      subjectId: item.subjectId,
-      sectionId: item.sectionId,
-      instructorId: item.instructorId,
-    }));
 
     return NextResponse.json({
-      items: transformedItems,
-      total,
-      page,
-      pageSize,
+      data: announcements,
+      statistics,
+      pagination: {
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit)
+      }
     });
   } catch (error) {
-    console.error('GET /api/announcements error', error);
-    return NextResponse.json({ error: 'Failed to fetch announcements' }, { status: 500 });
+    console.error('Error fetching announcements:', error);
+    return NextResponse.json(
+      { error: 'Failed to fetch announcements' },
+      { status: 500 }
+    );
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    // Authorization: allow ADMIN and INSTRUCTOR
-    const role = request.headers.get('x-user-role');
-    const isDev = process.env.NODE_ENV !== 'production';
-    if (!isDev) {
-      if (!role || (role !== 'ADMIN' && role !== 'INSTRUCTOR')) {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-      }
-    }
-
     const body = await request.json();
-    const {
-      title,
-      description,
-      class: classValue,
-      date,
-      status = 'normal',
-      priority = 'normal',
-      isGeneral = false,
-      subjectId,
-      sectionId,
-      instructorId,
-    } = body;
+    const validatedData = announcementSchema.parse(body);
 
-    // Validate required fields
-    if (!title || !description) {
-      return NextResponse.json({ error: 'Title and description are required' }, { status: 400 });
-    }
-
-    // Get user ID from middleware headers
-    const userId = request.headers.get('x-user-id');
-    const userRole = request.headers.get('x-user-role') as Role;
-    
-    if (!userId) {
-      return NextResponse.json({ error: 'User not authenticated' }, { status: 401 });
-    }
-
-    const newAnnouncement = await prisma.announcement.create({
+    const announcement = await prisma.announcement.create({
       data: {
-        title,
-        content: description,
-        isGeneral,
-        subjectId: subjectId ? parseInt(subjectId) : null,
-        sectionId: sectionId ? parseInt(sectionId) : null,
-        instructorId: instructorId ? parseInt(instructorId) : null,
-        status: status.toUpperCase() as Status,
-        priority: priority.toUpperCase() as Priority,
-        createdby: parseInt(userId),
-        userType: userRole,
-      },
-      include: {
-        admin: {
-          select: {
-            userName: true,
-            email: true,
-          },
-        },
-        section: {
-          select: {
-            sectionName: true,
-          },
-        },
-        subject: {
-          select: {
-            subjectName: true,
-            subjectCode: true,
-          },
-        },
-      },
+        title: validatedData.title,
+        content: validatedData.content,
+        priority: validatedData.priority || 'NORMAL',
+        userType: validatedData.targetAudience || 'ALL',
+        status: validatedData.isPublished ? 'ACTIVE' : 'INACTIVE',
+        createdby: 1, // TODO: Get from session
+        isGeneral: validatedData.targetAudience === 'ALL'
+      }
     });
 
-    // Transform the response to match frontend expectations
-    const transformedAnnouncement = {
-      id: newAnnouncement.announcementId,
-      title: newAnnouncement.title,
-      description: newAnnouncement.content,
-      class: newAnnouncement.section?.sectionName || newAnnouncement.subject?.subjectName || 'General',
-      date: newAnnouncement.createdAt.toISOString().split('T')[0],
-      status: newAnnouncement.status.toLowerCase() as 'normal' | 'important' | 'archived',
-      priority: newAnnouncement.priority.toLowerCase(),
-      createdAt: newAnnouncement.createdAt.toISOString(),
-      updatedAt: newAnnouncement.updatedAt.toISOString(),
-      createdBy: newAnnouncement.admin?.userName || 'Unknown',
-      isGeneral: newAnnouncement.isGeneral,
-      subjectId: newAnnouncement.subjectId,
-      sectionId: newAnnouncement.sectionId,
-      instructorId: newAnnouncement.instructorId,
-    };
+    // If published, send notifications
+    if (validatedData.isPublished) {
+      await sendAnnouncementNotifications(announcement);
+    }
 
-    return NextResponse.json(transformedAnnouncement, { status: 201 });
+    return NextResponse.json({ data: announcement });
   } catch (error) {
-    console.error('POST /api/announcements error', error);
-    return NextResponse.json({ error: 'Failed to create announcement' }, { status: 500 });
+    console.error('Error creating announcement:', error);
+    
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: 'Invalid announcement data', details: error.errors },
+        { status: 400 }
+      );
+    }
+
+    return NextResponse.json(
+      { error: 'Failed to create announcement' },
+      { status: 500 }
+    );
+  }
+}
+
+async function sendAnnouncementNotifications(announcement: any) {
+  try {
+    // Get target users based on audience
+    let targetUsers = [];
+    
+    if (announcement.targetAudience === 'ALL') {
+      targetUsers = await prisma.user.findMany({
+        select: { userId: true, email: true, userName: true }
+      });
+    } else if (announcement.targetAudience === 'STUDENTS') {
+      targetUsers = await prisma.user.findMany({
+        where: { role: 'STUDENT' },
+        select: { userId: true, email: true, userName: true }
+      });
+    } else if (announcement.targetAudience === 'INSTRUCTORS') {
+      targetUsers = await prisma.user.findMany({
+        where: { role: 'INSTRUCTOR' },
+        select: { userId: true, email: true, userName: true }
+      });
+    } else if (announcement.targetAudience === 'ADMINS') {
+      targetUsers = await prisma.user.findMany({
+        where: { role: { in: ['SUPER_ADMIN', 'ADMIN'] } },
+        select: { userId: true, email: true, userName: true }
+      });
+    }
+
+    // Create notification records
+    const notifications = targetUsers.map(user => ({
+      userId: user.userId,
+      title: `New Announcement: ${announcement.title}`,
+      message: announcement.content.substring(0, 200) + (announcement.content.length > 200 ? '...' : ''),
+      type: 'ANNOUNCEMENT',
+      priority: announcement.priority,
+      isRead: false,
+      createdAt: new Date()
+    }));
+
+    await prisma.notification.createMany({
+      data: notifications
+    });
+
+    // TODO: Send email notifications
+    // TODO: Send push notifications
+    // TODO: Send SMS for urgent announcements
+
+  } catch (error) {
+    console.error('Error sending announcement notifications:', error);
   }
 }

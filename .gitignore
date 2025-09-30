@@ -28,6 +28,16 @@ yarn-error.log*
 # local env files
 .env
 .env*.local
+.env.*
+*.env
+
+# secrets and keys
+*.key
+*.crt
+*.pfx
+*.keystore
+*.jks
+secrets/**
 
 # vercel
 .vercel
@@ -44,6 +54,8 @@ storybook-static
 *.zip
 *.tar.gz
 *.sql
+*.bak
+*.dump
 
 # test files
 test-*.md
@@ -76,6 +88,7 @@ Desktop.ini
 *.mp4
 *.mov
 *.avi
+*.heic
 
 # database
 *.db

@@ -19,7 +19,6 @@ export async function POST(request: Request) {
         include: {
           Student: true,
           Instructor: true,
-          Guardian: true,
         },
       });
     } else if (studentId) {
@@ -33,7 +32,6 @@ export async function POST(request: Request) {
           include: {
             Student: true,
             Instructor: true,
-            Guardian: true,
           },
         });
       }
@@ -48,7 +46,6 @@ export async function POST(request: Request) {
           include: {
             Student: true,
             Instructor: true,
-            Guardian: true,
           },
         });
       }
@@ -175,7 +172,7 @@ export async function POST(request: Request) {
       status: user.status,
       student: user.Student,
       instructor: user.Instructor,
-      guardian: user.Guardian,
+      // guardian removed; guardians are not users
     };
 
     // Set HTTP-only cookie with the token

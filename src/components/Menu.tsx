@@ -20,7 +20,6 @@ import {
   ChevronDown,
   ChevronUp,
   Calendar,
-  MessageCircle,
   AppWindow,
   Mail,
   Shield,
@@ -69,7 +68,7 @@ type MenuSection = {
   compact?: boolean;
 };
 
-type Role = "super_admin" | "admin" | "department_head" | "teacher" | "student" | "parent" | "system_auditor";
+type Role = "super_admin" | "admin" | "department_head" | "teacher" | "student";
 
 type MenuConfig = Record<Role, MenuSection[]>;
 
@@ -149,7 +148,6 @@ const menuConfig: MenuConfig = {
       sectionIcon: <Mail className="w-5 h-5" />,
       compact: true,
       items: [
-        { icon: <MessageCircle className="w-5 h-5" />, label: "Hub", href: "/list/communication", description: "Central communication hub" },
         {
           icon: <Megaphone className="w-5 h-5" />,
           label: "Broadcasts",
@@ -161,7 +159,7 @@ const menuConfig: MenuConfig = {
           ]
         },
         { icon: <Mail className="w-5 h-5" />, label: "Email", href: "/list/email", description: "Email management" },
-        { icon: <FileText className="w-5 h-5" />, label: "Logs", href: "/list/communication/logs", description: "Communication logs" },
+        
       ],
     },
     {
@@ -228,80 +226,7 @@ const menuConfig: MenuConfig = {
         { icon: <Activity className="w-5 h-5" />, label: "Live Attendance Feed", href: "/list/live-attendance" },
       ],
     },
-    {
-      title: "ANALYTICS & INSIGHTS",
-      sectionIcon: <BarChart3 className="w-5 h-5" />,
-      compact: true,
-      items: [
-        { 
-          icon: <BarChart3 className="w-5 h-5" />, 
-          label: "Attendance Analytics", 
-          href: "/analytics/attendance", 
-          description: "Comprehensive attendance insights" 
-        },
-        {
-          icon: <TrendingUp className="w-5 h-5" />,
-          label: "Comparative Analysis", 
-          href: "/analytics/comparative",
-          description: "Student vs instructor comparisons"
-        },
-        { 
-          icon: <Users className="w-5 h-5" />, 
-          label: "Performance Insights", 
-          href: "/analytics/performance", 
-          description: "System-wide performance metrics" 
-        },
-        { 
-          icon: <Activity className="w-5 h-5" />, 
-          label: "Real-time Dashboard", 
-          href: "/analytics/realtime", 
-          description: "Live attendance monitoring" 
-        },
-        {
-          icon: <Target className="w-5 h-5" />,
-          label: "Goals & Compliance",
-          href: "/analytics/goals",
-          description: "Attendance goals and compliance tracking"
-        }
-      ],
-    },
-    {
-      title: "REPORTS & EXPORTS",
-      sectionIcon: <FileText className="w-5 h-5" />,
-      compact: true,
-      items: [
-        { 
-          icon: <FileText className="w-5 h-5" />, 
-          label: "Report Hub", 
-          href: "/reports", 
-          description: "Generate comprehensive reports" 
-        },
-        {
-          icon: <Download className="w-5 h-5" />,
-          label: "Data Export", 
-          href: "/reports/export",
-          description: "Bulk data export tools"
-        },
-        { 
-          icon: <Users className="w-5 h-5" />, 
-          label: "Attendance Reports", 
-          href: "/reports/attendance", 
-          description: "Student & instructor attendance reports" 
-        },
-        { 
-          icon: <Activity className="w-5 h-5" />, 
-          label: "System Reports", 
-          href: "/reports/system-logs", 
-          description: "System activity and audit logs" 
-        },
-        {
-          icon: <Calendar className="w-5 h-5" />,
-          label: "Scheduled Reports",
-          href: "/reports/scheduled",
-          description: "Automated report generation"
-        }
-      ],
-    },
+    
     {
       title: "ACADEMIC MANAGEMENT",
       sectionIcon: <BookOpen className="w-5 h-5" />,
@@ -364,7 +289,6 @@ const menuConfig: MenuConfig = {
       sectionIcon: <Mail className="w-5 h-5" />,
       compact: true,
       items: [
-        { icon: <MessageCircle className="w-5 h-5" />, label: "Hub", href: "/list/communication", description: "Central communication hub" },
         {
           icon: <Megaphone className="w-5 h-5" />,
           label: "Broadcasts",
@@ -376,7 +300,6 @@ const menuConfig: MenuConfig = {
           ]
         },
         { icon: <Mail className="w-5 h-5" />, label: "Email", href: "/list/email", description: "Email management" },
-        { icon: <FileText className="w-5 h-5" />, label: "Logs", href: "/list/communication/logs", description: "Communication logs" },
       ],
     },
     {
@@ -478,7 +401,6 @@ const menuConfig: MenuConfig = {
       sectionIcon: <Mail className="w-5 h-5" />,
       compact: true,
       items: [
-        { icon: <MessageCircle className="w-5 h-5" />, label: "Hub", href: "/list/communication", description: "Central communication hub" },
         {
           icon: <Megaphone className="w-5 h-5" />,
           label: "Broadcasts",
@@ -490,7 +412,6 @@ const menuConfig: MenuConfig = {
           ]
         },
         { icon: <Mail className="w-5 h-5" />, label: "Email", href: "/list/email", description: "Email management" },
-        { icon: <FileText className="w-5 h-5" />, label: "Logs", href: "/list/communication/logs", description: "Communication logs" },
       ],
     },
     {
@@ -575,14 +496,7 @@ const menuConfig: MenuConfig = {
         { icon: <Megaphone className="w-5 h-5" />, label: "Post Announcement", href: "/list/announcements/post" },
       ],
     },
-    {
-      title: "MESSAGES",
-      sectionIcon: <MessageCircle className="w-5 h-5" />,
-      items: [
-        { icon: <MessageCircle className="w-5 h-5" />, label: "Inbox", href: "/list/messages/inbox" },
-        { icon: <MessageCircle className="w-5 h-5" />, label: "Contact Students", href: "/list/messages/contact" },
-      ],
-    },
+    
     {
       title: "PROFILE",
       sectionIcon: <User className="w-5 h-5" />,
@@ -644,14 +558,7 @@ const menuConfig: MenuConfig = {
         { icon: <Megaphone className="w-5 h-5" />, label: "Class Updates", href: "/list/announcements/updates" },
       ],
     },
-    {
-      title: "MESSAGES",
-      sectionIcon: <MessageCircle className="w-5 h-5" />,
-      items: [
-        { icon: <MessageCircle className="w-5 h-5" />, label: "Inbox", href: "/list/messages/inbox" },
-        { icon: <MessageCircle className="w-5 h-5" />, label: "Contact Instructor", href: "/list/messages/contact" },
-      ],
-    },
+    
     {
       title: "PROFILE",
       sectionIcon: <User className="w-5 h-5" />,
@@ -670,171 +577,7 @@ const menuConfig: MenuConfig = {
     },
   ],
 
-  parent: [
-    {
-      title: "SCHEDULE",
-      sectionIcon: <Calendar className="w-5 h-5" />,
-      items: [
-        { icon: <Calendar className="w-5 h-5" />, label: "Class Schedule", href: "/list/schedule" },
-      ],
-    },
-    {
-      title: "ATTENDANCE",
-      sectionIcon: <Clock className="w-5 h-5" />,
-      items: [
-        { icon: <Clock className="w-5 h-5" />, label: "My Child's Daily Attendance", href: "/list/attendance/daily" },
-        { icon: <Clock className="w-5 h-5" />, label: "Absences & Late Records", href: "/list/attendance/records" },
-      ],
-    },
-    {
-      title: "ANALYTICS",
-      sectionIcon: <BarChart2 className="w-5 h-5" />,
-      items: [
-        { icon: <BarChart2 className="w-5 h-5" />, label: "Attendance Summary", href: "/list/analytics/summary" },
-        { icon: <BarChart2 className="w-5 h-5" />, label: "Attendance Trends", href: "/list/analytics/trends" },
-      ],
-    },
-    {
-      title: "ANNOUNCEMENTS",
-      sectionIcon: <Megaphone className="w-5 h-5" />,
-      items: [
-        { icon: <Megaphone className="w-5 h-5" />, label: "School Events", href: "/list/announcements/events" },
-        { icon: <Megaphone className="w-5 h-5" />, label: "Class Updates", href: "/list/announcements/updates" },
-      ],
-    },
-    {
-      title: "MESSAGES",
-      sectionIcon: <MessageCircle className="w-5 h-5" />,
-      items: [
-        { icon: <MessageCircle className="w-5 h-5" />, label: "Inbox", href: "/list/messages/inbox" },
-        { icon: <MessageCircle className="w-5 h-5" />, label: "Contact Teacher", href: "/list/messages/contact" },
-      ],
-    },
-    {
-      title: "PROFILE",
-      sectionIcon: <User className="w-5 h-5" />,
-      items: [
-        { icon: <User className="w-5 h-5" />, label: "View Profile", href: "/profile" },
-        { icon: <User className="w-5 h-5" />, label: "Edit Info", href: "/profile/edit" },
-        { icon: <User className="w-5 h-5" />, label: "Change Password", href: "/profile/password" },
-      ],
-    },
-    {
-      title: "LOGOUT",
-      sectionIcon: <LogOut className="w-5 h-5" />,
-      items: [
-        { icon: <LogOut className="w-5 h-5" />, label: "Logout", href: "/logout" },
-      ],
-    },
-  ],
 
-  system_auditor: [
-    {
-      title: "DASHBOARD",
-      sectionIcon: <LayoutDashboard className="w-5 h-5" />,
-      items: [
-        { icon: <LayoutDashboard className="w-5 h-5" />, label: "Audit Dashboard", href: "/dashboard", description: "Compliance overview" },
-      ],
-    },
-    {
-      title: "SYSTEM MONITORING",
-      sectionIcon: <Activity className="w-5 h-5" />,
-      compact: true,
-      items: [
-        { icon: <Activity className="w-5 h-5" />, label: "System Health", href: "/settings/system-status", description: "Monitor system health" },
-        { icon: <Database className="w-5 h-5" />, label: "Database Logs", href: "/list/system-logs", description: "View system logs" },
-        { icon: <Shield className="w-5 h-5" />, label: "Security Audit", href: "/settings/audit-logs", description: "Security compliance logs" },
-        { icon: <FileText className="w-5 h-5" />, label: "Compliance Reports", href: "/reports/compliance", description: "Generate compliance reports" },
-      ]
-    },
-    {
-      title: "USER MANAGEMENT",
-      sectionIcon: <UserCircle className="w-5 h-5" />,
-      items: [
-        { icon: <Users className="w-5 h-5" />, label: "Users", href: "/list/users", description: "View user accounts (read-only)" },
-        { icon: <Shield className="w-5 h-5" />, label: "Roles", href: "/settings/roles", description: "View role configurations" },
-        { icon: <Activity className="w-5 h-5" />, label: "User Activity", href: "/reports/user-activity", description: "User access logs" },
-      ],
-    },
-    {
-      title: "RFID MANAGEMENT",
-      sectionIcon: <ScanLine className="w-5 h-5" />,
-      compact: true,
-      items: [
-        { icon: <BarChart3 className="w-5 h-5" />, label: "Overview", href: "/list/rfid/dashboard", description: "RFID system analytics" },
-        {
-          icon: <Wifi className="w-5 h-5" />,
-          label: "Devices",
-          href: "#",
-          description: "View RFID readers and tags",
-          subItems: [
-            { icon: <Wifi className="w-5 h-5" />, label: "Readers", href: "/list/rfid/readers", description: "RFID device status" },
-            { icon: <CreditCard className="w-5 h-5" />, label: "Tags", href: "/list/rfid/tags", description: "Tag assignment logs" },
-          ]
-        },
-        { icon: <FileText className="w-5 h-5" />, label: "Activity", href: "/list/rfid/logs", description: "RFID scan history" },
-        { icon: <Settings className="w-5 h-5" />, label: "Config", href: "/list/rfid/config", description: "System configuration" },
-      ],
-    },
-    {
-      title: "ATTENDANCE AUDIT",
-      sectionIcon: <Clock className="w-5 h-5" />,
-      compact: true,
-      items: [
-        { icon: <BarChart3 className="w-5 h-5" />, label: "Attendance Analytics", href: "/analytics/dashboard", description: "Attendance trends" },
-        { icon: <FileText className="w-5 h-5" />, label: "Attendance Reports", href: "/reports/attendance", description: "Generate attendance reports" },
-        { icon: <Activity className="w-5 h-5" />, label: "Verification Logs", href: "/reports/verification", description: "Attendance verification audit" },
-        { icon: <AlertTriangle className="w-5 h-5" />, label: "Discrepancies", href: "/reports/discrepancies", description: "Attendance discrepancies" },
-      ],
-    },
-    {
-      title: "COMMUNICATION",
-      sectionIcon: <Mail className="w-5 h-5" />,
-      compact: true,
-      items: [
-        { icon: <MessageCircle className="w-5 h-5" />, label: "Hub", href: "/list/communication", description: "Communication overview" },
-        {
-          icon: <Megaphone className="w-5 h-5" />,
-          label: "Broadcasts",
-          href: "#",
-          description: "Announcements and events",
-          subItems: [
-            { icon: <Megaphone className="w-5 h-5" />, label: "Announcements", href: "/list/announcements", description: "View announcements" },
-            { icon: <Calendar className="w-5 h-5" />, label: "Events", href: "/list/events", description: "View events" },
-          ]
-        },
-        { icon: <Mail className="w-5 h-5" />, label: "Email", href: "/list/email", description: "Email logs" },
-        { icon: <FileText className="w-5 h-5" />, label: "Logs", href: "/list/communication/logs", description: "Communication logs" },
-      ],
-    },
-    {
-      title: "SYSTEM SETTINGS",
-      sectionIcon: <Settings className="w-5 h-5" />,
-      compact: true,
-      items: [
-        {
-          icon: <Shield className="w-5 h-5" />, label: "Access Control", href: "#", description: "Security settings",
-          subItems: [
-            { icon: <Shield className="w-5 h-5" />, label: "Security", href: "/settings/security", description: "Security settings" },
-          ]
-        },
-        {
-          icon: <Activity className="w-5 h-5" />, label: "System Health", href: "#", description: "Monitor system health",
-          subItems: [
-            { icon: <Activity className="w-5 h-5" />, label: "Status", href: "/settings/system-status", description: "System status overview" },
-            { icon: <Database className="w-5 h-5" />, label: "Backup", href: "/settings/backup", description: "Backup logs" },
-          ]
-        },
-      ],
-    },
-    {
-      title: "LOGOUT",
-      sectionIcon: <LogOut className="w-5 h-5" />,
-      items: [
-        { icon: <LogOut className="w-5 h-5" />, label: "Logout", href: "/logout" },
-      ],
-    },
-  ],
 };
 // --- END FULL MENU CONFIG ---
 

@@ -28,7 +28,6 @@ const HEADER_HEIGHT = 64;
 const Navbar = ({ onSidebarToggle, sidebarCollapsed, logoOnly = false, hideLogo = false, role = "admin" }: { onSidebarToggle: () => void; sidebarCollapsed: boolean; logoOnly?: boolean; hideLogo?: boolean; role?: Role }) => {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const [messagesOpen, setMessagesOpen] = useState(false);
   const [shouldShowSearchBar, setShouldShowSearchBar] = useState(true);
   const navbarRef = useRef<HTMLDivElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -288,19 +287,7 @@ const Navbar = ({ onSidebarToggle, sidebarCollapsed, logoOnly = false, hideLogo 
               </TooltipTrigger>
               <TooltipContent>Reports</TooltipContent>
             </Tooltip>
-            {/* Messages Popover */}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span>
-                  <NotificationPopover
-                    type="messages"
-                    open={messagesOpen}
-                    onOpenChange={setMessagesOpen}
-                  />
-                </span>
-              </TooltipTrigger>
-              <TooltipContent>Messages</TooltipContent>
-            </Tooltip>
+            
             {/* Notifications Popover */}
             <Tooltip>
               <TooltipTrigger asChild>

@@ -1,48 +1,40 @@
-import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
 
+// GET all RFID tags
 export async function GET() {
   try {
-    const tags = await prisma.rFIDTags.findMany({
-      include: {
-        student: {
-          select: {
-            studentId: true,
-            firstName: true,
-            lastName: true,
-            studentIdNum: true,
-          },
-        },
-        instructor: {
-          select: {
-            instructorId: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-          },
-        },
+    console.log('Fetching RFID tags...');
+    
+    const rfidTags = await prisma.rFIDTags.findMany({
+      where: {
+        status: 'ACTIVE',
+        studentId: null,
+        instructorId: null,
+      },
+      select: {
+        tagId: true,
+        tagNumber: true,
+        tagType: true,
+        status: true,
+        notes: true,
+      },
+      orderBy: {
+        tagNumber: 'asc',
       },
     });
-    return NextResponse.json(tags);
+
+    console.log(`Found ${rfidTags.length} available RFID tags`);
+
+    return NextResponse.json({ 
+      data: rfidTags,
+      message: 'RFID tags fetched successfully'
+    });
   } catch (error) {
-    return NextResponse.json({ error: "Failed to fetch RFID tags" }, { status: 500 });
+    console.error('Error fetching RFID tags:', error);
+    return NextResponse.json(
+      { error: `Failed to fetch RFID tags: ${error instanceof Error ? error.message : 'Unknown error'}` },
+      { status: 500 }
+    );
   }
 }
-
-export async function POST(request: Request) {
-  try {
-    const data = await request.json();
-    const tag = await prisma.rFIDTags.create({
-      data: {
-        tagNumber: data.tagNumber,
-        tagType: data.tagType,
-        status: data.status,
-        notes: data.notes,
-        assignedAt: new Date(),
-      },
-    });
-    return NextResponse.json(tag);
-  } catch (error) {
-    return NextResponse.json({ error: "Failed to create RFID tag" }, { status: 500 });
-  }
-} 

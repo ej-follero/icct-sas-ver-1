@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { InstructorAttendanceAnalytics } from '@/components/InstructorAttendanceAnalytics';
+import { AttendanceAnalytics } from '@/components/AttendanceAnalytics';
 
 // Student-specific defaults and light theming can be centralized here later
 // For now, we enforce student type and surface a stable API for the page
 
-type AttendanceAnalyticsProps = React.ComponentProps<typeof InstructorAttendanceAnalytics>;
+type AttendanceAnalyticsProps = React.ComponentProps<typeof AttendanceAnalytics>;
 
 export function StudentAttendanceAnalytics(
   props: Omit<AttendanceAnalyticsProps, 'type'> & { type?: 'student' }
@@ -47,7 +47,7 @@ export function StudentAttendanceAnalytics(
   }, [incomingData]);
 
   return (
-    <InstructorAttendanceAnalytics
+    <AttendanceAnalytics
       {...rest}
       data={students}
       loading={loading}

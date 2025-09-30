@@ -111,7 +111,7 @@ export default function AttendanceRecordsDialog({
       try {
         setFetching(true);
         const params = new URLSearchParams();
-        params.append('instructorId', instructor.instructorId);
+        params.append('instructorId', instructor?.instructorId || '');
 
         // Date range presets
         const now = new Date();
@@ -222,10 +222,10 @@ export default function AttendanceRecordsDialog({
               <DialogTitle className="text-white text-2xl font-bold flex items-center gap-3">
                 Attendance Records
                 <Badge className="bg-white/20 text-white border-white/30">
-                  {instructor.attendanceRate}% Overall
+                  {instructor?.attendanceRate || 0}% Overall
                 </Badge>
               </DialogTitle>
-              <p className="text-blue-100 text-sm mt-1 font-medium">{instructor.instructorName} • {instructor.employeeId} • {instructor.department}</p>
+              <p className="text-blue-100 text-sm mt-1 font-medium">{instructor?.instructorName || 'N/A'} • {instructor?.employeeId || 'N/A'} • {instructor?.department || 'N/A'}</p>
             </div>
           </div>
           
@@ -236,7 +236,7 @@ export default function AttendanceRecordsDialog({
                 variant="ghost"
                 size="lg"
                 className="text-white hover:bg-white/20 hover:text-white rounded"
-                onClick={() => copyToClipboard(instructor.instructorName, 'Instructor Name')}
+                onClick={() => copyToClipboard(instructor?.instructorName || 'N/A', 'Instructor Name')}
               >
                 <Copy className="w-4 h-4 mr-1" />
                 Copy
@@ -281,19 +281,19 @@ export default function AttendanceRecordsDialog({
             {/* Quick Stats Row */}
             <div className="grid grid-cols-4 gap-4">
               <div className="bg-green-50 border border-green-200 rounded p-4 text-center">
-                <div className="text-2xl font-bold text-green-700">{instructor.attendedClasses}</div>
+                <div className="text-2xl font-bold text-green-700">{instructor?.attendedClasses || 0}</div>
                 <div className="text-sm text-green-600">Classes Attended</div>
               </div>
               <div className="bg-red-50 border border-red-200 rounded p-4 text-center">
-                <div className="text-2xl font-bold text-red-700">{instructor.absentClasses}</div>
+                <div className="text-2xl font-bold text-red-700">{instructor?.absentClasses || 0}</div>
                 <div className="text-sm text-red-600">Classes Missed</div>
               </div>
               <div className="bg-yellow-50 border border-yellow-200 rounded p-4 text-center">
-                <div className="text-2xl font-bold text-yellow-700">{instructor.lateClasses}</div>
+                <div className="text-2xl font-bold text-yellow-700">{instructor?.lateClasses || 0}</div>
                 <div className="text-sm text-yellow-600">Late Arrivals</div>
               </div>
               <div className="bg-blue-50 border border-blue-200 rounded p-4 text-center">
-                <div className="text-2xl font-bold text-blue-700">{instructor.totalScheduledClasses}</div>
+                <div className="text-2xl font-bold text-blue-700">{instructor?.totalScheduledClasses || 0}</div>
                 <div className="text-sm text-blue-600">Total Scheduled</div>
               </div>
             </div>
@@ -320,9 +320,9 @@ export default function AttendanceRecordsDialog({
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All subjects</SelectItem>
-                    {instructor.subjects.map((subject) => (
+                    {instructor?.subjects?.map((subject) => (
                       <SelectItem key={subject} value={subject}>{subject}</SelectItem>
-                    ))}
+                    )) || []}
                   </SelectContent>
                 </Select>
 

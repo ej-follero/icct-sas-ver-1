@@ -114,6 +114,6 @@ export interface AttendanceRecord {
 }
 
 export type RiskLevel = 'NONE' | 'LOW' | 'MEDIUM' | 'HIGH';
-export type StudentStatus = 'ACTIVE' | 'INACTIVE';
+export type StudentStatus = 'ACTIVE' | 'INACTIVE' | 'ARCHIVED';
 export type AttendanceStatus = 'PRESENT' | 'ABSENT' | 'LATE' | 'EXCUSED';
 export type AttendanceVerification = 'PENDING' | 'VERIFIED' | 'DISPUTED' | 'REJECTED';

@@ -16,7 +16,8 @@ import {
   TrendingUp,
   AlertTriangle,
   CheckCircle,
-  XCircle
+  XCircle,
+  X
 } from 'lucide-react';
 import { StudentAttendance, StudentStatus } from '@/types/student-attendance';
 
@@ -65,29 +66,39 @@ export default function StudentDetailModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center">
-              <User className="h-5 w-5 text-blue-600" />
-            </div>
-            <div>
-              <h2 className="text-xl font-bold">{student.studentName}</h2>
-              <p className="text-sm text-gray-600">{student.studentIdNum}</p>
+      <DialogContent className="max-w-4xl max-h-[90vh] p-0 rounded-xl flex flex-col">
+        <DialogHeader className="sticky top-0 z-10 bg-gradient-to-r from-blue-600 via-blue-700 to-blue-800 rounded-t-xl p-6 flex-shrink-0">
+          <DialogTitle asChild>
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
+                <User className="w-6 h-6 text-white" />
+              </div>
+              <div className="flex-1">
+                <h2 className="text-2xl font-bold text-white">{student.studentName}</h2>
+                <p className="text-blue-100 text-sm">{student.studentIdNum}</p>
+                <div className="flex gap-3 mt-3">
+                  <Badge className={`${getStatusColor(student.status)} px-3 py-1 bg-white/20 text-white border-white/30`}>
+                    {student.status}
+                  </Badge>
+                  <Badge className={`${getRiskColor(student.riskLevel)} px-3 py-1 bg-white/20 text-white border-white/30`}>
+                    Risk: {student.riskLevel}
+                  </Badge>
+                </div>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={onClose}
+                className="h-8 w-8 text-white hover:bg-white/20 rounded-full"
+              >
+                <X className="h-4 w-4" />
+              </Button>
             </div>
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-6">
-          {/* Status and Risk Level */}
-          <div className="flex gap-4">
-            <Badge className={`${getStatusColor(student.status)} px-3 py-1`}>
-              {student.status}
-            </Badge>
-            <Badge className={`${getRiskColor(student.riskLevel)} px-3 py-1`}>
-              Risk: {student.riskLevel}
-            </Badge>
-          </div>
+        <div className="flex-1 overflow-y-auto">
+          <div className="space-y-6 p-6">
 
           {/* Basic Information */}
           <Card>
@@ -116,37 +127,73 @@ export default function StudentDetailModal({
             </CardContent>
           </Card>
 
-          {/* Attendance Overview */}
+          {/* Personal Information */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Attendance Overview</CardTitle>
+              <CardTitle className="text-lg">Personal Information</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-green-600">{student.attendedClasses}</div>
-                  <div className="text-sm text-gray-600">Present</div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="flex items-center gap-3">
+                  <Calendar className="h-4 w-4 text-gray-500" />
+                  <div>
+                    <span className="text-sm text-gray-600">Birth Date</span>
+                    <div className="font-medium">{student.birthDate ? new Date(student.birthDate).toLocaleDateString() : 'Not provided'}</div>
+                  </div>
                 </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-yellow-600">{student.lateClasses}</div>
-                  <div className="text-sm text-gray-600">Late</div>
+                <div className="flex items-center gap-3">
+                  <User className="h-4 w-4 text-gray-500" />
+                  <div>
+                    <span className="text-sm text-gray-600">Gender</span>
+                    <div className="font-medium">{student.gender}</div>
+                  </div>
                 </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-red-600">{student.absentClasses}</div>
-                  <div className="text-sm text-gray-600">Absent</div>
+                <div className="flex items-center gap-3">
+                  <Building className="h-4 w-4 text-gray-500" />
+                  <div>
+                    <span className="text-sm text-gray-600">Nationality</span>
+                    <div className="font-medium">{student.nationality || 'Not provided'}</div>
+                  </div>
                 </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-blue-600">{student.attendanceRate}%</div>
-                  <div className="text-sm text-gray-600">Rate</div>
+                <div className="flex items-center gap-3">
+                  <GraduationCap className="h-4 w-4 text-gray-500" />
+                  <div>
+                    <span className="text-sm text-gray-600">Student Type</span>
+                    <div className="font-medium">{student.studentType}</div>
+                  </div>
                 </div>
               </div>
-              
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span>Overall Attendance Rate</span>
-                  <span>{student.attendanceRate}%</span>
+            </CardContent>
+          </Card>
+
+          {/* Contact Information */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Contact Information</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="flex items-center gap-3">
+                  <Mail className="h-4 w-4 text-gray-500" />
+                  <div>
+                    <span className="text-sm text-gray-600">Email Address</span>
+                    <div className="font-medium">{student.email}</div>
+                  </div>
                 </div>
-                <Progress value={student.attendanceRate} className="h-2" />
+                <div className="flex items-center gap-3">
+                  <Phone className="h-4 w-4 text-gray-500" />
+                  <div>
+                    <span className="text-sm text-gray-600">Phone Number</span>
+                    <div className="font-medium">{student.phoneNumber}</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 col-span-1 md:col-span-2">
+                  <Building className="h-4 w-4 text-gray-500" />
+                  <div className="flex-1">
+                    <span className="text-sm text-gray-600">Address</span>
+                    <div className="font-medium">{student.address || 'Not provided'}</div>
+                  </div>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -167,44 +214,111 @@ export default function StudentDetailModal({
             </CardContent>
           </Card>
 
-          {/* Performance Metrics */}
+          {/* Academic Information */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Performance Metrics</CardTitle>
+              <CardTitle className="text-lg">Academic Information</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="text-center p-4 bg-blue-50 rounded-lg">
-                  <TrendingUp className="h-6 w-6 text-blue-600 mx-auto mb-2" />
-                  <div className="text-lg font-bold">{student.consistencyRating}/5</div>
-                  <div className="text-sm text-gray-600">Consistency</div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="flex items-center gap-3">
+                  <GraduationCap className="h-4 w-4 text-gray-500" />
+                  <div>
+                    <span className="text-sm text-gray-600">Course</span>
+                    <div className="font-medium">{student.course}</div>
+                  </div>
                 </div>
-                <div className="text-center p-4 bg-green-50 rounded-lg">
-                  <CheckCircle className="h-6 w-6 text-green-600 mx-auto mb-2" />
-                  <div className="text-lg font-bold">{student.currentStreak}</div>
-                  <div className="text-sm text-gray-600">Current Streak</div>
+                <div className="flex items-center gap-3">
+                  <Building className="h-4 w-4 text-gray-500" />
+                  <div>
+                    <span className="text-sm text-gray-600">Department</span>
+                    <div className="font-medium">{student.department}</div>
+                  </div>
                 </div>
-                <div className="text-center p-4 bg-purple-50 rounded-lg">
-                  <Clock className="h-6 w-6 text-purple-600 mx-auto mb-2" />
-                  <div className="text-lg font-bold">{student.punctualityScore}%</div>
-                  <div className="text-sm text-gray-600">Punctuality</div>
+                <div className="flex items-center gap-3">
+                  <User className="h-4 w-4 text-gray-500" />
+                  <div>
+                    <span className="text-sm text-gray-600">Year Level</span>
+                    <div className="font-medium">{student.yearLevel.replace('_', ' ')}</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <CheckCircle className="h-4 w-4 text-gray-500" />
+                  <div>
+                    <span className="text-sm text-gray-600">Student Type</span>
+                    <div className="font-medium">{student.studentType}</div>
+                  </div>
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* Actions */}
+          {/* Guardian Information */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Guardian Information</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="flex items-center gap-3">
+                  <User className="h-4 w-4 text-gray-500" />
+                  <div>
+                    <span className="text-sm text-gray-600">Guardian Name</span>
+                    <div className="font-medium">{student.guardianName || 'Not provided'}</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Mail className="h-4 w-4 text-gray-500" />
+                  <div>
+                    <span className="text-sm text-gray-600">Guardian Email</span>
+                    <div className="font-medium">{student.guardianEmail || 'Not provided'}</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Phone className="h-4 w-4 text-gray-500" />
+                  <div>
+                    <span className="text-sm text-gray-600">Guardian Phone</span>
+                    <div className="font-medium">{student.guardianPhone || 'Not provided'}</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <User className="h-4 w-4 text-gray-500" />
+                  <div>
+                    <span className="text-sm text-gray-600">Guardian Type</span>
+                    <div className="font-medium">{student.guardianType || 'Not provided'}</div>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          </div>
+        </div>
+
+        {/* Footer Actions */}
+        <div className="bg-white border-t border-gray-200 p-4 rounded-b-xl flex-shrink-0">
           <div className="flex justify-end gap-3">
-            <Button variant="outline" onClick={onClose}>
+            <Button 
+              variant="outline" 
+              onClick={onClose}
+              className="rounded px-6 py-2 border-gray-300 hover:bg-gray-50"
+            >
               Close
             </Button>
             {onEdit && (
-              <Button onClick={onEdit}>
+              <Button 
+                onClick={onEdit}
+                className="rounded px-6 py-2 bg-blue-600 hover:bg-blue-700"
+              >
                 Edit Student
               </Button>
             )}
             {onDelete && (
-              <Button variant="destructive" onClick={onDelete}>
+              <Button 
+                variant="destructive" 
+                onClick={onDelete}
+                className="rounded px-6 py-2 bg-red-600 hover:bg-red-700"
+              >
                 Delete Student
               </Button>
             )}

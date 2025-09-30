@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
-import { Search, TrendingUp, TrendingDown, Users, Clock, AlertCircle, Filter, ChevronDown, BookOpen, Info, Printer, FileDown, FileText, ChevronUp, Mail, Phone, Send, Home, ChevronRight, Download, RefreshCw, Settings, Maximize2, Minimize2, CheckCircle, X, ChevronsLeft, ChevronLeft, ChevronsRight, Activity, BarChart3, Shield, Zap, AlertTriangle, Target, Building, GraduationCap, Check, User, Hash, Bell, Eye, Plus, Upload, Columns3, List, Edit, Trash2, Calendar, MoreVertical } from 'lucide-react';
+import { Search, TrendingUp, TrendingDown, Users, Clock, AlertCircle, Filter, ChevronDown, BookOpen, Info, Printer, FileDown, FileText, ChevronUp, Phone, Send, Home, ChevronRight, Download, RefreshCw, Settings, Maximize2, Minimize2, CheckCircle, X, ChevronsLeft, ChevronLeft, ChevronsRight, Activity, BarChart3, Shield, Zap, AlertTriangle, Target, Building, GraduationCap, Check, User, Hash, Eye, Plus, Upload, Columns3, List, Edit, Trash2, Calendar, MoreVertical } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,9 +18,9 @@ import {
   DropdownMenuSeparator
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
 import { useDebounce } from '@/hooks/use-debounce';
+import { ExportService } from '@/lib/services/export.service';
+import { toast } from 'sonner';
 
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { LineChart, Line, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart, Bar, CartesianGrid, Legend, PieChart, Pie, Cell } from 'recharts';
@@ -30,8 +30,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import StudentDetailModal from '@/components/StudentDetailModal';
 import { 
   AttendanceRecordsDialog, 
+  StudentAttendanceRecordsDialog,
   EditInstructorDialog, 
-  DeactivateInstructorDialog 
+  EditStudentDialog,
+  DeactivateEntityDialog,
+  BulkStatusUpdateDialog,
+  ExportDialog
 } from '@/components/reusable/Dialogs';
 import { ICCT_CLASSES, getStatusColor, getAttendanceRateColor } from '@/lib/colors';
 import { 
@@ -42,7 +46,7 @@ import {
 } from '@/types/student-attendance';
 import { FilterChips } from '@/components/FilterChips';
 import { FilterDialog } from '@/components/FilterDialog';
-import StudentAttendanceAnalytics from '@/components/StudentAttendanceAnalytics';
+import { AttendanceAnalytics } from '@/components/AttendanceAnalytics';
 
  
 import { TableList, TableListColumn } from '@/components/reusable/Table/TableList';
@@ -54,6 +58,7 @@ import PageHeader from '@/components/PageHeader/PageHeader';
  
 import { QuickActionsPanel } from '@/components/reusable/QuickActionsPanel';
 import { ManualAttendanceDialog } from '@/components/reusable/Dialogs';
+import SearchableSelect from '@/components/reusable/Search/SearchableSelect';
 
 
 interface Filters extends Record<string, string[]> {
@@ -197,6 +202,15 @@ export default function StudentAttendancePage() {
   const [showBulkActions, setShowBulkActions] = useState(false);
   const [showManualAttendance, setShowManualAttendance] = useState(false);
   const [manualStudentId, setManualStudentId] = useState<number | undefined>(undefined);
+  const [showBulkStatusUpdate, setShowBulkStatusUpdate] = useState(false);
+  const [showExportDialog, setShowExportDialog] = useState(false);
+  
+  // State for expandable row data
+  const [expandedRowData, setExpandedRowData] = useState<Record<string, any>>({});
+  const [loadingExpandedData, setLoadingExpandedData] = useState<Set<string>>(new Set());
+  
+  // Export loading state
+  const [exportLoading, setExportLoading] = useState(false);
   
   // Subject filter state for analytics
   const [selectedSubject, setSelectedSubject] = useState<string>('all');
@@ -235,38 +249,85 @@ export default function StudentAttendancePage() {
       setLoading(true);
       setError(null);
       
+      console.log('🔍 Starting to fetch student attendance data...');
+      
       const params = new URLSearchParams();
       if (debouncedSearch) {
         params.append('search', debouncedSearch);
       }
       
-      const response = await fetch(`/api/attendance/students?${params.toString()}`);
+      const url = `/api/attendance/students?${params.toString()}`;
+      console.log('📡 Fetching from URL:', url);
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        // Add timeout
+        signal: AbortSignal.timeout(30000) // 30 second timeout
+      });
+      
+      console.log('📡 Response status:', response.status, response.statusText);
       
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.details || `HTTP ${response.status}: ${response.statusText}`);
+        console.error('❌ API Error:', errorData);
+        
+        // Handle specific HTTP status codes
+        if (response.status === 404) {
+          throw new Error('Student attendance data not found. Please check if the service is running.');
+        } else if (response.status === 500) {
+          throw new Error('Server error occurred. Please try again later.');
+        } else if (response.status === 403) {
+          throw new Error('Access denied. Please check your permissions.');
+        } else {
+          throw new Error(errorData.details || errorData.message || `HTTP ${response.status}: ${response.statusText}`);
+        }
       }
       
       const data = await response.json();
+      console.log('📊 Raw API response:', data);
       
       // Handle case where API returns an error object
       if (data.error) {
+        console.error('❌ API returned error:', data.error);
         throw new Error(data.details || data.error);
       }
       
-      console.log('Fetched student data:', data);
-      console.log('Number of students:', Array.isArray(data) ? data.length : 0);
-      if (Array.isArray(data) && data.length > 0) {
-        console.log('Sample student data:', data[0]);
+      // Validate data structure
+      if (!Array.isArray(data)) {
+        throw new Error('Invalid data format received from server');
       }
       
-      setStudents(Array.isArray(data) ? data : []);
+      console.log('✅ Fetched student data:', data);
+      console.log('📈 Number of students:', data.length);
+      if (data.length > 0) {
+        console.log('👤 Sample student data:', data[0]);
+      }
+      
+      setStudents(data);
+      console.log('✅ Students state updated');
     } catch (err) {
-      console.error('Error fetching student attendance:', err);
-      setError(err instanceof Error ? err.message : 'An error occurred');
+      console.error('❌ Error fetching student attendance:', err);
+      
+      // Handle specific error types
+      if (err instanceof Error) {
+        if (err.name === 'AbortError') {
+          setError('Request timed out. Please check your connection and try again.');
+        } else if (err.message.includes('Failed to fetch')) {
+          setError('Network error. Please check your internet connection.');
+        } else {
+          setError(err.message);
+        }
+      } else {
+        setError('An unexpected error occurred');
+      }
+      
       setStudents([]); // Set empty array on error
     } finally {
       setLoading(false);
+      console.log('🏁 Fetch completed, loading set to false');
     }
   }, [debouncedSearch]);
 
@@ -426,6 +487,21 @@ export default function StudentAttendancePage() {
       header: "", 
       accessor: "expander", 
       className: "w-8 text-center",
+      render: (student: StudentAttendance) => (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-8 w-8 p-0 hover:bg-gray-50"
+          onClick={(e) => {
+            e.stopPropagation();
+            handleToggleExpand(student.studentId);
+          }}
+        >
+          <ChevronRight className={`h-4 w-4 text-gray-600 transition-transform ${
+            expandedRowIds.has(student.studentId) ? 'rotate-90' : ''
+          }`} />
+        </Button>
+      ),
       expandedContent: (student: StudentAttendance) => (
         <TableCell colSpan={studentColumns.length} className="p-0">
           <div className="bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 border-l-4 border-blue-400 mx-2 mb-2 rounded-r-xl shadow-sm transition-all duration-300">
@@ -485,7 +561,7 @@ export default function StudentAttendancePage() {
             {/* Main Content Tabs */}
             <div className="p-2 sm:p-4">
               <Tabs defaultValue="activity" className="w-full">
-                <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 bg-blue-50/70 rounded p-1 gap-1 border border-blue-200">
+                <TabsList className="grid w-full grid-cols-3 bg-blue-50/70 rounded p-1 gap-1 border border-blue-200">
                   <TabsTrigger value="activity" className="flex items-center justify-center gap-1 text-xs px-2 py-2 rounded text-slate-700 hover:bg-blue-100 transition data-[state=active]:bg-white data-[state=active]:text-blue-700 data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-blue-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
                     <Clock className="w-3 h-3 flex-shrink-0" />
                     <span>Activity</span>
@@ -497,10 +573,6 @@ export default function StudentAttendancePage() {
                   <TabsTrigger value="analytics" className="flex items-center justify-center gap-1 text-xs px-2 py-2 rounded text-slate-700 hover:bg-blue-100 transition data-[state=active]:bg-white data-[state=active]:text-blue-700 data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-blue-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
                     <BarChart3 className="w-3 h-3 flex-shrink-0" />
                     <span>Analytics</span>
-                  </TabsTrigger>
-                  <TabsTrigger value="actions" className="flex items-center justify-center gap-1 text-xs px-2 py-2 rounded text-slate-700 hover:bg-blue-100 transition data-[state=active]:bg-white data-[state=active]:text-blue-700 data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-blue-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
-                    <Settings className="w-3 h-3 flex-shrink-0" />
-                    <span>Actions</span>
                   </TabsTrigger>
                 </TabsList>
 
@@ -516,29 +588,66 @@ export default function StudentAttendancePage() {
                         </CardTitle>
                       </CardHeader>
                       <CardContent className="space-y-3">
-                        {student.recentActivity && student.recentActivity.length > 0 ? (
-                          student.recentActivity.map((entry, index) => (
-                            <div key={index} className="flex items-center justify-between p-2 rounded bg-slate-50/50 border border-slate-200/30">
-                              <div className="flex items-center gap-3">
-                                <div className={`w-2 h-2 rounded-full ${
-                                  entry.status === 'present' ? 'bg-emerald-500' :
-                                  entry.status === 'late' ? 'bg-amber-500' :
-                                  'bg-red-500'
-                                }`}></div>
-                                <span className="text-sm font-medium text-slate-700">{entry.day}</span>
+                        {loadingExpandedData.has(student.studentId) ? (
+                          <div className="text-center py-4 text-slate-500 text-sm">
+                            Loading activity data...
+                          </div>
+                        ) : expandedRowData[student.studentId]?.recentActivity && expandedRowData[student.studentId].recentActivity.length > 0 ? (
+                          <div className="space-y-3">
+                            {expandedRowData[student.studentId].recentActivity.map((entry: any, index: number) => (
+                              <div key={index} className="flex items-center justify-between p-3 rounded bg-slate-50/50 border border-slate-200/30 hover:bg-slate-100/50 transition-colors">
+                                <div className="flex items-center gap-3 flex-1">
+                                  <div className={`w-3 h-3 rounded-full ${
+                                    entry.status === 'present' ? 'bg-emerald-500' :
+                                    entry.status === 'late' ? 'bg-amber-500' :
+                                    'bg-red-500'
+                                  }`}></div>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-sm font-medium text-slate-700">{entry.day}</span>
+                                      <span className="text-xs text-slate-500">{entry.time}</span>
+                                    </div>
+                                    <div className="text-xs text-slate-600 truncate">
+                                      {entry.subject} • {entry.room}
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <Badge className={`text-xs px-2 py-1 ${
+                                    entry.status === 'present' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' :
+                                    entry.status === 'late' ? 'bg-amber-100 text-amber-700 border-amber-200' :
+                                    'bg-red-100 text-red-700 border-red-200'
+                                  }`}>
+                                    {entry.status}
+                                  </Badge>
+                                </div>
                               </div>
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs text-slate-500">{entry.time}</span>
-                                <Badge className={`text-xs px-2 py-0.5 ${
-                                  entry.status === 'present' ? 'bg-emerald-100 text-emerald-700' :
-                                  entry.status === 'late' ? 'bg-amber-100 text-amber-700' :
-                                  'bg-red-100 text-red-700'
-                                }`}>
-                                  {entry.status}
-                                </Badge>
+                            ))}
+                            
+                            {/* Summary Stats */}
+                            <div className="mt-4 pt-3 border-t border-slate-200">
+                              <div className="grid grid-cols-3 gap-4 text-center">
+                                <div>
+                                  <div className="text-lg font-bold text-emerald-600">
+                                    {expandedRowData[student.studentId]?.weeklyPerformance?.presentDays || 0}
+                                  </div>
+                                  <div className="text-xs text-slate-500">Present</div>
+                                </div>
+                                <div>
+                                  <div className="text-lg font-bold text-amber-600">
+                                    {expandedRowData[student.studentId]?.weeklyPerformance?.lateDays || 0}
+                                  </div>
+                                  <div className="text-xs text-slate-500">Late</div>
+                                </div>
+                                <div>
+                                  <div className="text-lg font-bold text-red-600">
+                                    {expandedRowData[student.studentId]?.weeklyPerformance?.absentDays || 0}
+                                  </div>
+                                  <div className="text-xs text-slate-500">Absent</div>
+                                </div>
                               </div>
                             </div>
-                          ))
+                          </div>
                         ) : (
                           <div className="text-center py-4 text-slate-500 text-sm">
                             No recent activity data available
@@ -547,63 +656,6 @@ export default function StudentAttendancePage() {
                       </CardContent>
                     </Card>
 
-                    {/* Weekly Summary */}
-                    <Card className="bg-white/70 border-slate-200/50 shadow-sm">
-                      <CardHeader className="pb-3">
-                        <CardTitle className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-                          <Target className="w-4 h-4 text-emerald-600" />
-                          Weekly Performance
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-4">
-                        <div className="space-y-3">
-                          <div className="flex justify-between items-center">
-                            <span className="text-sm text-slate-600">Present Days</span>
-                            <div className="flex items-center gap-2">
-                              <Progress 
-                                value={student.weeklyPerformance ? (student.weeklyPerformance.presentDays / student.weeklyPerformance.totalDays) * 100 : 0} 
-                                className="w-16 h-2" 
-                              />
-                              <span className="text-sm font-semibold text-emerald-700">
-                                {student.weeklyPerformance ? `${student.weeklyPerformance.presentDays}/${student.weeklyPerformance.totalDays}` : '0/0'}
-                              </span>
-                            </div>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <span className="text-sm text-slate-600">On-Time Rate</span>
-                            <div className="flex items-center gap-2">
-                              <Progress 
-                                value={student.weeklyPerformance?.onTimeRate || 0} 
-                                className="w-16 h-2" 
-                              />
-                              <span className="text-sm font-semibold text-blue-700">
-                                {student.weeklyPerformance ? `${Math.round(student.weeklyPerformance.onTimeRate)}%` : '0%'}
-                              </span>
-                            </div>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <span className="text-sm text-slate-600">Current Streak</span>
-                            <span className="text-sm font-bold text-indigo-700 bg-indigo-100 px-2 py-1 rounded">
-                              {student.weeklyPerformance?.currentStreak || 0} days
-                            </span>
-                          </div>
-                        </div>
-                        
-                        <Separator className="my-3" />
-                        
-                        <div className="text-center">
-                          {(() => {
-                            const { rank, total } = getDepartmentRank(student);
-                            return (
-                              <>
-                                <div className="text-lg font-bold text-slate-800">{`Rank #${rank}`}</div>
-                                <div className="text-xs text-slate-500">{`out of ${total} in department`}</div>
-                              </>
-                            );
-                          })()}
-                        </div>
-                      </CardContent>
-                    </Card>
                   </div>
                 </TabsContent>
 
@@ -619,35 +671,94 @@ export default function StudentAttendancePage() {
                         </CardTitle>
                       </CardHeader>
                       <CardContent className="space-y-3">
-                        {student.todaySchedule && student.todaySchedule.length > 0 ? (
-                          student.todaySchedule.map((entry, index) => (
-                            <div key={index} className="flex items-center justify-between p-3 rounded bg-slate-50/50 border border-slate-200/30 hover:shadow-sm transition-shadow">
-                              <div className="flex items-center gap-3">
-                                <div className={`w-3 h-3 rounded-full ${
-                                  entry.status === 'completed' ? 'bg-emerald-500' :
-                                  entry.status === 'in-progress' ? 'bg-blue-500 animate-pulse' :
-                                  'bg-slate-300'
-                                }`}></div>
-                                <div>
-                                  <div className="font-medium text-slate-800">{entry.time}</div>
-                                  <div className="text-sm text-slate-600">{entry.subject}</div>
+                        {loadingExpandedData.has(student.studentId) ? (
+                          <div className="text-center py-4 text-slate-500 text-sm">
+                            Loading schedule data...
+                          </div>
+                        ) : (
+                          <div className="space-y-3">
+                            {(() => {
+                              // Generate today's schedule based on student's actual schedules
+                              const todaySchedule: any[] = [];
+                              const now = new Date();
+                              const today = now.getDay(); // 0 = Sunday, 1 = Monday, etc.
+                              
+                              // Map day numbers to names
+                              const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+                              const todayName = dayNames[today];
+                              
+                              // Get student's schedules for today
+                              const studentSchedules = student.schedules || [];
+                              const todaySchedules = studentSchedules.filter((schedule: any) => 
+                                schedule.dayOfWeek === todayName || schedule.dayOfWeek === 'DAILY'
+                              );
+                              
+                              if (todaySchedules.length > 0) {
+                                todaySchedules.forEach((schedule: any, index: number) => {
+                                  const currentTime = now.getHours() * 100 + now.getMinutes();
+                                  const startTime = parseInt(schedule.startTime?.replace(':', '') || '0');
+                                  const endTime = parseInt(schedule.endTime?.replace(':', '') || '0');
+                                  
+                                  let status = 'upcoming';
+                                  if (currentTime >= startTime && currentTime <= endTime) {
+                                    status = 'in-progress';
+                                  } else if (currentTime > endTime) {
+                                    status = 'completed';
+                                  }
+                                  
+                                  todaySchedule.push({
+                                    time: schedule.startTime || 'TBD',
+                                    subject: schedule.subjectName || 'Unknown Subject',
+                                    room: schedule.roomNumber || 'TBD',
+                                    status: status
+                                  });
+                                });
+                              }
+                              
+                              return todaySchedule;
+                            })().map((entry: any, index: number) => (
+                              <div key={index} className="flex items-center justify-between p-3 rounded bg-slate-50/50 border border-slate-200/30 hover:shadow-sm transition-shadow">
+                                <div className="flex items-center gap-3">
+                                  <div className={`w-3 h-3 rounded-full ${
+                                    entry.status === 'completed' ? 'bg-emerald-500' :
+                                    entry.status === 'in-progress' ? 'bg-blue-500 animate-pulse' :
+                                    'bg-slate-300'
+                                  }`}></div>
+                                  <div>
+                                    <div className="font-medium text-slate-800">{entry.time}</div>
+                                    <div className="text-sm text-slate-600">{entry.subject}</div>
+                                  </div>
+                                </div>
+                                <div className="text-right">
+                                  <div className="text-sm font-medium text-slate-700">{entry.room}</div>
+                                  <Badge className={`text-xs mt-1 ${
+                                    entry.status === 'completed' ? 'bg-emerald-100 text-emerald-700' :
+                                    entry.status === 'in-progress' ? 'bg-blue-100 text-blue-700' :
+                                    'bg-slate-100 text-slate-600'
+                                  }`}>
+                                    {entry.status?.replace('-', ' ') || 'upcoming'}
+                                  </Badge>
                                 </div>
                               </div>
-                              <div className="text-right">
-                                <div className="text-sm font-medium text-slate-700">{entry.room}</div>
-                                <Badge className={`text-xs mt-1 ${
-                                  entry.status === 'completed' ? 'bg-emerald-100 text-emerald-700' :
-                                  entry.status === 'in-progress' ? 'bg-blue-100 text-blue-700' :
-                                  'bg-slate-100 text-slate-600'
-                                }`}>
-                                  {entry.status?.replace('-', ' ') || 'upcoming'}
-                                </Badge>
+                            ))}
+                            
+                            {(() => {
+                              const studentSchedules = student.schedules || [];
+                              const now = new Date();
+                              const today = now.getDay();
+                              const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+                              const todayName = dayNames[today];
+                              
+                              const todaySchedules = studentSchedules.filter((schedule: any) => 
+                                schedule.dayOfWeek === todayName || schedule.dayOfWeek === 'DAILY'
+                              );
+                              
+                              return todaySchedules.length === 0;
+                            })() && (
+                              <div className="text-center py-4 text-slate-500 text-sm">
+                                No classes scheduled for today
                               </div>
-                            </div>
-                          ))
-                        ) : (
-                          <div className="text-center py-4 text-slate-500 text-sm">
-                            No classes scheduled for today
+                            )}
                           </div>
                         )}
                       </CardContent>
@@ -683,7 +794,21 @@ export default function StudentAttendancePage() {
                           </div>
                           <div className="flex justify-between text-sm">
                             <span className="text-slate-600">Upcoming Today</span>
-                            <span className="font-semibold text-blue-700">{student.todaySchedule?.length || 0}</span>
+                            <span className="font-semibold text-blue-700">
+                              {(() => {
+                                const now = new Date();
+                                const today = now.getDay();
+                                const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+                                const todayName = dayNames[today];
+                                
+                                const studentSchedules = student.schedules || [];
+                                const todaySchedules = studentSchedules.filter((schedule: any) => 
+                                  schedule.dayOfWeek === todayName || schedule.dayOfWeek === 'DAILY'
+                                );
+                                
+                                return todaySchedules.length;
+                              })()}
+                            </span>
                           </div>
                         </div>
                       </CardContent>
@@ -693,134 +818,92 @@ export default function StudentAttendancePage() {
 
                 {/* Analytics Tab */}
                 <TabsContent value="analytics" className="mt-2 sm:mt-4">
-                  {/* Performance Breakdown */}
-                  <Card className="bg-white/70 border-slate-200/50 shadow-sm">
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-                        <BarChart3 className="w-4 h-4 text-purple-600" />
-                        Performance Breakdown
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-4">
-                        <div>
-                          <div className="flex justify-between text-sm mb-1">
-                            <span>Present</span>
-                            <span>{student.attendedClasses}/{student.totalScheduledClasses}</span>
-                          </div>
-                          <Progress value={(student.attendedClasses / student.totalScheduledClasses) * 100} className="h-2" />
-                        </div>
-                        <div>
-                          <div className="flex justify-between text-sm mb-1">
-                            <span>Late Arrivals</span>
-                            <span>{student.lateClasses}/{student.totalScheduledClasses}</span>
-                          </div>
-                          <Progress value={(student.lateClasses / student.totalScheduledClasses) * 100} className="h-2" />
-                        </div>
-                        <div>
-                          <div className="flex justify-between text-sm mb-1">
-                            <span>Absences</span>
-                            <span>{student.absentClasses}/{student.totalScheduledClasses}</span>
-                          </div>
-                          <Progress value={(student.absentClasses / student.totalScheduledClasses) * 100} className="h-2" />
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </TabsContent>
-
-                {/* Actions Tab */}
-                <TabsContent value="actions" className="mt-2 sm:mt-4">
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
-                    {/* Quick Actions */}
+                    {/* Weekly Performance */}
                     <Card className="bg-white/70 border-slate-200/50 shadow-sm">
                       <CardHeader className="pb-3">
                         <CardTitle className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-                          <Zap className="w-4 h-4 text-yellow-600" />
-                          Quick Actions
+                          <Target className="w-4 h-4 text-emerald-600" />
+                          Weekly Performance
                         </CardTitle>
                       </CardHeader>
-                      <CardContent className="space-y-2">
-                        <Button 
-                          size="sm" 
-                          variant="outline" 
-                          className="w-full justify-start bg-white/80 hover:bg-blue-50 border-slate-300 rounded"
-                          onClick={() => {
-                            setSelectedStudentForRecords(student);
-                            setShowAttendanceRecordsModal(true);
-                          }}
-                        >
-                          <Calendar className="w-4 h-4 mr-2 text-blue-600" />
-                          View Full Records
-                        </Button>
-                        <Button 
-                          size="sm" 
-                          variant="outline" 
-                          className="w-full justify-start bg-white/80 hover:bg-emerald-50 border-slate-300 rounded"
-                          onClick={() => {
-                            setSelectedStudentForEdit(student);
-                            setShowEditStudentModal(true);
-                          }}
-                        >
-                          <Edit className="w-4 h-4 mr-2 text-emerald-600" />
-                          Edit Profile
-                        </Button>
-                        <Button 
-                          size="sm" 
-                          variant="outline" 
-                          className="w-full justify-start bg-white/80 hover:bg-purple-50 border-slate-300 rounded"
-                        >
-                          <Mail className="w-4 h-4 mr-2 text-purple-600" />
-                          Send Message
-                        </Button>
-                        <Button 
-                          size="sm" 
-                          variant="outline" 
-                          className="w-full justify-start bg-white/80 hover:bg-orange-50 border-slate-300 rounded
-                          "
-                        >
-                          <Bell className="w-4 h-4 mr-2 text-orange-600" />
-                          Send Alert
-                        </Button>
+                      <CardContent className="space-y-4">
+                        <div className="space-y-3">
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm text-slate-600">Present Days</span>
+                            <div className="flex items-center gap-2">
+                              <Progress 
+                                value={expandedRowData[student.studentId]?.weeklyPerformance ? 
+                                  (expandedRowData[student.studentId].weeklyPerformance.presentDays / expandedRowData[student.studentId].weeklyPerformance.totalDays) * 100 : 0} 
+                                className="w-16 h-2" 
+                              />
+                              <span className="text-sm font-semibold text-emerald-700">
+                                {expandedRowData[student.studentId]?.weeklyPerformance ? 
+                                  `${expandedRowData[student.studentId].weeklyPerformance.presentDays}/${expandedRowData[student.studentId].weeklyPerformance.totalDays}` : '0/0'}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm text-slate-600">On-Time Rate</span>
+                            <div className="flex items-center gap-2">
+                              <Progress 
+                                value={expandedRowData[student.studentId]?.weeklyPerformance?.onTimeRate || 0} 
+                                className="w-16 h-2" 
+                              />
+                              <span className="text-sm font-semibold text-blue-700">
+                                {expandedRowData[student.studentId]?.weeklyPerformance ? 
+                                  `${Math.round(expandedRowData[student.studentId].weeklyPerformance.onTimeRate)}%` : '0%'}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm text-slate-600">Current Streak</span>
+                            <span className="text-sm font-bold text-indigo-700 bg-indigo-100 px-2 py-1 rounded">
+                              {expandedRowData[student.studentId]?.weeklyPerformance?.currentStreak || 0} days
+                            </span>
+                          </div>
+                        </div>
+                        
                       </CardContent>
                     </Card>
 
-                    {/* Contact & Info */}
+                    {/* Performance Breakdown */}
                     <Card className="bg-white/70 border-slate-200/50 shadow-sm">
                       <CardHeader className="pb-3">
                         <CardTitle className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-                          <User className="w-4 h-4 text-slate-600" />
-                          Contact Information
+                          <BarChart3 className="w-4 h-4 text-purple-600" />
+                          Performance Breakdown
                         </CardTitle>
                       </CardHeader>
-                      <CardContent className="space-y-3">
-                        <div className="flex items-center gap-3 text-sm">
-                          <Mail className="w-4 h-4 text-slate-500" />
-                          <span className="text-slate-700">{student.email}</span>
-                        </div>
-                        <div className="flex items-center gap-3 text-sm">
-                          <Phone className="w-4 h-4 text-slate-500" />
-                          <span className="text-slate-700">{student.phoneNumber}</span>
-                        </div>
-                        <div className="flex items-center gap-3 text-sm">
-                          <Building className="w-4 h-4 text-slate-500" />
-                          <span className="text-slate-700">{student.department}</span>
-                        </div>
-                        <div className="flex items-center gap-3 text-sm">
-                          <GraduationCap className="w-4 h-4 text-slate-500" />
-                          <span className="text-slate-700">{student.course}</span>
-                        </div>
-                        
-                        <Separator className="my-3" />
-                        
-                        <div className="text-xs text-slate-500">
-                          <div>Last Login: 2 hours ago</div>
-                          <div>Member since: Jan 2023</div>
+                      <CardContent>
+                        <div className="space-y-4">
+                          <div>
+                            <div className="flex justify-between text-sm mb-1">
+                              <span>Present</span>
+                              <span>{student.attendedClasses}/{student.totalScheduledClasses}</span>
+                            </div>
+                            <Progress value={(student.attendedClasses / student.totalScheduledClasses) * 100} className="h-2" />
+                          </div>
+                          <div>
+                            <div className="flex justify-between text-sm mb-1">
+                              <span>Late Arrivals</span>
+                              <span>{student.lateClasses}/{student.totalScheduledClasses}</span>
+                            </div>
+                            <Progress value={(student.lateClasses / student.totalScheduledClasses) * 100} className="h-2" />
+                          </div>
+                          <div>
+                            <div className="flex justify-between text-sm mb-1">
+                              <span>Absences</span>
+                              <span>{student.absentClasses}/{student.totalScheduledClasses}</span>
+                            </div>
+                            <Progress value={(student.absentClasses / student.totalScheduledClasses) * 100} className="h-2" />
+                          </div>
                         </div>
                       </CardContent>
                     </Card>
                   </div>
                 </TabsContent>
+
               </Tabs>
             </div>
           </div>
@@ -974,13 +1057,16 @@ export default function StudentAttendancePage() {
                 <MoreVertical className="h-4 w-4 text-gray-600" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48 rounded overflow-hidden shadow-md">
+            <DropdownMenuContent align="end" className="w-56 rounded overflow-hidden shadow-md">
+              <DropdownMenuLabel className="text-xs font-semibold text-slate-600 px-3 py-2">
+                Quick Actions
+              </DropdownMenuLabel>
               <DropdownMenuItem
                 onClick={(e) => {
                   e.stopPropagation();
                   handleStudentClick(student);
                 }}
-                className="flex items-center gap-2 cursor-pointer hover:bg-blue-100 focus:bg-blue-100"
+                className="flex items-center gap-2 cursor-pointer hover:bg-blue-100 focus:bg-blue-100 px-3 py-2"
               >
                 <Eye className="h-4 w-4 text-blue-600" />
                 <span>View Details</span>
@@ -989,25 +1075,13 @@ export default function StudentAttendancePage() {
               <DropdownMenuItem
                 onClick={(e) => {
                   e.stopPropagation();
-                  setSelectedStudentForEdit(student);
-                  setShowEditStudentModal(true);
-                }}
-                className="flex items-center gap-2 cursor-pointer hover:bg-blue-100 focus:bg-blue-100"
-              >
-                <Edit className="h-4 w-4 text-orange-600" />
-                <span>Edit Student</span>
-              </DropdownMenuItem>
-              
-              <DropdownMenuItem
-                onClick={(e) => {
-                  e.stopPropagation();
                   setSelectedStudentForRecords(student);
                   setShowAttendanceRecordsModal(true);
                 }}
-                className="flex items-center gap-2 cursor-pointer hover:bg-blue-100 focus:bg-blue-100"
+                className="flex items-center gap-2 cursor-pointer hover:bg-blue-100 focus:bg-blue-100 px-3 py-2"
               >
                 <Calendar className="h-4 w-4 text-purple-600" />
-                <span>View Attendance Records</span>
+                <span>View Full Records</span>
               </DropdownMenuItem>
               
               <DropdownMenuSeparator />
@@ -1015,10 +1089,22 @@ export default function StudentAttendancePage() {
               <DropdownMenuItem
                 onClick={(e) => {
                   e.stopPropagation();
+                  setSelectedStudentForEdit(student);
+                  setShowEditStudentModal(true);
+                }}
+                className="flex items-center gap-2 cursor-pointer hover:bg-emerald-100 focus:bg-emerald-100 px-3 py-2"
+              >
+                <Edit className="h-4 w-4 text-emerald-600" />
+                <span>Edit Profile</span>
+              </DropdownMenuItem>
+              
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.stopPropagation();
                   setSelectedStudentForDelete(student);
                   setShowDeleteConfirmModal(true);
                 }}
-                className="flex items-center gap-2 cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50 hover:bg-red-50"
+                className="flex items-center gap-2 cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50 hover:bg-red-50 px-3 py-2"
               >
                 <Trash2 className="h-4 w-4 text-red-600" />
                 <span>Delete Student</span>
@@ -1092,78 +1178,59 @@ export default function StudentAttendancePage() {
 
   const totalPages = Math.ceil(filteredStudents.length / pageSize);
 
-  // Memoize analytics data based on subject and current page filters
-  const analyticsData = useMemo(() => {
-    // Start with base list
-    let base = [...students];
-
-    // Apply page filter chips (departments, courses (courseCode), yearLevels, statuses, riskLevels, attendanceRates, subjects)
-    base = base.filter(student => {
-      const matchesDepartment = filters.departments.length === 0 || filters.departments.includes(student.department);
-      const matchesCourse = filters.courses.length === 0 || filters.courses.includes(student.courseCode);
-      const matchesYearLevel = filters.yearLevels.length === 0 || filters.yearLevels.includes(student.yearLevel);
-
-      let matchesAttendanceRate = filters.attendanceRates.length === 0;
-      if (filters.attendanceRates.length > 0) {
-        matchesAttendanceRate = filters.attendanceRates.some(rate => {
-          if (rate === 'High (≥90%)') return student.attendanceRate >= 90;
-          if (rate === 'Medium (75-89%)') return student.attendanceRate >= 75 && student.attendanceRate < 90;
-          if (rate === 'Low (<75%)') return student.attendanceRate < 75;
-          return false;
-        });
-      }
-
-      const matchesRiskLevel = filters.riskLevels.length === 0 || (student.riskLevel && filters.riskLevels.includes(student.riskLevel));
-      const matchesStatus = filters.statuses.length === 0 || (student.status && filters.statuses.includes(student.status));
-      const matchesSubjects = filters.subjects.length === 0 || filters.subjects.some(code => student.schedules?.some(s => s.subjectCode === code));
-
-      return matchesDepartment && matchesCourse && matchesYearLevel && matchesAttendanceRate && matchesRiskLevel && matchesStatus && matchesSubjects;
+  // Transform students data to AttendanceData format for analytics
+  const transformedStudentsData = useMemo(() => {
+    console.log('🔄 Transforming students data:', { 
+      studentsLength: students?.length, 
+      students: students,
+      isArray: Array.isArray(students)
     });
-
-    // Apply analytics subject selector (drop-down above charts)
-    const subjectFiltered = selectedSubject === 'all' 
-      ? base 
-      : base.filter(student => student.schedules?.some(s => {
-          const subjectData = subjects.find(x => x.subjectName === s.subjectName);
-          return subjectData?.subjectId.toString() === selectedSubject || s.subjectCode === selectedSubject;
-        }));
-
-    return subjectFiltered.map(student => ({
+    
+    if (!students || students.length === 0) {
+      console.log('⚠️ No students data available for analytics');
+      return [];
+    }
+    
+    console.log('✅ Students data found, transforming...');
+    const transformed = students.map(student => ({
       id: student.studentId,
       name: student.studentName,
       department: student.department,
-      status: student.status.toLowerCase() as 'active' | 'inactive',
-      riskLevel: (student.riskLevel || 'NONE').toLowerCase() as 'none' | 'low' | 'medium' | 'high',
-      attendanceRate: student.attendanceRate,
       totalClasses: student.totalScheduledClasses,
       attendedClasses: student.attendedClasses,
       absentClasses: student.absentClasses,
       lateClasses: student.lateClasses,
-      lastAttendance: student.lastAttendance,
+      attendanceRate: student.attendanceRate,
+      riskLevel: (student.riskLevel || 'NONE').toLowerCase() as 'none' | 'low' | 'medium' | 'high',
+      lastAttendance: student.lastAttendance ? new Date(student.lastAttendance) : new Date(),
+      status: student.status.toLowerCase() as 'active' | 'inactive',
       subjects: student.schedules?.map(s => s.subjectName) || [],
-      // Student-specific fields
-      classesAttended: student.attendedClasses + student.lateClasses,
-      classesMissed: student.absentClasses,
-      complianceScore: student.attendanceRate,
-      notificationCount: Math.floor(student.absentClasses * 0.8), // Mock calculation
-      lastNotification: student.lastAttendance,
-      courseLoad: student.totalScheduledClasses,
-      needsAttention: student.absentClasses > 0,
-      // Mock data for charts - could be calculated from actual attendance records
       weeklyData: [
         { week: 'Week 1', attendanceRate: student.attendanceRate * 0.95, totalClasses: Math.floor(student.totalScheduledClasses * 0.25), attendedClasses: Math.floor((student.attendedClasses + student.lateClasses) * 0.25), absentClasses: Math.floor(student.absentClasses * 0.25), lateClasses: Math.floor(student.lateClasses * 0.25), trend: 'up' as const, change: 2 },
         { week: 'Week 2', attendanceRate: student.attendanceRate * 0.98, totalClasses: Math.floor(student.totalScheduledClasses * 0.25), attendedClasses: Math.floor((student.attendedClasses + student.lateClasses) * 0.25), absentClasses: Math.floor(student.absentClasses * 0.25), lateClasses: Math.floor(student.lateClasses * 0.25), trend: 'up' as const, change: 1 },
         { week: 'Week 3', attendanceRate: student.attendanceRate * 1.02, totalClasses: Math.floor(student.totalScheduledClasses * 0.25), attendedClasses: Math.floor((student.attendedClasses + student.lateClasses) * 0.25), absentClasses: Math.floor(student.absentClasses * 0.25), lateClasses: Math.floor(student.lateClasses * 0.25), trend: 'stable' as const, change: 0 },
         { week: 'Week 4', attendanceRate: student.attendanceRate * 0.99, totalClasses: Math.floor(student.totalScheduledClasses * 0.25), attendedClasses: Math.floor((student.attendedClasses + student.lateClasses) * 0.25), absentClasses: Math.floor(student.absentClasses * 0.25), lateClasses: Math.floor(student.lateClasses * 0.25), trend: 'down' as const, change: -1 }
       ],
-      historicalData: [], // Mock data - could be calculated from actual attendance records
-      timeOfDayData: [], // Mock data - could be calculated from actual attendance records
-      comparativeData: [], // Mock data - could be calculated from actual attendance records
-      subjectPerformance: [], // Mock data - could be calculated from actual attendance records
-      goalTracking: [], // Mock data - could be calculated from actual attendance records
-      performanceRanking: [] // Mock data - could be calculated from actual attendance records
+      // Student-specific fields
+      parentNotifications: Math.floor(student.absentClasses * 0.8),
+      attendanceStreak: Math.floor(Math.random() * 10) + 1
     }));
-  }, [students, filters, selectedSubject, subjects]);
+    
+    console.log('✅ Transformed data for analytics:', transformed);
+    console.log('📊 Transformed data length:', transformed.length);
+    return transformed;
+  }, [students]);
+
+  // Debug analytics data
+  useEffect(() => {
+    console.log('Analytics Debug:', {
+      studentsLength: students?.length,
+      transformedDataLength: transformedStudentsData?.length,
+      loading,
+      error,
+      hasData: transformedStudentsData && transformedStudentsData.length > 0
+    });
+  }, [students, transformedStudentsData, loading, error]);
 
   const handleStudentClick = (student: StudentAttendance) => {
     setSelectedStudent(student);
@@ -1194,6 +1261,109 @@ export default function StudentAttendancePage() {
     }));
   };
 
+  // Fetch expanded row data
+  const fetchExpandedRowData = async (studentId: string) => {
+    if (expandedRowData[studentId] || loadingExpandedData.has(studentId)) {
+      return;
+    }
+
+    setLoadingExpandedData(prev => new Set(prev).add(studentId));
+    
+    try {
+      console.log('🔍 Fetching real student details for:', studentId);
+      
+      const response = await fetch(`/api/students/${studentId}/details`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        signal: AbortSignal.timeout(15000) // 15 second timeout for details
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        
+        // Handle specific HTTP status codes
+        if (response.status === 404) {
+          throw new Error('Student details not found');
+        } else if (response.status === 500) {
+          throw new Error('Server error while fetching student details');
+        } else {
+          throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+        }
+      }
+      
+      const data = await response.json();
+      console.log('✅ Fetched real student details:', data);
+      
+      // Validate data structure
+      if (!data || typeof data !== 'object') {
+        throw new Error('Invalid data format received');
+      }
+      
+      setExpandedRowData(prev => ({
+        ...prev,
+        [studentId]: {
+          recentActivity: Array.isArray(data.recentActivity) ? data.recentActivity : [],
+          weeklyPerformance: data.weeklyPerformance && typeof data.weeklyPerformance === 'object' 
+            ? data.weeklyPerformance 
+            : {
+                presentDays: 0,
+                lateDays: 0,
+                absentDays: 0,
+                totalDays: 0,
+                onTimeRate: 0,
+                currentStreak: 0
+              }
+        }
+      }));
+    } catch (error) {
+      console.error('❌ Error fetching expanded row data:', error);
+      
+      // Handle specific error types
+      let errorMessage = 'Failed to load student details';
+      if (error instanceof Error) {
+        if (error.name === 'AbortError') {
+          errorMessage = 'Request timed out';
+        } else if (error.message.includes('Failed to fetch')) {
+          errorMessage = 'Network error';
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
+      // Show user-friendly error message only for non-network errors
+      if (!errorMessage.includes('Network error') && !errorMessage.includes('Request timed out')) {
+        toast.error(`Unable to load details for student: ${errorMessage}`);
+      }
+      
+      // Fallback to basic data if API fails
+      const student = students.find(s => s.studentId === studentId);
+      if (student) {
+        setExpandedRowData(prev => ({
+          ...prev,
+          [studentId]: {
+            recentActivity: [],
+            weeklyPerformance: {
+              presentDays: 0,
+              lateDays: 0,
+              absentDays: 0,
+              totalDays: 0,
+              onTimeRate: 0,
+              currentStreak: 0
+            }
+          }
+        }));
+      }
+    } finally {
+      setLoadingExpandedData(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(studentId);
+        return newSet;
+      });
+    }
+  };
+
   const handleToggleExpand = (studentId: string) => {
     setExpandedRowIds(prev => {
       const newSet = new Set(prev);
@@ -1201,6 +1371,8 @@ export default function StudentAttendancePage() {
         newSet.delete(studentId);
       } else {
         newSet.add(studentId);
+        // Fetch data when expanding
+        fetchExpandedRowData(studentId);
       }
       return newSet;
     });
@@ -1270,6 +1442,244 @@ export default function StudentAttendancePage() {
     }
   };
 
+  // Handle archive of student (soft delete with ARCHIVED status)
+  const handleArchiveStudent = async (studentId: string, reason: string) => {
+    try {
+      setLoading(true);
+      
+      const response = await fetch(`/api/students/${studentId}/soft-delete`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          reason: reason,
+          deletedAt: new Date().toISOString(),
+          action: 'archive'
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      
+      if (result.success) {
+        // Update the student in the local state to reflect the archive
+        setStudents(prevStudents => 
+          prevStudents.map(student => 
+            student.studentId === studentId 
+              ? { ...student, status: 'ARCHIVED' as const, deletedAt: new Date().toISOString() }
+              : student
+          )
+        );
+        
+        // Close the modal
+        setShowDeleteConfirmModal(false);
+        setSelectedStudentForDelete(null);
+        
+        // Show success message
+        toast.success('Student has been successfully archived');
+      } else {
+        throw new Error(result.error || 'Failed to archive student');
+      }
+    } catch (error) {
+      console.error('Error archiving student:', error);
+      toast.error(`Failed to archive student: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle deactivation of student (soft delete with INACTIVE status)
+  const handleDeactivateStudent = async (studentId: string, reason: string) => {
+    try {
+      setLoading(true);
+      
+      const response = await fetch(`/api/students/${studentId}/soft-delete`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          reason: reason,
+          deletedAt: new Date().toISOString(),
+          action: 'deactivate'
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      
+      if (result.success) {
+        // Update the student in the local state to reflect the deactivation
+        setStudents(prevStudents => 
+          prevStudents.map(student => 
+            student.studentId === studentId 
+              ? { ...student, status: 'INACTIVE' as const, deletedAt: new Date().toISOString() }
+              : student
+          )
+        );
+        
+        // Close the modal
+        setShowDeleteConfirmModal(false);
+        setSelectedStudentForDelete(null);
+        
+        // Show success message
+        toast.success('Student has been successfully deactivated');
+      } else {
+        throw new Error(result.error || 'Failed to deactivate student');
+      }
+    } catch (error) {
+      console.error('Error deactivating student:', error);
+      toast.error(`Failed to deactivate student: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle export with format and options
+  const handleExport = async (format: 'pdf' | 'csv' | 'excel', options: { includeCharts: boolean; includeFilters: boolean; includeSummary: boolean }) => {
+    try {
+      setExportLoading(true);
+      console.log('Exporting data:', { format, options });
+      
+      // Validate data before export
+      if (!transformedStudentsData || transformedStudentsData.length === 0) {
+        throw new Error('No data available for export. Please ensure students are loaded.');
+      }
+      
+      // Prepare export data
+      const exportData = {
+        type: 'student' as const,
+        data: transformedStudentsData,
+        filters: {
+          department: filters.departments.length > 0 ? filters.departments.join(', ') : 'All',
+          course: filters.courses.length > 0 ? filters.courses.join(', ') : 'All',
+          yearLevel: filters.yearLevels.length > 0 ? filters.yearLevels.join(', ') : 'All',
+          attendanceRate: filters.attendanceRates.length > 0 ? filters.attendanceRates.join(', ') : 'All',
+          riskLevel: filters.riskLevels.length > 0 ? filters.riskLevels.join(', ') : 'All',
+          subject: filters.subjects.length > 0 ? filters.subjects.join(', ') : 'All',
+          status: filters.statuses.length > 0 ? filters.statuses.join(', ') : 'All'
+        },
+        timeRange: {
+          start: new Date('2025-04-01'),
+          end: new Date('2025-06-30'),
+          preset: 'semester'
+        }
+      };
+
+      // Capture chart elements for export with better selectors
+      const chartElements = {
+        // Main dashboard charts
+        attendanceTrend: document.querySelector('[data-chart="attendance-trend"]') as HTMLElement,
+        departmentStats: document.querySelector('[data-chart="department-stats"]') as HTMLElement,
+        riskLevelChart: document.querySelector('[data-chart="risk-level"]') as HTMLElement,
+        lateArrivalChart: document.querySelector('[data-chart="late-arrival"]') as HTMLElement,
+        // Expanded modal charts
+        attendanceDistribution: document.querySelector('[data-chart="attendance-distribution"]') as HTMLElement,
+        weeklyTrend: document.querySelector('[data-chart="weekly-trend"]') as HTMLElement,
+        lateArrivalTrend: document.querySelector('[data-chart="late-arrival-trend"]') as HTMLElement,
+        riskLevelDistribution: document.querySelector('[data-chart="risk-level-distribution"]') as HTMLElement,
+        departmentPerformance: document.querySelector('[data-chart="department-performance"]') as HTMLElement,
+        patternAnalysis: document.querySelector('[data-chart="pattern-analysis"]') as HTMLElement,
+        streakAnalysis: document.querySelector('[data-chart="streak-analysis"]') as HTMLElement
+      };
+
+      // Fallback to generic selectors if specific ones not found
+      if (!chartElements.attendanceTrend) {
+        chartElements.attendanceTrend = document.querySelector('.recharts-wrapper') as HTMLElement;
+      }
+      if (!chartElements.departmentStats) {
+        chartElements.departmentStats = document.querySelectorAll('.recharts-wrapper')[1] as HTMLElement;
+      }
+      if (!chartElements.riskLevelChart) {
+        chartElements.riskLevelChart = document.querySelectorAll('.recharts-wrapper')[2] as HTMLElement;
+      }
+      if (!chartElements.lateArrivalChart) {
+        chartElements.lateArrivalChart = document.querySelectorAll('.recharts-wrapper')[3] as HTMLElement;
+      }
+
+      const exportOptions = {
+        format,
+        filename: `student-attendance-${format}-${new Date().toISOString().split('T')[0]}`,
+        includeCharts: options.includeCharts,
+        includeFilters: options.includeFilters,
+        chartElements: options.includeCharts ? chartElements : undefined
+      };
+
+      await ExportService.exportAnalytics(exportData, exportOptions);
+      
+      // Show success toast
+      toast.success(`${format.toUpperCase()} export completed successfully!`);
+    } catch (error) {
+      console.error('Export failed:', error);
+      // Show error toast
+      toast.error(`Export failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw error; // Re-throw for the dialog to handle
+    } finally {
+      setExportLoading(false);
+    }
+  };
+
+  // Handle bulk status update
+  const handleBulkStatusUpdate = async (status: string, reason?: string) => {
+    try {
+      setLoading(true);
+      
+      const selectedStudentIds = Array.from(selected);
+      const response = await fetch('/api/students/bulk-status-update', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          studentIds: selectedStudentIds,
+          status: status,
+          reason: reason,
+          updatedAt: new Date().toISOString()
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      
+      if (result.success) {
+        // Update the students in the local state
+        setStudents(prevStudents => 
+          prevStudents.map(student => 
+            selectedStudentIds.includes(student.studentId)
+              ? { ...student, status: status as any, updatedAt: new Date().toISOString() }
+              : student
+          )
+        );
+        
+        // Clear selection
+        setSelected(new Set());
+        
+        // Show success message
+        toast.success(`Successfully updated ${selectedStudentIds.length} students`);
+      } else {
+        throw new Error(result.error || 'Failed to update students');
+      }
+    } catch (error) {
+      console.error('Error updating student status:', error);
+      toast.error(`Failed to update students: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
 
 
   // Error state
@@ -1321,8 +1731,106 @@ export default function StudentAttendancePage() {
 
         {/* Student Attendance Management - Main Content */}
           
+          {/* Analytics Dashboard */}
+          <Card className="border border-blue-200 shadow-lg rounded-xl overflow-hidden p-0 w-full">
+              <AttendanceAnalytics 
+                data={transformedStudentsData}
+                loading={loading}
+                type="student"
+                enableAdvancedFeatures={true}
+                enableRealTime={false}
+
+                enableDrillDown={true}
+                enableTimeRange={true}
+                showHeader={true}
+                showSecondaryFilters={true}
+                selectedSubject={selectedSubject}
+                onSubjectChange={setSelectedSubject}
+                subjects={subjects.map(subject => {
+                  return { id: subject.subjectId.toString(), name: subject.subjectCode };
+                })}
+
+                onDrillDown={(filter: { type: string; value: string }) => {
+                  // Handle drill down logic
+                }}
+                onExport={async (format: 'pdf' | 'csv' | 'excel') => {
+                  try {
+                    setExportLoading(true);
+                    console.log('Exporting analytics data:', format);
+                    
+                    // Validate data before export
+                    if (!transformedStudentsData || transformedStudentsData.length === 0) {
+                      throw new Error('No data available for export. Please ensure students are loaded.');
+                    }
+                    
+                    // Prepare export data
+                    const exportData = {
+                      type: 'student' as const,
+                      data: transformedStudentsData,
+                      filters: {
+                        department: filters.departments.length > 0 ? filters.departments.join(', ') : 'All',
+                        course: filters.courses.length > 0 ? filters.courses.join(', ') : 'All',
+                        yearLevel: filters.yearLevels.length > 0 ? filters.yearLevels.join(', ') : 'All',
+                        attendanceRate: filters.attendanceRates.length > 0 ? filters.attendanceRates.join(', ') : 'All',
+                        riskLevel: filters.riskLevels.length > 0 ? filters.riskLevels.join(', ') : 'All',
+                        subject: filters.subjects.length > 0 ? filters.subjects.join(', ') : 'All',
+                        status: filters.statuses.length > 0 ? filters.statuses.join(', ') : 'All'
+                      },
+                      timeRange: {
+                        start: new Date('2025-04-01'),
+                        end: new Date('2025-06-30'),
+                        preset: 'semester'
+                      }
+                    };
+
+                    // Capture chart elements for export with better selectors
+                    const chartElements = {
+                      attendanceTrend: document.querySelector('[data-chart="attendance-trend"] .recharts-wrapper, .recharts-wrapper[data-chart="attendance-trend"]') as HTMLElement,
+                      departmentStats: document.querySelector('[data-chart="department-stats"] .recharts-wrapper, .recharts-wrapper[data-chart="department-stats"]') as HTMLElement,
+                      riskLevelChart: document.querySelector('[data-chart="risk-level"] .recharts-wrapper, .recharts-wrapper[data-chart="risk-level"]') as HTMLElement,
+                      lateArrivalChart: document.querySelector('[data-chart="late-arrival"] .recharts-wrapper, .recharts-wrapper[data-chart="late-arrival"]') as HTMLElement,
+                    };
+
+                    // Fallback to generic selectors if specific ones not found
+                    if (!chartElements.attendanceTrend) {
+                      chartElements.attendanceTrend = document.querySelector('.recharts-wrapper') as HTMLElement;
+                    }
+                    if (!chartElements.departmentStats) {
+                      chartElements.departmentStats = document.querySelectorAll('.recharts-wrapper')[1] as HTMLElement;
+                    }
+                    if (!chartElements.riskLevelChart) {
+                      chartElements.riskLevelChart = document.querySelectorAll('.recharts-wrapper')[2] as HTMLElement;
+                    }
+                    if (!chartElements.lateArrivalChart) {
+                      chartElements.lateArrivalChart = document.querySelectorAll('.recharts-wrapper')[3] as HTMLElement;
+                    }
+
+                    const options = {
+                      format,
+                      filename: `student-attendance-analytics-${new Date().toISOString().split('T')[0]}`,
+                      includeCharts: true,
+                      includeFilters: true,
+                      chartElements
+                    };
+
+                    await ExportService.exportAnalytics(exportData, options);
+                    
+                    // Show success toast
+                    toast.success(`${format.toUpperCase()} export completed successfully!`);
+                  } catch (error) {
+                    console.error('Export failed:', error);
+                    // Show error toast
+                    toast.error(`Export failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                  } finally {
+                    setExportLoading(false);
+                  }
+                }}
+                onRefresh={handleRefresh}
+              />
+          </Card>
+
           {/* Quick Actions Panel */}
-        <div className="w-full pt-2 sm:pt-3 overflow-x-hidden">
+          <div className="w-full pt-2 sm:pt-3 overflow-x-hidden">
             <QuickActionsPanel
               variant="premium"
               title="Quick Actions"
@@ -1347,14 +1855,8 @@ export default function StudentAttendancePage() {
                   label: 'Export Report',
                   description: 'Download attendance report',
                   icon: <Download className="w-5 h-5 text-white" />,
-                  onClick: () => console.log('Export attendance report clicked')
-                },
-                {
-                  id: 'send-notifications',
-                  label: 'Send Alerts',
-                  description: 'Notify absent students',
-                  icon: <Bell className="w-5 h-5 text-white" />,
-                  onClick: () => console.log('Send notifications clicked')
+                  disabled: !transformedStudentsData || transformedStudentsData.length === 0,
+                  onClick: () => setShowExportDialog(true)
                 },
                 {
                   id: 'refresh-data',
@@ -1374,7 +1876,10 @@ export default function StudentAttendancePage() {
                   label: 'Manage Schedules',
                   description: 'View student schedules',
                   icon: <Clock className="w-5 h-5 text-white" />,
-                  onClick: () => console.log('Manage schedules clicked')
+                  onClick: () => {
+                    // Navigate to schedules page
+                    window.location.href = '/list/schedules';
+                  }
                 }
               ]}
               lastActionTime="2 minutes ago"
@@ -1386,68 +1891,35 @@ export default function StudentAttendancePage() {
               }}
             />
           </div>
-
-                    {/* Analytics Dashboard */}
-
-          
-          <Card className="border border-blue-200 shadow-lg rounded-xl overflow-hidden p-0 w-full">
-              <StudentAttendanceAnalytics 
-                data={analyticsData}
-                loading={loading} 
-                enableAdvancedFeatures={true}
-                enableRealTime={false}
-
-                enableDrillDown={true}
-                enableTimeRange={true}
-                showHeader={true}
-                showSecondaryFilters={true}
-                selectedSubject={selectedSubject}
-                onSubjectChange={setSelectedSubject}
-                subjects={subjects.map(subject => {
-                  return { id: subject.subjectId.toString(), name: subject.subjectCode };
-                })}
-
-                onDrillDown={(filter: { type: string; value: string }) => {
-                  // Handle drill down logic
-                }}
-                onExport={(format: 'pdf' | 'csv' | 'excel') => {
-                  console.log('Export:', format);
-                  // Handle export logic
-                }}
-                onRefresh={handleRefresh}
-              />
-          </Card>
           
           <Card className="border border-blue-200 shadow-lg rounded-xl overflow-hidden p-0 w-full">
             <CardHeader className="p-0">
-              {/* Blue Gradient Header - flush to card edge, no rounded corners */}
-              <div className="bg-gradient-to-r from-[#1e40af] to-[#3b82f6] p-0">
-                <div className="w-full px-3 sm:px-4 lg:px-6 py-3 sm:py-4">
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4">
-                    <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
-                      <div className="w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center flex-shrink-0">
-                        <Search className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+              {/* Enhanced Blue Gradient Header - matching dialog styling */}
+              <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-blue-800 p-0">
+                <div className="w-full px-6 py-6">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                      <Users className="w-6 h-6 text-white" />
                       </div>
-                      <div className="min-w-0 flex-1">
-                        <h3 className="text-sm sm:text-base lg:text-lg font-bold text-white truncate">Student Attendance Report</h3>
-                        <p className="text-blue-100 text-xs sm:text-sm truncate">Search, filter and manage student attendance records</p>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-2xl font-bold text-white mb-1">Student Attendance Records</h3>
+                      <p className="text-blue-100 text-sm">Search, filter and manage student attendance records with comprehensive analytics</p>
                       </div>
-                    </div>
-                    <div>
+                    <div className="flex items-center gap-2">
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <Button
                             size="icon"
                             variant="ghost"
-                            className="h-9 w-9 rounded-full text-white hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/40"
+                            className="h-10 w-10 rounded-lg text-white hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/40"
                             onClick={handleRefresh}
                             disabled={loading}
                             aria-label="Refresh data"
                           >
                             {loading ? (
-                              <RefreshCw className="w-4 h-4 animate-spin" />
+                              <RefreshCw className="w-5 h-5 animate-spin" />
                             ) : (
-                              <RefreshCw className="w-4 h-4" />
+                              <RefreshCw className="w-5 h-5" />
                             )}
                           </Button>
                         </TooltipTrigger>
@@ -1478,6 +1950,7 @@ export default function StudentAttendancePage() {
 
                   {/* Quick Filter Dropdowns */}
                   <div className="flex flex-wrap gap-3 justify-end">
+                    {/* Department Filter */}
                     <Select value={filters.departments[0] || 'all'} onValueChange={(value) => {
                       if (value === 'all') {
                         setFilters({ ...filters, departments: [] });
@@ -1488,7 +1961,7 @@ export default function StudentAttendancePage() {
                       <SelectTrigger className="w-full lg:w-40 text-sm text-gray-500 min-w-0 rounded border-gray-300 bg-white hover:bg-gray-50">
                         <SelectValue placeholder="Department" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="max-h-60 overflow-y-auto">
                         <SelectItem value="all">All Departments</SelectItem>
                         {departments.map(dept => (
                           <SelectItem key={dept} value={dept}>{dept}</SelectItem>
@@ -1496,24 +1969,26 @@ export default function StudentAttendancePage() {
                       </SelectContent>
                     </Select>
 
-                    {/* Course Filter (by Course Code) */}
-                    <Select value={filters.courses[0] || 'all'} onValueChange={(value) => {
-                      if (value === 'all') {
-                        setFilters({ ...filters, courses: [] });
-                      } else {
-                        setFilters({ ...filters, courses: [value] });
-                      }
-                    }}>
-                      <SelectTrigger className="w-full lg:w-40 text-sm text-gray-500 min-w-0 rounded border-gray-300 bg-white hover:bg-gray-50">
-                        <SelectValue placeholder="Course Code" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Courses</SelectItem>
-                        {courses.map(code => (
-                          <SelectItem key={code} value={code}>{code}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    {/* Course Filter (by Course Code) - Searchable */}
+                    <div className="w-full lg:w-40">
+                      <SearchableSelect
+                        value={filters.courses[0] || 'all'}
+                        onChange={(value) => {
+                          if (value === 'all') {
+                            setFilters({ ...filters, courses: [] });
+                          } else {
+                            setFilters({ ...filters, courses: [value] });
+                          }
+                        }}
+                        options={[
+                          { value: 'all', label: 'All Courses' },
+                          ...courses.map(code => ({ value: code, label: code }))
+                        ]}
+                        placeholder="Search courses..."
+                        className="w-full lg:w-40"
+                        noOptionsMessage="No courses found"
+                      />
+                    </div>
 
                     {/* Year Level Filter */}
                     <Select value={filters.yearLevels[0] || 'all'} onValueChange={(value) => {
@@ -1526,7 +2001,7 @@ export default function StudentAttendancePage() {
                       <SelectTrigger className="w-full lg:w-40 text-sm text-gray-500 min-w-0 rounded border-gray-300 bg-white hover:bg-gray-50">
                         <SelectValue placeholder="Year Level" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="max-h-60 overflow-y-auto">
                         <SelectItem value="all">All Years</SelectItem>
                         {yearLevels.map(level => (
                           <SelectItem key={level} value={level}>{level.replace('_', ' ')}</SelectItem>
@@ -1544,7 +2019,7 @@ export default function StudentAttendancePage() {
                       <SelectTrigger className="w-full lg:w-32 text-sm text-gray-500 min-w-0 rounded border-gray-300 bg-white hover:bg-gray-50">
                         <SelectValue placeholder="Status" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="max-h-60 overflow-y-auto">
                         <SelectItem value="all">All Status</SelectItem>
                         <SelectItem value="ACTIVE">Active</SelectItem>
                         <SelectItem value="INACTIVE">Inactive</SelectItem>
@@ -1562,7 +2037,7 @@ export default function StudentAttendancePage() {
                       <SelectTrigger className="w-full lg:w-36 text-sm text-gray-500 min-w-0 rounded border-gray-300 bg-white hover:bg-gray-50">
                         <SelectValue placeholder="Attendance" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="max-h-60 overflow-y-auto">
                         <SelectItem value="all">All Rates</SelectItem>
                         <SelectItem value="High (≥90%)">High (≥90%)</SelectItem>
                         <SelectItem value="Medium (75-89%)">Medium (75-89%)</SelectItem>
@@ -1580,7 +2055,7 @@ export default function StudentAttendancePage() {
                       <SelectTrigger className="w-full lg:w-32 text-sm text-gray-500 min-w-0 rounded border-gray-300 bg-white hover:bg-gray-50">
                         <SelectValue placeholder="Risk Level" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="max-h-60 overflow-y-auto">
                         <SelectItem value="all">All Levels</SelectItem>
                         <SelectItem value="NONE">None</SelectItem>
                         <SelectItem value="LOW">Low</SelectItem>
@@ -1645,19 +2120,85 @@ export default function StudentAttendancePage() {
                       key: 'export',
                       label: 'Export Selected',
                       icon: <Download className="w-4 h-4 mr-2" />,
-                      onClick: () => console.log('Export selected:', Array.from(selected))
-                    },
-                    {
-                      key: 'notify',
-                      label: 'Send Notification',
-                      icon: <Bell className="w-4 h-4 mr-2" />,
-                      onClick: () => console.log('Send notification to:', Array.from(selected))
+                      onClick: async () => {
+                        try {
+                          setExportLoading(true);
+                          const selectedStudents = transformedStudentsData.filter(student => selected.has(student.id));
+                          
+                          const exportData = {
+                            type: 'student' as const,
+                            data: selectedStudents,
+                            filters: {
+                              selection: `Selected ${selected.size} students`,
+                              department: filters.departments.length > 0 ? filters.departments.join(', ') : 'All',
+                              course: filters.courses.length > 0 ? filters.courses.join(', ') : 'All',
+                              yearLevel: filters.yearLevels.length > 0 ? filters.yearLevels.join(', ') : 'All',
+                              attendanceRate: filters.attendanceRates.length > 0 ? filters.attendanceRates.join(', ') : 'All',
+                              riskLevel: filters.riskLevels.length > 0 ? filters.riskLevels.join(', ') : 'All',
+                              subject: filters.subjects.length > 0 ? filters.subjects.join(', ') : 'All',
+                              status: filters.statuses.length > 0 ? filters.statuses.join(', ') : 'All'
+                            },
+                            timeRange: {
+                              start: new Date('2025-04-01'),
+                              end: new Date('2025-06-30'),
+                              preset: 'semester'
+                            }
+                          };
+
+                          // Capture chart elements for export with better selectors
+                          const chartElements = {
+                            // Main dashboard charts
+                            attendanceTrend: document.querySelector('[data-chart="attendance-trend"]') as HTMLElement,
+                            departmentStats: document.querySelector('[data-chart="department-stats"]') as HTMLElement,
+                            riskLevelChart: document.querySelector('[data-chart="risk-level"]') as HTMLElement,
+                            lateArrivalChart: document.querySelector('[data-chart="late-arrival"]') as HTMLElement,
+                            // Expanded modal charts
+                            attendanceDistribution: document.querySelector('[data-chart="attendance-distribution"]') as HTMLElement,
+                            weeklyTrend: document.querySelector('[data-chart="weekly-trend"]') as HTMLElement,
+                            lateArrivalTrend: document.querySelector('[data-chart="late-arrival-trend"]') as HTMLElement,
+                            riskLevelDistribution: document.querySelector('[data-chart="risk-level-distribution"]') as HTMLElement,
+                            departmentPerformance: document.querySelector('[data-chart="department-performance"]') as HTMLElement,
+                            patternAnalysis: document.querySelector('[data-chart="pattern-analysis"]') as HTMLElement,
+                            streakAnalysis: document.querySelector('[data-chart="streak-analysis"]') as HTMLElement
+                          };
+
+                          // Fallback to generic selectors if specific ones not found
+                          if (!chartElements.attendanceTrend) {
+                            chartElements.attendanceTrend = document.querySelector('.recharts-wrapper') as HTMLElement;
+                          }
+                          if (!chartElements.departmentStats) {
+                            chartElements.departmentStats = document.querySelectorAll('.recharts-wrapper')[1] as HTMLElement;
+                          }
+                          if (!chartElements.riskLevelChart) {
+                            chartElements.riskLevelChart = document.querySelectorAll('.recharts-wrapper')[2] as HTMLElement;
+                          }
+                          if (!chartElements.lateArrivalChart) {
+                            chartElements.lateArrivalChart = document.querySelectorAll('.recharts-wrapper')[3] as HTMLElement;
+                          }
+
+                          const options = {
+                            format: 'excel' as const,
+                            filename: `selected-students-${new Date().toISOString().split('T')[0]}`,
+                            includeCharts: true,
+                            includeFilters: true,
+                            chartElements
+                          };
+
+                          await ExportService.exportAnalytics(exportData, options);
+                          toast.success('Selected students exported successfully!');
+                        } catch (error) {
+                          console.error('Export failed:', error);
+                          toast.error(`Export failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                        } finally {
+                          setExportLoading(false);
+                        }
+                      }
                     },
                     {
                       key: 'update',
                       label: 'Update Status',
                       icon: <Settings className="w-4 h-4 mr-2" />,
-                      onClick: () => console.log('Update status for:', Array.from(selected))
+                      onClick: () => setShowBulkStatusUpdate(true)
                     }
                   ]}
                 />
@@ -1731,8 +2272,14 @@ export default function StudentAttendancePage() {
                       selectedIds={Array.from(selected)}
                       onSelect={handleSelectRow}
                       onView={(item) => handleStudentClick(item)}
-                      onEdit={(item) => console.log('Edit student:', item)}
-                      onDelete={(item) => console.log('Delete student:', item)}
+                      onEdit={(item) => {
+                        setSelectedStudentForEdit(item);
+                        setShowEditStudentModal(true);
+                      }}
+                      onDelete={(item) => {
+                        setSelectedStudentForDelete(item);
+                        setShowDeleteConfirmModal(true);
+                      }}
                       getItemId={(item) => item.studentId}
                       getItemName={(item) => item.studentName}
                       getItemCode={(item) => item.studentIdNum}
@@ -1789,50 +2336,85 @@ export default function StudentAttendancePage() {
         />
       )}
 
-      {/* Attendance Records Modal */}
-      <AttendanceRecordsDialog
+      {/* Student Attendance Records Modal */}
+      <StudentAttendanceRecordsDialog
         open={showAttendanceRecordsModal}
         onOpenChange={setShowAttendanceRecordsModal}
-        instructor={selectedStudentForRecords as any}
+        student={selectedStudentForRecords ? {
+          studentId: selectedStudentForRecords.studentId,
+          studentName: selectedStudentForRecords.studentName,
+          studentIdNum: selectedStudentForRecords.studentIdNum,
+          department: selectedStudentForRecords.department,
+          attendanceRate: selectedStudentForRecords.attendanceRate,
+          attendedClasses: selectedStudentForRecords.attendedClasses,
+          absentClasses: selectedStudentForRecords.absentClasses,
+          lateClasses: selectedStudentForRecords.lateClasses,
+          totalScheduledClasses: selectedStudentForRecords.totalScheduledClasses,
+          subjects: selectedStudentForRecords.schedules?.map(s => s.subjectName) || []
+        } : null}
         showCopyButton={true}
         showPrintButton={true}
         showExportButton={true}
       />
 
       {/* Edit Student Modal */}
-      <EditInstructorDialog
+      <EditStudentDialog
         open={showEditStudentModal}
         onOpenChange={setShowEditStudentModal}
-        instructor={selectedStudentForEdit as any}
+        student={selectedStudentForEdit ? {
+          studentId: selectedStudentForEdit.studentId,
+          studentName: selectedStudentForEdit.studentName,
+          studentIdNum: selectedStudentForEdit.studentIdNum,
+          email: selectedStudentForEdit.email,
+          department: selectedStudentForEdit.department,
+          course: selectedStudentForEdit.course,
+          yearLevel: selectedStudentForEdit.yearLevel,
+          status: selectedStudentForEdit.status,
+          phoneNumber: selectedStudentForEdit.phoneNumber,
+        } : null}
         onSave={async (payload) => {
           if (!selectedStudentForEdit?.studentId) {
             throw new Error('Missing studentId');
           }
+          
           const res = await fetch(`/api/students/${selectedStudentForEdit.studentId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
           });
+          
           if (!res.ok) {
             const err = await res.json().catch(() => ({}));
-            throw new Error(err?.error || `Failed to update instructor (HTTP ${res.status})`);
+            throw new Error(err?.error || `Failed to update student (HTTP ${res.status})`);
           }
+          
           await handleRefresh();
         }}
       />
 
       {/* Delete Confirmation Modal */}
-      <DeactivateInstructorDialog
+      <DeactivateEntityDialog
         open={showDeleteConfirmModal}
         onOpenChange={setShowDeleteConfirmModal}
-        instructor={selectedStudentForDelete as any}
-        onDeactivate={(studentId, reason) => {
-          console.log('Deactivate student:', studentId, reason);
-          // TODO: Implement deactivate functionality
+        entity={selectedStudentForDelete ? {
+          studentId: selectedStudentForDelete.studentId,
+          studentName: selectedStudentForDelete.studentName,
+          studentIdNum: selectedStudentForDelete.studentIdNum,
+          department: selectedStudentForDelete.department,
+          attendanceRate: selectedStudentForDelete.attendanceRate,
+          subjects: selectedStudentForDelete.schedules?.map(s => s.subjectName) || [],
+          totalScheduledClasses: selectedStudentForDelete.totalScheduledClasses,
+          avatarUrl: undefined
+        } : null}
+        onDeactivate={(studentId: string, reason?: string) => {
+          if (studentId) {
+            handleDeactivateStudent(studentId, reason || 'No reason provided');
+          }
         }}
-        onArchive={(studentId, reason) => {
-          console.log('Archive student:', studentId, reason);
-          // TODO: Implement archive functionality
+        onArchive={(studentId: string, reason?: string) => {
+          if (studentId) {
+            handleArchiveStudent(studentId, reason || 'No reason provided');
+          }
         }}
         showCopyButton={true}
         showPrintButton={true}
@@ -1842,11 +2424,31 @@ export default function StudentAttendancePage() {
       <ManualAttendanceDialog
         open={showManualAttendance}
         onOpenChange={setShowManualAttendance}
+        autoDetectEntity={true}
         defaultEntityType="student"
         defaultEntityId={manualStudentId}
         onSuccess={() => {
           // Optional: trigger refresh
+          handleRefresh();
         }}
+      />
+
+      {/* Bulk Status Update Dialog */}
+      <BulkStatusUpdateDialog
+        open={showBulkStatusUpdate}
+        onOpenChange={setShowBulkStatusUpdate}
+        selectedCount={selected.size}
+        entityType="student"
+        onUpdate={handleBulkStatusUpdate}
+      />
+
+      {/* Export Dialog */}
+      <ExportDialog
+        open={showExportDialog}
+        onOpenChange={setShowExportDialog}
+        onExport={handleExport}
+        dataCount={transformedStudentsData.length}
+        entityType="student"
       />
     </TooltipProvider>
   );

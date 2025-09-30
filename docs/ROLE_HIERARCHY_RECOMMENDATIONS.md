@@ -121,43 +121,7 @@ This document outlines the recommended role hierarchy for the ICCT Smart Attenda
 
 ---
 
-### 6. **GUARDIAN** (Parent Level)
-**Purpose**: Parent/guardian access to student information
-
-**Key Responsibilities**:
-- Monitor child's attendance
-- View child's academic progress
-- Receive notifications
-- Access relevant announcements
-
-**Permissions**:
-- View child's attendance
-- View child's schedule
-- Receive notifications
-- Limited profile access
-- View relevant reports
-
-**Typical Users**: Parents, Legal Guardians
-
----
-
-### 7. **SYSTEM_AUDITOR** (Audit Level)
-**Purpose**: Compliance and audit functions
-
-**Key Responsibilities**:
-- System compliance monitoring
-- Audit log review
-- Security assessment
-- Compliance reporting
-
-**Permissions**:
-- Read-only access to all data
-- Audit log access
-- Compliance reporting
-- System analytics access
-- No modification permissions
-
-**Typical Users**: Compliance Officers, External Auditors
+<!-- System Auditor role removed from web access. Auditing is handled by Admins with scoped permissions. -->
 
 ## Permission Categories
 

@@ -47,16 +47,7 @@ const studentSchema = baseSchema.extend({
   address: z.string().min(1),
 });
 
-const guardianSchema = baseSchema.extend({
-  role: z.literal(Role.GUARDIAN),
-  guardianType: z.enum(['PARENT', 'GUARDIAN']),
-  occupation: z.string().optional().nullable(),
-  workplace: z.string().optional().nullable(),
-  emergencyContact: z.string().optional().nullable(),
-  relationshipToStudent: z.string().min(1),
-});
-
-const anySchema = z.union([instructorSchema, studentSchema, guardianSchema, baseSchema]);
+const anySchema = z.union([instructorSchema, studentSchema, baseSchema]);
 
 function toUserStatus(status: string | undefined): UserStatus {
   switch (status) {
@@ -150,28 +141,10 @@ export async function POST(req: Request) {
           },
         });
       } else if (data.role === Role.GUARDIAN) {
-        await tx.guardian.create({
-          data: {
-            guardianId: user.userId,
-            email: data.email,
-            phoneNumber: data.phoneNumber,
-            firstName: data.firstName,
-            middleName: data.middleName ?? undefined,
-            lastName: data.lastName,
-            suffix: data.suffix ?? undefined,
-            address: data.address ?? '',
-            img: null,
-            gender: data.gender as any,
-            guardianType: data.guardianType as any,
-            status: PrismaStatus.ACTIVE,
-            occupation: data.occupation ?? undefined,
-            workplace: data.workplace ?? undefined,
-            emergencyContact: data.emergencyContact ?? undefined,
-            relationshipToStudent: data.relationshipToStudent,
-            totalStudents: 0,
-            lastLogin: null,
-          },
-        });
+        // Removed: guardian is no longer a user role
+        throw new Error('GUARDIAN role is no longer supported');
+      } else if (data.role === Role.SYSTEM_AUDITOR) {
+        throw new Error('SYSTEM_AUDITOR role is no longer supported');
       }
 
       return user;

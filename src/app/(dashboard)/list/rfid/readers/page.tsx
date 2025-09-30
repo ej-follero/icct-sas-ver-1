@@ -107,6 +107,7 @@ export default function RFIDReadersPage() {
   const [formType, setFormType] = useState<'create' | 'update'>('create');
   const [selectedReaderForForm, setSelectedReaderForForm] = useState<RFIDReader | undefined>();
   const [error, setError] = useState<string | null>(null);
+  const [isDeletingReader, setIsDeletingReader] = useState(false);
 
   const [sortDialogOpen, setSortDialogOpen] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
@@ -442,17 +443,22 @@ export default function RFIDReadersPage() {
 
   const handleProcessBulkAction = async (actionType: string, config: any) => {
     if (actionType === 'status-update') {
-      const status = config.status?.toUpperCase();
+      const newStatusRaw: string | undefined = config?.newStatus;
+      const reason: string | undefined = config?.reason;
+      if (!newStatusRaw) return { success: false };
+      const newStatus = newStatusRaw.toUpperCase();
+
       const updatePromises = selectedIds.map(async (readerId) => {
         const response = await fetch(`/api/rfid/readers/${readerId}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status }),
+          body: JSON.stringify({ status: newStatus, reason }),
         });
         if (!response.ok) throw new Error(`Failed to update reader ${readerId}`);
         return response.json();
       });
       await Promise.all(updatePromises);
+      await fetchReaders();
       return { success: true, processed: selectedIds.length };
     }
     if (actionType === 'export') {
@@ -468,6 +474,8 @@ export default function RFIDReadersPage() {
   // Import functionality
   const handleImportReaders = async (data: any[]) => {
     try {
+      console.log('Importing readers with data:', data);
+      
       const response = await fetch('/api/rfid/readers/bulk', {
         method: 'POST',
         headers: {
@@ -483,19 +491,36 @@ export default function RFIDReadersPage() {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Import API error:', errorData);
+        throw new Error(errorData.error || errorData.message || `HTTP ${response.status}: ${response.statusText}`);
       }
 
       const result = await response.json();
+      console.log('Import API response:', result);
+      
+      // Refresh the readers list
       await fetchReaders();
-      toast.success('Readers imported successfully');
+      
+      // Show success message with details
+      const successCount = result.results?.success || 0;
+      const failedCount = result.results?.failed || 0;
+      
+      if (successCount > 0) {
+        toast.success(`Successfully imported ${successCount} readers`);
+      }
+      
+      if (failedCount > 0) {
+        toast.warning(`${failedCount} readers failed to import`);
+      }
+      
       return {
-        success: result.results?.success,
-        failed: result.results?.failed,
+        success: successCount,
+        failed: failedCount,
         errors: result.results?.errors || []
       };
     } catch (error: any) {
+      console.error('Import error:', error);
       toast.error(error.message || 'Failed to import readers');
       throw error;
     }
@@ -538,6 +563,29 @@ export default function RFIDReadersPage() {
     } finally {
       setExportDialogOpen(false);
     }
+  };
+
+  // Quick export selected rows to CSV
+  const handleQuickExportSelected = () => {
+    const selected = readers.filter(r => selectedIds.includes(r.readerId.toString()));
+    if (selected.length === 0) {
+      toast.error('No readers selected to export');
+      return;
+    }
+    const selectedColumnsData = exportableColumns; // use all exportable columns
+    const headers = selectedColumnsData.map(col => col.label);
+    const rows = selected.map(reader => selectedColumnsData.map(col => String(reader[col.key as keyof RFIDReader] ?? '')));
+
+    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', 'rfid-readers-selected.csv');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success(`Exported ${selected.length} selected readers to CSV`);
   };
 
   const bulkActions = [
@@ -623,6 +671,28 @@ export default function RFIDReadersPage() {
             { label: 'Readers' }
           ]}
         />
+
+        {/* Error Banner */}
+        {error && (
+          <div className="w-full max-w-full">
+            <div className="flex items-start justify-between p-3 sm:p-4 border border-red-200 bg-red-50 text-red-800 rounded-xl">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="w-5 h-5 mt-0.5" />
+                <div>
+                  <div className="font-semibold">Failed to load readers</div>
+                  <div className="text-sm">{error}</div>
+                </div>
+              </div>
+              <button
+                aria-label="Dismiss error"
+                className="text-red-700 hover:text-red-900"
+                onClick={() => setError(null)}
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Summary Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
@@ -766,13 +836,13 @@ export default function RFIDReadersPage() {
                     placeholder="Search readers..."
                     value={searchTerm}
                     onChange={e => setSearchTerm(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:outline-none"
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:outline-none"
                   />
                 </div>
                 {/* Quick Filter Dropdowns */}
                 <div className="flex flex-wrap gap-2 sm:gap-3 w-full xl:w-auto">
                   <Select value={statusFilter} onValueChange={setStatusFilter}>
-                    <SelectTrigger className="w-full sm:w-28 lg:w-32 xl:w-28 text-gray-700">
+                    <SelectTrigger className="w-full sm:w-28 lg:w-32 xl:w-28 text-gray-700 rounded">
                       <SelectValue placeholder="Status" />
                     </SelectTrigger>
                     <SelectContent>
@@ -815,7 +885,7 @@ export default function RFIDReadersPage() {
                     </SelectContent>
                   </Select>
                   <Select value={roomFilter} onValueChange={setRoomFilter}>
-                    <SelectTrigger className="w-full sm:w-32 lg:w-40 xl:w-40 text-gray-700">
+                    <SelectTrigger className="w-full sm:w-32 lg:w-40 xl:w-40 text-gray-700 rounded">
                       <SelectValue placeholder="Room" />
                     </SelectTrigger>
                     <SelectContent>
@@ -848,7 +918,7 @@ export default function RFIDReadersPage() {
                       key: "export",
                       label: "Quick Export",
                       icon: <Download className="w-4 h-4 mr-2" />,
-                      onClick: () => handleExport(),
+                      onClick: () => handleQuickExportSelected(),
                       tooltip: "Quick export selected readers to CSV"
                     },
                     {
@@ -968,9 +1038,27 @@ export default function RFIDReadersPage() {
           <ConfirmDeleteDialog
             open={deleteDialogOpen}
             onOpenChange={setDeleteDialogOpen}
-            onDelete={() => {
-              toast.info("Delete functionality not yet implemented.");
-              setDeleteDialogOpen(false);
+            onDelete={async () => {
+              if (!readerToDelete) return;
+              setIsDeletingReader(true);
+              try {
+                const response = await fetch(`/api/rfid/readers/${readerToDelete.readerId}`, {
+                  method: 'DELETE',
+                });
+                if (!response.ok) {
+                  const errorData = await response.json().catch(() => ({}));
+                  throw new Error(errorData?.error || `Failed to delete reader ${readerToDelete.readerId}`);
+                }
+                setReaders(prev => prev.filter(r => r.readerId !== readerToDelete.readerId));
+                setSelectedIds(prev => prev.filter(id => id !== readerToDelete.readerId.toString()));
+                toast.success('Reader deleted successfully');
+              } catch (err: any) {
+                toast.error(err?.message || 'Failed to delete reader');
+              } finally {
+                setIsDeletingReader(false);
+                setDeleteDialogOpen(false);
+                setReaderToDelete(null);
+              }
             }}
             itemName={readerToDelete.deviceName}
           />
@@ -999,36 +1087,33 @@ export default function RFIDReadersPage() {
         <SortDialog
           open={sortDialogOpen}
           onOpenChange={setSortDialogOpen}
-          sortField={sortField}
-          setSortField={setSortField as any}
-          sortOrder={sortOrder}
-          setSortOrder={setSortOrder}
-          sortFieldOptions={[
+          sortOptions={[
             { value: 'deviceId', label: 'Device ID' },
             { value: 'deviceName', label: 'Device Name' },
             { value: 'status', label: 'Status' },
             { value: 'lastSeen', label: 'Last Seen' },
           ]}
-          onApply={() => setSortDialogOpen(false)}
-          onReset={() => {
-            setSortField('deviceId');
-            setSortOrder('asc');
+          currentSort={{ field: sortField, order: sortOrder }}
+          onSortChange={(field, order) => {
+            setSortField(field as SortField);
+            setSortOrder(order as SortOrder);
           }}
           title="Sort Readers"
+          description="Sort readers by different fields. Choose the field and order to organize your list."
+          entityType="readers"
         />
 
         {/* Export Dialog */}
         <ExportDialog
           open={exportDialogOpen}
           onOpenChange={setExportDialogOpen}
-          exportableColumns={exportableColumns}
-          exportColumns={exportColumns}
-          setExportColumns={setExportColumns}
-          exportFormat={exportFormat}
-          setExportFormat={setExportFormat}
-          onExport={handleExport}
-          title="Export RFID Readers"
-          tooltip="Export the current list of readers."
+          selectedItems={selectedIds.map(id => readers.find(r => r.readerId.toString() === id)).filter(Boolean) as RFIDReader[]}
+          entityType="reader"
+          entityLabel="reader"
+          exportColumns={exportableColumns.map(col => ({ id: col.key, label: col.label, default: true }))}
+          onExport={(options) => {
+            toast.success(`Exported ${options.format} with ${options.columns.length} columns`);
+          }}
         />
 
                  {/* Import Dialog */}
@@ -1037,7 +1122,7 @@ export default function RFIDReadersPage() {
            onOpenChange={setImportDialogOpen}
            onImport={handleImportReaders}
            entityName="RFIDReader"
-           templateUrl={undefined}
+           templateUrl="/api/rfid/readers/template"
            acceptedFileTypes={[".csv", ".xlsx", ".xls"]}
            maxFileSize={5}
          />
@@ -1064,9 +1149,9 @@ export default function RFIDReadersPage() {
            entityType="reader"
            entityLabel="reader"
            availableActions={[
-             { id: 'status-update', label: 'Update Status', description: 'Update status of selected readers', icon: <Settings className="w-4 h-4" />, tabId: 'actions' },
-             { id: 'notification', label: 'Send Notification', description: 'Send notification to administrators', icon: <Bell className="w-4 h-4" />, tabId: 'actions' },
-             { id: 'export', label: 'Export Data', description: 'Export selected readers data', icon: <Download className="w-4 h-4" />, tabId: 'actions' },
+            { id: 'status-update', label: 'Update Status', description: 'Update status of selected readers', icon: <Settings className="w-4 h-4" />, tabId: 'status' },
+            { id: 'notification', label: 'Send Notification', description: 'Send notification to administrators', icon: <Bell className="w-4 h-4" />, tabId: 'notification' },
+            { id: 'export', label: 'Export Data', description: 'Export selected readers data', icon: <Download className="w-4 h-4" />, tabId: 'export' },
            ]}
            onActionComplete={handleBulkActionComplete}
            onCancel={handleBulkActionCancel}

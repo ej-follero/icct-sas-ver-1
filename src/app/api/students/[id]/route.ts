@@ -107,29 +107,42 @@ export async function PUT(
       );
     }
 
+    // Prepare update data - only include fields that are provided
+    const updateData: any = {};
+    
+    if (body.firstName) updateData.firstName = body.firstName;
+    if (body.lastName) updateData.lastName = body.lastName;
+    if (body.studentIdNum) updateData.studentIdNum = body.studentIdNum;
+    if (body.email) updateData.email = body.email;
+    if (body.phoneNumber) updateData.phoneNumber = body.phoneNumber;
+    if (body.yearLevel) updateData.yearLevel = body.yearLevel;
+    if (body.status) updateData.status = body.status;
+    
+    // Handle department and course updates if provided
+    if (body.department) {
+      // Find department by name
+      const department = await prisma.department.findFirst({
+        where: { departmentName: body.department }
+      });
+      if (department) {
+        updateData.departmentId = department.departmentId;
+      }
+    }
+    
+    if (body.course) {
+      // Find course by name
+      const course = await prisma.courseOffering.findFirst({
+        where: { courseName: body.course }
+      });
+      if (course) {
+        updateData.courseId = course.courseId;
+      }
+    }
+
     // Update student
     const updatedStudent = await prisma.student.update({
       where: { studentId },
-      data: {
-        studentIdNum: body.studentIdNum,
-        rfidTag: body.rfidTag,
-        firstName: body.firstName,
-        middleName: body.middleName,
-        lastName: body.lastName,
-        suffix: body.suffix,
-        email: body.email,
-        phoneNumber: body.phoneNumber,
-        address: body.address,
-        img: body.img,
-        gender: body.gender,
-        birthDate: body.birthDate ? new Date(body.birthDate) : null,
-        nationality: body.nationality,
-        studentType: body.studentType,
-        yearLevel: body.yearLevel,
-        courseId: body.courseId,
-        departmentId: body.departmentId,
-        guardianId: body.guardianId,
-      },
+      data: updateData,
       include: {
         Department: true,
         CourseOffering: true,

@@ -3,7 +3,7 @@ export interface BaseUser {
   userId: number;
   userName: string;
   email: string;
-  role: 'SUPER_ADMIN' | 'ADMIN' | 'DEPARTMENT_HEAD' | 'TEACHER' | 'STUDENT' | 'GUARDIAN' | 'SYSTEM_AUDITOR';
+  role: 'SUPER_ADMIN' | 'ADMIN' | 'DEPARTMENT_HEAD' | 'TEACHER' | 'STUDENT' | 'SYSTEM_AUDITOR';
   status: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED' | 'PENDING' | 'BLOCKED';
   lastLogin?: Date;
   lastPasswordChange?: Date;
@@ -73,27 +73,6 @@ export interface InstructorUserProfile extends BaseUser {
   // Analytics
   totalSubjects: number;
   totalStudents: number;
-}
-
-export interface GuardianUserProfile extends BaseUser {
-  role: 'GUARDIAN';
-  // Guardian Profile Data
-  guardianId: number;
-  firstName: string;
-  middleName?: string;
-  lastName: string;
-  suffix?: string;
-  phoneNumber: string;
-  address: string;
-  img?: string;
-  gender: 'MALE' | 'FEMALE';
-  guardianType: 'PARENT' | 'GUARDIAN';
-  occupation?: string;
-  workplace?: string;
-  emergencyContact?: string;
-  relationshipToStudent: string;
-  totalStudents: number;
-  notificationPreferences?: any;
 }
 
 // Filter and Management Types
@@ -186,7 +165,7 @@ export interface UserImportRecord {
   email: string;
   firstName: string;
   lastName: string;
-  role: 'STUDENT' | 'TEACHER' | 'GUARDIAN';
+  role: 'STUDENT' | 'TEACHER';
   // Role-specific fields would be added based on role
   studentIdNum?: string;
   courseId?: number;

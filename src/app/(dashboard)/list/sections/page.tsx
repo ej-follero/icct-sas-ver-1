@@ -1604,32 +1604,18 @@ export default function SectionsPage() {
         <ExportDialog
           open={exportDialogOpen}
           onOpenChange={setExportDialogOpen}
-          exportableColumns={[
-            { key: 'name', label: 'Section Name' },
-            { key: 'capacity', label: 'Capacity' },
-            { key: 'status', label: 'Status' },
-            { key: 'yearLevel', label: 'Year Level' },
-            { key: 'course', label: 'Course' },
-            { key: 'totalStudents', label: 'Students' },
-            { key: 'totalSubjects', label: 'Subjects' },
-          ]}
-          exportColumns={columnsToExport}
-          setExportColumns={setColumnsToExport}
-          exportFormat={pendingExportType}
-          setExportFormat={setPendingExportType}
-          onExport={doExport}
-          title="Export Sections"
-          tooltip="Export section data in various formats. Choose your preferred export options."
+          onExport={async (format: 'pdf' | 'excel' | 'csv', options?: any) => {
+            setPendingExportType(format);
+            setExportModalOpen(true);
+          }}
+          dataCount={sections.length}
+          entityType="student"
         />
 
         <SortDialog
           open={sortDialogOpen}
           onOpenChange={setSortDialogOpen}
-          sortField={sortField}
-          setSortField={setSortField}
-          sortOrder={sortOrder}
-          setSortOrder={setSortOrder}
-          sortFieldOptions={[
+          sortOptions={[
             { value: 'name', label: 'Section Name' },
             { value: 'capacity', label: 'Capacity' },
             { value: 'yearLevel', label: 'Year Level' },
@@ -1640,13 +1626,13 @@ export default function SectionsPage() {
             { value: 'currentEnrollment', label: 'Enrolled Students' },
             { value: 'totalSubjects', label: 'Total Subjects' },
           ]}
-          onApply={handleApplyFilters}
-          onReset={() => {
-            setSortField('name');
-            setSortOrder('asc');
+          currentSort={{ field: sortField, order: sortOrder }}
+          onSortChange={(field: string, order: 'asc' | 'desc') => {
+            setSortField(field as SortField);
+            setSortOrder(order);
           }}
           title="Sort Sections"
-          tooltip="Sort sections by different fields. Choose the field and order to organize your list."
+          description="Sort sections by different fields. Choose the field and order to organize your list."
         />
 
         <SectionFormDialog
@@ -2184,6 +2170,27 @@ export default function SectionsPage() {
           open={importDialogOpen}
           onOpenChange={setImportDialogOpen}
           entityName="section"
+          templateUrl="/api/sections/template"
+          acceptedFileTypes={[".csv", ".xlsx", ".xls"]}
+          maxFileSize={5}
+          fileRequirements={
+            <>
+              <li>• File must be in CSV or Excel format</li>
+              <li>• Maximum file size: 5MB</li>
+              <li>• Required columns: <b>sectionName</b>, <b>sectionCapacity</b>, <b>yearLevel</b>, <b>courseId</b>, <b>academicYear</b>, <b>semester</b></li>
+              <li>• Optional columns: <b>sectionStatus</b>, <b>currentEnrollment</b>, <b>roomAssignment</b>, <b>scheduleNotes</b></li>
+              <li>• <b>sectionName</b>: Must be unique (e.g., "CS-1A", "IT-2B")</li>
+              <li>• <b>sectionCapacity</b>: Must be positive number (e.g., 30, 50)</li>
+              <li>• <b>yearLevel</b>: Must be 1, 2, 3, or 4</li>
+              <li>• <b>courseId</b>: Must match existing course ID</li>
+              <li>• <b>academicYear</b>: Format "YYYY-YYYY" (e.g., "2024-2025")</li>
+              <li>• <b>semester</b>: "FIRST_SEMESTER", "SECOND_SEMESTER", or "THIRD_SEMESTER"</li>
+              <li>• <b>sectionStatus</b>: "ACTIVE" or "INACTIVE" (defaults to "ACTIVE")</li>
+              <li>• <b>currentEnrollment</b>: Number of currently enrolled students (defaults to 0)</li>
+              <li>• <b>roomAssignment</b>: Room number or location (optional)</li>
+              <li>• <b>scheduleNotes</b>: Additional schedule information (optional)</li>
+            </>
+          }
           onImport={async (data) => {
             try {
               // Validate imported data

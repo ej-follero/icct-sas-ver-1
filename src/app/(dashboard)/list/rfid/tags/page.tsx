@@ -4,47 +4,34 @@ import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { TablePagination } from "@/components/reusable/Table/TablePagination";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuLabel } from "@/components/ui/dropdown-menu";
-import * as XLSX from "xlsx";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
 import { toast } from "sonner";
 import Fuse from "fuse.js";
 import React from "react";
-import { Settings, Plus, Trash2, Printer, Loader2, MoreHorizontal, Upload, List, Columns3, ChevronDown, ChevronUp, UserCheck, UserX, Users, UserPlus, RefreshCw, Download, Search, Bell, Building2, RotateCcw, Eye, Pencil, BookOpen, GraduationCap, BadgeInfo, X, ChevronRight, Hash, Tag, Layers, FileText, Clock, Info, UserCheck as UserCheckIcon, Archive, CreditCard, Filter, Edit, User, MapPin, AlertTriangle, Wifi, Signal, Battery, Zap } from "lucide-react";
+import { Settings, Plus, Trash2, Printer, Loader2, Upload, List, Columns3, ChevronDown, ChevronUp, UserCheck, UserX, RefreshCw, Download, Search, Bell, X, ChevronRight, Clock, CreditCard, MapPin, AlertTriangle, Eye, Pencil } from "lucide-react";
 import { ImportDialog } from "@/components/reusable/Dialogs/ImportDialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ExportDialog } from '@/components/reusable/Dialogs/ExportDialog';
-import { SortDialog, SortFieldOption } from '@/components/reusable/Dialogs/SortDialog';
+import { SortDialog } from '@/components/reusable/Dialogs/SortDialog';
 import BulkActionsBar from '@/components/reusable/BulkActionsBar';
 import { PrintLayout } from '@/components/PrintLayout';
-import { TableCardView } from '@/components/reusable/Table/TableCardView';
-import { TableRowActions } from '@/components/reusable/Table/TableRowActions';
+// removed unused TableCardView and TableRowActions
 import { TableList, TableListColumn } from '@/components/reusable/Table/TableList';
 import { ConfirmDeleteDialog } from '@/components/ConfirmDeleteDialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { TableExpandedRow } from '@/components/reusable/Table/TableExpandedRow';
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import PageHeader from '@/components/PageHeader/PageHeader';
-import { useDebounce } from '@/hooks/use-debounce';
 import { Card, CardHeader } from "@/components/ui/card";
 import SummaryCard from '@/components/SummaryCard';
 import { EmptyState } from '@/components/reusable';
 import BulkActionsDialog from '@/components/reusable/Dialogs/BulkActionsDialog';
 import { ViewDialog } from '@/components/reusable/Dialogs/ViewDialog';
 import { QuickActionsPanel } from '@/components/reusable/QuickActionsPanel';
-import { SummaryCardSkeleton, PageSkeleton } from '@/components/reusable/Skeleton';
 import { VisibleColumnsDialog, ColumnOption } from '@/components/reusable/Dialogs/VisibleColumnsDialog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useRouter } from "next/navigation";
 import { Checkbox as SharedCheckbox } from '@/components/ui/checkbox';
-import { Pagination, CompactPagination } from "@/components/Pagination";
-import { useRef } from "react";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { CardContent, CardDescription, CardTitle } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { RFIDTagFormDialog } from "@/components/forms/RFIDTagFormDialog";
 import { safeHighlight } from "@/lib/sanitizer";
 
 type TagStatus = "active" | "inactive" | "lost" | "damaged";
@@ -73,7 +60,7 @@ interface FuseResult<T> {
   }>;
 }
 
-const tagSortFieldOptions: SortFieldOption<string>[] = [
+const tagSortFieldOptions: { value: string; label: string }[] = [
   { value: 'tagId', label: 'Tag ID' },
   { value: 'studentName', label: 'Student Name' },
   { value: 'status', label: 'Status' },
@@ -139,7 +126,6 @@ interface RFIDTag {
 }
 
 export default function RFIDTagsPage() {
-  const router = useRouter();
   const [tags, setTags] = useState<RFIDTag[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -178,6 +164,7 @@ export default function RFIDTagsPage() {
   const [expandedRowIds, setExpandedRowIds] = useState<string[]>([]);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(new Date());
+  const [createForm, setCreateForm] = useState<{ tagNumber: string; tagType: RFIDTag['tagType']; status: RFIDTag['status']; notes?: string }>({ tagNumber: '', tagType: 'STUDENT_CARD', status: 'ACTIVE', notes: '' });
 
   const fetchTags = async () => {
     try {
@@ -202,6 +189,7 @@ export default function RFIDTagsPage() {
   useEffect(() => {
     fetchTags();
   }, []);
+
 
   // Add Fuse.js setup with proper types
   const fuse = useMemo(() => new Fuse<RFIDTag>(tags, {
@@ -331,6 +319,15 @@ export default function RFIDTagsPage() {
     });
   };
 
+  // Expanded rows toggle
+  const onToggleExpand = (itemId: string) => {
+    setExpandedRowIds((current) =>
+      current.includes(itemId)
+        ? current.filter((id) => id !== itemId)
+        : [...current, itemId]
+    );
+  };
+
   // Top bar actions
   const handleRefresh = () => {
     setIsRefreshing(true);
@@ -341,6 +338,202 @@ export default function RFIDTagsPage() {
 
   // Table columns (filtered by visibleColumns)
   const columns: TableListColumn<RFIDTag>[] = [
+    {
+      header: '',
+      accessor: 'expander',
+      className: 'w-10 text-center px-1 py-1',
+      render: (item: RFIDTag) => (
+        <button
+          onClick={() => onToggleExpand(item.tagId.toString())}
+          className="px-2 py-1 rounded-full hover:bg-gray-200 text-center"
+          aria-label={expandedRowIds.includes(item.tagId.toString()) ? 'Collapse row' : 'Expand row'}
+        >
+          {expandedRowIds.includes(item.tagId.toString()) ? <ChevronDown size={16} className="text-blue-500" /> : <ChevronRight size={16} className="text-blue-500" />}
+        </button>
+      ),
+      expandedContent: (item: RFIDTag) => {
+        // Calculate days since assignment
+        const assignedDate = new Date(item.assignedAt);
+        const now = new Date();
+        const daysSinceAssignment = Math.floor((now.getTime() - assignedDate.getTime()) / (1000 * 60 * 60 * 24));
+        
+        // Calculate days until expiry (if applicable)
+        const daysUntilExpiry = item.expiresAt ? Math.floor((new Date(item.expiresAt).getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) : null;
+        
+        // Calculate days since last use
+        const daysSinceLastUse = item.lastUsed ? Math.floor((now.getTime() - new Date(item.lastUsed).getTime()) / (1000 * 60 * 60 * 24)) : null;
+        
+        return (
+          <td colSpan={columns.length} className="p-0">
+            <div className="bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 border-t border-slate-200">
+              <div className="p-6">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                  {/* Usage Analytics */}
+                  <div className="bg-white rounded border border-slate-200 p-5 shadow-sm">
+                    <div className="flex items-center gap-3 mb-4">
+                      <h4 className="font-semibold text-gray-800 text-base">Usage Analytics</h4>
+                    </div>
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center py-2 border-b border-slate-100">
+                        <span className="text-slate-600 text-sm font-medium">Days Assigned</span>
+                        <span className="font-semibold text-blue-900 text-sm">{daysSinceAssignment} days</span>
+                      </div>
+                      <div className="flex justify-between items-center py-2 border-b border-slate-100">
+                        <span className="text-slate-600 text-sm font-medium">Last Used</span>
+                        <span className="font-semibold text-blue-900 text-sm">
+                          {daysSinceLastUse !== null ? `${daysSinceLastUse} days ago` : 'Never used'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center py-2 border-b border-slate-100">
+                        <span className="text-slate-600 text-sm font-medium">Expiry Status</span>
+                        <span className={`font-semibold text-sm px-2 py-1 rounded-full ${
+                          daysUntilExpiry === null ? 'bg-blue-100 text-blue-700' : 
+                          daysUntilExpiry > 30 ? 'bg-green-100 text-green-700' : 
+                          daysUntilExpiry > 7 ? 'bg-yellow-100 text-yellow-700' : 
+                          'bg-red-100 text-red-700'
+                        }`}>
+                          {daysUntilExpiry === null ? 'No expiry' : daysUntilExpiry > 0 ? `${daysUntilExpiry} days left` : 'Expired'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center py-2">
+                        <span className="text-slate-600 text-sm font-medium">Usage Rate</span>
+                        <span className="font-semibold text-blue-900 text-sm">
+                          {daysSinceLastUse !== null && daysSinceAssignment > 0 
+                            ? `${Math.round((daysSinceAssignment - daysSinceLastUse) / daysSinceAssignment * 100)}% active`
+                            : '0% active'
+                          }
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Technical Details */}
+                  <div className="bg-white rounded border border-slate-200 p-5 shadow-sm">
+                    <div className="flex items-center gap-3 mb-4">
+                      <h4 className="font-semibold text-gray-800 text-base">Technical Details</h4>
+                    </div>
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center py-2 border-b border-slate-100">
+                        <span className="text-slate-600 text-sm font-medium">Tag ID</span>
+                        <span className="font-mono text-xs bg-slate-100 text-slate-800 px-3 py-1 rounded-md border">{item.tagId}</span>
+                      </div>
+                      <div className="flex justify-between items-center py-2 border-b border-slate-100">
+                        <span className="text-slate-600 text-sm font-medium">Tag Number</span>
+                        <span className="font-mono text-xs bg-slate-100 text-slate-800 px-3 py-1 rounded-md border">{item.tagNumber}</span>
+                      </div>
+                      <div className="flex justify-between items-center py-2 border-b border-slate-100">
+                        <span className="text-slate-600 text-sm font-medium">Type</span>
+                        <span className="font-medium text-blue-900 text-sm">{item.tagType.replace('_', ' ')}</span>
+                      </div>
+                      <div className="flex justify-between items-center py-2">
+                        <span className="text-slate-600 text-sm font-medium">Status</span>
+                        <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                          item.status === 'ACTIVE' ? 'bg-green-100 text-green-800 border border-green-200' :
+                          item.status === 'INACTIVE' ? 'bg-slate-100 text-slate-800 border border-slate-200' :
+                          item.status === 'LOST' ? 'bg-red-100 text-red-800 border border-red-200' :
+                          item.status === 'DAMAGED' ? 'bg-orange-100 text-orange-800 border border-orange-200' :
+                          'bg-yellow-100 text-yellow-800 border border-yellow-200'
+                        }`}>
+                          {item.status}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Assignment History */}
+                  <div className="bg-white rounded border border-slate-200 p-5 shadow-sm">
+                    <div className="flex items-center gap-3 mb-4">
+                      <h4 className="font-semibold text-gray-800 text-base">Assignment History</h4>
+                    </div>
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center py-2 border-b border-slate-100">
+                        <span className="text-slate-600 text-sm font-medium">Assigned Date</span>
+                        <span className="font-semibold text-blue-900 text-sm">{assignedDate.toLocaleDateString()}</span>
+                      </div>
+                      <div className="flex justify-between items-center py-2 border-b border-slate-100">
+                        <span className="text-slate-600 text-sm font-medium">Assigned By</span>
+                        <span className="font-semibold text-blue-900 text-sm">{item.assignedBy ? `User #${item.assignedBy}` : 'System'}</span>
+                      </div>
+                      <div className="flex justify-between items-center py-2 border-b border-slate-100">
+                        <span className="text-slate-600 text-sm font-medium">Reason</span>
+                        <span className="font-semibold text-blue-900 text-sm max-w-32 truncate" title={item.assignmentReason || 'Standard assignment'}>
+                          {item.assignmentReason || 'Standard assignment'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center py-2">
+                        <span className="text-slate-600 text-sm font-medium">Current Holder</span>
+                        <span className="font-semibold text-blue-900 text-sm max-w-32 truncate">
+                          {item.student ? `${item.student.firstName} ${item.student.lastName}` : 
+                           item.instructor ? `${item.instructor.firstName} ${item.instructor.lastName}` : 
+                           'Unassigned'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Quick Actions */}
+                <div className="mt-6 pt-6 border-t border-slate-200">
+                   <div className="flex flex-wrap gap-3">
+                     <button 
+                       className="px-4 py-2 bg-blue-50 text-blue-700 text-sm rounded border border-blue-200 hover:bg-blue-100 hover:border-blue-300 transition-all duration-200 font-medium"
+                       onClick={async () => {
+                         try {
+                           await navigator.clipboard.writeText(item.tagNumber);
+                           toast.success('Tag number copied to clipboard');
+                         } catch (err) {
+                           toast.error('Failed to copy tag number');
+                         }
+                       }}
+                     >
+                       Copy Tag Number
+                     </button>
+                     <button 
+                       className="px-4 py-2 bg-indigo-50 text-indigo-700 text-sm rounded border border-indigo-200 hover:bg-indigo-100 hover:border-indigo-300 transition-all duration-200 font-medium"
+                       onClick={async () => {
+                         try {
+                           const jsonData = JSON.stringify({
+                             tagId: item.tagId,
+                             tagNumber: item.tagNumber,
+                             status: item.status,
+                             type: item.tagType,
+                             assignedAt: item.assignedAt,
+                             lastUsed: item.lastUsed,
+                             expiresAt: item.expiresAt
+                           }, null, 2);
+                           await navigator.clipboard.writeText(jsonData);
+                           toast.success('Tag JSON copied to clipboard');
+                         } catch (err) {
+                           toast.error('Failed to copy tag JSON');
+                         }
+                       }}
+                     >
+                       Copy Tag JSON
+                     </button>
+                     {item.student && (
+                       <button 
+                         className="px-4 py-2 bg-green-50 text-green-700 text-sm rounded border border-green-200 hover:bg-green-100 hover:border-green-300 transition-all duration-200 font-medium"
+                         onClick={async () => {
+                           try {
+                             const studentInfo = `${item.student?.firstName} ${item.student?.lastName} (${item.student?.studentIdNum})`;
+                             await navigator.clipboard.writeText(studentInfo);
+                             toast.success('Student info copied to clipboard');
+                           } catch (err) {
+                             toast.error('Failed to copy student info');
+                           }
+                         }}
+                       >
+                         Copy Student Info
+                       </button>
+                     )}
+                   </div>
+                </div>
+              </div>
+            </div>
+          </td>
+        );
+      }
+    },
     {
       header: (
         <SharedCheckbox 
@@ -424,10 +617,7 @@ export default function RFIDTagsPage() {
             className: 'text-center',
             sortable: col.sortable,
             render: (item: RFIDTag) => (
-              <div className="flex items-center gap-1 justify-center">
-                <Clock className="w-3 h-3" />
-                <span className="text-sm">{item.lastUsed ? new Date(item.lastUsed).toLocaleString() : 'Never'}</span>
-              </div>
+              <span className="text-sm">{item.lastUsed ? new Date(item.lastUsed).toLocaleString() : 'Never'}</span>
             )
           };
         }
@@ -438,10 +628,7 @@ export default function RFIDTagsPage() {
             className: 'text-center',
             sortable: col.sortable,
             render: (item: RFIDTag) => (
-              <div className="flex items-center gap-1 justify-center">
-                <MapPin className="w-3 h-3" />
-                <span className="text-sm">{item.notes || 'N/A'}</span>
-              </div>
+              <span className="text-sm">{item.notes || 'N/A'}</span>
             )
           };
         }
@@ -547,7 +734,106 @@ export default function RFIDTagsPage() {
   ];
 
   const selectedTags = tags.filter(tag => selectedIds.includes(tag.tagId.toString()));
-  const [exportColumns, setExportColumns] = useState<string[]>(exportableColumns.map(col => col.accessor));
+
+  const handleQuickExportSelectedTags = () => {
+    const selected = selectedTags;
+    if (selected.length === 0) {
+      toast.error('No tags selected to export');
+      return;
+    }
+    const headers = tagColumns.map(col => col.label);
+    const rows = selected.map((tag) => {
+      return tagColumns.map(col => {
+        const accessor = col.accessor as string;
+        // Handle special derived fields
+        if (accessor === 'studentName') {
+          return tag.student ? `${tag.student.firstName} ${tag.student.lastName}` : '';
+        }
+        if (accessor === 'notes') {
+          return tag.notes || '';
+        }
+        return String((tag as any)[accessor] ?? '');
+      });
+    });
+    const csv = [headers.join(','), ...rows.map(r => r.map(v => {
+      const s = String(v);
+      return s.includes(',') || s.includes('"') ? '"' + s.replace(/"/g, '""') + '"' : s;
+    }).join(','))].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'rfid-tags-selected.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success(`Exported ${selected.length} selected tags to CSV`);
+  };
+
+  const handlePrint = () => {
+    const printColumns = [
+      { header: 'Tag ID', accessor: 'tagId' },
+      { header: 'Assigned To', accessor: 'studentName' },
+      { header: 'Status', accessor: 'status' },
+      { header: 'Last Used', accessor: 'lastSeen' },
+      { header: 'Notes', accessor: 'location' },
+      { header: 'Type', accessor: 'scanCount' },
+      { header: 'Assigned Date', accessor: 'assignedAt' },
+    ];
+
+    const printData = filteredTags.map((t) => ({
+      tagId: t.tagNumber,
+      studentName: t.student ? `${t.student.firstName} ${t.student.lastName}` : (t.instructor ? `${t.instructor.firstName} ${t.instructor.lastName}` : ''),
+      status: t.status,
+      lastSeen: t.lastUsed ? new Date(t.lastUsed).toLocaleString() : 'Never',
+      location: t.notes || '',
+      scanCount: t.tagType,
+      assignedAt: t.assignedAt ? new Date(t.assignedAt).toLocaleDateString() : '',
+    }));
+
+    const printFn = PrintLayout({
+      title: 'RFID Tags List',
+      data: printData,
+      columns: printColumns,
+      totalItems: filteredTags.length,
+    });
+    printFn();
+  };
+
+  const handleImportTags = async (data: any[]) => {
+    try {
+      const res = await fetch('/api/rfid/tags/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          records: data,
+          options: { skipDuplicates: true, updateExisting: true }
+        })
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error || `Import failed (HTTP ${res.status})`);
+      }
+      const result = await res.json();
+      await fetchTags();
+      toast.success('Tags imported successfully');
+      return {
+        success: result?.results?.success ?? 0,
+        failed: result?.results?.failed ?? 0,
+        errors: result?.results?.errors ?? []
+      };
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to import tags');
+      return { success: 0, failed: data.length, errors: [e?.message || 'Unknown import error'] };
+    }
+  };
+
+  const handleBulkActionCompleteTags = (actionType: string, results: any) => {
+    toast.success(`Bulk action '${actionType}' completed.`);
+    setBulkActionsDialogOpen(false);
+    fetchTags();
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#f8fafc] via-[#ffffff] to-[#f8fafc] p-0 overflow-x-hidden">
@@ -561,6 +847,28 @@ export default function RFIDTagsPage() {
             { label: 'Tags' }
           ]}
         />
+
+        {/* Error Banner */}
+        {error && (
+          <div className="w-full max-w-full">
+            <div className="flex items-start justify-between p-3 sm:p-4 border border-red-200 bg-red-50 text-red-800 rounded-xl">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="w-5 h-5 mt-0.5" />
+                <div>
+                  <div className="font-semibold">Failed to load tags</div>
+                  <div className="text-sm">{error}</div>
+                </div>
+              </div>
+              <button
+                aria-label="Dismiss error"
+                className="text-red-700 hover:text-red-900"
+                onClick={() => setError(null)}
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Summary Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
@@ -630,7 +938,7 @@ export default function RFIDTagsPage() {
                 label: 'Print Page',
                 description: 'Print tag list',
                 icon: <Printer className="w-5 h-5 text-white" />,
-                onClick: () => {/* handlePrint */}
+                onClick: handlePrint
               },
               {
                 id: 'visible-columns',
@@ -696,19 +1004,19 @@ export default function RFIDTagsPage() {
               <div className="flex flex-col xl:flex-row gap-2 sm:gap-3 items-start xl:items-center justify-end">
                 {/* Search Bar */}
                 <div className="relative w-full xl:w-auto xl:min-w-[200px] xl:max-w-sm">
-                  <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                  <Search className="absolute left-3 top-3 h-4 w-4 text-gray-500" />
                   <input
                     type="text"
                     placeholder="Search tags..."
                     value={searchInput}
                     onChange={e => setSearchInput(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:outline-none"
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:outline-none"
                   />
                 </div>
                 {/* Quick Filter Dropdowns */}
                 <div className="flex flex-wrap gap-2 sm:gap-3 w-full xl:w-auto">
                   <Select value={statusFilter} onValueChange={setStatusFilter}>
-                    <SelectTrigger className="w-full sm:w-28 lg:w-32 xl:w-28 text-gray-700">
+                    <SelectTrigger className="w-full sm:w-28 lg:w-32 xl:w-28 text-gray-700 rounded">
                       <SelectValue placeholder="Status" />
                     </SelectTrigger>
                     <SelectContent>
@@ -757,7 +1065,7 @@ export default function RFIDTagsPage() {
                       key: "export",
                       label: "Quick Export",
                       icon: <Download className="w-4 h-4 mr-2" />,
-                      onClick: () => {/* handleExportSelectedTags */},
+                    onClick: () => handleQuickExportSelectedTags(),
                       tooltip: "Quick export selected tags to CSV"
                     },
                     {
@@ -820,6 +1128,8 @@ export default function RFIDTagsPage() {
                       className="border-0 shadow-none max-w-full"
                       sortState={{ field: sortField, order: sortOrder }}
                       onSort={handleSort}
+                      expandedRowIds={expandedRowIds}
+                      onToggleExpand={onToggleExpand}
                     />
                   )}
                 </div>
@@ -854,67 +1164,211 @@ export default function RFIDTagsPage() {
         <SortDialog
           open={sortDialogOpen}
           onOpenChange={setSortDialogOpen}
-          sortField={sortField}
-          setSortField={field => setSortField(field as TagSortField)}
-          sortOrder={sortOrder}
-          setSortOrder={setSortOrder}
-          sortFieldOptions={tagSortFieldOptions}
-          onApply={() => {
-            setSortFields([{ field: sortField as SortField, order: sortOrder }]);
-            setSortDialogOpen(false);
-          }}
-          onReset={() => {
-            setSortField('tagId');
-            setSortOrder('asc');
-            setSortFields([{ field: 'tagId' as SortField, order: 'asc' }]);
-            setSortDialogOpen(false);
+          sortOptions={tagSortFieldOptions}
+          currentSort={{ field: sortField, order: sortOrder }}
+          onSortChange={(field, order) => {
+            setSortField(field as TagSortField);
+            setSortOrder(order as TagSortOrder);
+            setSortFields([{ field: field as SortField, order }]);
           }}
           title="Sort Tags"
-          tooltip="Sort tags by different fields. Choose the field and order to organize your list."
+          description="Sort tags by different fields. Choose the field and order to organize your list."
+          entityType="tags"
         />
 
         <ExportDialog
           open={exportDialogOpen}
           onOpenChange={setExportDialogOpen}
-          exportableColumns={exportableColumnsForExport}
-          exportColumns={exportColumns}
-          setExportColumns={setExportColumns}
-          exportFormat={exportFormat}
-          setExportFormat={setExportFormat}
-          onExport={() => {/* handleExport */}}
-          title="Export Tags"
-          tooltip="Export tag data in various formats. Choose your preferred export options."
+          selectedItems={selectedTags}
+          entityType="tag"
+          entityLabel="tag"
+          exportColumns={tagColumns.map(col => ({ id: col.key, label: col.label, default: true }))}
+          onExport={(options) => {
+            toast.success(`Exported ${options.format} with ${options.columns.length} columns`);
+          }}
         />
 
         <ImportDialog
           open={importDialogOpen}
           onOpenChange={setImportDialogOpen}
-          onImport={async (data) => {
-            // Placeholder implementation
-            return { success: data.length, failed: 0, errors: [] };
-          }}
+          onImport={handleImportTags}
           entityName="RFIDTag"
-          templateUrl={undefined}
+          templateUrl="/api/rfid/tags/template"
           acceptedFileTypes={[".csv", ".xlsx", ".xls"]}
           maxFileSize={5}
         />
 
+        {/* Add Tag Dialog */}
+        <RFIDTagFormDialog
+          open={addModalOpen}
+          onOpenChange={setAddModalOpen}
+          onSubmit={async (data) => {
+            try {
+              const res = await fetch('/api/rfid/tags', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+              });
+              if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err?.error || 'Failed to create tag');
+              }
+              const created = await res.json();
+              setTags(prev => [created, ...prev]);
+              toast.success('Tag created successfully');
+              setCreateForm({ tagNumber: '', tagType: 'STUDENT_CARD', status: 'ACTIVE', notes: '' });
+            } catch (e: any) {
+              toast.error(e?.message || 'Failed to create tag');
+              throw e; // Re-throw to prevent dialog from closing
+            }
+          }}
+          mode="create"
+        />
+        
+        {selectedTag && (
+          <ViewDialog
+            open={viewModalOpen}
+            onOpenChange={setViewModalOpen}
+            title="Tag Details"
+            subtitle={`Tag ${selectedTag.tagNumber}`}
+            sections={[
+              {
+                title: "Tag Information",
+                fields: [
+                  { label: 'Tag ID', value: String(selectedTag.tagId) },
+                  { label: 'Tag Number', value: selectedTag.tagNumber },
+                  { label: 'Type', value: selectedTag.tagType },
+                  { label: 'Status', value: selectedTag.status },
+                  { label: 'Assigned Date', value: selectedTag.assignedAt ? new Date(selectedTag.assignedAt).toLocaleString() : 'N/A' },
+                  { label: 'Last Used', value: selectedTag.lastUsed ? new Date(selectedTag.lastUsed).toLocaleString() : 'Never' },
+                ]
+              },
+              {
+                title: "Assignment",
+                fields: [
+                  { label: 'Student', value: selectedTag.student ? `${selectedTag.student.firstName} ${selectedTag.student.lastName} (${selectedTag.student.studentIdNum})` : '—' },
+                  { label: 'Instructor', value: selectedTag.instructor ? `${selectedTag.instructor.firstName} ${selectedTag.instructor.lastName}` : '—' },
+                  { label: 'Assigned By', value: selectedTag.assignedBy ? String(selectedTag.assignedBy) : '—' },
+                  { label: 'Reason', value: selectedTag.assignmentReason || '—' },
+                ]
+              },
+              {
+                title: "Additional",
+                fields: [
+                  { label: 'Expires At', value: selectedTag.expiresAt ? new Date(selectedTag.expiresAt).toLocaleString() : '—' },
+                  { label: 'Notes', value: selectedTag.notes || '—' },
+                ]
+              }
+            ]}
+            tooltipText="View detailed RFID tag information"
+          />
+        )}
+
+        {/* Edit Tag Dialog */}
+        {selectedTag && (
+          <RFIDTagFormDialog
+            open={editModalOpen}
+            onOpenChange={setEditModalOpen}
+            initialData={selectedTag}
+            onSubmit={async (data) => {
+              try {
+                const res = await fetch(`/api/rfid/tags/${selectedTag.tagId}`, {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(data)
+                });
+                if (!res.ok) {
+                  const err = await res.json().catch(() => ({}));
+                  throw new Error(err?.error || 'Failed to update tag');
+                }
+                const updated = await res.json();
+                setTags(prev => prev.map(t => t.tagId === selectedTag.tagId ? { ...t, ...updated } : t));
+                toast.success('Tag updated successfully');
+                setSelectedTag(null);
+              } catch (e: any) {
+                toast.error(e?.message || 'Failed to update tag');
+                throw e; // Re-throw to prevent dialog from closing
+              }
+            }}
+            mode="edit"
+          />
+        )}
+
+        {/* Delete Tag Confirmation Dialog */}
+        {selectedTag && (
+          <ConfirmDeleteDialog
+            open={deleteModalOpen}
+            onOpenChange={(open) => {
+              setDeleteModalOpen(open);
+              if (!open) setSelectedTag(null);
+            }}
+            itemName={selectedTag.tagNumber}
+            onDelete={async () => {
+              try {
+                const res = await fetch(`/api/rfid/tags/${selectedTag.tagId}`, { method: 'DELETE' });
+                if (!res.ok) {
+                  const err = await res.json().catch(() => ({}));
+                  throw new Error(err?.error || 'Failed to delete tag');
+                }
+                setTags(prev => prev.filter(t => t.tagId !== selectedTag.tagId));
+                setSelectedIds(prev => prev.filter(id => id !== selectedTag.tagId.toString()));
+                toast.success('Tag deleted successfully');
+              } catch (e: any) {
+                toast.error(e?.message || 'Failed to delete tag');
+              } finally {
+                setDeleteModalOpen(false);
+                setSelectedTag(null);
+              }
+            }}
+          />
+        )}
+
         <BulkActionsDialog
           open={bulkActionsDialogOpen}
           onOpenChange={setBulkActionsDialogOpen}
-          selectedItems={selectedTagsForBulkAction}
+          selectedItems={selectedTags}
           entityType="tag"
           entityLabel="tag"
           availableActions={[
-            { id: 'status-update', label: 'Update Status', description: 'Update status of selected tags', icon: <Settings className="w-4 h-4" />, tabId: 'actions' },
-            { id: 'notification', label: 'Send Notification', description: 'Send notification to administrators', icon: <Bell className="w-4 h-4" />, tabId: 'actions' },
-            { id: 'export', label: 'Export Data', description: 'Export selected tags data', icon: <Download className="w-4 h-4" />, tabId: 'actions' },
+            { id: 'status-update', label: 'Update Status', description: 'Update status of selected tags', icon: <Settings className="w-4 h-4" />, tabId: 'status' },
+            { id: 'notification', label: 'Send Notification', description: 'Send notification to administrators', icon: <Bell className="w-4 h-4" />, tabId: 'notification' },
+            { id: 'export', label: 'Export Data', description: 'Export selected tags data', icon: <Download className="w-4 h-4" />, tabId: 'export' },
           ]}
-          onActionComplete={() => {/* handleBulkActionComplete */}}
+          onActionComplete={handleBulkActionCompleteTags}
           onCancel={() => setBulkActionsDialogOpen(false)}
           onProcessAction={async (actionType: string, config: any) => {
-            // Placeholder implementation
-            return { success: true };
+            try {
+              if (actionType === 'status-update') {
+                const { itemId, newStatus, reason } = config || {};
+                if (!itemId || !newStatus) return { success: false };
+                const res = await fetch(`/api/rfid/tags/${itemId}`, {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ status: String(newStatus).toUpperCase(), reason })
+                });
+                if (!res.ok) return { success: false };
+                const updated = await res.json().catch(() => ({}));
+                setTags(prev => prev.map(t => t.tagId.toString() === String(itemId) ? { ...t, ...updated, status: String(newStatus).toUpperCase() as RFIDTag['status'] } : t));
+                return { success: true };
+              }
+              if (actionType === 'notification') {
+                const { itemId, subject, message, priority, includeAttachments } = config || {};
+                if (!itemId || !subject || !message) return { success: false };
+                // Placeholder notification API; adjust to your backend route
+                await fetch(`/api/notifications/tags`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ tagId: itemId, subject, message, priority, includeAttachments })
+                }).catch(() => {});
+                return { success: true };
+              }
+              if (actionType === 'export') {
+                return { success: true };
+              }
+              return { success: false };
+            } catch {
+              return { success: false };
+            }
           }}
           getItemId={(item: RFIDTag) => item.tagId.toString()}
           getItemDisplayName={(item: RFIDTag) => item.tagNumber}

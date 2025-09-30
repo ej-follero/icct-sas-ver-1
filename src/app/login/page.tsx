@@ -86,9 +86,6 @@ const LoginPage = () => {
         case 'STUDENT':
           router.push('/dashboard');
           break;
-        case 'GUARDIAN':
-          router.push('/dashboard');
-          break;
         default:
           router.push('/dashboard');
       }

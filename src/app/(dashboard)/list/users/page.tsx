@@ -16,7 +16,7 @@ import { Settings, Plus, Trash2, Printer, Loader2, MoreHorizontal, Upload, List,
 import { ImportDialog } from "@/components/reusable/Dialogs/ImportDialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ExportDialog } from '@/components/reusable/Dialogs/ExportDialog';
-import { SortDialog, SortFieldOption } from '@/components/reusable/Dialogs/SortDialog';
+import { SortDialog } from '@/components/reusable/Dialogs/SortDialog';
 import BulkActionsBar from '@/components/reusable/BulkActionsBar';
 import { PrintLayout } from '@/components/PrintLayout';
 import { TableCardView } from '@/components/reusable/Table/TableCardView';
@@ -70,7 +70,7 @@ interface FuseResult<T> {
   }>;
 }
 
-const userSortFieldOptions: SortFieldOption<string>[] = [
+const userSortFieldOptions = [
   { value: 'userName', label: 'Username' },
   { value: 'email', label: 'Email' },
   { value: 'role', label: 'Role' },
@@ -978,6 +978,54 @@ export default function UsersListPage() {
     });
 
     printFunction();
+  };
+
+  // Handler for downloading user import template
+  const handleDownloadUserTemplate = () => {
+    const templateData = [
+      {
+        userName: "john.doe",
+        email: "john.doe@icct.edu",
+        role: "STUDENT",
+        status: "active",
+        isEmailVerified: "false",
+        isPhoneVerified: "false",
+        twoFactorEnabled: "false"
+      },
+      {
+        userName: "jane.smith",
+        email: "jane.smith@icct.edu",
+        role: "INSTRUCTOR",
+        status: "active",
+        isEmailVerified: "true",
+        isPhoneVerified: "false",
+        twoFactorEnabled: "true"
+      },
+      {
+        userName: "admin.user",
+        email: "admin@icct.edu",
+        role: "ADMIN",
+        status: "active",
+        isEmailVerified: "true",
+        isPhoneVerified: "true",
+        twoFactorEnabled: "true"
+      }
+    ];
+
+    const headers = [
+      'userName',
+      'email', 
+      'role',
+      'status',
+      'isEmailVerified',
+      'isPhoneVerified',
+      'twoFactorEnabled'
+    ];
+
+    const ws = XLSX.utils.json_to_sheet(templateData, { header: headers });
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Users');
+    XLSX.writeFile(wb, 'users-import-template.xlsx');
   };
 
   // Handler for importing users
@@ -1924,36 +1972,26 @@ export default function UsersListPage() {
         <SortDialog
           open={sortDialogOpen}
           onOpenChange={setSortDialogOpen}
-          sortField={sortField}
-          setSortField={field => setSortField(field as UserSortField)}
-          sortOrder={sortOrder}
-          setSortOrder={setSortOrder}
-          sortFieldOptions={userSortFieldOptions}
-          onApply={() => {
-            setSortFields([{ field: sortField as SortField, order: sortOrder }]);
-            setSortDialogOpen(false);
-          }}
-          onReset={() => {
-            setSortField('userName');
-            setSortOrder('asc');
-            setSortFields([{ field: 'userName' as SortField, order: 'asc' }]);
-            setSortDialogOpen(false);
+          sortOptions={userSortFieldOptions}
+          currentSort={{ field: sortField, order: sortOrder }}
+          onSortChange={(field, order) => {
+            setSortField(field as UserSortField);
+            setSortOrder(order as UserSortOrder);
+            setSortFields([{ field: field as SortField, order }]);
           }}
           title="Sort Users"
-          tooltip="Sort users by different fields. Choose the field and order to organize your list."
+          description="Sort users by different fields. Choose the field and order to organize your list."
         />
 
         <ExportDialog
           open={exportDialogOpen}
           onOpenChange={setExportDialogOpen}
-          exportableColumns={exportableColumnsForExport}
-          exportColumns={exportColumns}
-          setExportColumns={setExportColumns}
-          exportFormat={exportFormat}
-          setExportFormat={setExportFormat}
-          onExport={handleExport}
-          title="Export Users"
-          tooltip="Export user data in various formats. Choose your preferred export options."
+          onExport={async (format, options) => {
+            setExportFormat(format);
+            await handleExport();
+          }}
+          dataCount={selectedIds.length > 0 ? selectedIds.length : filteredUsers.length}
+          entityType="student"
         />
 
         {/* View User Dialog */}
@@ -2034,6 +2072,27 @@ export default function UsersListPage() {
           templateUrl={undefined}
           acceptedFileTypes={[".csv", ".xlsx", ".xls"]}
           maxFileSize={10}
+          templateBuilder={handleDownloadUserTemplate}
+          fileRequirements={
+            <div className="space-y-2">
+              <div className="text-sm text-gray-600">
+                <p className="font-medium mb-2">File Requirements for User Import:</p>
+                <ul className="space-y-1">
+                  <li>• File must be in CSV or Excel format</li>
+                  <li>• Maximum file size: 10MB</li>
+                  <li>• <b>Required columns:</b> <code className="bg-gray-100 px-1 rounded">userName</code>, <code className="bg-gray-100 px-1 rounded">email</code>, <code className="bg-gray-100 px-1 rounded">role</code></li>
+                  <li>• <b>Optional columns:</b> <code className="bg-gray-100 px-1 rounded">status</code>, <code className="bg-gray-100 px-1 rounded">isEmailVerified</code>, <code className="bg-gray-100 px-1 rounded">isPhoneVerified</code>, <code className="bg-gray-100 px-1 rounded">twoFactorEnabled</code></li>
+                  <li>• <b>role</b> values: <code className="bg-blue-100 px-1 rounded">SUPER_ADMIN</code>, <code className="bg-blue-100 px-1 rounded">ADMIN</code>, <code className="bg-blue-100 px-1 rounded">DEPARTMENT_HEAD</code>, <code className="bg-blue-100 px-1 rounded">INSTRUCTOR</code>, <code className="bg-blue-100 px-1 rounded">STUDENT</code></li>
+                  <li>• <b>status</b> values: <code className="bg-green-100 px-1 rounded">active</code>, <code className="bg-green-100 px-1 rounded">inactive</code>, <code className="bg-green-100 px-1 rounded">suspended</code>, <code className="bg-green-100 px-1 rounded">pending</code>, <code className="bg-green-100 px-1 rounded">blocked</code> (defaults to <code className="bg-green-100 px-1 rounded">active</code>)</li>
+                  <li>• <b>isEmailVerified</b>/<b>isPhoneVerified</b>/<b>twoFactorEnabled</b>: <code className="bg-yellow-100 px-1 rounded">true</code> or <code className="bg-yellow-100 px-1 rounded">false</code> (defaults to <code className="bg-yellow-100 px-1 rounded">false</code>)</li>
+                  <li>• <b>userName</b> must be unique and between 3-50 characters</li>
+                  <li>• <b>email</b> must be valid email format and unique</li>
+                  <li>• <b>Passwords will be auto-generated</b> and sent to users via email</li>
+                  <li>• <b>SUPER_ADMIN</b> role is restricted and cannot be imported</li>
+                </ul>
+              </div>
+            </div>
+          }
         />
 
         <BulkActionsDialog<User>

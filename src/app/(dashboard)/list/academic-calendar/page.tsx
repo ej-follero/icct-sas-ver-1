@@ -29,7 +29,8 @@ import {
   Share2,
   Archive,
   RefreshCw,
-  BarChart2
+  BarChart2,
+  Printer
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -119,6 +120,14 @@ interface CalendarViewProps {
 }
 
 function CalendarView({ events, currentDate, viewMode, selectedEvents, onEventSelect }: CalendarViewProps) {
+  // Debug logging for CalendarView
+  console.log('CalendarView received:', {
+    eventsCount: events.length,
+    events: events,
+    viewMode,
+    currentDate
+  });
+
   const getDaysInMonth = (date: Date) => {
     const year = date.getFullYear();
     const month = date.getMonth();
@@ -139,7 +148,7 @@ function CalendarView({ events, currentDate, viewMode, selectedEvents, onEventSe
   };
 
   const getEventsForDate = (date: Date) => {
-    return events.filter(event => {
+    const dayEvents = events.filter(event => {
       const eventStart = new Date(event.startDate);
       const eventEnd = new Date(event.endDate);
       const checkDate = new Date(date);
@@ -148,8 +157,23 @@ function CalendarView({ events, currentDate, viewMode, selectedEvents, onEventSe
       eventStart.setHours(0, 0, 0, 0);
       eventEnd.setHours(0, 0, 0, 0);
       
-      return checkDate >= eventStart && checkDate <= eventEnd;
+      const isMatch = checkDate >= eventStart && checkDate <= eventEnd;
+      
+      // Debug logging for date matching
+      if (isMatch) {
+        console.log('Event matched to date:', {
+          eventTitle: event.title,
+          eventStart: eventStart.toDateString(),
+          eventEnd: eventEnd.toDateString(),
+          checkDate: checkDate.toDateString(),
+          isMatch
+        });
+      }
+      
+      return isMatch;
     });
+    
+    return dayEvents;
   };
 
   const formatTime = (date: Date) => {
@@ -195,7 +219,7 @@ function CalendarView({ events, currentDate, viewMode, selectedEvents, onEventSe
                   {dayEvents.slice(0, 3).map(event => (
                     <div
                       key={event.id}
-                      className={`text-xs p-1 rounded cursor-pointer ${
+                      className={`text-xs p-1 rounded cursor-pointer transition-all hover:shadow-sm ${
                         selectedEvents.includes(event.id) 
                           ? 'ring-2 ring-blue-500' 
                           : ''
@@ -209,6 +233,16 @@ function CalendarView({ events, currentDate, viewMode, selectedEvents, onEventSe
                           {formatTime(new Date(event.startDate))}
                         </div>
                       )}
+                      <div className="flex items-center gap-1 mt-1">
+                        <div className={`w-1.5 h-1.5 rounded-full ${
+                          event.status === 'published' ? 'bg-green-500' : 
+                          event.status === 'draft' ? 'bg-yellow-500' : 'bg-red-500'
+                        }`}></div>
+                        <span className="text-xs opacity-75">
+                          {event.priority === 'critical' ? '🔴' : 
+                           event.priority === 'high' ? '🟡' : '🟢'}
+                        </span>
+                      </div>
                     </div>
                   ))}
                   {dayEvents.length > 3 && (
@@ -320,7 +354,7 @@ function CalendarView({ events, currentDate, viewMode, selectedEvents, onEventSe
     return (
       <div className="calendar-day">
         {/* Day Header */}
-        <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+        <div className="mb-6 p-4 bg-gray-50 rounded">
           <h3 className="text-xl font-semibold text-gray-900">
             {currentDate.toLocaleDateString([], { 
               weekday: 'long', 
@@ -342,7 +376,7 @@ function CalendarView({ events, currentDate, viewMode, selectedEvents, onEventSe
               {allDayEvents.map(event => (
                 <div
                   key={event.id}
-                  className={`p-3 border-l-4 rounded-lg cursor-pointer transition-colors ${
+                  className={`p-3 border-l-4 rounded cursor-pointer transition-colors ${
                     selectedEvents.includes(event.id) 
                       ? 'ring-2 ring-blue-500 bg-blue-50' 
                       : 'hover:bg-gray-50'
@@ -374,10 +408,10 @@ function CalendarView({ events, currentDate, viewMode, selectedEvents, onEventSe
                       )}
                     </div>
                     <div className="flex items-center gap-2">
-                      <Button variant="ghost" size="sm">
+                      <Button variant="ghost" size="sm" onClick={() => onEventSelect(event.id)}>
                         <Eye className="w-4 h-4" />
                       </Button>
-                      <Button variant="ghost" size="sm">
+                      <Button variant="ghost" size="sm" onClick={() => onEventSelect(event.id)}>
                         <Edit className="w-4 h-4" />
                       </Button>
                     </div>
@@ -407,7 +441,7 @@ function CalendarView({ events, currentDate, viewMode, selectedEvents, onEventSe
                     {hourEvents.map(event => (
                       <div
                         key={event.id}
-                        className={`absolute left-2 right-2 p-3 rounded-lg cursor-pointer shadow-sm ${
+                        className={`absolute left-2 right-2 p-3 rounded cursor-pointer shadow-sm ${
                           selectedEvents.includes(event.id) 
                             ? 'ring-2 ring-blue-500' 
                             : 'hover:shadow-md'
@@ -444,10 +478,10 @@ function CalendarView({ events, currentDate, viewMode, selectedEvents, onEventSe
                             )}
                           </div>
                           <div className="flex items-center gap-1 ml-2">
-                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => onEventSelect(event.id)}>
                               <Eye className="w-3 h-3" />
                             </Button>
-                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => onEventSelect(event.id)}>
                               <Edit className="w-3 h-3" />
                             </Button>
                           </div>
@@ -537,10 +571,10 @@ function CalendarView({ events, currentDate, viewMode, selectedEvents, onEventSe
                 </div>
                 
                 <div className="flex items-center gap-2">
-                  <Button variant="ghost" size="sm">
+                  <Button variant="ghost" size="sm" onClick={() => onEventSelect(event.id)}>
                     <Eye className="w-4 h-4" />
                   </Button>
-                  <Button variant="ghost" size="sm">
+                  <Button variant="ghost" size="sm" onClick={() => onEventSelect(event.id)}>
                     <Edit className="w-4 h-4" />
                   </Button>
                 </div>
@@ -727,8 +761,9 @@ export default function AcademicCalendarPage() {
   const [selectedSemester, setSelectedSemester] = useState<Semester | null>(null);
   const [viewMode, setViewMode] = useState<'month' | 'week' | 'day' | 'list' | 'timeline'>('month');
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [eventsLoading, setEventsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState({
     category: 'all',
@@ -742,172 +777,326 @@ export default function AcademicCalendarPage() {
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [notifications, setNotifications] = useState<string[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
+  const [selectedEvent, setSelectedEvent] = useState<AcademicEvent | null>(null);
+  const [showEventDetails, setShowEventDetails] = useState(false);
+  const [showEditEvent, setShowEditEvent] = useState(false);
+  
+  // Add Event form state
+  const [newEvent, setNewEvent] = useState({
+    title: '',
+    description: '',
+    category: 'academic' as const,
+    priority: 'medium' as const,
+    startDate: '',
+    endDate: '',
+    location: '',
+    allDay: false,
+    recurring: false,
+    requiresApproval: false
+  });
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  
+  // Import/Export state
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importProgress, setImportProgress] = useState(0);
+  const [isImporting, setIsImporting] = useState(false);
+  const [exportFormat, setExportFormat] = useState<'csv' | 'xlsx' | 'pdf' | 'ical'>('csv');
+  const [isExporting, setIsExporting] = useState(false);
+  
+  // Settings state
+  const [settings, setSettings] = useState({
+    notifications: {
+      email: true,
+      push: false,
+      reminders: true
+    },
+    display: {
+      showWeekends: true,
+      showHolidays: true,
+      colorCoding: true
+    },
+    integration: {
+      googleSync: false,
+      outlookSync: false
+    }
+  });
 
-  // Mock data for demonstration
+  // Load initial data
   useEffect(() => {
-    const mockAcademicYears: AcademicYear[] = [
-      {
-        id: 1,
-        name: "2024-2025",
-        startDate: new Date(2024, 5, 1), // June 1, 2024
-        endDate: new Date(2025, 4, 31), // May 31, 2025
-        isActive: true,
-        semesters: [
-          {
-            id: 1,
-            name: "1st Semester",
-            startDate: new Date(2024, 7, 1), // August 1, 2024
-            endDate: new Date(2024, 11, 20), // December 20, 2024
-            type: '1st',
-            isActive: true,
-          },
-          {
-            id: 2,
-            name: "2nd Semester",
-            startDate: new Date(2025, 0, 15), // January 15, 2025
-            endDate: new Date(2025, 4, 15), // May 15, 2025
-            type: '2nd',
-            isActive: false,
-          },
-          {
-            id: 3,
-            name: "Summer",
-            startDate: new Date(2025, 4, 20), // May 20, 2025
-            endDate: new Date(2025, 6, 15), // July 15, 2025
-            type: 'Summer',
-            isActive: false,
-          },
-        ],
-      },
-    ];
-
-    const mockEvents: AcademicEvent[] = [
-      {
-        id: 1,
-        title: "Enrollment Period - 1st Semester",
-        description: "Regular enrollment for incoming and continuing students",
-        startDate: new Date(2024, 6, 15), // July 15, 2024
-        endDate: new Date(2024, 7, 30), // August 30, 2024
-        allDay: true,
-        category: 'academic',
-        priority: 'high',
-        location: "Registrar's Office",
-        isRecurring: true,
-        recurrencePattern: "yearly",
-        status: 'published',
-        createdBy: "Admin",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        requiresApproval: false,
-        color: "#3B82F6",
-        tags: ["enrollment", "registration"],
-      },
-      {
-        id: 2,
-        title: "Classes Begin - 1st Semester",
-        description: "First day of classes for 1st Semester",
-        startDate: new Date(2024, 7, 1), // August 1, 2024
-        endDate: new Date(2024, 7, 1), // August 1, 2024
-        allDay: true,
-        category: 'academic',
-        priority: 'critical',
-        isRecurring: true,
-        recurrencePattern: "yearly",
-        status: 'published',
-        createdBy: "Admin",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        requiresApproval: false,
-        color: "#3B82F6",
-        tags: ["classes", "semester-start"],
-      },
-      {
-        id: 3,
-        title: "Midterm Examinations",
-        description: "Midterm examination period for all courses",
-        startDate: new Date(2024, 9, 15), // October 15, 2024
-        endDate: new Date(2024, 9, 25), // October 25, 2024
-        allDay: true,
-        category: 'academic',
-        priority: 'high',
-        isRecurring: true,
-        recurrencePattern: "yearly",
-        status: 'published',
-        createdBy: "Admin",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        requiresApproval: false,
-        color: "#3B82F6",
-        tags: ["examinations", "midterm"],
-      },
-      {
-        id: 4,
-        title: "Christmas Break",
-        description: "Christmas and New Year holiday break",
-        startDate: new Date(2024, 11, 20), // December 20, 2024
-        endDate: new Date(2025, 0, 5), // January 5, 2025
-        allDay: true,
-        category: 'holiday',
-        priority: 'medium',
-        isRecurring: true,
-        recurrencePattern: "yearly",
-        status: 'published',
-        createdBy: "Admin",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        requiresApproval: false,
-        color: "#EF4444",
-        tags: ["holiday", "break"],
-      },
-      {
-        id: 5,
-        title: "Faculty Meeting",
-        description: "Monthly faculty meeting to discuss academic matters",
-        startDate: new Date(2024, 7, 15, 14, 0), // August 15, 2024 2:00 PM
-        endDate: new Date(2024, 7, 15, 16, 0), // August 15, 2024 4:00 PM
-        allDay: false,
-        category: 'administrative',
-        priority: 'medium',
-        location: "Conference Room A",
-        attendees: ["All Faculty"],
-        isRecurring: true,
-        recurrencePattern: "monthly",
-        status: 'published',
-        createdBy: "Dean",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        requiresApproval: true,
-        approvedBy: "Admin",
-        approvedAt: new Date(),
-        color: "#F97316",
-        tags: ["faculty", "meeting"],
-      },
-      {
-        id: 6,
-        title: "Payment Deadline",
-        description: "Deadline for tuition fee payment",
-        startDate: new Date(2024, 7, 31), // August 31, 2024
-        endDate: new Date(2024, 7, 31), // August 31, 2024
-        allDay: true,
-        category: 'deadline',
-        priority: 'critical',
-        isRecurring: true,
-        recurrencePattern: "yearly",
-        status: 'published',
-        createdBy: "Finance Office",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        requiresApproval: false,
-        color: "#EAB308",
-        tags: ["payment", "deadline"],
-      },
-    ];
-
-    setAcademicYears(mockAcademicYears);
-    setSelectedYear(mockAcademicYears[0]);
-    setSelectedSemester(mockAcademicYears[0].semesters[0]);
-    setEvents(mockEvents);
+    const initializeData = async () => {
+      setLoading(true);
+      try {
+        await loadAcademicYears();
+        
+        // Load settings from localStorage
+        const savedSettings = localStorage.getItem('academic-calendar-settings');
+        if (savedSettings) {
+          try {
+            setSettings(JSON.parse(savedSettings));
+          } catch (error) {
+            console.error('Error loading settings:', error);
+          }
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    initializeData();
   }, []);
+
+  // Reload events when academic year/semester selection changes
+  useEffect(() => {
+    if (selectedYear && selectedSemester) {
+      loadEvents();
+    } else {
+      // Load events even without academic year/semester selection
+      loadEvents();
+    }
+  }, [selectedYear, selectedSemester]);
+
+  // Reload events when filters change
+  useEffect(() => {
+    loadEvents();
+  }, [filters, search]);
+
+  const loadAcademicYears = async () => {
+    try {
+      setError(null);
+      const response = await fetch('/api/academic-years');
+      if (!response.ok) throw new Error('Failed to fetch academic years');
+      const data = await response.json();
+      setAcademicYears(data);
+      
+      // Auto-select the first academic year and its first semester
+      if (data.length > 0) {
+        setSelectedYear(data[0]);
+        if (data[0].semesters.length > 0) {
+          setSelectedSemester(data[0].semesters[0]);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading academic years:', error);
+      setError('Failed to load academic years');
+    }
+  };
+
+  const loadEvents = async () => {
+    try {
+      setError(null);
+      setEventsLoading(true);
+      
+      // Build query parameters for filtering
+      const params = new URLSearchParams();
+      
+      // Add date range filtering if academic year/semester is selected
+      if (selectedYear && selectedSemester) {
+        const startDate = selectedSemester.startDate instanceof Date 
+          ? selectedSemester.startDate 
+          : new Date(selectedSemester.startDate);
+        const endDate = selectedSemester.endDate instanceof Date 
+          ? selectedSemester.endDate 
+          : new Date(selectedSemester.endDate);
+        
+        params.append('startDate', startDate.toISOString().split('T')[0]);
+        params.append('endDate', endDate.toISOString().split('T')[0]);
+      }
+      
+      // Add other filters
+      if (filters.category !== 'all') {
+        params.append('eventType', filters.category.toUpperCase());
+      }
+      if (filters.status !== 'all') {
+        params.append('status', filters.status.toUpperCase());
+      }
+      if (filters.priority !== 'all') {
+        params.append('priority', filters.priority.toUpperCase());
+      }
+      if (search) {
+        params.append('search', search);
+      }
+      
+      // Add pagination for better performance
+      params.append('pageSize', '100');
+      
+      console.log('Fetching events from:', `/api/events?${params.toString()}`);
+      
+      const response = await fetch(`/api/events?${params.toString()}`);
+      console.log('API Response status:', response.status, response.statusText);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('API Error Response:', errorText);
+        throw new Error(`Failed to fetch events: ${response.status} ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      console.log('API Response data:', data);
+      
+      // Transform the API response to match our AcademicEvent interface
+      const transformedEvents: AcademicEvent[] = data.items?.map((event: any) => {
+        console.log('Transforming event:', event);
+        
+        // The API returns date and startTime/endTime separately, combine them
+        const startDateTime = event.startTime 
+          ? new Date(event.date + 'T' + event.startTime)
+          : new Date(event.date + 'T00:00:00');
+        
+        const endDateTime = event.endTime 
+          ? new Date(event.date + 'T' + event.endTime)
+          : startDateTime;
+
+        const transformedEvent = {
+          id: event.id,
+          title: event.title,
+          description: event.description,
+          startDate: startDateTime,
+          endDate: endDateTime,
+          allDay: !event.startTime || event.startTime === '00:00',
+          category: mapEventTypeToCategory(event.eventType),
+          priority: mapPriorityToLevel(event.priority),
+          location: event.location,
+          isRecurring: false, // TODO: Add recurrence support
+          status: mapStatusToEventStatus(event.status),
+          createdBy: event.createdBy,
+          createdAt: new Date(event.createdAt),
+          updatedAt: new Date(event.updatedAt),
+          requiresApproval: event.requiresRegistration || false,
+          color: getEventColor(mapEventTypeToCategory(event.eventType)),
+          tags: [], // TODO: Add tags support
+        };
+        
+        console.log('Transformed event:', transformedEvent);
+        return transformedEvent;
+      }) || [];
+      
+      console.log('Events loaded from database:', {
+        totalEvents: transformedEvents.length,
+        events: transformedEvents,
+        apiResponse: data
+      });
+      
+      setEvents(transformedEvents);
+    } catch (error) {
+      console.error('Error loading events:', error);
+      setError('Failed to load events');
+    } finally {
+      setEventsLoading(false);
+    }
+  };
+
+  const refreshData = async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([loadAcademicYears(), loadEvents()]);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  // Helper functions for data transformation
+  const mapEventTypeToCategory = (eventType: string): 'academic' | 'administrative' | 'holiday' | 'special' | 'deadline' => {
+    switch (eventType) {
+      case 'ACADEMIC':
+      case 'WORKSHOP':
+      case 'SEMINAR':
+        return 'academic';
+      case 'MEETING':
+        return 'administrative';
+      case 'SOCIAL':
+      case 'SPORTS':
+        return 'holiday';
+      case 'GRADUATION':
+      case 'ORIENTATION':
+        return 'special';
+      case 'OTHER':
+        return 'deadline';
+      default:
+        return 'academic';
+    }
+  };
+
+  const mapPriorityToLevel = (priority: string): 'low' | 'medium' | 'high' | 'critical' => {
+    switch (priority) {
+      case 'LOW':
+        return 'low';
+      case 'NORMAL':
+        return 'medium';
+      case 'HIGH':
+        return 'high';
+      case 'URGENT':
+        return 'critical';
+      default:
+        return 'medium';
+    }
+  };
+
+  const mapStatusToEventStatus = (status: string): 'draft' | 'published' | 'cancelled' => {
+    switch (status) {
+      case 'DRAFT':
+        return 'draft';
+      case 'SCHEDULED':
+      case 'ONGOING':
+      case 'COMPLETED':
+        return 'published';
+      case 'CANCELLED':
+      case 'POSTPONED':
+        return 'cancelled';
+      default:
+        return 'draft';
+    }
+  };
+
+  const getEventColor = (category: string): string => {
+    switch (category) {
+      case 'academic':
+        return '#3B82F6';
+      case 'administrative':
+        return '#F97316';
+      case 'holiday':
+        return '#EF4444';
+      case 'special':
+        return '#8B5CF6';
+      case 'deadline':
+        return '#EAB308';
+      default:
+        return '#6B7280';
+    }
+  };
+
+  // Database mapping functions
+  const mapCategoryToEventType = (category: string): string => {
+    switch (category) {
+      case 'academic':
+        return 'ACADEMIC';
+      case 'administrative':
+        return 'MEETING';
+      case 'holiday':
+        return 'SOCIAL';
+      case 'special':
+        return 'GRADUATION';
+      case 'deadline':
+        return 'OTHER';
+      default:
+        return 'ACADEMIC';
+    }
+  };
+
+  const mapPriorityToDbLevel = (priority: string): string => {
+    switch (priority) {
+      case 'low':
+        return 'LOW';
+      case 'medium':
+        return 'NORMAL';
+      case 'high':
+        return 'HIGH';
+      case 'critical':
+        return 'URGENT';
+      default:
+        return 'NORMAL';
+    }
+  };
 
   const filteredEvents = events.filter(event => {
     const matchesSearch = event.title.toLowerCase().includes(search.toLowerCase()) ||
@@ -916,7 +1105,30 @@ export default function AcademicCalendarPage() {
     const matchesPriority = filters.priority === 'all' || event.priority === filters.priority;
     const matchesStatus = filters.status === 'all' || event.status === filters.status;
     
-    return matchesSearch && matchesCategory && matchesPriority && matchesStatus;
+    const isMatch = matchesSearch && matchesCategory && matchesPriority && matchesStatus;
+    
+    // Debug logging for filtering
+    if (!isMatch) {
+      console.log('Event filtered out:', {
+        title: event.title,
+        matchesSearch,
+        matchesCategory,
+        matchesPriority,
+        matchesStatus,
+        filters,
+        search
+      });
+    }
+    
+    return isMatch;
+  });
+
+  // Debug logging for filtered events
+  console.log('Filtered events:', {
+    totalEvents: events.length,
+    filteredEvents: filteredEvents.length,
+    filters,
+    search
   });
 
   const handleAddEvent = () => {
@@ -931,44 +1143,96 @@ export default function AcademicCalendarPage() {
     setShowExportDialog(true);
   };
 
-  const handleDeleteEvents = () => {
+  const handleDeleteEvents = async () => {
     if (selectedEvents.length === 0) {
       toast.error("Please select events to delete");
       return;
     }
     
-    setEvents(events.filter(event => !selectedEvents.includes(event.id)));
-    setSelectedEvents([]);
-    toast.success(`${selectedEvents.length} event(s) deleted successfully`);
+    try {
+      // Delete events one by one (in a real app, you'd have a bulk delete endpoint)
+      const deletePromises = selectedEvents.map(eventId => 
+        fetch(`/api/events/${eventId}`, {
+          method: 'DELETE',
+          headers: {
+            'x-user-role': 'ADMIN', // TODO: Get from auth context
+            'x-user-id': '1' // TODO: Get from auth context
+          }
+        })
+      );
+      
+      await Promise.all(deletePromises);
+      
+      setEvents(events.filter(event => !selectedEvents.includes(event.id)));
+      setSelectedEvents([]);
+      toast.success(`${selectedEvents.length} event(s) deleted successfully`);
+    } catch (error) {
+      console.error('Error deleting events:', error);
+      toast.error('Failed to delete some events');
+    }
   };
 
-  const handleBulkAction = (action: string) => {
+  const handleBulkAction = async (action: string) => {
     if (selectedEvents.length === 0) {
       toast.error("Please select events first");
       return;
     }
 
-    switch (action) {
-      case 'publish':
-        setEvents(events.map(event => 
-          selectedEvents.includes(event.id) 
-            ? { ...event, status: 'published' as const }
-            : event
-        ));
-        toast.success(`${selectedEvents.length} event(s) published`);
-        break;
-      case 'archive':
-        setEvents(events.map(event => 
-          selectedEvents.includes(event.id) 
-            ? { ...event, status: 'cancelled' as const }
-            : event
-        ));
-        toast.success(`${selectedEvents.length} event(s) archived`);
-        break;
-      default:
-        break;
+    try {
+      const updatePromises = selectedEvents.map(eventId => {
+        const event = events.find(e => e.id === eventId);
+        if (!event) return Promise.resolve();
+
+        let newStatus: string;
+        switch (action) {
+          case 'publish':
+            newStatus = 'SCHEDULED';
+            break;
+          case 'archive':
+            newStatus = 'CANCELLED';
+            break;
+          default:
+            return Promise.resolve();
+        }
+
+        return fetch(`/api/events/${eventId}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-user-role': 'ADMIN', // TODO: Get from auth context
+            'x-user-id': '1' // TODO: Get from auth context
+          },
+          body: JSON.stringify({
+            status: newStatus,
+            title: event.title,
+            description: event.description,
+            eventType: mapCategoryToEventType(event.category),
+            eventDate: event.startDate.toISOString(),
+            endDate: event.endDate.toISOString(),
+            location: event.location,
+            priority: mapPriorityToDbLevel(event.priority),
+            isPublic: true,
+            requiresRegistration: event.requiresApproval,
+            capacity: null,
+            imageUrl: null,
+            contactEmail: null,
+            contactPhone: null
+          })
+        });
+      });
+
+      await Promise.all(updatePromises);
+      
+      // Reload events to get updated data
+      await loadEvents();
+      
+      const actionText = action === 'publish' ? 'published' : 'archived';
+      toast.success(`${selectedEvents.length} event(s) ${actionText}`);
+      setSelectedEvents([]);
+    } catch (error) {
+      console.error('Error performing bulk action:', error);
+      toast.error('Failed to update some events');
     }
-    setSelectedEvents([]);
   };
 
   const getUpcomingEvents = () => {
@@ -990,8 +1254,600 @@ export default function AcademicCalendarPage() {
     return { total, published, pending, critical };
   };
 
+  // Calendar navigation functions
+  const navigateToPrevious = () => {
+    const newDate = new Date(currentDate);
+    if (viewMode === 'month') {
+      newDate.setMonth(newDate.getMonth() - 1);
+    } else if (viewMode === 'week') {
+      newDate.setDate(newDate.getDate() - 7);
+    } else if (viewMode === 'day') {
+      newDate.setDate(newDate.getDate() - 1);
+    }
+    setCurrentDate(newDate);
+  };
+
+  const navigateToNext = () => {
+    const newDate = new Date(currentDate);
+    if (viewMode === 'month') {
+      newDate.setMonth(newDate.getMonth() + 1);
+    } else if (viewMode === 'week') {
+      newDate.setDate(newDate.getDate() + 7);
+    } else if (viewMode === 'day') {
+      newDate.setDate(newDate.getDate() + 1);
+    }
+    setCurrentDate(newDate);
+  };
+
+  const navigateToToday = () => {
+    setCurrentDate(new Date());
+  };
+
+  // Event action handlers
+  const handleViewEvent = (event: AcademicEvent) => {
+    setSelectedEvent(event);
+    setShowEventDetails(true);
+  };
+
+  const handleEditEvent = (event: AcademicEvent) => {
+    setSelectedEvent(event);
+    setShowEditEvent(true);
+  };
+
+  const handleDeleteEvent = async (eventId: number) => {
+    try {
+      const response = await fetch(`/api/events/${eventId}`, {
+        method: 'DELETE',
+        headers: {
+          'x-user-role': 'ADMIN', // TODO: Get from auth context
+          'x-user-id': '1' // TODO: Get from auth context
+        }
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete event');
+      }
+
+      setEvents(events.filter(e => e.id !== eventId));
+      toast.success('Event deleted successfully');
+    } catch (error) {
+      console.error('Error deleting event:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to delete event');
+    }
+  };
+
+  // Form validation
+  const validateForm = () => {
+    const errors: Record<string, string> = {};
+    
+    if (!newEvent.title.trim()) {
+      errors.title = 'Event title is required';
+    }
+    
+    if (!newEvent.startDate) {
+      errors.startDate = 'Start date is required';
+    }
+    
+    if (!newEvent.endDate) {
+      errors.endDate = 'End date is required';
+    }
+    
+    if (newEvent.startDate && newEvent.endDate) {
+      const startDate = new Date(newEvent.startDate);
+      const endDate = new Date(newEvent.endDate);
+      
+      if (endDate <= startDate) {
+        errors.endDate = 'End date must be after start date';
+      }
+    }
+    
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  // Handle form input changes
+  const handleFormChange = (field: string, value: any) => {
+    setNewEvent(prev => ({ ...prev, [field]: value }));
+    // Clear error when user starts typing
+    if (formErrors[field]) {
+      setFormErrors(prev => ({ ...prev, [field]: '' }));
+    }
+  };
+
+  // Handle form submission
+  const handleAddEventSubmit = async () => {
+    if (!validateForm()) {
+      toast.error('Please fix the form errors');
+      return;
+    }
+
+    try {
+      const eventData = {
+        title: newEvent.title,
+        description: newEvent.description,
+        eventType: mapCategoryToEventType(newEvent.category),
+        eventDate: newEvent.startDate,
+        endDate: newEvent.endDate,
+        location: newEvent.location,
+        priority: mapPriorityToDbLevel(newEvent.priority),
+        isPublic: true,
+        requiresRegistration: newEvent.requiresApproval,
+        capacity: null,
+        imageUrl: null,
+        contactEmail: null,
+        contactPhone: null
+      };
+
+      const response = await fetch('/api/events', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-role': 'ADMIN', // TODO: Get from auth context
+          'x-user-id': '1' // TODO: Get from auth context
+        },
+        body: JSON.stringify(eventData)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to create event');
+      }
+
+      const createdEvent = await response.json();
+      
+      // Transform the created event to match our interface
+      const transformedEvent: AcademicEvent = {
+        id: createdEvent.eventId,
+        title: createdEvent.title,
+        description: createdEvent.description,
+        startDate: new Date(createdEvent.eventDate),
+        endDate: createdEvent.endDate ? new Date(createdEvent.endDate) : new Date(createdEvent.eventDate),
+        allDay: false, // TODO: Determine from time
+        category: mapEventTypeToCategory(createdEvent.eventType),
+        priority: mapPriorityToLevel(createdEvent.priority),
+        location: createdEvent.location,
+        attendees: [],
+        isRecurring: false,
+        recurrencePattern: undefined,
+        status: mapStatusToEventStatus(createdEvent.status),
+        createdBy: createdEvent.createdByAdmin?.userName || 'Unknown',
+        createdAt: new Date(createdEvent.createdAt),
+        updatedAt: new Date(createdEvent.updatedAt),
+        requiresApproval: false,
+        color: getEventColor(mapEventTypeToCategory(createdEvent.eventType)),
+        tags: []
+      };
+
+      setEvents(prev => [...prev, transformedEvent]);
+      setShowAddEvent(false);
+      setNewEvent({
+        title: '',
+        description: '',
+        category: 'academic',
+        priority: 'medium',
+        startDate: '',
+        endDate: '',
+        location: '',
+        allDay: false,
+        recurring: false,
+        requiresApproval: false
+      });
+      setFormErrors({});
+      toast.success('Event added successfully');
+    } catch (error) {
+      console.error('Error creating event:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to create event');
+    }
+  };
+
+  // Reset form when dialog closes
+  const handleAddEventClose = () => {
+    setShowAddEvent(false);
+    setNewEvent({
+      title: '',
+      description: '',
+      category: 'academic',
+      priority: 'medium',
+      startDate: '',
+      endDate: '',
+      location: '',
+      allDay: false,
+      recurring: false,
+      requiresApproval: false
+    });
+    setFormErrors({});
+  };
+
+  // Import functionality
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setImportFile(file);
+    }
+  };
+
+  const parseCSV = (csvText: string): AcademicEvent[] => {
+    const lines = csvText.split('\n');
+    const headers = lines[0].split(',').map(h => h.trim());
+    const events: AcademicEvent[] = [];
+
+    for (let i = 1; i < lines.length; i++) {
+      if (lines[i].trim()) {
+        const values = lines[i].split(',').map(v => v.trim());
+        const event: AcademicEvent = {
+          id: Date.now() + i,
+          title: values[0] || '',
+          description: values[1] || '',
+          startDate: new Date(values[2] || new Date()),
+          endDate: new Date(values[3] || new Date()),
+          allDay: values[4] === 'true',
+          category: (values[5] as any) || 'academic',
+          priority: (values[6] as any) || 'medium',
+          location: values[7] || '',
+          attendees: values[8] ? values[8].split(';') : [],
+          isRecurring: values[9] === 'true',
+          recurrencePattern: values[10] || undefined,
+          status: 'draft',
+          createdBy: 'Imported User',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          requiresApproval: values[11] === 'true',
+          color: getEventColor((values[5] as any) || 'academic'),
+          tags: values[12] ? values[12].split(';') : []
+        };
+        events.push(event);
+      }
+    }
+    return events;
+  };
+
+  const handleImport = async () => {
+    if (!importFile) {
+      toast.error('Please select a file to import');
+      return;
+    }
+
+    setIsImporting(true);
+    setImportProgress(0);
+
+    try {
+      const text = await importFile.text();
+      const importedEvents = parseCSV(text);
+      
+      // Create events in database
+      const createPromises = importedEvents.map(async (event, index) => {
+        // Update progress
+        setImportProgress(Math.round(((index + 1) / importedEvents.length) * 100));
+        
+        const eventData = {
+          title: event.title,
+          description: event.description,
+          eventType: mapCategoryToEventType(event.category),
+          eventDate: event.startDate.toISOString(),
+          endDate: event.endDate.toISOString(),
+          location: event.location,
+          priority: mapPriorityToDbLevel(event.priority),
+          isPublic: true,
+          requiresRegistration: event.requiresApproval,
+          capacity: null,
+          imageUrl: null,
+          contactEmail: null,
+          contactPhone: null
+        };
+
+        const response = await fetch('/api/events', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-user-role': 'ADMIN', // TODO: Get from auth context
+            'x-user-id': '1' // TODO: Get from auth context
+          },
+          body: JSON.stringify(eventData)
+        });
+
+        if (!response.ok) {
+          console.error(`Failed to create event: ${event.title}`);
+        }
+      });
+
+      await Promise.all(createPromises);
+
+      // Reload events from database
+      await loadEvents();
+      
+      setShowImportDialog(false);
+      setImportFile(null);
+      setImportProgress(0);
+      toast.success(`${importedEvents.length} events imported successfully`);
+    } catch (error) {
+      console.error('Import error:', error);
+      toast.error('Failed to import events. Please check the file format.');
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  // Export functionality
+  const generateCSV = (events: AcademicEvent[]): string => {
+    const headers = [
+      'Title', 'Description', 'Start Date', 'End Date', 'All Day', 
+      'Category', 'Priority', 'Location', 'Attendees', 'Recurring', 
+      'Recurrence Pattern', 'Requires Approval', 'Tags'
+    ];
+    
+    const rows = events.map(event => [
+      event.title,
+      event.description || '',
+      event.startDate.toISOString(),
+      event.endDate.toISOString(),
+      event.allDay.toString(),
+      event.category,
+      event.priority,
+      event.location || '',
+      event.attendees?.join(';') || '',
+      event.isRecurring.toString(),
+      event.recurrencePattern || '',
+      event.requiresApproval.toString(),
+      event.tags?.join(';') || ''
+    ]);
+
+    return [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
+  };
+
+  const generateICal = (events: AcademicEvent[]): string => {
+    let ical = 'BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//ICCT//Academic Calendar//EN\n';
+    
+    events.forEach(event => {
+      ical += 'BEGIN:VEVENT\n';
+      ical += `UID:${event.id}@icct.edu\n`;
+      ical += `DTSTART:${event.startDate.toISOString().replace(/[-:]/g, '').split('.')[0]}Z\n`;
+      ical += `DTEND:${event.endDate.toISOString().replace(/[-:]/g, '').split('.')[0]}Z\n`;
+      ical += `SUMMARY:${event.title}\n`;
+      if (event.description) {
+        ical += `DESCRIPTION:${event.description}\n`;
+      }
+      if (event.location) {
+        ical += `LOCATION:${event.location}\n`;
+      }
+      ical += 'END:VEVENT\n';
+    });
+    
+    ical += 'END:VCALENDAR';
+    return ical;
+  };
+
+  const handleExport = async () => {
+    setIsExporting(true);
+    
+    try {
+      let content = '';
+      let mimeType = '';
+      let fileExtension = '';
+      
+      switch (exportFormat) {
+        case 'csv':
+          content = generateCSV(events);
+          mimeType = 'text/csv';
+          fileExtension = 'csv';
+          break;
+        case 'ical':
+          content = generateICal(events);
+          mimeType = 'text/calendar';
+          fileExtension = 'ics';
+          break;
+        case 'xlsx':
+          // For Excel, we'll use CSV format as a fallback
+          content = generateCSV(events);
+          mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+          fileExtension = 'xlsx';
+          break;
+        case 'pdf':
+          // For PDF, we'll use CSV format as a fallback
+          content = generateCSV(events);
+          mimeType = 'application/pdf';
+          fileExtension = 'pdf';
+          break;
+      }
+
+      const blob = new Blob([content], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `academic-calendar-${new Date().toISOString().split('T')[0]}.${fileExtension}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      
+      setShowExportDialog(false);
+      toast.success(`Events exported to ${exportFormat.toUpperCase()} successfully`);
+    } catch (error) {
+      console.error('Export error:', error);
+      toast.error('Failed to export events');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  // Settings management
+  const handleSettingsChange = (category: string, setting: string, value: boolean) => {
+    setSettings(prev => ({
+      ...prev,
+      [category]: {
+        ...prev[category as keyof typeof prev],
+        [setting]: value
+      }
+    }));
+  };
+
+  const handleSaveSettings = async () => {
+    try {
+      // Save to localStorage for now (in a real app, this would be saved to database)
+      localStorage.setItem('academic-calendar-settings', JSON.stringify(settings));
+      
+      // TODO: Add API call to save settings to database
+      // const response = await fetch('/api/settings/academic-calendar', {
+      //   method: 'POST',
+      //   headers: {
+      //     'Content-Type': 'application/json',
+      //     'x-user-role': 'ADMIN',
+      //     'x-user-id': '1'
+      //   },
+      //   body: JSON.stringify(settings)
+      // });
+      
+      setShowSettings(false);
+      toast.success('Settings saved successfully');
+    } catch (error) {
+      console.error('Error saving settings:', error);
+      toast.error('Failed to save settings');
+    }
+  };
+
+  const handleResetSettings = () => {
+    const defaultSettings = {
+      notifications: {
+        email: true,
+        push: false,
+        reminders: true
+      },
+      display: {
+        showWeekends: true,
+        showHolidays: true,
+        colorCoding: true
+      },
+      integration: {
+        googleSync: false,
+        outlookSync: false
+      }
+    };
+    setSettings(defaultSettings);
+    toast.success('Settings reset to defaults');
+  };
+
+  // Quick action handlers
+  const handleSetReminders = () => {
+    toast.info('Reminder settings will be available in the Settings dialog');
+    setShowSettings(true);
+  };
+
+  const handleShareCalendar = () => {
+    const shareUrl = window.location.href;
+    if (navigator.share) {
+      navigator.share({
+        title: 'ICCT Academic Calendar',
+        text: 'Check out our academic calendar',
+        url: shareUrl
+      });
+    } else {
+      navigator.clipboard.writeText(shareUrl);
+      toast.success('Calendar link copied to clipboard');
+    }
+  };
+
+  const handleGenerateReport = () => {
+    const reportData = {
+      totalEvents: events.length,
+      publishedEvents: events.filter(e => e.status === 'published').length,
+      draftEvents: events.filter(e => e.status === 'draft').length,
+      criticalEvents: events.filter(e => e.priority === 'critical').length,
+      upcomingEvents: events.filter(e => e.startDate > new Date()).length,
+      generatedAt: new Date().toISOString()
+    };
+
+    const reportContent = `
+ICCT Academic Calendar Report
+Generated: ${new Date().toLocaleDateString()}
+
+Summary:
+- Total Events: ${reportData.totalEvents}
+- Published Events: ${reportData.publishedEvents}
+- Draft Events: ${reportData.draftEvents}
+- Critical Events: ${reportData.criticalEvents}
+- Upcoming Events: ${reportData.upcomingEvents}
+
+Event Categories:
+${Object.entries(EVENT_CATEGORIES).map(([key, value]) => 
+  `- ${value.label}: ${events.filter(e => e.category === key).length}`
+).join('\n')}
+    `.trim();
+
+    const blob = new Blob([reportContent], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `academic-calendar-report-${new Date().toISOString().split('T')[0]}.txt`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    
+    toast.success('Calendar report generated successfully');
+  };
+
   const stats = getEventStats();
   const upcomingEvents = getUpcomingEvents();
+
+  // Show loading state
+  if (loading) {
+    return (
+      <div className="flex flex-col min-h-screen p-6 bg-gray-50">
+        <PageHeader
+          title="Academic Calendar"
+          subtitle="Manage academic events, deadlines, and important dates"
+          breadcrumbs={[
+            { label: 'Home', href: '/' },
+            { label: 'Academic Management', href: '/academic-management' },
+            { label: 'Academic Calendar' }
+          ]}
+        />
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-gray-600">Loading calendar data...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state
+  if (error) {
+    return (
+      <div className="flex flex-col min-h-screen p-6 bg-gray-50">
+        <PageHeader
+          title="Academic Calendar"
+          subtitle="Manage academic events, deadlines, and important dates"
+          breadcrumbs={[
+            { label: 'Home', href: '/' },
+            { label: 'Academic Management', href: '/academic-management' },
+            { label: 'Academic Calendar' }
+          ]}
+        />
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center">
+            <AlertTriangle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">Error Loading Calendar</h3>
+            <p className="text-gray-600 mb-4">{error}</p>
+            <Button onClick={refreshData} disabled={refreshing}>
+              {refreshing ? (
+                <>
+                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                  Retrying...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                  Try Again
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col min-h-screen p-6 bg-gray-50">
@@ -1009,8 +1865,103 @@ export default function AcademicCalendarPage() {
 
 
 
+      {/* Database Status & Stats */}
+      <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-medium text-blue-900">Database Connection Status</h3>
+            <p className="text-xs text-blue-700">
+              Events loaded: {events.length} | 
+              Filtered: {filteredEvents.length} | 
+              Academic Year: {selectedYear?.name || 'None'} | 
+              Semester: {selectedSemester?.name || 'None'}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className={`w-2 h-2 rounded-full ${events.length > 0 ? 'bg-green-500' : 'bg-yellow-500'}`}></div>
+            <span className="text-xs text-blue-700">
+              {events.length > 0 ? 'Connected' : 'No data'}
+            </span>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={loadEvents}
+              disabled={eventsLoading}
+              className="ml-2"
+            >
+              <RefreshCw className={`w-3 h-3 ${eventsLoading ? 'animate-spin' : ''}`} />
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={async () => {
+                try {
+                  const testEvent = {
+                    title: 'Test Academic Event',
+                    description: 'This is a test event created to verify the calendar display',
+                    eventType: 'ACADEMIC',
+                    eventDate: new Date().toISOString(),
+                    endDate: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
+                    location: 'Test Location',
+                    priority: 'NORMAL',
+                    isPublic: true,
+                    requiresRegistration: false,
+                    capacity: null,
+                    imageUrl: null,
+                    contactEmail: null,
+                    contactPhone: null
+                  };
+
+                  const response = await fetch('/api/events', {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'x-user-role': 'ADMIN',
+                      'x-user-id': '1'
+                    },
+                    body: JSON.stringify(testEvent)
+                  });
+
+                  if (response.ok) {
+                    toast.success('Test event created successfully');
+                    await loadEvents(); // Reload events
+                  } else {
+                    const error = await response.text();
+                    toast.error(`Failed to create test event: ${error}`);
+                  }
+                } catch (error) {
+                  console.error('Error creating test event:', error);
+                  toast.error('Failed to create test event');
+                }
+              }}
+              className="ml-2"
+            >
+              Create Test Event
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={async () => {
+                try {
+                  const response = await fetch('/api/events');
+                  const data = await response.json();
+                  console.log('Database check - Raw API response:', data);
+                  toast.info(`Database has ${data.items?.length || 0} events`);
+                } catch (error) {
+                  console.error('Database check error:', error);
+                  toast.error('Failed to check database');
+                }
+              }}
+              className="ml-2"
+            >
+              Check DB
+            </Button>
+          </div>
+        </div>
+      </div>
+
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6 pt-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Events</CardTitle>
@@ -1091,7 +2042,7 @@ export default function AcademicCalendarPage() {
               ) : (
                 <div className="space-y-3">
                   {upcomingEvents.map(event => (
-                    <div key={event.id} className="p-3 border rounded-lg">
+                    <div key={event.id} className="p-3 border rounded">
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
                           <h4 className="font-medium text-sm">{event.title}</h4>
@@ -1134,21 +2085,27 @@ export default function AcademicCalendarPage() {
                   <Plus className="w-4 h-4 mr-2" />
                   Add Event
                 </Button>
-                <Button variant="outline" size="sm" className="w-full justify-start">
+                <Button variant="outline" size="sm" className="w-full justify-start" onClick={handleSetReminders}>
                   <Bell className="w-4 h-4 mr-2" />
                   Set Reminders
                 </Button>
-                <Button variant="outline" size="sm" className="w-full justify-start">
+                <Button variant="outline" size="sm" className="w-full justify-start" onClick={handleShareCalendar}>
                   <Share2 className="w-4 h-4 mr-2" />
                   Share Calendar
                 </Button>
-                <Button variant="outline" size="sm" className="w-full justify-start">
+                <Button variant="outline" size="sm" className="w-full justify-start" onClick={handleGenerateReport}>
                   <FileText className="w-4 h-4 mr-2" />
                   Generate Report
                 </Button>
-                <Button variant="outline" size="sm" className="w-full justify-start">
-                  <RefreshCw className="w-4 h-4 mr-2" />
-                  Sync Calendar
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="w-full justify-start" 
+                  onClick={refreshData}
+                  disabled={refreshing}
+                >
+                  <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
+                  {refreshing ? 'Syncing...' : 'Sync Calendar'}
                 </Button>
               </div>
             </CardContent>
@@ -1188,14 +2145,23 @@ export default function AcademicCalendarPage() {
                 </div>
                 
                 <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm">
+                  <Button variant="outline" size="sm" onClick={navigateToPrevious}>
                     <ChevronLeft className="w-4 h-4" />
                   </Button>
-                  <Button variant="outline" size="sm">
+                  <Button variant="outline" size="sm" onClick={navigateToToday}>
                     Today
                   </Button>
-                  <Button variant="outline" size="sm">
+                  <Button variant="outline" size="sm" onClick={navigateToNext}>
                     <ChevronRight className="w-4 h-4" />
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={loadEvents}
+                    disabled={loading}
+                    className="ml-2"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                   </Button>
                 </div>
               </div>
@@ -1226,17 +2192,27 @@ export default function AcademicCalendarPage() {
 
               {/* Calendar Content */}
               <div className="min-h-[600px]">
-                {viewMode === 'month' && (
+                {eventsLoading && (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="text-center">
+                      <RefreshCw className="w-8 h-8 animate-spin text-blue-600 mx-auto mb-4" />
+                      <p className="text-gray-600">Loading events from database...</p>
+                    </div>
+                  </div>
+                )}
+                
+                {!eventsLoading && (
+                  <>
+                    {viewMode === 'month' && (
                   <CalendarView 
                     events={filteredEvents}
                     currentDate={currentDate}
                     viewMode="month"
                     selectedEvents={selectedEvents}
                     onEventSelect={(eventId) => {
-                      if (selectedEvents.includes(eventId)) {
-                        setSelectedEvents(selectedEvents.filter(id => id !== eventId));
-                      } else {
-                        setSelectedEvents([...selectedEvents, eventId]);
+                      const event = events.find(e => e.id === eventId);
+                      if (event) {
+                        handleViewEvent(event);
                       }
                     }}
                   />
@@ -1249,10 +2225,9 @@ export default function AcademicCalendarPage() {
                     viewMode="week"
                     selectedEvents={selectedEvents}
                     onEventSelect={(eventId) => {
-                      if (selectedEvents.includes(eventId)) {
-                        setSelectedEvents(selectedEvents.filter(id => id !== eventId));
-                      } else {
-                        setSelectedEvents([...selectedEvents, eventId]);
+                      const event = events.find(e => e.id === eventId);
+                      if (event) {
+                        handleViewEvent(event);
                       }
                     }}
                   />
@@ -1265,10 +2240,9 @@ export default function AcademicCalendarPage() {
                     viewMode="day"
                     selectedEvents={selectedEvents}
                     onEventSelect={(eventId) => {
-                      if (selectedEvents.includes(eventId)) {
-                        setSelectedEvents(selectedEvents.filter(id => id !== eventId));
-                      } else {
-                        setSelectedEvents([...selectedEvents, eventId]);
+                      const event = events.find(e => e.id === eventId);
+                      if (event) {
+                        handleViewEvent(event);
                       }
                     }}
                   />
@@ -1279,14 +2253,25 @@ export default function AcademicCalendarPage() {
                     {filteredEvents.length === 0 ? (
                       <div className="text-center py-12">
                         <Calendar className="mx-auto h-12 w-12 text-gray-400" />
-                        <h3 className="mt-2 text-sm font-medium text-gray-900">No events found</h3>
+                        <h3 className="mt-2 text-sm font-medium text-gray-900">
+                          {events.length === 0 ? 'No events available' : 'No events found'}
+                        </h3>
                         <p className="mt-1 text-sm text-gray-500">
-                          Try adjusting your filters or create a new event.
+                          {events.length === 0 
+                            ? 'Start by creating your first academic event.'
+                            : 'Try adjusting your filters or create a new event.'
+                          }
                         </p>
+                        {events.length === 0 && (
+                          <Button className="mt-4" onClick={handleAddEvent}>
+                            <Plus className="w-4 h-4 mr-2" />
+                            Create First Event
+                          </Button>
+                        )}
                       </div>
                     ) : (
                       filteredEvents.map(event => (
-                        <div key={event.id} className="flex items-center justify-between p-4 border rounded-lg">
+                        <div key={event.id} className="flex items-center justify-between p-4 border rounded">
                           <div className="flex items-center gap-4">
                             <Checkbox
                               checked={selectedEvents.includes(event.id)}
@@ -1313,20 +2298,33 @@ export default function AcademicCalendarPage() {
                               <p className="text-sm text-gray-500 mt-1">
                                 {event.startDate.toLocaleDateString()} - {event.endDate.toLocaleDateString()}
                               </p>
+                              {event.location && (
+                                <p className="text-sm text-gray-500 mt-1">
+                                  📍 {event.location}
+                                </p>
+                              )}
                               {event.description && (
                                 <p className="text-sm text-gray-600 mt-1">{event.description}</p>
                               )}
+                              <div className="flex items-center gap-2 mt-2">
+                                <span className="text-xs text-gray-400">
+                                  Created by: {event.createdBy}
+                                </span>
+                                <span className="text-xs text-gray-400">
+                                  Status: {event.status}
+                                </span>
+                              </div>
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
-                            <Button variant="ghost" size="sm">
+                            <Button variant="ghost" size="sm" onClick={() => handleViewEvent(event)}>
                               <Eye className="w-4 h-4" />
                             </Button>
-                            <Button variant="ghost" size="sm">
+                            <Button variant="ghost" size="sm" onClick={() => handleEditEvent(event)}>
                               <Edit className="w-4 h-4" />
                             </Button>
-                            <Button variant="ghost" size="sm">
-                              <MoreHorizontal className="w-4 h-4" />
+                            <Button variant="ghost" size="sm" onClick={() => handleDeleteEvent(event.id)}>
+                              <Trash2 className="w-4 h-4" />
                             </Button>
                           </div>
                         </div>
@@ -1342,13 +2340,14 @@ export default function AcademicCalendarPage() {
                     viewMode="timeline"
                     selectedEvents={selectedEvents}
                     onEventSelect={(eventId) => {
-                      if (selectedEvents.includes(eventId)) {
-                        setSelectedEvents(selectedEvents.filter(id => id !== eventId));
-                      } else {
-                        setSelectedEvents([...selectedEvents, eventId]);
+                      const event = events.find(e => e.id === eventId);
+                      if (event) {
+                        handleViewEvent(event);
                       }
                     }}
                   />
+                )}
+                  </>
                 )}
               </div>
             </CardContent>
@@ -1357,7 +2356,7 @@ export default function AcademicCalendarPage() {
       </div>
 
       {/* Add Event Dialog */}
-      <Dialog open={showAddEvent} onOpenChange={setShowAddEvent}>
+      <Dialog open={showAddEvent} onOpenChange={handleAddEventClose}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Add New Event</DialogTitle>
@@ -1365,12 +2364,24 @@ export default function AcademicCalendarPage() {
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="title">Event Title</Label>
-                <Input id="title" placeholder="Enter event title" />
+                <Label htmlFor="title">Event Title *</Label>
+                <Input 
+                  id="title" 
+                  placeholder="Enter event title" 
+                  value={newEvent.title}
+                  onChange={(e) => handleFormChange('title', e.target.value)}
+                  className={formErrors.title ? 'border-red-500' : ''}
+                />
+                {formErrors.title && (
+                  <p className="text-sm text-red-500 mt-1">{formErrors.title}</p>
+                )}
               </div>
               <div>
                 <Label htmlFor="category">Category</Label>
-                <Select>
+                <Select 
+                  value={newEvent.category} 
+                  onValueChange={(value) => handleFormChange('category', value)}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Select category" />
                   </SelectTrigger>
@@ -1385,24 +2396,50 @@ export default function AcademicCalendarPage() {
             
             <div>
               <Label htmlFor="description">Description</Label>
-              <Textarea id="description" placeholder="Enter event description" />
+              <Textarea 
+                id="description" 
+                placeholder="Enter event description" 
+                value={newEvent.description}
+                onChange={(e) => handleFormChange('description', e.target.value)}
+              />
             </div>
             
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="startDate">Start Date</Label>
-                <Input id="startDate" type="datetime-local" />
+                <Label htmlFor="startDate">Start Date *</Label>
+                <Input 
+                  id="startDate" 
+                  type="datetime-local" 
+                  value={newEvent.startDate}
+                  onChange={(e) => handleFormChange('startDate', e.target.value)}
+                  className={formErrors.startDate ? 'border-red-500' : ''}
+                />
+                {formErrors.startDate && (
+                  <p className="text-sm text-red-500 mt-1">{formErrors.startDate}</p>
+                )}
               </div>
               <div>
-                <Label htmlFor="endDate">End Date</Label>
-                <Input id="endDate" type="datetime-local" />
+                <Label htmlFor="endDate">End Date *</Label>
+                <Input 
+                  id="endDate" 
+                  type="datetime-local" 
+                  value={newEvent.endDate}
+                  onChange={(e) => handleFormChange('endDate', e.target.value)}
+                  className={formErrors.endDate ? 'border-red-500' : ''}
+                />
+                {formErrors.endDate && (
+                  <p className="text-sm text-red-500 mt-1">{formErrors.endDate}</p>
+                )}
               </div>
             </div>
             
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="priority">Priority</Label>
-                <Select>
+                <Select 
+                  value={newEvent.priority} 
+                  onValueChange={(value) => handleFormChange('priority', value)}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Select priority" />
                   </SelectTrigger>
@@ -1415,33 +2452,49 @@ export default function AcademicCalendarPage() {
               </div>
               <div>
                 <Label htmlFor="location">Location</Label>
-                <Input id="location" placeholder="Enter location" />
+                <Input 
+                  id="location" 
+                  placeholder="Enter location" 
+                  value={newEvent.location}
+                  onChange={(e) => handleFormChange('location', e.target.value)}
+                />
               </div>
             </div>
             
-            <div className="flex items-center space-x-2">
-              <Checkbox id="allDay" />
-              <Label htmlFor="allDay">All day event</Label>
-            </div>
-            
-            <div className="flex items-center space-x-2">
-              <Checkbox id="recurring" />
-              <Label htmlFor="recurring">Recurring event</Label>
-            </div>
-            
-            <div className="flex items-center space-x-2">
-              <Checkbox id="requiresApproval" />
-              <Label htmlFor="requiresApproval">Requires approval</Label>
+            <div className="space-y-3">
+              <div className="flex items-center space-x-2">
+                <Checkbox 
+                  id="allDay" 
+                  checked={newEvent.allDay}
+                  onCheckedChange={(checked) => handleFormChange('allDay', checked)}
+                />
+                <Label htmlFor="allDay">All day event</Label>
+              </div>
+              
+              <div className="flex items-center space-x-2">
+                <Checkbox 
+                  id="recurring" 
+                  checked={newEvent.recurring}
+                  onCheckedChange={(checked) => handleFormChange('recurring', checked)}
+                />
+                <Label htmlFor="recurring">Recurring event</Label>
+              </div>
+              
+              <div className="flex items-center space-x-2">
+                <Checkbox 
+                  id="requiresApproval" 
+                  checked={newEvent.requiresApproval}
+                  onCheckedChange={(checked) => handleFormChange('requiresApproval', checked)}
+                />
+                <Label htmlFor="requiresApproval">Requires approval</Label>
+              </div>
             </div>
             
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setShowAddEvent(false)}>
+              <Button variant="outline" onClick={handleAddEventClose}>
                 Cancel
               </Button>
-              <Button onClick={() => {
-                toast.success("Event added successfully");
-                setShowAddEvent(false);
-              }}>
+              <Button onClick={handleAddEventSubmit}>
                 Add Event
               </Button>
             </div>
@@ -1457,18 +2510,55 @@ export default function AcademicCalendarPage() {
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label htmlFor="importFile">Select File</Label>
-              <Input id="importFile" type="file" accept=".csv,.xlsx" />
+              <Label htmlFor="importFile">Select CSV File</Label>
+              <Input 
+                id="importFile" 
+                type="file" 
+                accept=".csv" 
+                onChange={handleFileSelect}
+                disabled={isImporting}
+              />
+              {importFile && (
+                <p className="text-sm text-gray-600 mt-1">
+                  Selected: {importFile.name} ({(importFile.size / 1024).toFixed(1)} KB)
+                </p>
+              )}
             </div>
+            
+            {isImporting && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span>Importing events...</span>
+                  <span>{importProgress}%</span>
+                </div>
+                <Progress value={importProgress} className="w-full" />
+              </div>
+            )}
+            
+            <div className="bg-blue-50 p-3 rounded-lg">
+              <h4 className="font-medium text-blue-900 mb-2">CSV Format Requirements:</h4>
+              <p className="text-sm text-blue-800">
+                Your CSV file should have the following columns: Title, Description, Start Date, End Date, All Day, Category, Priority, Location, Attendees, Recurring, Recurrence Pattern, Requires Approval, Tags
+              </p>
+            </div>
+            
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setShowImportDialog(false)}>
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setShowImportDialog(false);
+                  setImportFile(null);
+                  setImportProgress(0);
+                }}
+                disabled={isImporting}
+              >
                 Cancel
               </Button>
-              <Button onClick={() => {
-                toast.success("Events imported successfully");
-                setShowImportDialog(false);
-              }}>
-                Import
+              <Button 
+                onClick={handleImport}
+                disabled={!importFile || isImporting}
+              >
+                {isImporting ? 'Importing...' : 'Import Events'}
               </Button>
             </div>
           </div>
@@ -1483,28 +2573,51 @@ export default function AcademicCalendarPage() {
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label htmlFor="exportFormat">Format</Label>
-              <Select>
+              <Label htmlFor="exportFormat">Export Format</Label>
+              <Select 
+                value={exportFormat} 
+                onValueChange={(value: any) => setExportFormat(value)}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Select format" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="csv">CSV</SelectItem>
-                  <SelectItem value="xlsx">Excel</SelectItem>
-                  <SelectItem value="pdf">PDF</SelectItem>
-                  <SelectItem value="ical">iCal</SelectItem>
+                  <SelectItem value="csv">CSV (Comma Separated Values)</SelectItem>
+                  <SelectItem value="xlsx">Excel Spreadsheet</SelectItem>
+                  <SelectItem value="pdf">PDF Document</SelectItem>
+                  <SelectItem value="ical">iCal Calendar</SelectItem>
                 </SelectContent>
               </Select>
             </div>
+            
+            <div className="bg-gray-50 p-3 rounded-lg">
+              <h4 className="font-medium text-gray-900 mb-2">Export Information:</h4>
+              <p className="text-sm text-gray-600">
+                Exporting {events.length} events to {exportFormat.toUpperCase()} format.
+                {exportFormat === 'ical' && ' This format is compatible with Google Calendar, Outlook, and other calendar applications.'}
+              </p>
+            </div>
+            
+            {isExporting && (
+              <div className="flex items-center gap-2 text-sm text-gray-600">
+                <RefreshCw className="w-4 h-4 animate-spin" />
+                <span>Preparing export...</span>
+              </div>
+            )}
+            
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setShowExportDialog(false)}>
+              <Button 
+                variant="outline" 
+                onClick={() => setShowExportDialog(false)}
+                disabled={isExporting}
+              >
                 Cancel
               </Button>
-              <Button onClick={() => {
-                toast.success("Events exported successfully");
-                setShowExportDialog(false);
-              }}>
-                Export
+              <Button 
+                onClick={handleExport}
+                disabled={isExporting || events.length === 0}
+              >
+                {isExporting ? 'Exporting...' : `Export to ${exportFormat.toUpperCase()}`}
               </Button>
             </div>
           </div>
@@ -1523,15 +2636,27 @@ export default function AcademicCalendarPage() {
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="emailNotif">Email Notifications</Label>
-                  <Switch id="emailNotif" />
+                  <Switch 
+                    id="emailNotif" 
+                    checked={settings.notifications.email}
+                    onCheckedChange={(checked) => handleSettingsChange('notifications', 'email', checked)}
+                  />
                 </div>
                 <div className="flex items-center justify-between">
                   <Label htmlFor="pushNotif">Push Notifications</Label>
-                  <Switch id="pushNotif" />
+                  <Switch 
+                    id="pushNotif" 
+                    checked={settings.notifications.push}
+                    onCheckedChange={(checked) => handleSettingsChange('notifications', 'push', checked)}
+                  />
                 </div>
                 <div className="flex items-center justify-between">
                   <Label htmlFor="reminderNotif">Reminder Notifications</Label>
-                  <Switch id="reminderNotif" />
+                  <Switch 
+                    id="reminderNotif" 
+                    checked={settings.notifications.reminders}
+                    onCheckedChange={(checked) => handleSettingsChange('notifications', 'reminders', checked)}
+                  />
                 </div>
               </div>
             </div>
@@ -1543,15 +2668,27 @@ export default function AcademicCalendarPage() {
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="showWeekends">Show Weekends</Label>
-                  <Switch id="showWeekends" defaultChecked />
+                  <Switch 
+                    id="showWeekends" 
+                    checked={settings.display.showWeekends}
+                    onCheckedChange={(checked) => handleSettingsChange('display', 'showWeekends', checked)}
+                  />
                 </div>
                 <div className="flex items-center justify-between">
                   <Label htmlFor="showHolidays">Show Holidays</Label>
-                  <Switch id="showHolidays" defaultChecked />
+                  <Switch 
+                    id="showHolidays" 
+                    checked={settings.display.showHolidays}
+                    onCheckedChange={(checked) => handleSettingsChange('display', 'showHolidays', checked)}
+                  />
                 </div>
                 <div className="flex items-center justify-between">
                   <Label htmlFor="colorCoding">Color Coding</Label>
-                  <Switch id="colorCoding" defaultChecked />
+                  <Switch 
+                    id="colorCoding" 
+                    checked={settings.display.colorCoding}
+                    onCheckedChange={(checked) => handleSettingsChange('display', 'colorCoding', checked)}
+                  />
                 </div>
               </div>
             </div>
@@ -1563,27 +2700,264 @@ export default function AcademicCalendarPage() {
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="googleSync">Google Calendar Sync</Label>
-                  <Switch id="googleSync" />
+                  <Switch 
+                    id="googleSync" 
+                    checked={settings.integration.googleSync}
+                    onCheckedChange={(checked) => handleSettingsChange('integration', 'googleSync', checked)}
+                  />
                 </div>
                 <div className="flex items-center justify-between">
                   <Label htmlFor="outlookSync">Outlook Sync</Label>
-                  <Switch id="outlookSync" />
+                  <Switch 
+                    id="outlookSync" 
+                    checked={settings.integration.outlookSync}
+                    onCheckedChange={(checked) => handleSettingsChange('integration', 'outlookSync', checked)}
+                  />
                 </div>
               </div>
             </div>
             
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setShowSettings(false)}>
-                Cancel
+            <div className="flex justify-between">
+              <Button variant="outline" onClick={handleResetSettings}>
+                Reset to Defaults
               </Button>
-              <Button onClick={() => {
-                toast.success("Settings saved successfully");
-                setShowSettings(false);
-              }}>
-                Save Settings
-              </Button>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => setShowSettings(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={handleSaveSettings}>
+                  Save Settings
+                </Button>
+              </div>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Event Details Dialog */}
+      <Dialog open={showEventDetails} onOpenChange={setShowEventDetails}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Event Details</DialogTitle>
+          </DialogHeader>
+          {selectedEvent && (
+            <div className="space-y-4">
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <h3 className="text-xl font-semibold">{selectedEvent.title}</h3>
+                  <div className="flex items-center gap-2 mt-2">
+                    <Badge 
+                      className={`text-xs ${EVENT_CATEGORIES[selectedEvent.category].textColor} bg-opacity-10`}
+                    >
+                      {EVENT_CATEGORIES[selectedEvent.category].label}
+                    </Badge>
+                    <Badge className={`text-xs ${PRIORITY_LEVELS[selectedEvent.priority].color}`}>
+                      {PRIORITY_LEVELS[selectedEvent.priority].label}
+                    </Badge>
+                    <Badge variant={selectedEvent.status === 'published' ? 'default' : 'secondary'}>
+                      {selectedEvent.status}
+                    </Badge>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={() => {
+                    setShowEventDetails(false);
+                    setShowEditEvent(true);
+                  }}>
+                    <Edit className="w-4 h-4 mr-2" />
+                    Edit
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => setShowEventDetails(false)}>
+                    Close
+                  </Button>
+                </div>
+              </div>
+              
+              {selectedEvent.description && (
+                <div>
+                  <h4 className="font-medium mb-2">Description</h4>
+                  <p className="text-gray-600">{selectedEvent.description}</p>
+                </div>
+              )}
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <h4 className="font-medium mb-2">Start Date</h4>
+                  <p className="text-gray-600">
+                    {selectedEvent.startDate.toLocaleDateString()} at {selectedEvent.startDate.toLocaleTimeString()}
+                  </p>
+                </div>
+                <div>
+                  <h4 className="font-medium mb-2">End Date</h4>
+                  <p className="text-gray-600">
+                    {selectedEvent.endDate.toLocaleDateString()} at {selectedEvent.endDate.toLocaleTimeString()}
+                  </p>
+                </div>
+              </div>
+              
+              {selectedEvent.location && (
+                <div>
+                  <h4 className="font-medium mb-2">Location</h4>
+                  <p className="text-gray-600">{selectedEvent.location}</p>
+                </div>
+              )}
+              
+              {selectedEvent.attendees && selectedEvent.attendees.length > 0 && (
+                <div>
+                  <h4 className="font-medium mb-2">Attendees</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedEvent.attendees.map((attendee, index) => (
+                      <Badge key={index} variant="outline">{attendee}</Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <h4 className="font-medium mb-2">Created By</h4>
+                  <p className="text-gray-600">{selectedEvent.createdBy}</p>
+                </div>
+                <div>
+                  <h4 className="font-medium mb-2">Created At</h4>
+                  <p className="text-gray-600">{selectedEvent.createdAt.toLocaleDateString()}</p>
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Event Dialog */}
+      <Dialog open={showEditEvent} onOpenChange={setShowEditEvent}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Edit Event</DialogTitle>
+          </DialogHeader>
+          {selectedEvent && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="editTitle">Event Title</Label>
+                  <Input id="editTitle" defaultValue={selectedEvent.title} />
+                </div>
+                <div>
+                  <Label htmlFor="editCategory">Category</Label>
+                  <Select defaultValue={selectedEvent.category}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(EVENT_CATEGORIES).map(([key, value]) => (
+                        <SelectItem key={key} value={key}>{value.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              
+              <div>
+                <Label htmlFor="editDescription">Description</Label>
+                <Textarea id="editDescription" defaultValue={selectedEvent.description} />
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="editStartDate">Start Date</Label>
+                  <Input 
+                    id="editStartDate" 
+                    type="datetime-local" 
+                    defaultValue={selectedEvent.startDate.toISOString().slice(0, 16)}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="editEndDate">End Date</Label>
+                  <Input 
+                    id="editEndDate" 
+                    type="datetime-local" 
+                    defaultValue={selectedEvent.endDate.toISOString().slice(0, 16)}
+                  />
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="editPriority">Priority</Label>
+                  <Select defaultValue={selectedEvent.priority}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select priority" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(PRIORITY_LEVELS).map(([key, value]) => (
+                        <SelectItem key={key} value={key}>{value.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="editLocation">Location</Label>
+                  <Input id="editLocation" defaultValue={selectedEvent.location} />
+                </div>
+              </div>
+              
+              <div className="flex items-center space-x-2">
+                <Checkbox id="editAllDay" defaultChecked={selectedEvent.allDay} />
+                <Label htmlFor="editAllDay">All day event</Label>
+              </div>
+              
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setShowEditEvent(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={async () => {
+                  try {
+                    if (!selectedEvent) return;
+                    
+                    const eventData = {
+                      title: (document.getElementById('editTitle') as HTMLInputElement)?.value || selectedEvent.title,
+                      description: (document.getElementById('editDescription') as HTMLTextAreaElement)?.value || selectedEvent.description,
+                      eventType: mapCategoryToEventType(selectedEvent.category),
+                      eventDate: (document.getElementById('editStartDate') as HTMLInputElement)?.value || selectedEvent.startDate.toISOString(),
+                      endDate: (document.getElementById('editEndDate') as HTMLInputElement)?.value || selectedEvent.endDate.toISOString(),
+                      location: (document.getElementById('editLocation') as HTMLInputElement)?.value || selectedEvent.location,
+                      priority: mapPriorityToDbLevel(selectedEvent.priority),
+                      isPublic: true,
+                      requiresRegistration: selectedEvent.requiresApproval,
+                      capacity: null,
+                      imageUrl: null,
+                      contactEmail: null,
+                      contactPhone: null
+                    };
+
+                    const response = await fetch(`/api/events/${selectedEvent.id}`, {
+                      method: 'PUT',
+                      headers: {
+                        'Content-Type': 'application/json',
+                        'x-user-role': 'ADMIN', // TODO: Get from auth context
+                        'x-user-id': '1' // TODO: Get from auth context
+                      },
+                      body: JSON.stringify(eventData)
+                    });
+
+                    if (!response.ok) {
+                      const errorData = await response.json();
+                      throw new Error(errorData.error || 'Failed to update event');
+                    }
+
+                    // Reload events to get updated data
+                    await loadEvents();
+                    toast.success("Event updated successfully");
+                    setShowEditEvent(false);
+                  } catch (error) {
+                    console.error('Error updating event:', error);
+                    toast.error(error instanceof Error ? error.message : 'Failed to update event');
+                  }
+                }}>
+                  Update Event
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

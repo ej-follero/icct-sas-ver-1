@@ -139,13 +139,9 @@ export async function DELETE(
       );
     }
 
-    // Delete guardian and associated user
+    // Delete guardian (no associated user account)
     await prisma.guardian.delete({
       where: { guardianId }
-    });
-
-    await prisma.user.delete({
-      where: { userId: guardianId }
     });
 
     return NextResponse.json({ 

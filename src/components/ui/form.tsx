@@ -6,18 +6,13 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
 const Form = React.forwardRef<
-  HTMLFormElement,
-  React.FormHTMLAttributes<HTMLFormElement> & {
-    onSubmit?: (e: React.FormEvent<HTMLFormElement>) => void;
-  }
->(({ className, onSubmit, ...props }, ref) => {
+  HTMLDivElement,
+  { className?: string; children?: React.ReactNode }
+>(({ className, children }, ref) => {
   return (
-    <form
-      ref={ref}
-      className={cn("space-y-6", className)}
-      onSubmit={onSubmit}
-      {...props}
-    />
+    <div ref={ref} className={cn("space-y-6", className)}>
+      {children}
+    </div>
   );
 });
 Form.displayName = "Form";

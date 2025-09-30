@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
-import { Search, TrendingUp, TrendingDown, Users, Clock, AlertCircle, Filter, ChevronDown, BookOpen, Info, Printer, FileDown, FileText, ChevronUp, Mail, Phone, Send, Home, ChevronRight, Download, RefreshCw, Settings, Maximize2, Minimize2, CheckCircle, X, ChevronsLeft, ChevronLeft, ChevronsRight, Activity, BarChart3, Shield, Zap, AlertTriangle, Target, Building, GraduationCap, Check, User, Hash, Bell, Eye, Plus, Upload, Columns3, List, Edit, Trash2, Calendar, MoreVertical } from 'lucide-react';
+import { Search, TrendingUp, TrendingDown, Users, Clock, AlertCircle, Filter, ChevronDown, BookOpen, Info, Printer, FileDown, FileText, ChevronUp, Phone, Send, Home, ChevronRight, Download, RefreshCw, Settings, Maximize2, Minimize2, CheckCircle, X, ChevronsLeft, ChevronLeft, ChevronsRight, Activity, BarChart3, Shield, Zap, AlertTriangle, Target, Building, GraduationCap, Check, User, Hash, Eye, Plus, Upload, Columns3, List, Edit, Trash2, Calendar, MoreVertical } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,7 +31,7 @@ import InstructorDetailModal from '@/components/InstructorDetailModal';
 import { 
   AttendanceRecordsDialog, 
   EditInstructorDialog, 
-  DeactivateInstructorDialog,
+  DeactivateEntityDialog,
   ManualAttendanceDialog
 } from '@/components/reusable/Dialogs';
 import { ICCT_CLASSES, getStatusColor, getAttendanceRateColor } from '@/lib/colors';
@@ -43,7 +43,7 @@ import {
 } from '@/types/instructor-attendance';
 import { FilterChips } from '@/components/FilterChips';
 import { FilterDialog } from '@/components/FilterDialog';
-import { InstructorAttendanceAnalytics } from '@/components/InstructorAttendanceAnalytics';
+import { AttendanceAnalytics } from '@/components/AttendanceAnalytics';
 
  
 import { TableList, TableListColumn } from '@/components/reusable/Table/TableList';
@@ -188,6 +188,10 @@ export default function InstructorAttendancePage() {
   const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
   const [showManualAttendance, setShowManualAttendance] = useState(false);
   const [manualEntityId, setManualEntityId] = useState<number | undefined>(undefined);
+  
+  // State for expandable row data
+  const [expandedRowData, setExpandedRowData] = useState<Record<string, any>>({});
+  const [loadingExpandedData, setLoadingExpandedData] = useState<Set<string>>(new Set());
   
   // Table state
   const [sortBy, setSortBy] = useState<{ field: string; order: 'asc' | 'desc' }>({ field: 'instructorName', order: 'asc' });
@@ -412,6 +416,21 @@ export default function InstructorAttendancePage() {
       header: "", 
       accessor: "expander", 
       className: "w-8 text-center",
+      render: (instructor: InstructorAttendance) => (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-8 w-8 p-0 hover:bg-gray-50"
+          onClick={(e) => {
+            e.stopPropagation();
+            handleToggleExpand(instructor.instructorId);
+          }}
+        >
+          <ChevronRight className={`h-4 w-4 text-gray-600 transition-transform ${
+            expandedRowIds.has(instructor.instructorId) ? 'rotate-90' : ''
+          }`} />
+        </Button>
+      ),
       expandedContent: (instructor: InstructorAttendance) => (
         <TableCell colSpan={instructorColumns.length} className="p-0">
           <div className="bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 border-l-4 border-blue-400 mx-2 mb-2 rounded-r-xl shadow-sm transition-all duration-300">
@@ -502,8 +521,12 @@ export default function InstructorAttendancePage() {
                         </CardTitle>
                       </CardHeader>
                       <CardContent className="space-y-3">
-                        {instructor.recentActivity && instructor.recentActivity.length > 0 ? (
-                          instructor.recentActivity.map((entry, index) => (
+                        {loadingExpandedData.has(instructor.instructorId) ? (
+                          <div className="text-center py-4 text-slate-500 text-sm">
+                            Loading activity data...
+                          </div>
+                        ) : expandedRowData[instructor.instructorId]?.recentActivity && expandedRowData[instructor.instructorId].recentActivity.length > 0 ? (
+                          expandedRowData[instructor.instructorId].recentActivity.map((entry: any, index: number) => (
                             <div key={index} className="flex items-center justify-between p-2 rounded bg-slate-50/50 border border-slate-200/30">
                               <div className="flex items-center gap-3">
                                 <div className={`w-2 h-2 rounded-full ${
@@ -754,14 +777,6 @@ export default function InstructorAttendancePage() {
                         <Button 
                           size="sm" 
                           variant="outline" 
-                          className="w-full justify-start bg-white/80 hover:bg-purple-50 border-slate-300 rounded"
-                        >
-                          <Mail className="w-4 h-4 mr-2 text-purple-600" />
-                          Send Message
-                        </Button>
-                        <Button 
-                          size="sm" 
-                          variant="outline" 
                           className="w-full justify-start bg-white/80 hover:bg-blue-50 border-slate-300 rounded"
                           onClick={() => {
                             setManualEntityId(instructor.instructorId as unknown as number);
@@ -770,15 +785,6 @@ export default function InstructorAttendancePage() {
                         >
                           <CheckCircle className="w-4 h-4 mr-2 text-blue-600" />
                           Manual Attendance
-                        </Button>
-                        <Button 
-                          size="sm" 
-                          variant="outline" 
-                          className="w-full justify-start bg-white/80 hover:bg-orange-50 border-slate-300 rounded
-                          "
-                        >
-                          <Bell className="w-4 h-4 mr-2 text-orange-600" />
-                          Send Alert
                         </Button>
                       </CardContent>
                     </Card>
@@ -792,10 +798,6 @@ export default function InstructorAttendancePage() {
                         </CardTitle>
                       </CardHeader>
                       <CardContent className="space-y-3">
-                        <div className="flex items-center gap-3 text-sm">
-                          <Mail className="w-4 h-4 text-slate-500" />
-                          <span className="text-slate-700">{instructor.email}</span>
-                        </div>
                         <div className="flex items-center gap-3 text-sm">
                           <Phone className="w-4 h-4 text-slate-500" />
                           <span className="text-slate-700">+1 (555) 123-4567</span>
@@ -1166,6 +1168,34 @@ export default function InstructorAttendancePage() {
     }));
   };
 
+  // Fetch expanded row data
+  const fetchExpandedRowData = async (instructorId: string) => {
+    if (expandedRowData[instructorId] || loadingExpandedData.has(instructorId)) {
+      return;
+    }
+
+    setLoadingExpandedData(prev => new Set(prev).add(instructorId));
+    
+    try {
+      const response = await fetch(`/api/instructors/${instructorId}/details`);
+      if (response.ok) {
+        const data = await response.json();
+        setExpandedRowData(prev => ({
+          ...prev,
+          [instructorId]: data
+        }));
+      }
+    } catch (error) {
+      console.error('Error fetching expanded row data:', error);
+    } finally {
+      setLoadingExpandedData(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(instructorId);
+        return newSet;
+      });
+    }
+  };
+
   const handleToggleExpand = (instructorId: string) => {
     setExpandedRowIds(prev => {
       const newSet = new Set(prev);
@@ -1173,6 +1203,8 @@ export default function InstructorAttendancePage() {
         newSet.delete(instructorId);
       } else {
         newSet.add(instructorId);
+        // Fetch data when expanding
+        fetchExpandedRowData(instructorId);
       }
       return newSet;
     });
@@ -1322,13 +1354,6 @@ export default function InstructorAttendancePage() {
                   onClick: () => console.log('Export attendance report clicked')
                 },
                 {
-                  id: 'send-notifications',
-                  label: 'Send Alerts',
-                  description: 'Notify absent instructors',
-                  icon: <Bell className="w-5 h-5 text-white" />,
-                  onClick: () => console.log('Send notifications clicked')
-                },
-                {
                   id: 'refresh-data',
                   label: 'Refresh Data',
                   description: 'Reload attendance data',
@@ -1363,32 +1388,33 @@ export default function InstructorAttendancePage() {
 
           
           <Card className="border border-blue-200 shadow-lg rounded-xl overflow-hidden p-0 w-full">
-              <InstructorAttendanceAnalytics 
+              <AttendanceAnalytics 
                 data={instructors.map(instructor => ({
-                  instructorId: instructor.instructorId,
-                  instructorName: instructor.instructorName,
+                  id: instructor.instructorId,
+                  name: instructor.instructorName,
                   department: instructor.department,
-                  totalScheduledClasses: instructor.totalScheduledClasses,
+                  totalClasses: instructor.totalScheduledClasses,
                   attendedClasses: instructor.attendedClasses,
                   absentClasses: instructor.absentClasses,
                   lateClasses: instructor.lateClasses,
                   attendanceRate: instructor.attendanceRate,
-                  riskLevel: instructor.riskLevel || 'NONE',
+                  riskLevel: (instructor.riskLevel || 'NONE').toLowerCase() as 'none' | 'low' | 'medium' | 'high',
                   lastAttendance: instructor.lastAttendance ? new Date(instructor.lastAttendance) : new Date(),
-                  status: instructor.status || 'ACTIVE',
+                  status: (instructor.status || 'ACTIVE').toLowerCase() as 'active' | 'inactive',
                   subjects: instructor.subjects || [],
-                  weeklyPattern: instructor.weeklyPattern || {
-                    monday: 85,
-                    tuesday: 88,
-                    wednesday: 90,
-                    thursday: 87,
-                    friday: 82,
-                    saturday: 0,
-                    sunday: 0
-                  },
-                  currentStreak: instructor.currentStreak || 0,
-                  consistencyRating: instructor.consistencyRating || 4,
-                  trend: instructor.trend || 0
+                  weeklyData: [
+                    { week: 'Week 1', attendanceRate: instructor.attendanceRate * 0.95, totalClasses: Math.floor(instructor.totalScheduledClasses * 0.25), attendedClasses: Math.floor(instructor.attendedClasses * 0.25), absentClasses: Math.floor(instructor.absentClasses * 0.25), lateClasses: Math.floor(instructor.lateClasses * 0.25), trend: 'up' as const, change: 2 },
+                    { week: 'Week 2', attendanceRate: instructor.attendanceRate * 0.98, totalClasses: Math.floor(instructor.totalScheduledClasses * 0.25), attendedClasses: Math.floor(instructor.attendedClasses * 0.25), absentClasses: Math.floor(instructor.absentClasses * 0.25), lateClasses: Math.floor(instructor.lateClasses * 0.25), trend: 'up' as const, change: 1 },
+                    { week: 'Week 3', attendanceRate: instructor.attendanceRate * 1.02, totalClasses: Math.floor(instructor.totalScheduledClasses * 0.25), attendedClasses: Math.floor(instructor.attendedClasses * 0.25), absentClasses: Math.floor(instructor.absentClasses * 0.25), lateClasses: Math.floor(instructor.lateClasses * 0.25), trend: 'stable' as const, change: 0 },
+                    { week: 'Week 4', attendanceRate: instructor.attendanceRate * 0.99, totalClasses: Math.floor(instructor.totalScheduledClasses * 0.25), attendedClasses: Math.floor(instructor.attendedClasses * 0.25), absentClasses: Math.floor(instructor.absentClasses * 0.25), lateClasses: Math.floor(instructor.lateClasses * 0.25), trend: 'down' as const, change: -1 }
+                  ],
+                  // Instructor-specific fields
+                  classesTaught: instructor.attendedClasses,
+                  classesMissed: instructor.absentClasses,
+                  complianceScore: instructor.attendanceRate,
+                  notificationCount: Math.floor(instructor.absentClasses * 0.8),
+                  teachingLoad: instructor.totalScheduledClasses,
+                  substituteRequired: instructor.absentClasses > 0
                 }))} 
                 loading={loading} 
                 type="instructor"
@@ -1626,12 +1652,6 @@ export default function InstructorAttendancePage() {
                       onClick: () => console.log('Export selected:', Array.from(selected))
                     },
                     {
-                      key: 'notify',
-                      label: 'Send Notification',
-                      icon: <Bell className="w-4 h-4 mr-2" />,
-                      onClick: () => console.log('Send notification to:', Array.from(selected))
-                    },
-                    {
                       key: 'update',
                       label: 'Update Status',
                       icon: <Settings className="w-4 h-4 mr-2" />,
@@ -1789,15 +1809,24 @@ export default function InstructorAttendancePage() {
       />
 
       {/* Delete Confirmation Modal */}
-      <DeactivateInstructorDialog
+      <DeactivateEntityDialog
         open={showDeleteConfirmModal}
         onOpenChange={setShowDeleteConfirmModal}
-        instructor={selectedInstructorForDelete}
-        onDeactivate={(instructorId, reason) => {
+        entity={selectedInstructorForDelete ? {
+          instructorId: selectedInstructorForDelete.instructorId,
+          instructorName: selectedInstructorForDelete.instructorName,
+          employeeId: selectedInstructorForDelete.employeeId,
+          department: selectedInstructorForDelete.department,
+          attendanceRate: selectedInstructorForDelete.attendanceRate,
+          subjects: selectedInstructorForDelete.subjects || [],
+          totalScheduledClasses: selectedInstructorForDelete.totalScheduledClasses,
+          avatarUrl: selectedInstructorForDelete.avatarUrl
+        } : null}
+        onDeactivate={(instructorId: string, reason?: string) => {
           console.log('Deactivate instructor:', instructorId, reason);
           // TODO: Implement deactivate functionality
         }}
-        onArchive={(instructorId, reason) => {
+        onArchive={(instructorId: string, reason?: string) => {
           console.log('Archive instructor:', instructorId, reason);
           // TODO: Implement archive functionality
         }}

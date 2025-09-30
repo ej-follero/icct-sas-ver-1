@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
 
 export async function GET(request: Request) {
   try {
@@ -44,21 +44,63 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const data = await request.json();
+    
+    // Validate required fields
+    if (!data.deviceId || !data.roomId || !data.status) {
+      return NextResponse.json({ 
+        error: "Missing required fields: deviceId, roomId, and status are required" 
+      }, { status: 400 });
+    }
+
+    // Validate room exists
+    const room = await prisma.room.findUnique({
+      where: { roomId: data.roomId }
+    });
+    if (!room) {
+      return NextResponse.json({ 
+        error: `Room with ID ${data.roomId} not found` 
+      }, { status: 400 });
+    }
+
+    // Validate status enum
+    const validStatuses = ["ACTIVE", "INACTIVE", "TESTING", "CALIBRATION", "REPAIR", "OFFLINE", "ERROR"];
+    if (!validStatuses.includes(data.status)) {
+      return NextResponse.json({ 
+        error: `Invalid status. Must be one of: ${validStatuses.join(", ")}` 
+      }, { status: 400 });
+    }
+
     const reader = await prisma.rFIDReader.create({
       data: {
-        deviceId: data.deviceId,
-        deviceName: data.deviceName,
+        deviceId: data.deviceId.trim(),
+        deviceName: data.deviceName?.trim() || null,
         roomId: data.roomId,
-        ipAddress: data.ipAddress,
+        ipAddress: data.ipAddress?.trim() || null,
         status: data.status,
-        notes: data.notes,
-        components: data.components || {},
+        notes: data.notes?.trim() || null,
+        components: {},
         assemblyDate: new Date(),
         lastSeen: new Date(),
       },
     });
     return NextResponse.json(reader);
-  } catch (error) {
-    return NextResponse.json({ error: "Failed to create RFID reader" }, { status: 500 });
+  } catch (error: any) {
+    console.error('Error creating RFID reader:', error);
+    
+    // Handle specific Prisma errors
+    if (error.code === 'P2002') {
+      return NextResponse.json({ 
+        error: "Device ID already exists. Please use a unique device ID." 
+      }, { status: 400 });
+    }
+    if (error.code === 'P2003') {
+      return NextResponse.json({ 
+        error: "Invalid room reference. Please ensure the room exists." 
+      }, { status: 400 });
+    }
+    
+    return NextResponse.json({ 
+      error: error.message || "Failed to create RFID reader" 
+    }, { status: 500 });
   }
 } 

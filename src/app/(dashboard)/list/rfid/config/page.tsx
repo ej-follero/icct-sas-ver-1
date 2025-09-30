@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Settings, Wifi, Shield, Activity, Plus, Edit, Trash2, RefreshCw, Search, Bell, Download, Upload, Printer, Columns3, List, Eye, Pencil, RotateCcw, X, Clock, Info, UserCheck, UserX, Building2, Hash, Tag, Layers, FileText, BadgeInfo, AlertTriangle, WifiOff, CreditCard, Loader2 } from 'lucide-react';
+import { Settings, Wifi, Shield, Activity, Plus, Edit, Trash2, RefreshCw, Search, Bell, Download, Upload, Printer, Columns3, List, Eye, Pencil, RotateCcw, X, Clock, Info, UserCheck, UserX, Building2, Hash, Tag, Layers, FileText, BadgeInfo, AlertTriangle, WifiOff, CreditCard, Loader2, ChevronDown, ChevronRight } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -10,6 +10,8 @@ import { toast } from 'sonner';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import PageHeader from '@/components/PageHeader/PageHeader';
 import SummaryCard from '@/components/SummaryCard';
 import { QuickActionsPanel } from '@/components/reusable/QuickActionsPanel';
@@ -18,7 +20,7 @@ import { ConfirmDeleteDialog } from '@/components/ConfirmDeleteDialog';
 import { ViewDialog } from '@/components/reusable/Dialogs/ViewDialog';
 import BulkActionsDialog from '@/components/reusable/Dialogs/BulkActionsDialog';
 import { ExportDialog } from '@/components/reusable/Dialogs/ExportDialog';
-import { SortDialog, SortFieldOption } from '@/components/reusable/Dialogs/SortDialog';
+import { SortDialog } from '@/components/reusable/Dialogs/SortDialog';
 import { VisibleColumnsDialog, ColumnOption } from '@/components/reusable/Dialogs/VisibleColumnsDialog';
 import { ImportDialog } from '@/components/reusable/Dialogs/ImportDialog';
 import { TableList, TableListColumn } from '@/components/reusable/Table/TableList';
@@ -65,6 +67,7 @@ export default function RFIDConfigPage() {
   
   const [readers, setReaders] = useState<RFIDReader[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [searchInput, setSearchInput] = useState("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -73,66 +76,41 @@ export default function RFIDConfigPage() {
   const [roomFilter, setRoomFilter] = useState<string>("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [totalCount, setTotalCount] = useState(0);
   const [sortField, setSortField] = useState<'deviceName' | 'status' | 'readRate' | 'lastSeen'>('deviceName');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   
   // Dialog states
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [editForm, setEditForm] = useState<{ deviceName: string; ipAddress: string; status: RFIDReader['status']; roomId?: string; notes?: string }>({ deviceName: '', ipAddress: '', status: 'ACTIVE', roomId: undefined, notes: '' });
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [sortDialogOpen, setSortDialogOpen] = useState(false);
   const [visibleColumnsDialogOpen, setVisibleColumnsDialogOpen] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [bulkActionsDialogOpen, setBulkActionsDialogOpen] = useState(false);
+  const [expandedRowIds, setExpandedRowIds] = useState<string[]>([]);
   
   // Column visibility
   const [visibleColumns, setVisibleColumns] = useState<string[]>([
     'deviceName', 'status', 'readRate', 'tags', 'roomName', 'lastSeen'
   ]);
 
-  // Mock data for demonstration
-  const mockReaders: RFIDReader[] = [
-    {
-      id: '1',
-      deviceId: 'RFID-001',
-      deviceName: 'Main Entrance',
-      status: 'ACTIVE',
-      ipAddress: '192.168.1.100',
-      lastSeen: '2024-01-15T10:30:00Z',
-      roomId: 1,
-      roomName: 'Main Hall',
-      tags: 45,
-      readRate: 98.5,
-      components: { antenna: 'active', power: 'stable' }
-    },
-    {
-      id: '2',
-      deviceId: 'RFID-002',
-      deviceName: 'Library',
-      status: 'ACTIVE',
-      ipAddress: '192.168.1.101',
-      lastSeen: '2024-01-15T10:29:00Z',
-      roomId: 2,
-      roomName: 'Library',
-      tags: 23,
-      readRate: 95.2,
-      components: { antenna: 'active', power: 'stable' }
-    },
-    {
-      id: '3',
-      deviceId: 'RFID-003',
-      deviceName: 'Cafeteria',
-      status: 'MAINTENANCE',
-      ipAddress: '192.168.1.102',
-      lastSeen: '2024-01-15T09:15:00Z',
-      roomId: 3,
-      roomName: 'Cafeteria',
-      tags: 0,
-      readRate: 0,
-      components: { antenna: 'inactive', power: 'unstable' }
-    }
-  ];
+  // Derived room options (id + display name)
+  const roomOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    const list = Array.isArray(readers) ? readers : [];
+    list.forEach(r => {
+      if (r && (r as any).roomId) {
+        const rid = String((r as any).roomId);
+        const rname = (r as any).roomName || rid;
+        map.set(rid, rname);
+      }
+    });
+    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
+  }, [readers]);
 
   // Column definitions
   const readerColumns = [
@@ -153,7 +131,7 @@ export default function RFIDConfigPage() {
     required: col.key === 'deviceName' || col.key === 'status',
   }));
 
-  const sortFieldOptions: SortFieldOption<string>[] = [
+  const sortFieldOptions: { value: string; label: string }[] = [
     { value: 'deviceName', label: 'Device Name' },
     { value: 'deviceId', label: 'Device ID' },
     { value: 'status', label: 'Status' },
@@ -163,67 +141,62 @@ export default function RFIDConfigPage() {
     { value: 'lastSeen', label: 'Last Seen' },
   ];
 
-  // Load data
-  useEffect(() => {
-    const loadData = async () => {
+  // Load data from API
+  const fetchReaders = async () => {
+    try {
       setLoading(true);
-      try {
-        // Simulate API call
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        setReaders(mockReaders);
-      } catch (error) {
-        toast.error('Failed to load RFID readers');
-      } finally {
-        setLoading(false);
-      }
-    };
-    loadData();
-  }, []);
-
-  // Filtered and sorted readers
-  const filteredReaders = useMemo(() => {
-    let filtered = readers;
-
-    // Apply search filter
-    if (searchInput) {
-      filtered = filtered.filter(reader =>
-        reader.deviceName.toLowerCase().includes(searchInput.toLowerCase()) ||
-        reader.deviceId.toLowerCase().includes(searchInput.toLowerCase()) ||
-        reader.roomName?.toLowerCase().includes(searchInput.toLowerCase())
-      );
+      setError(null);
+      const params = new URLSearchParams();
+      if (searchInput) params.set('search', searchInput);
+      if (statusFilter && statusFilter !== 'all') params.set('status', statusFilter);
+      if (roomFilter && roomFilter !== 'all') params.set('room', roomFilter);
+      params.set('page', String(currentPage));
+      params.set('pageSize', String(itemsPerPage));
+      params.set('sortBy', sortField);
+      params.set('sortDir', sortOrder);
+      const res = await fetch(`/api/rfid/readers?${params.toString()}`);
+      if (!res.ok) throw new Error('Failed to fetch readers');
+      const raw = await res.json();
+      const rows = Array.isArray(raw) ? raw : (Array.isArray(raw?.data) ? raw.data : []);
+      const mapped: RFIDReader[] = rows.map((r: any) => ({
+        id: String(r.readerId ?? r.id ?? r.deviceId),
+        deviceId: r.deviceId,
+        deviceName: r.deviceName || '',
+        status: (r.status || 'ACTIVE') as RFIDReader['status'],
+        ipAddress: r.ipAddress || '',
+        lastSeen: (r.lastSeen ? new Date(r.lastSeen).toISOString() : new Date().toISOString()),
+        roomId: r.roomId,
+        roomName: r.roomName || r.room?.roomNo || undefined,
+        tags: r.tags ?? 0,
+        readRate: r.readRate ?? 0,
+        components: r.components ?? {},
+        notes: r.notes || undefined,
+      }));
+      setReaders(mapped);
+      const total = typeof raw?.total === 'number' ? raw.total : mapped.length;
+      setTotalCount(total);
+    } catch (e: any) {
+      const msg = e?.message || 'Failed to load RFID readers';
+      setError(msg);
+      toast.error(msg);
+      setReaders([]);
+      setTotalCount(0);
+    } finally {
+      setLoading(false);
     }
+  };
 
-    // Apply status filter
-    if (statusFilter !== 'all') {
-      filtered = filtered.filter(reader => reader.status === statusFilter);
-    }
+  useEffect(() => {
+    fetchReaders();
+  }, [searchInput, statusFilter, roomFilter, currentPage, itemsPerPage, sortField, sortOrder]);
 
-    // Apply room filter
-    if (roomFilter !== 'all') {
-      filtered = filtered.filter(reader => reader.roomId?.toString() === roomFilter);
-    }
-
-    // Apply sorting
-    filtered.sort((a, b) => {
-      const aValue = a[sortField];
-      const bValue = b[sortField];
-      
-      if (aValue < bValue) return sortOrder === 'asc' ? -1 : 1;
-      if (aValue > bValue) return sortOrder === 'asc' ? 1 : -1;
-      return 0;
-    });
-
-    return filtered;
-  }, [readers, searchInput, statusFilter, roomFilter, sortField, sortOrder]);
+  // Server-side filtering/sorting/pagination: use readers as-is
+  const filteredReaders = readers;
 
   // Pagination
-  const paginatedReaders = useMemo(() => {
-    const start = (currentPage - 1) * itemsPerPage;
-    const end = start + itemsPerPage;
-    return filteredReaders.slice(start, end);
-  }, [filteredReaders, currentPage, itemsPerPage]);
+  const paginatedReaders = filteredReaders;
 
-  const totalPages = Math.ceil(filteredReaders.length / itemsPerPage);
+  const totalPages = Math.ceil((totalCount || 0) / itemsPerPage);
 
   // Selection handlers
   const isAllSelected = paginatedReaders.length > 0 && paginatedReaders.every(r => selectedIds.includes(r.id));
@@ -241,6 +214,15 @@ export default function RFIDConfigPage() {
     setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
   };
 
+  // Expanded rows toggle
+  const onToggleExpand = (itemId: string) => {
+    setExpandedRowIds((current) =>
+      current.includes(itemId)
+        ? current.filter((id) => id !== itemId)
+        : [...current, itemId]
+    );
+  };
+
   // Configuration handlers
   const handleConfigChange = (key: keyof RFIDConfig, value: any) => {
     setConfig(prev => ({ ...prev, [key]: value }));
@@ -251,17 +233,112 @@ export default function RFIDConfigPage() {
   const handleRefresh = async () => {
     setIsRefreshing(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      toast.success('RFID configuration refreshed successfully');
-    } catch (error) {
-      toast.error('Failed to refresh configuration');
+      await fetchReaders();
+      if (!error) toast.success('RFID readers refreshed');
     } finally {
       setIsRefreshing(false);
     }
   };
 
+  // Export helpers
+  const exportToCSV = (rows: RFIDReader[], columns: { id: string; label: string }[], filename: string) => {
+    const headers = columns.map(c => c.label);
+    const csvRows = rows.map((row) => {
+      return columns.map(col => {
+        const value = (row as any)[col.id] ?? '';
+        const s = String(value);
+        return s.includes(',') || s.includes('"') ? '"' + s.replace(/"/g, '""') + '"' : s;
+      }).join(',');
+    });
+    const csv = [headers.join(','), ...csvRows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const exportToXLSX = async (rows: RFIDReader[], columns: { id: string; label: string }[], filename: string) => {
+    try {
+      const XLSX = await import('xlsx');
+      const data = rows.map((r) => {
+        const obj: Record<string, any> = {};
+        columns.forEach(col => { obj[col.label] = (r as any)[col.id] ?? ''; });
+        return obj;
+      });
+      const ws = XLSX.utils.json_to_sheet(data);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'RFID Readers');
+      XLSX.writeFile(wb, filename);
+    } catch (e) {
+      toast.error('XLSX export not available. Falling back to CSV.');
+      exportToCSV(rows, columns, filename.replace(/\.xlsx$/, '.csv'));
+    }
+  };
+
+  const exportToPDF = async (rows: RFIDReader[], columns: { id: string; label: string }[], filename: string) => {
+    try {
+      const jsPDFModule = await import('jspdf');
+      const autoTableModule = await import('jspdf-autotable');
+      const doc = new jsPDFModule.jsPDF();
+      const head = [columns.map(c => c.label)];
+      const body = rows.map(row => columns.map(c => String((row as any)[c.id] ?? '')));
+      // @ts-ignore
+      autoTableModule.default(doc, { head, body, styles: { fontSize: 8 } });
+      doc.save(filename);
+    } catch (e) {
+      toast.error('PDF export not available.');
+    }
+  };
+
   // Table columns
   const columns: TableListColumn<RFIDReader>[] = [
+    {
+      header: '',
+      accessor: 'expander',
+      className: 'w-10 text-center px-1 py-1',
+      render: (item: RFIDReader) => (
+        <button
+          onClick={() => onToggleExpand(item.id)}
+          className="px-2 py-1 rounded-full hover:bg-gray-200 text-center"
+          aria-label={expandedRowIds.includes(item.id) ? 'Collapse row' : 'Expand row'}
+        >
+          {expandedRowIds.includes(item.id) ? <ChevronDown size={16} className="text-blue-500" /> : <ChevronRight size={16} className="text-blue-500" />}
+        </button>
+      ),
+      expandedContent: (item: RFIDReader) => {
+        const copy = (t: string) => { try { navigator.clipboard.writeText(t); toast.success('Copied'); } catch {} };
+        return (
+          <td colSpan={columns.length} className="p-0">
+            <div className="bg-blue-50/60 px-4 py-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <h4 className="font-semibold text-blue-900">Technical</h4>
+                  <div className="text-sm space-y-1">
+                    <div><span className="font-medium">Device ID:</span> {item.deviceId}</div>
+                    <div><span className="font-medium">IP Address:</span> {item.ipAddress || '—'}</div>
+                    <div><span className="font-medium">Room:</span> {item.roomName || item.roomId || '—'}</div>
+                    <div><span className="font-medium">Last Seen:</span> {item.lastSeen ? new Date(item.lastSeen).toLocaleString() : '—'}</div>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <h4 className="font-semibold text-blue-900">Components JSON</h4>
+                  <pre className="text-xs bg-white border border-blue-100 rounded-md p-2 overflow-x-auto whitespace-pre-wrap break-words">{JSON.stringify(item.components, null, 2)}</pre>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" className="rounded" onClick={() => copy(item.deviceId)}>Copy Device ID</Button>
+                    <Button variant="outline" size="sm" className="rounded" onClick={() => copy(JSON.stringify(item))}>Copy Row JSON</Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </td>
+        );
+      }
+    },
     {
       header: (
         <Checkbox 
@@ -367,7 +444,8 @@ export default function RFIDConfigPage() {
                   className="hover:bg-green-50"
                   onClick={() => {
                     setSelectedReader(item);
-                    setEditDialogOpen(true);
+                  setEditForm({ deviceName: item.deviceName, ipAddress: item.ipAddress, status: item.status, roomId: item.roomId ? String(item.roomId) : undefined, notes: item.notes });
+                  setEditDialogOpen(true);
                   }}
                 >
                   <Pencil className="h-4 w-4 text-green-600" />
@@ -386,7 +464,7 @@ export default function RFIDConfigPage() {
                   className="hover:bg-red-50"
                   onClick={() => {
                     setSelectedReader(item);
-                    setDeleteDialogOpen(true);
+                  setDeleteDialogOpen(true);
                   }}
                 >
                   <Trash2 className="h-4 w-4 text-red-600" />
@@ -424,6 +502,108 @@ export default function RFIDConfigPage() {
             { label: "Configuration" }
           ]}
         />
+
+        {/* Edit Reader Dialog */}
+        {selectedReader && (
+          <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+            <DialogContent className="sm:max-w-[560px] p-0 rounded-2xl overflow-hidden">
+              <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-blue-800 p-6 relative">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setEditDialogOpen(false)}
+                  className="absolute top-4 right-4 h-8 w-8 text-white hover:bg-white/20 rounded-full"
+                  aria-label="Close dialog"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+                <div>
+                  <DialogTitle className="text-xl font-bold text-white mb-1">Edit Reader</DialogTitle>
+                  <p className="text-blue-100">Update reader information and save changes.</p>
+                </div>
+              </div>
+              <div className="space-y-4 p-6 max-h-[70vh] overflow-y-auto">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-device-name">Device Name</Label>
+                  <Input id="edit-device-name" value={editForm.deviceName} onChange={(e) => setEditForm(prev => ({ ...prev, deviceName: e.target.value }))} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-ip">IP Address</Label>
+                  <Input id="edit-ip" value={editForm.ipAddress} onChange={(e) => setEditForm(prev => ({ ...prev, ipAddress: e.target.value }))} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Status</Label>
+                  <Select value={editForm.status} onValueChange={(v) => setEditForm(prev => ({ ...prev, status: v as RFIDReader['status'] }))}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ACTIVE">Active</SelectItem>
+                      <SelectItem value="INACTIVE">Inactive</SelectItem>
+                      <SelectItem value="MAINTENANCE">Maintenance</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Room</Label>
+                  <Select value={editForm.roomId} onValueChange={(v) => setEditForm(prev => ({ ...prev, roomId: v }))}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select room" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {roomOptions.map(r => (
+                        <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-notes">Notes</Label>
+                  <Input id="edit-notes" value={editForm.notes || ''} onChange={(e) => setEditForm(prev => ({ ...prev, notes: e.target.value }))} />
+                </div>
+              </div>
+              <DialogFooter className="px-6 py-4 bg-gray-50/50 border-t border-gray-200">
+                <Button variant="outline" onClick={() => setEditDialogOpen(false)} className="rounded" disabled={isSavingEdit}>Cancel</Button>
+                <Button
+                  onClick={async () => {
+                    if (!selectedReader) return;
+                    setIsSavingEdit(true);
+                    try {
+                      const res = await fetch(`/api/rfid/readers/${selectedReader.id}`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          deviceName: editForm.deviceName,
+                          ipAddress: editForm.ipAddress,
+                          status: editForm.status,
+                          roomId: editForm.roomId ? Number(editForm.roomId) : undefined,
+                          notes: editForm.notes,
+                        })
+                      });
+                      if (!res.ok) {
+                        const err = await res.json().catch(() => ({}));
+                        throw new Error(err?.error || 'Failed to update reader');
+                      }
+                      const updated = await res.json();
+                      setReaders(prev => prev.map(r => r.id === selectedReader.id ? { ...r, ...updated, id: selectedReader.id } : r));
+                      toast.success('Reader updated successfully');
+                      setEditDialogOpen(false);
+                      setSelectedReader(null);
+                    } catch (e: any) {
+                      toast.error(e?.message || 'Failed to update reader');
+                    } finally {
+                      setIsSavingEdit(false);
+                    }
+                  }}
+                  disabled={isSavingEdit || !editForm.deviceName}
+                  className="bg-blue-600 hover:bg-blue-700 rounded"
+                >
+                  {isSavingEdit ? 'Saving...' : 'Save Changes'}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
 
         {/* Summary Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
@@ -492,6 +672,13 @@ export default function RFIDConfigPage() {
                 onClick: () => setExportDialogOpen(true)
               },
               {
+                id: 'import-data',
+                label: 'Import Readers',
+                description: 'Import readers from file',
+                icon: <Upload className="w-5 h-5 text-white" />,
+                onClick: () => setImportDialogOpen(true)
+              },
+              {
                 id: 'print-page',
                 label: 'Print Page',
                 description: 'Print configuration',
@@ -511,13 +698,6 @@ export default function RFIDConfigPage() {
                 description: 'Configure sorting',
                 icon: <List className="w-5 h-5 text-white" />,
                 onClick: () => setSortDialogOpen(true)
-              },
-              {
-                id: 'import-data',
-                label: 'Import Data',
-                description: 'Import reader data',
-                icon: <Upload className="w-5 h-5 text-white" />,
-                onClick: () => setImportDialogOpen(true)
               }
             ]}
             lastActionTime="2 minutes ago"
@@ -531,10 +711,30 @@ export default function RFIDConfigPage() {
         </div>
 
         {/* System Configuration */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Card className="shadow-lg rounded-xl overflow-hidden">
-            <CardHeader className="bg-gradient-to-r from-[#1e40af] to-[#3b82f6] text-white">
-              <CardTitle className="flex items-center gap-2">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          {error && (
+            <div className="lg:col-span-2">
+              <div className="flex items-start justify-between p-3 sm:p-4 border border-red-200 bg-red-50 text-red-800 rounded-xl">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="w-5 h-5 mt-0.5" />
+                  <div>
+                    <div className="font-semibold">Failed to load readers</div>
+                    <div className="text-sm">{error}</div>
+                  </div>
+                </div>
+                <button
+                  aria-label="Dismiss error"
+                  className="text-red-700 hover:text-red-900"
+                  onClick={() => setError(null)}
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
+          <Card className="shadow-lg rounded-xl overflow-hidden p-0 lg:col-span-1">
+            <CardHeader className="bg-gradient-to-r from-[#1e40af] to-[#3b82f6] text-white px-6 py-6">
+              <CardTitle className="flex items-center gap-2 text-white">
                 <Settings className="w-5 h-5" />
                 System Configuration
               </CardTitle>
@@ -612,9 +812,9 @@ export default function RFIDConfigPage() {
           </Card>
 
           {/* RFID Readers Management */}
-          <Card className="shadow-lg rounded-xl overflow-hidden">
-            <CardHeader className="bg-gradient-to-r from-[#1e40af] to-[#3b82f6] text-white">
-              <CardTitle className="flex items-center gap-2">
+          <Card className="shadow-lg rounded-xl overflow-hidden p-0 lg:col-span-3">
+            <CardHeader className="bg-gradient-to-r from-[#1e40af] to-[#3b82f6] text-white px-6 py-6">
+              <CardTitle className="flex items-center gap-2 text-white">
                 <Wifi className="w-5 h-5" />
                 RFID Readers
               </CardTitle>
@@ -622,20 +822,20 @@ export default function RFIDConfigPage() {
             <CardContent className="p-6">
               {/* Search and Filters */}
               <div className="mb-6 space-y-4">
-                <div className="flex flex-col xl:flex-row gap-2 sm:gap-3 items-start xl:items-center justify-between">
-                  <div className="relative w-full xl:w-auto xl:min-w-[200px] xl:max-w-sm">
-                    <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                    <input
-                      type="text"
-                      placeholder="Search readers..."
-                      value={searchInput}
-                      onChange={e => setSearchInput(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:outline-none"
-                    />
-                  </div>
-                  <div className="flex flex-wrap gap-2 sm:gap-3 w-full xl:w-auto">
+                <div className="flex flex-col xl:flex-row gap-2 sm:gap-3 items-start xl:items-center justify-end">
+                  <div className="flex flex-wrap gap-2 sm:gap-3 w-full xl:w-auto items-center">
+                    <div className="relative w-full xl:w-auto xl:min-w-[200px] xl:max-w-sm order-1 xl:order-none">
+                      <Search className="absolute left-3 top-3 h-4 w-4 text-gray-500" />
+                      <input
+                        type="text"
+                        placeholder="Search readers..."
+                        value={searchInput}
+                        onChange={e => setSearchInput(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:outline-none"
+                      />
+                    </div>
                     <Select value={statusFilter} onValueChange={setStatusFilter}>
-                      <SelectTrigger className="w-full sm:w-28 lg:w-32 xl:w-28 text-gray-700">
+                      <SelectTrigger className="w-full sm:w-28 lg:w-32 xl:w-28 text-gray-700 rounded">
                         <SelectValue placeholder="Status" />
                       </SelectTrigger>
                       <SelectContent>
@@ -646,14 +846,14 @@ export default function RFIDConfigPage() {
                       </SelectContent>
                     </Select>
                     <Select value={roomFilter} onValueChange={setRoomFilter}>
-                      <SelectTrigger className="w-full sm:w-32 lg:w-40 xl:w-40 text-gray-700">
+                      <SelectTrigger className="w-full sm:w-32 lg:w-40 xl:w-40 text-gray-700 rounded">
                         <SelectValue placeholder="Location" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">All Locations</SelectItem>
-                        <SelectItem value="1">Main Hall</SelectItem>
-                        <SelectItem value="2">Library</SelectItem>
-                        <SelectItem value="3">Cafeteria</SelectItem>
+                        {roomOptions.map(r => (
+                          <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -695,6 +895,8 @@ export default function RFIDConfigPage() {
                     isIndeterminate={isIndeterminate}
                     getItemId={(item) => item.id}
                     className="border-0 shadow-none max-w-full"
+                    expandedRowIds={expandedRowIds}
+                    onToggleExpand={onToggleExpand}
                   />
                 )}
               </div>
@@ -755,10 +957,22 @@ export default function RFIDConfigPage() {
             if (!open) setSelectedReader(null);
           }}
           itemName={selectedReader?.deviceName}
-          onDelete={() => { 
-            if (selectedReader) {
+          onDelete={async () => { 
+            if (!selectedReader) return;
+            try {
+              const res = await fetch(`/api/rfid/readers/${selectedReader.id}`, { method: 'DELETE' });
+              if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err?.error || 'Failed to delete reader');
+              }
               setReaders(prev => prev.filter(r => r.id !== selectedReader.id));
+              setSelectedIds(prev => prev.filter(id => id !== selectedReader.id));
               toast.success('Reader deleted successfully');
+            } catch (e: any) {
+              toast.error(e?.message || 'Failed to delete reader');
+            } finally {
+              setDeleteDialogOpen(false);
+              setSelectedReader(null);
             }
           }}
           onCancel={() => { setDeleteDialogOpen(false); setSelectedReader(null); }}
@@ -770,35 +984,49 @@ export default function RFIDConfigPage() {
         <SortDialog
           open={sortDialogOpen}
           onOpenChange={setSortDialogOpen}
-          sortField={sortField}
-          setSortField={field => setSortField(field as any)}
-          sortOrder={sortOrder}
-          setSortOrder={setSortOrder}
-          sortFieldOptions={sortFieldOptions}
-          onApply={() => setSortDialogOpen(false)}
-          onReset={() => {
-            setSortField('deviceName');
-            setSortOrder('asc');
-            setSortDialogOpen(false);
+          sortOptions={sortFieldOptions}
+          currentSort={{ field: sortField, order: sortOrder }}
+          onSortChange={(field, order) => {
+            setSortField(field as 'deviceName' | 'status' | 'readRate' | 'lastSeen');
+            setSortOrder(order);
           }}
           title="Sort Readers"
-          tooltip="Sort readers by different fields. Choose the field and order to organize your list."
+          description="Sort readers by different fields. Choose the field and order to organize your list."
+          entityType="readers"
         />
 
         <ExportDialog
           open={exportDialogOpen}
           onOpenChange={setExportDialogOpen}
-          exportableColumns={readerColumns.map(col => ({ key: col.key, label: col.label }))}
-          exportColumns={visibleColumns}
-          setExportColumns={setVisibleColumns}
-          exportFormat={null}
-          setExportFormat={() => {}}
-          onExport={() => {
-            toast.success('Export functionality coming soon');
-            setExportDialogOpen(false);
+          selectedItems={readers}
+          entityType="reader"
+          entityLabel="reader"
+          exportColumns={readerColumns.map(col => ({ id: col.key, label: col.label, default: true }))}
+          onExport={async (options) => {
+            try {
+              const cols = (options.columns as any[]).map((c: any) => {
+                const key = typeof c === 'string' ? c : c?.id;
+                const found = readerColumns.find(col => col.key === key);
+                return found ? { id: found.key, label: found.label } : null;
+              }).filter(Boolean) as { id: string; label: string }[];
+              const dataSource = readers;
+              if (dataSource.length === 0) {
+                toast.error('No data to export');
+                return;
+              }
+              const fmt = String(options.format || '').toLowerCase();
+              if (fmt === 'csv') {
+                exportToCSV(dataSource as any, cols, 'rfid-readers.csv');
+              } else if (fmt === 'excel') {
+                await exportToXLSX(dataSource as any, cols, 'rfid-readers.xlsx');
+              } else if (fmt === 'pdf') {
+                await exportToPDF(dataSource as any, cols, 'rfid-readers.pdf');
+              }
+              toast.success(`Exported ${dataSource.length} record(s) to ${String(options.format).toUpperCase()}`);
+            } catch (e: any) {
+              toast.error(e?.message || 'Failed to export readers');
+            }
           }}
-          title="Export Readers"
-          tooltip="Export reader data in various formats. Choose your preferred export options."
         />
 
         <VisibleColumnsDialog
@@ -829,13 +1057,48 @@ export default function RFIDConfigPage() {
         <ImportDialog
           open={importDialogOpen}
           onOpenChange={setImportDialogOpen}
-          onImport={async (data) => {
-            toast.success('Import functionality coming soon');
-            setImportDialogOpen(false);
-            return { success: 0, failed: 0, errors: [] };
+          onImport={async (records: any[]) => {
+            try {
+              // Basic validation
+              const required = ['deviceId'];
+              const invalid: number[] = [];
+              const normalized = records.map((r: any, idx: number) => {
+                const rec: any = {
+                  deviceId: r.deviceId,
+                  deviceName: r.deviceName,
+                  roomId: r.roomId,
+                  status: r.status || 'ACTIVE',
+                  ipAddress: r.ipAddress,
+                  notes: r.notes,
+                };
+                if (!rec.deviceId) invalid.push(idx + 1);
+                return rec;
+              });
+              if (invalid.length > 0) throw new Error(`Invalid rows: ${invalid.join(', ')}`);
+              const res = await fetch('/api/rfid/readers/bulk', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ records: normalized })
+              });
+              if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err?.error || `Import failed (HTTP ${res.status})`);
+              }
+              const result = await res.json();
+              await fetchReaders();
+              toast.success('Readers imported successfully');
+              return {
+                success: result?.results?.success ?? 0,
+                failed: result?.results?.failed ?? 0,
+                errors: result?.results?.errors ?? []
+              };
+            } catch (e: any) {
+              toast.error(e?.message || 'Failed to import readers');
+              return { success: 0, failed: records.length, errors: [e?.message || 'Unknown import error'] };
+            }
           }}
           entityName="RFIDReader"
-          templateUrl={undefined}
+          templateUrl="/api/rfid/readers/template"
           acceptedFileTypes={[".csv", ".xlsx", ".xls"]}
           maxFileSize={5}
         />
@@ -844,31 +1107,49 @@ export default function RFIDConfigPage() {
           open={bulkActionsDialogOpen}
           onOpenChange={setBulkActionsDialogOpen}
           selectedItems={readers.filter(reader => selectedIds.includes(reader.id))}
-          entityType="course"
+          entityType="reader"
           entityLabel="reader"
           availableActions={[
-            { type: 'status-update', title: 'Update Status', description: 'Update status of selected readers', icon: <Settings className="w-4 h-4" /> },
-            { type: 'notification', title: 'Send Notification', description: 'Send notification to administrators', icon: <Bell className="w-4 h-4" /> },
-            { type: 'export', title: 'Export Data', description: 'Export selected readers data', icon: <Download className="w-4 h-4" /> },
+            { id: 'status-update', label: 'Update Status', description: 'Update status of selected readers', icon: <Settings className="w-4 h-4" />, tabId: 'status' },
+            { id: 'notification', label: 'Send Notification', description: 'Send notification to administrators', icon: <Bell className="w-4 h-4" />, tabId: 'notification' },
+            { id: 'export', label: 'Export Data', description: 'Export selected readers data', icon: <Download className="w-4 h-4" />, tabId: 'export' },
           ]}
-          exportColumns={readerColumns.map(col => ({ id: col.key, label: col.label, default: true }))}
-          notificationTemplates={[]}
-          stats={{
-            total: readers.filter(reader => selectedIds.includes(reader.id)).length,
-            active: readers.filter(reader => selectedIds.includes(reader.id) && reader.status === 'ACTIVE').length,
-            inactive: readers.filter(reader => selectedIds.includes(reader.id) && reader.status !== 'ACTIVE').length
-          }}
           onActionComplete={(actionType: string, results: any) => {
             toast.success(`Bulk action '${actionType}' completed.`);
             setBulkActionsDialogOpen(false);
+            fetchReaders();
           }}
           onCancel={() => setBulkActionsDialogOpen(false)}
           onProcessAction={async (actionType: string, config: any) => {
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            return { success: true, processed: selectedIds.length };
+            try {
+              if (actionType === 'status-update') {
+                const { itemId, newStatus, reason } = config || {};
+                if (!itemId || !newStatus) return { success: false };
+                const res = await fetch(`/api/rfid/readers/${itemId}`, {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ status: String(newStatus).toUpperCase(), reason })
+                });
+                if (!res.ok) return { success: false };
+                const updated = await res.json().catch(() => ({}));
+                setReaders(prev => prev.map(r => r.id === String(itemId) ? { ...r, ...updated, status: String(newStatus).toUpperCase() as RFIDReader['status'] } : r));
+                return { success: true };
+              }
+              if (actionType === 'notification') {
+                // Placeholder - integrate with your notifications module if present
+                return { success: true };
+              }
+              if (actionType === 'export') {
+                return { success: true };
+              }
+              return { success: false };
+            } catch {
+              return { success: false };
+            }
           }}
           getItemDisplayName={(item: RFIDReader) => item.deviceName}
           getItemStatus={(item: RFIDReader) => item.status}
+          getItemId={(item: RFIDReader) => item.id}
         />
       </div>
     </div>

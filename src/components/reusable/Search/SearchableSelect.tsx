@@ -43,14 +43,44 @@ const SearchableSelectSearch: React.FC<SearchableSelectProps> = ({
   const [displayValue, setDisplayValue] = useState('');
   const [asyncOptions, setAsyncOptions] = useState<Option[] | null>(null);
   const [loading, setLoading] = useState(false);
+  const [selectedOption, setSelectedOption] = useState<Option | null>(null);
+  const [isMouseInside, setIsMouseInside] = useState(false);
+  
+  const sourceOptions = asyncOptions ?? options;
+  
+  // Handle click outside to close dropdown
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (isOpen && !(event.target as Element).closest('.searchable-select-container')) {
+        setIsOpen(false);
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isOpen]);
   
   // Set display value based on selected value
   useEffect(() => {
-    const selectedOption = options.find(opt => opt.value === value);
-    setDisplayValue(selectedOption ? selectedOption.label : search);
-  }, [value, options, search]);
-
-  const sourceOptions = asyncOptions ?? options;
+    if (value && selectedOption && selectedOption.value === value) {
+      // Show the selected option label
+      setDisplayValue(selectedOption.label);
+    } else {
+      // Find and display the current value
+      const foundOption = sourceOptions.find(opt => opt.value === value);
+      if (foundOption) {
+        setSelectedOption(foundOption);
+        setDisplayValue(foundOption.label);
+      } else {
+        setDisplayValue('');
+      }
+    }
+  }, [value, sourceOptions, selectedOption]);
   const filteredOptions = sourceOptions.filter(opt => 
     opt.label.toLowerCase().includes(search.toLowerCase())
   );
@@ -67,8 +97,12 @@ const SearchableSelectSearch: React.FC<SearchableSelectProps> = ({
       setLoading(true);
       try {
         const res = await asyncSearch(search.trim());
-        if (!cancelled) setAsyncOptions(res);
+        if (!cancelled) {
+          setAsyncOptions(res);
+          console.log('Async search results:', res);
+        }
       } catch (e) {
+        console.error('Async search error:', e);
         if (!cancelled) setAsyncOptions([]);
       } finally {
         if (!cancelled) setLoading(false);
@@ -81,11 +115,13 @@ const SearchableSelectSearch: React.FC<SearchableSelectProps> = ({
   }, [search, asyncSearch, minChars]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearch(e.target.value);
+    const newSearch = e.target.value;
+    setSearch(newSearch);
     setIsOpen(true);
   };
 
   const handleOptionClick = (option: Option) => {
+    setSelectedOption(option);
     onChange(option.value);
     setSearch('');
     setIsOpen(false);
@@ -97,45 +133,67 @@ const SearchableSelectSearch: React.FC<SearchableSelectProps> = ({
 
   const handleInputBlur = () => {
     // Delay closing to allow clicking on options
-    setTimeout(() => setIsOpen(false), 200);
+    setTimeout(() => setIsOpen(false), 1000);
   };
 
   return (
-    <div className={`relative ${className}`}>
+    <div className={`relative searchable-select-container ${className}`}>
       <input
         type="text"
         value={displayValue}
-        onChange={handleInputChange}
+        readOnly
         onFocus={handleInputFocus}
-        onBlur={handleInputBlur}
+        onBlur={() => {}}
         placeholder={placeholder}
-        className="w-full px-3 py-2 border border-blue-200 rounded bg-background text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-blue-400"
+        className="w-full px-3 py-2 border border-gray-300 rounded bg-white text-sm text-gray-500 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-blue-400 cursor-pointer hover:bg-gray-50"
       />
       {isOpen && (
         <div
-          className="absolute top-full left-0 right-0 mt-1 bg-white border border-blue-200 rounded shadow-lg z-50 max-h-48 overflow-y-auto overscroll-contain"
+          className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-300 rounded shadow-lg z-50 max-h-60 overflow-hidden"
           onWheelCapture={(e) => e.stopPropagation()}
           onScrollCapture={(e) => e.stopPropagation()}
           onMouseDown={(e) => e.preventDefault()}
           onTouchStart={(e) => e.preventDefault()}
         >
-          {loading ? (
-            <div className="px-3 py-2 text-blue-400 text-sm">Searching…</div>
-          ) : filteredOptions.length > 0 ? (
-            filteredOptions.map(opt => (
-              <div
-                key={opt.value}
-                className={`px-3 py-2 cursor-pointer hover:bg-blue-50 transition-colors ${
-                  opt.value === value ? 'bg-blue-100 text-blue-900' : 'text-blue-700'
-                }`}
-                onClick={() => handleOptionClick(opt)}
-              >
-                {opt.label}
+          {/* Search input inside dropdown */}
+          <div className="p-2 border-b border-gray-200">
+            <input
+              type="text"
+              value={search}
+              onChange={handleInputChange}
+              placeholder="Search..."
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-blue-400 text-gray-500"
+              autoFocus
+            />
+          </div>
+          
+          {/* Options list */}
+          <div className="max-h-48 overflow-y-auto overscroll-contain">
+            {loading ? (
+              <div className="px-3 py-2 text-gray-500 text-sm flex items-center gap-2">
+                <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+                Searching…
               </div>
-            ))
-          ) : (
-            <div className="px-3 py-2 text-blue-400 text-sm">{noOptionsMessage}</div>
-          )}
+            ) : filteredOptions.length > 0 ? (
+              filteredOptions.map(opt => (
+                <div
+                  key={opt.value}
+                  className={`px-3 py-2 cursor-pointer hover:bg-gray-50 transition-colors ${
+                    opt.value === value ? 'bg-gray-100 text-gray-900' : 'text-gray-700'
+                  }`}
+                  onClick={() => handleOptionClick(opt)}
+                >
+                  {opt.label}
+                </div>
+              ))
+            ) : search.trim().length >= minChars ? (
+              <div className="px-3 py-2 text-gray-500 text-sm">{noOptionsMessage}</div>
+            ) : (
+              <div className="px-3 py-2 text-gray-400 text-sm">
+                {minChars > 1 ? `Type at least ${minChars} characters to search` : 'Start typing to search'}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -181,30 +239,32 @@ const MultiSearchableSelectSearch: React.FC<MultiSearchableSelectProps> = ({
   };
 
   const handleInputFocus = () => {
+    setSearch('');
+    setDisplayValue('');
     setIsOpen(true);
   };
 
   const handleInputBlur = () => {
     // Delay closing to allow clicking on options
-    setTimeout(() => setIsOpen(false), 200);
+    setTimeout(() => setIsOpen(false), 1000);
   };
 
   return (
     <div className={`relative ${className}`}>
-      <div className="min-h-[42px] px-3 py-2 border border-blue-200 rounded bg-background text-sm ring-offset-background focus-within:outline-none focus-within:ring-2 focus-within:ring-blue-400 focus-within:border-blue-400">
+      <div className="min-h-[42px] px-3 py-2 border border-gray-300 rounded bg-background text-sm ring-offset-background focus-within:outline-none focus-within:ring-2 focus-within:ring-blue-400 focus-within:border-blue-400">
         {/* Selected Items Display */}
         {selectedOptions.length > 0 && (
           <div className="flex flex-wrap gap-1 mb-2">
             {selectedOptions.map(option => (
               <span
                 key={option.value}
-                className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded"
+                className="inline-flex items-center gap-1 px-2 py-1 bg-gray-100 text-gray-800 text-xs rounded"
               >
                 {option.label}
                 <button
                   type="button"
                   onClick={() => handleRemoveOption(option.value)}
-                  className="hover:bg-blue-200 rounded p-0.5"
+                  className="hover:bg-gray-200 rounded p-0.5"
                 >
                   ×
                 </button>
@@ -219,42 +279,57 @@ const MultiSearchableSelectSearch: React.FC<MultiSearchableSelectProps> = ({
           value={search}
           onChange={handleInputChange}
           onFocus={handleInputFocus}
-          onBlur={handleInputBlur}
+          onBlur={() => {}}
           placeholder={selectedOptions.length === 0 ? placeholder : "Add more..."}
-          className="w-full bg-transparent border-none outline-none text-sm placeholder:text-muted-foreground"
+          className="w-full bg-transparent border-none outline-none text-sm text-gray-900 placeholder:text-gray-500"
         />
       </div>
       
       {/* Dropdown */}
       {isOpen && (
         <div
-          className="absolute top-full left-0 right-0 mt-1 bg-white border border-blue-200 rounded shadow-lg z-50 max-h-48 overflow-y-auto overscroll-contain"
+          className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-300 rounded shadow-lg z-50 max-h-60 overflow-hidden"
           onWheelCapture={(e) => e.stopPropagation()}
           onScrollCapture={(e) => e.stopPropagation()}
           onMouseDown={(e) => e.preventDefault()}
           onTouchStart={(e) => e.preventDefault()}
         >
+          {/* Search input inside dropdown */}
+          <div className="p-2 border-b border-gray-200">
+            <input
+              type="text"
+              value={search}
+              onChange={handleInputChange}
+              placeholder="Search..."
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-blue-400 text-gray-500"
+              autoFocus
+            />
+          </div>
+          
+          {/* Options list */}
+          <div className="max-h-48 overflow-y-auto overscroll-contain">
           {filteredOptions.length > 0 ? (
             filteredOptions.map(opt => (
               <div
                 key={opt.value}
-                className="px-3 py-2 cursor-pointer hover:bg-blue-50 transition-colors text-blue-700"
+                className="px-3 py-2 cursor-pointer hover:bg-gray-50 transition-colors text-gray-700"
                 onClick={() => handleOptionClick(opt)}
               >
                 <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 bg-blue-500 rounded"></div>
+                  <div className="w-2 h-2 bg-gray-500 rounded"></div>
                   <div>
-                    <div className="font-medium text-sm text-blue-800">{opt.label}</div>
-                    <div className="text-xs text-blue-500">{opt.value}</div>
+                    <div className="font-medium text-sm text-gray-800">{opt.label}</div>
+                    <div className="text-xs text-gray-500">{opt.value}</div>
                   </div>
                 </div>
               </div>
             ))
           ) : search ? (
-            <div className="px-3 py-2 text-blue-400 text-sm">{noMoreOptionsMessage}</div>
+            <div className="px-3 py-2 text-gray-500 text-sm">{noMoreOptionsMessage}</div>
           ) : (
-            <div className="px-3 py-2 text-blue-400 text-sm">{startTypingMessage}</div>
+            <div className="px-3 py-2 text-gray-500 text-sm">{startTypingMessage}</div>
           )}
+          </div>
         </div>
       )}
     </div>

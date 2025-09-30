@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { prisma } from '@/lib/prisma';
 
 export async function GET() {
   try {
@@ -11,7 +9,7 @@ export async function GET() {
     });
 
     // Get recent security logs
-    const recentLogs = await prisma.securityLog.findMany({
+    const recentLogs = await prisma.securityLogs.findMany({
       where: {
         timestamp: {
           gte: new Date(Date.now() - 24 * 60 * 60 * 1000) // Last 24 hours
@@ -40,7 +38,7 @@ export async function GET() {
       }
     });
 
-    const failedAttempts = await prisma.securityLog.count({
+    const failedAttempts = await prisma.securityLogs.count({
       where: {
         eventType: 'LOGIN_ATTEMPT',
         severity: 'HIGH',
@@ -50,7 +48,7 @@ export async function GET() {
       }
     });
 
-    const suspiciousActivities = await prisma.securityLog.count({
+    const suspiciousActivities = await prisma.securityLogs.count({
       where: {
         eventType: 'SUSPICIOUS_ACTIVITY',
         timestamp: {
@@ -125,4 +123,4 @@ export async function GET() {
       { status: 500 }
     );
   }
-} 
+}

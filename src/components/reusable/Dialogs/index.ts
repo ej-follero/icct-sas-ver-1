@@ -1,16 +1,17 @@
 // Dialog Components Export
 export { default as AttendanceRecordsDialog } from './AttendanceRecordsDialog';
+export { default as StudentAttendanceRecordsDialog } from './StudentAttendanceRecordsDialog';
 export { default as BackupDialog } from './BackupDialog';
 export { default as BackupLogsDialog } from './BackupLogsDialog';
 export { default as BackupOperationsDialog } from './BackupOperationsDialog';
 export { default as BackupSchedulingDialog } from './BackupSchedulingDialog';
 export { default as BackupSettingsDialog } from './BackupSettingsDialog';
 export { default as BulkActionsDialog } from './BulkActionsDialog';
-export { default as DeactivateInstructorDialog } from './DeactivateInstructorDialog';
+export { default as DeactivateEntityDialog } from './DeactivateEntityDialog';
 export { default as DownloadDialog } from './DownloadDialog';
 export { default as EditInstructorDialog } from './EditInstructorDialog';
+export { default as EditStudentDialog } from './EditStudentDialog';
 export { default as EncryptionDialog } from './EncryptionDialog';
-export { default as ExportDialog } from './ExportDialog';
 export { default as ImportDialog } from './ImportDialog';
 export { default as IncrementalBackupDialog } from './IncrementalBackupDialog';
 export { default as RestoreDialog } from './RestoreDialog';
@@ -24,3 +25,8 @@ export { default as ManualAttendanceDialog } from './ManualAttendanceDialog';
 export { default as EmailDetailDialog } from './EmailDetailDialog';
 export { default as EmailComposeDialog } from './EmailComposeDialog';
 export { default as EmailBulkMoveDialog } from './EmailBulkMoveDialog';
+export { AddScheduleDialog } from './AddScheduleDialog';
+export { EditScheduleDialog } from './EditScheduleDialog';
+export { DeleteScheduleDialog } from './DeleteScheduleDialog';
+export { BulkStatusUpdateDialog } from './BulkStatusUpdateDialog';
+export { ExportDialog } from './ExportDialog';

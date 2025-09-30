@@ -4,46 +4,38 @@ import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { TablePagination } from "@/components/reusable/Table/TablePagination";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuLabel } from "@/components/ui/dropdown-menu";
-import * as XLSX from "xlsx";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
 import { toast } from "sonner";
 import Fuse from "fuse.js";
 import React from "react";
-import { Settings, Plus, Trash2, Printer, Loader2, MoreHorizontal, Upload, List, Columns3, ChevronDown, ChevronUp, UserCheck, UserX, Users, UserPlus, RefreshCw, Download, Search, Bell, Building2, RotateCcw, Eye, Pencil, BookOpen, GraduationCap, BadgeInfo, X, ChevronRight, Hash, Tag, Layers, FileText, Clock, Info, UserCheck as UserCheckIcon, Archive, MapPin, CreditCard, ScanLine, CheckCircle, XCircle, AlertTriangle, Filter, Calendar } from "lucide-react";
+import { Settings, Printer, Loader2, Upload, List, Columns3, ChevronDown, ChevronUp, RefreshCw, Download, Search, Bell, X, ChevronRight, FileText, Clock, MapPin, ScanLine, CheckCircle, XCircle, AlertTriangle, Eye } from "lucide-react";
 import { ImportDialog } from "@/components/reusable/Dialogs/ImportDialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ExportDialog } from '@/components/reusable/Dialogs/ExportDialog';
-import { SortDialog, SortFieldOption } from '@/components/reusable/Dialogs/SortDialog';
+import { SortDialog } from '@/components/reusable/Dialogs/SortDialog';
 import BulkActionsBar from '@/components/reusable/BulkActionsBar';
 import { PrintLayout } from '@/components/PrintLayout';
-import { TableCardView } from '@/components/reusable/Table/TableCardView';
-import { TableRowActions } from '@/components/reusable/Table/TableRowActions';
+// removed unused TableCardView and TableRowActions
 import { TableList, TableListColumn } from '@/components/reusable/Table/TableList';
-import { ConfirmDeleteDialog } from '@/components/ConfirmDeleteDialog';
+// removed unused ConfirmDeleteDialog
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { TableExpandedRow } from '@/components/reusable/Table/TableExpandedRow';
+// removed unused TableExpandedRow
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import PageHeader from '@/components/PageHeader/PageHeader';
-import { useDebounce } from '@/hooks/use-debounce';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+// removed unused useDebounce
+import { Card, CardHeader } from "@/components/ui/card";
 import SummaryCard from '@/components/SummaryCard';
 import { EmptyState } from '@/components/reusable';
 import BulkActionsDialog from '@/components/reusable/Dialogs/BulkActionsDialog';
 import { ViewDialog } from '@/components/reusable/Dialogs/ViewDialog';
 import { QuickActionsPanel } from '@/components/reusable/QuickActionsPanel';
-import { SummaryCardSkeleton, PageSkeleton } from '@/components/reusable/Skeleton';
+// removed unused skeleton imports
 import { VisibleColumnsDialog, ColumnOption } from '@/components/reusable/Dialogs/VisibleColumnsDialog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useRouter } from "next/navigation";
+// removed unused useRouter
 import { Checkbox as SharedCheckbox } from '@/components/ui/checkbox';
-import { Pagination } from "@/components/Pagination";
-import { TableHeaderSection } from '@/components/reusable/Table/TableHeaderSection';
-import { useRef } from "react";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+// removed unused Pagination, TableHeaderSection, useRef, and Table primitives
 import { safeHighlight } from "@/lib/sanitizer";
 
 type RFIDLogStatus = "success" | "error" | "unauthorized" | "timeout";
@@ -87,7 +79,7 @@ interface FuseResult<T> {
   }>;
 }
 
-const rfidLogSortFieldOptions: SortFieldOption<string>[] = [
+const rfidLogSortFieldOptions: { value: string; label: string }[] = [
   { value: 'tagId', label: 'Tag ID' },
   { value: 'studentName', label: 'Student Name' },
   { value: 'readerId', label: 'Reader ID' },
@@ -128,13 +120,14 @@ const COLUMN_OPTIONS: ColumnOption[] = rfidLogColumns.map(col => ({
 }));
 
 export default function RFIDLogsPage() {
-  const router = useRouter();
+  // removed unused router
   const [logs, setLogs] = useState<RFIDLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchInput, setSearchInput] = useState("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [selectedLog, setSelectedLog] = useState<RFIDLog | null>(null);
+  const [viewModalOpen, setViewModalOpen] = useState(false);
   const [columnFilters, setColumnFilters] = useState<ColumnFilter[]>([]);
   const [showColumnFilters, setShowColumnFilters] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
@@ -171,69 +164,66 @@ export default function RFIDLogsPage() {
   // Add import dialog state if not present
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [locationFilter, setLocationFilter] = useState('all');
+  const [locationSearch, setLocationSearch] = useState('');
+
+  // Build unique location options from logs
+  const locationOptions = useMemo(() => {
+    const set = new Set<string>();
+    const source = Array.isArray(logs) ? logs : [];
+    source.forEach(l => { if (l && (l as any).location) set.add((l as any).location as string); });
+    return Array.from(set).sort();
+  }, [logs]);
+
+  const filteredLocationOptions = useMemo(() => {
+    const term = locationSearch.trim().toLowerCase();
+    if (!term) return locationOptions;
+    return locationOptions.filter(loc => loc.toLowerCase().includes(term));
+  }, [locationOptions, locationSearch]);
+
+  const fetchLogs = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const params = new URLSearchParams();
+      if (statusFilter && statusFilter !== 'all') params.set('status', statusFilter);
+      if (scanTypeFilter && scanTypeFilter !== 'all') params.set('scanType', scanTypeFilter);
+      if (locationFilter && locationFilter !== 'all') params.set('location', locationFilter);
+      if (dateFilter) {
+        // Compute local day boundaries and send to API
+        const start = new Date(dateFilter);
+        start.setHours(0,0,0,0);
+        const end = new Date(dateFilter);
+        end.setHours(23,59,59,999);
+        params.set('start', start.toISOString());
+        params.set('end', end.toISOString());
+      }
+      const res = await fetch(`/api/rfid/logs${params.toString() ? `?${params.toString()}` : ''}`);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error || `Failed to fetch RFID logs (HTTP ${res.status})`);
+      }
+      const raw = await res.json();
+      const data = Array.isArray(raw) ? raw : (Array.isArray(raw?.data) ? raw.data : (Array.isArray(raw?.items) ? raw.items : []));
+      setLogs(data);
+    } catch (e: any) {
+      const message = e?.message || 'Failed to fetch RFID logs';
+      setError(message);
+      toast.error(message);
+      setLogs([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    // Mock data - replace with actual API calls
-    setLogs([
-      {
-        id: '1',
-        tagId: 'RFID-001',
-        readerId: 'Reader-101',
-        studentId: 'STU001',
-        studentName: 'John Doe',
-        location: 'Room 101',
-        timestamp: '2024-01-15 14:30:25',
-        status: 'success',
-        scanType: 'attendance',
-        duration: 90,
-      },
-      {
-        id: '2',
-        tagId: 'RFID-002',
-        readerId: 'Reader-102',
-        studentId: 'STU002',
-        studentName: 'Jane Smith',
-        location: 'Room 102',
-        timestamp: '2024-01-15 14:29:18',
-        status: 'success',
-        scanType: 'attendance',
-        duration: 90,
-      },
-      {
-        id: '3',
-        tagId: 'RFID-003',
-        readerId: 'Reader-103',
-        studentId: 'STU003',
-        studentName: 'Mike Johnson',
-        location: 'Room 103',
-        timestamp: '2024-01-15 14:28:45',
-        status: 'error',
-        scanType: 'attendance',
-        notes: 'Tag not recognized',
-      },
-      {
-        id: '4',
-        tagId: 'RFID-004',
-        readerId: 'Reader-104',
-        studentId: 'STU004',
-        studentName: 'Sarah Wilson',
-        location: 'Library',
-        timestamp: '2024-01-15 14:25:30',
-        status: 'success',
-        scanType: 'entry',
-      },
-      {
-        id: '5',
-        tagId: 'RFID-005',
-        readerId: 'Reader-105',
-        location: 'Computer Lab',
-        timestamp: '2024-01-15 14:20:15',
-        status: 'unauthorized',
-        scanType: 'access',
-        notes: 'Access denied - restricted area',
-      },
-    ]);
+    fetchLogs();
   }, []);
+
+  // Refresh logs whenever filter values change
+  useEffect(() => {
+    fetchLogs();
+    setCurrentPage(1);
+  }, [statusFilter, scanTypeFilter, locationFilter, dateFilter]);
 
   // Add Fuse.js setup with proper types
   const fuse = useMemo(() => new Fuse<RFIDLog>(logs, {
@@ -264,6 +254,12 @@ export default function RFIDLogsPage() {
     // Apply location filter
     if (locationFilter !== "all") {
       filtered = filtered.filter(log => log.location === locationFilter);
+    }
+
+    // Apply date filter (match YYYY-MM-DD prefix of timestamp)
+    if (dateFilter) {
+      const dayPrefix = dateFilter; // HTML date input returns YYYY-MM-DD
+      filtered = filtered.filter(log => (log.timestamp || '').startsWith(dayPrefix));
     }
 
     // Apply column filters
@@ -360,6 +356,129 @@ export default function RFIDLogsPage() {
     });
   };
 
+  // Print current filtered logs
+  const handlePrint = () => {
+    const printColumns = [
+      { header: 'Tag ID', accessor: 'tagId' },
+      { header: 'Student', accessor: 'studentName' },
+      { header: 'Reader ID', accessor: 'readerId' },
+      { header: 'Location', accessor: 'location' },
+      { header: 'Scan Type', accessor: 'scanType' },
+      { header: 'Status', accessor: 'status' },
+      { header: 'Timestamp', accessor: 'timestamp' },
+    ];
+    const printData = filteredLogs.map((l) => ({
+      tagId: l.tagId,
+      studentName: l.studentName || '',
+      readerId: l.readerId,
+      location: l.location,
+      scanType: l.scanType,
+      status: l.status,
+      timestamp: l.timestamp,
+    }));
+    const printFn = PrintLayout({
+      title: 'RFID Access Logs',
+      data: printData,
+      columns: printColumns,
+      totalItems: filteredLogs.length,
+    });
+    printFn();
+  };
+
+  // Quick export selected logs to CSV
+  const handleQuickExportSelectedLogs = () => {
+    const selected = logs.filter(l => selectedIds.includes(l.id));
+    if (selected.length === 0) {
+      toast.error('No logs selected to export');
+      return;
+    }
+    const headers = rfidLogColumns.map(col => col.label);
+    const rows = selected.map((log) => {
+      return rfidLogColumns.map(col => {
+        const accessor = col.accessor as string;
+        return String((log as any)[accessor] ?? '');
+      });
+    });
+    const csv = [headers.join(','), ...rows.map(r => r.map(v => {
+      const s = String(v);
+      return s.includes(',') || s.includes('"') ? '"' + s.replace(/"/g, '""') + '"' : s;
+    }).join(','))].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'rfid-logs-selected.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success(`Exported ${selected.length} selected logs to CSV`);
+  };
+
+  const exportToCSV = (rows: RFIDLog[], columns: { id: string; label: string }[], filename: string) => {
+    const headers = columns.map(c => c.label);
+    const csvRows = rows.map((log) => {
+      return columns.map(col => {
+        const key = col.id as keyof RFIDLog;
+        const value = (log as any)[key] ?? '';
+        const s = String(value);
+        return s.includes(',') || s.includes('"') ? '"' + s.replace(/"/g, '""') + '"' : s;
+      }).join(',');
+    });
+    const csv = [headers.join(','), ...csvRows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const exportToXLSX = async (rows: RFIDLog[], columns: { id: string; label: string }[], filename: string) => {
+    try {
+      const XLSX = await import('xlsx');
+      const data = rows.map((log) => {
+        const obj: Record<string, any> = {};
+        columns.forEach(col => { obj[col.label] = (log as any)[col.id] ?? ''; });
+        return obj;
+      });
+      const ws = XLSX.utils.json_to_sheet(data);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'RFID Logs');
+      XLSX.writeFile(wb, filename);
+    } catch (e) {
+      toast.error('XLSX export not available. Falling back to CSV.');
+      exportToCSV(rows, columns, filename.replace(/\.xlsx$/, '.csv'));
+    }
+  };
+
+  const exportToPDF = async (rows: RFIDLog[], columns: { id: string; label: string }[], filename: string) => {
+    try {
+      const jsPDFModule = await import('jspdf');
+      const autoTableModule = await import('jspdf-autotable');
+      const doc = new jsPDFModule.jsPDF();
+      const head = [columns.map(c => c.label)];
+      const body = rows.map(log => columns.map(c => String((log as any)[c.id] ?? '')));
+      // @ts-ignore
+      autoTableModule.default(doc, { head, body, styles: { fontSize: 8 } });
+      doc.save(filename);
+    } catch (e) {
+      // Fallback to print layout if jsPDF is not available
+      const printColumns = columns.map(c => ({ header: c.label, accessor: c.id }));
+      const printData = rows.map((log) => {
+        const obj: Record<string, any> = {};
+        columns.forEach(col => { obj[col.id] = (log as any)[col.id] ?? ''; });
+        return obj;
+      });
+      const printFn = PrintLayout({ title: 'RFID Access Logs', data: printData, columns: printColumns, totalItems: rows.length });
+      printFn();
+      toast.message('Opened print dialog as PDF fallback');
+    }
+  };
+
   // Handler for toggling expanded rows
   const onToggleExpand = async (itemId: string) => {
     setExpandedRowIds((current) =>
@@ -399,13 +518,15 @@ export default function RFIDLogsPage() {
     }
   };
 
-  const stats = {
-    total: logs.length,
-    success: logs.filter(l => l.status === 'success').length,
-    errors: logs.filter(l => l.status === 'error').length,
-    unauthorized: logs.filter(l => l.status === 'unauthorized').length,
-    today: logs.filter(l => l.timestamp.startsWith('2024-01-15')).length,
-  };
+  const stats = useMemo(() => {
+    const total = filteredLogs.length;
+    const success = filteredLogs.filter(l => l.status === 'success').length;
+    const errors = filteredLogs.filter(l => l.status === 'error').length;
+    const unauthorized = filteredLogs.filter(l => l.status === 'unauthorized').length;
+    const dayPrefix = dateFilter || new Date().toISOString().slice(0, 10);
+    const today = filteredLogs.filter(l => (l.timestamp || '').startsWith(dayPrefix)).length;
+    return { total, success, errors, unauthorized, today };
+  }, [filteredLogs, dateFilter]);
 
   // Table columns (filtered by visibleColumns)
   const columns: TableListColumn<RFIDLog>[] = [
@@ -423,25 +544,37 @@ export default function RFIDLogsPage() {
         </button>
       ),
       expandedContent: (item: RFIDLog) => {
+        // Simple insights and raw JSON for ops/triage
+        const allForTag = logs.filter(l => l.tagId === item.tagId);
+        const sorted = [...allForTag].sort((a,b) => (a.timestamp||'') < (b.timestamp||'') ? -1 : 1);
+        const idx = sorted.findIndex(l => l.id === item.id);
+        const prev = idx > 0 ? sorted[idx-1] : undefined;
+        const next = idx >= 0 && idx < sorted.length-1 ? sorted[idx+1] : undefined;
+        const now = new Date(item.timestamp).getTime();
+        const in24h = logs.filter(l => l.tagId === item.tagId && Math.abs(new Date(l.timestamp).getTime() - now) <= 24*60*60*1000);
+        const failures = in24h.filter(l => l.status !== 'success');
+        const copy = (t: string) => { try { navigator.clipboard.writeText(t); toast.success('Copied'); } catch {} };
         return (
           <td colSpan={columns.length} className="p-0">
-            <div className="bg-blue-50 p-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <h4 className="font-semibold text-blue-900 mb-2">Log Details</h4>
-                  <div className="space-y-2 text-sm">
+            <div className="bg-blue-50/60 px-4 py-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <h4 className="font-semibold text-blue-900">Insights</h4>
+                  <div className="text-sm space-y-1">
                     <div><span className="font-medium">Tag ID:</span> {item.tagId}</div>
                     <div><span className="font-medium">Reader ID:</span> {item.readerId}</div>
-                    <div><span className="font-medium">Student ID:</span> {item.studentId || 'N/A'}</div>
-                    <div><span className="font-medium">Duration:</span> {item.duration ? `${item.duration} minutes` : 'N/A'}</div>
+                    <div><span className="font-medium">24h scans (same tag):</span> {in24h.length}</div>
+                    <div><span className="font-medium">24h failures:</span> {failures.length}</div>
+                    <div><span className="font-medium">Previous scan:</span> {prev ? new Date(prev.timestamp).toLocaleString() : '—'}</div>
+                    <div><span className="font-medium">Next scan:</span> {next ? new Date(next.timestamp).toLocaleString() : '—'}</div>
                   </div>
                 </div>
-                <div>
-                  <h4 className="font-semibold text-blue-900 mb-2">Additional Info</h4>
-                  <div className="space-y-2 text-sm">
-                    <div><span className="font-medium">Notes:</span> {item.notes || 'No notes'}</div>
-                    <div><span className="font-medium">Scan Type:</span> <Badge variant="outline">{item.scanType}</Badge></div>
-                    <div><span className="font-medium">Status:</span> {getStatusBadge(item.status)}</div>
+                <div className="space-y-2">
+                  <h4 className="font-semibold text-blue-900">Raw Event</h4>
+                  <pre className="text-xs bg-white border border-blue-100 rounded-md p-2 overflow-x-auto whitespace-pre-wrap break-words">{JSON.stringify(item, null, 2)}</pre>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" className="rounded" onClick={() => copy(item.tagId)}>Copy Tag ID</Button>
+                    <Button variant="outline" size="sm" className="rounded" onClick={() => copy(JSON.stringify(item))}>Copy JSON</Button>
                   </div>
                 </div>
               </div>
@@ -541,13 +674,10 @@ export default function RFIDLogsPage() {
               const fuseResult = fuzzyResults.find(r => r.item.id === item.id) as FuseResult<RFIDLog> | undefined;
               const locationMatches = fuseResult?.matches?.find((m: { key: string }) => m.key === "location")?.indices;
               return (
-                <div className="flex items-center gap-1 justify-center">
-                  <MapPin className="w-3 h-3" />
-                  <span 
-                    className="text-sm text-blue-900"
-                    dangerouslySetInnerHTML={{ __html: safeHighlight(item.location, locationMatches) }}
-                  />
-                </div>
+                <span 
+                  className="text-sm text-blue-900"
+                  dangerouslySetInnerHTML={{ __html: safeHighlight(item.location, locationMatches) }}
+                />
               );
             }
           };
@@ -560,7 +690,7 @@ export default function RFIDLogsPage() {
             sortable: col.sortable,
             render: (item: RFIDLog) => (
               <Badge variant="outline" className="text-center">
-                {item.scanType.toUpperCase()}
+                {String(item?.scanType ?? '').toUpperCase() || 'N/A'}
               </Badge>
             )
           };
@@ -573,7 +703,6 @@ export default function RFIDLogsPage() {
             sortable: col.sortable,
             render: (item: RFIDLog) => (
               <div className="flex items-center gap-2 justify-center">
-                {getStatusIcon(item.status)}
                 {getStatusBadge(item.status)}
               </div>
             )
@@ -586,10 +715,7 @@ export default function RFIDLogsPage() {
             className: 'text-center',
             sortable: col.sortable,
             render: (item: RFIDLog) => (
-              <div className="flex items-center gap-1 justify-center">
-                <Clock className="w-3 h-3" />
-                <span className="text-sm text-blue-900">{item.timestamp}</span>
-              </div>
+              <span className="text-sm text-blue-900">{item.timestamp}</span>
             )
           };
         }
@@ -616,7 +742,7 @@ export default function RFIDLogsPage() {
                   className="hover:bg-blue-50"
                   onClick={() => {
                     setSelectedLog(item);
-                    // Add view dialog logic here
+                    setViewModalOpen(true);
                   }}
                 >
                   <Eye className="h-4 w-4 text-blue-600" />
@@ -644,6 +770,27 @@ export default function RFIDLogsPage() {
             { label: "Access Logs" }
           ]}
         />
+
+        {error && (
+          <div className="w-full max-w-full">
+            <div className="flex items-start justify-between p-3 sm:p-4 border border-red-200 bg-red-50 text-red-800 rounded-xl">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="w-5 h-5 mt-0.5" />
+                <div>
+                  <div className="font-semibold">Failed to load logs</div>
+                  <div className="text-sm">{error}</div>
+                </div>
+              </div>
+              <button
+                aria-label="Dismiss error"
+                className="text-red-700 hover:text-red-900"
+                onClick={() => setError(null)}
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Summary Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
@@ -692,6 +839,13 @@ export default function RFIDLogsPage() {
             }
             actionCards={[
               {
+                id: 'import-data',
+                label: 'Import Data',
+                description: 'Import logs from file',
+                icon: <Upload className="w-5 h-5 text-white" />,
+                onClick: () => setImportDialogOpen(true)
+              },
+              {
                 id: 'export-data',
                 label: 'Export Data',
                 description: 'Export logs to file',
@@ -703,7 +857,7 @@ export default function RFIDLogsPage() {
                 label: 'Print Page',
                 description: 'Print log list',
                 icon: <Printer className="w-5 h-5 text-white" />,
-                onClick: () => {/* Add print logic */}
+                onClick: handlePrint
               },
               {
                 id: 'visible-columns',
@@ -723,7 +877,14 @@ export default function RFIDLogsPage() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                   </svg>
                 ),
-                onClick: () => {/* Add refresh logic */},
+                onClick: async () => {
+                  try {
+                    setIsRefreshing(true);
+                    await fetchLogs();
+                  } finally {
+                    setIsRefreshing(false);
+                  }
+                },
                 disabled: isRefreshing,
                 loading: isRefreshing
               },
@@ -775,13 +936,13 @@ export default function RFIDLogsPage() {
                     placeholder="Search logs..."
                     value={searchInput}
                     onChange={e => setSearchInput(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:outline-none"
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:outline-none"
                   />
                 </div>
                 {/* Quick Filter Dropdowns */}
                 <div className="flex flex-wrap gap-2 sm:gap-3 w-full xl:w-auto">
                   <Select value={statusFilter} onValueChange={setStatusFilter}>
-                    <SelectTrigger className="w-full sm:w-28 lg:w-32 xl:w-28 text-gray-700">
+                    <SelectTrigger className="w-full sm:w-28 lg:w-32 xl:w-28 text-gray-700 rounded">
                       <SelectValue placeholder="Status" />
                     </SelectTrigger>
                     <SelectContent>
@@ -809,7 +970,7 @@ export default function RFIDLogsPage() {
                     </SelectContent>
                   </Select>
                   <Select value={scanTypeFilter} onValueChange={setScanTypeFilter}>
-                    <SelectTrigger className="w-full sm:w-28 lg:w-32 xl:w-28 text-gray-700">
+                    <SelectTrigger className="w-full sm:w-28 lg:w-32 xl:w-28 text-gray-700 rounded">
                       <SelectValue placeholder="Scan Type" />
                     </SelectTrigger>
                     <SelectContent>
@@ -820,11 +981,37 @@ export default function RFIDLogsPage() {
                       <SelectItem value="access">Access</SelectItem>
                     </SelectContent>
                   </Select>
+                  <Select value={locationFilter} onValueChange={setLocationFilter}>
+                    <SelectTrigger className="w-full sm:w-36 lg:w-40 xl:w-36 text-gray-700 rounded">
+                      <SelectValue placeholder="Location" />
+                    </SelectTrigger>
+                    <SelectContent className="w-60">
+                      <div className="p-2 sticky top-0 bg-white/95 backdrop-blur z-10">
+                        <input
+                          type="text"
+                          placeholder="Search locations..."
+                          value={locationSearch}
+                          onChange={(e) => setLocationSearch(e.target.value)}
+                          className="w-full px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                      <div className="max-h-64 overflow-y-auto">
+                        <SelectItem value="all">All Locations</SelectItem>
+                        {filteredLocationOptions.length === 0 ? (
+                          <div className="px-3 py-2 text-sm text-gray-500">No matches</div>
+                        ) : (
+                          filteredLocationOptions.map(loc => (
+                            <SelectItem key={loc} value={loc}>{loc}</SelectItem>
+                          ))
+                        )}
+                      </div>
+                    </SelectContent>
+                  </Select>
                   <input
                     type="date"
                     value={dateFilter}
                     onChange={(e) => setDateFilter(e.target.value)}
-                    className="px-3 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:outline-none"
+                    className="px-3 py-2 border border-gray-300 rounded text-gray-700 placeholder:text-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:outline-none"
                   />
                 </div>
               </div>
@@ -840,7 +1027,7 @@ export default function RFIDLogsPage() {
                       key: "bulk-actions",
                       label: "Bulk Actions",
                       icon: <Settings className="w-4 h-4 mr-2" />,
-                      onClick: () => {/* Add bulk actions logic */},
+                      onClick: () => setBulkActionsDialogOpen(true),
                       tooltip: "Open enhanced bulk actions dialog",
                       variant: "default"
                     },
@@ -848,7 +1035,7 @@ export default function RFIDLogsPage() {
                       key: "export",
                       label: "Quick Export",
                       icon: <Download className="w-4 h-4 mr-2" />,
-                      onClick: () => {/* Add export logic */},
+                      onClick: () => handleQuickExportSelectedLogs(),
                       tooltip: "Quick export selected logs to CSV"
                     }
                   ]}
@@ -877,7 +1064,14 @@ export default function RFIDLogsPage() {
                             <Button
                               variant="outline"
                               className="border-blue-300 text-blue-700 hover:bg-blue-50 rounded-xl"
-                              onClick={() => {/* Add refresh logic */}}
+                              onClick={async () => {
+                                try {
+                                  setIsRefreshing(true);
+                                  await fetchLogs();
+                                } finally {
+                                  setIsRefreshing(false);
+                                }
+                              }}
                             >
                               <RefreshCw className="w-4 h-4 mr-2" />
                               Refresh Data
@@ -921,39 +1115,182 @@ export default function RFIDLogsPage() {
         </div>
 
         {/* Dialogs */}
+        <BulkActionsDialog
+          open={bulkActionsDialogOpen}
+          onOpenChange={setBulkActionsDialogOpen}
+          selectedItems={(Array.isArray(logs) ? logs : []).filter(l => l && selectedIds.includes(l.id)).filter(Boolean)}
+          entityType="rfidLog"
+          entityLabel="log"
+          availableActions={[
+            { id: 'notification', label: 'Send Notification', description: 'Notify administrators about selected logs', icon: <Bell className="w-4 h-4" />, tabId: 'notification' },
+            { id: 'export', label: 'Export Data', description: 'Export selected logs data', icon: <Download className="w-4 h-4" />, tabId: 'export' },
+          ]}
+          onActionComplete={(actionType, results) => {
+            toast.success(`Bulk action '${actionType}' completed.`);
+            setBulkActionsDialogOpen(false);
+          }}
+          onCancel={() => setBulkActionsDialogOpen(false)}
+          onProcessAction={async (actionType, config) => {
+            try {
+              if (actionType === 'notification') {
+                const { itemId, subject, message, priority, includeAttachments } = config || {};
+                if (!itemId || !subject || !message) return { success: false };
+                await fetch(`/api/notifications/logs`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ logId: itemId, subject, message, priority, includeAttachments })
+                }).catch(() => {});
+                return { success: true };
+              }
+              if (actionType === 'export') {
+                // Handled by dialog; we simply acknowledge success
+                return { success: true };
+              }
+              return { success: false };
+            } catch {
+              return { success: false };
+            }
+          }}
+          getItemId={(item) => item.id}
+          getItemDisplayName={(item) => String(item?.tagId ?? '')}
+          getItemStatus={(item) => String(item?.status ?? '')}
+        />
+
+        {selectedLog && (
+          <ViewDialog
+            open={viewModalOpen}
+            onOpenChange={setViewModalOpen}
+            title="Log Details"
+            subtitle={`${(String(selectedLog?.scanType ?? '').toUpperCase() || 'LOG')} at ${selectedLog?.location ?? ''}`}
+            sections={[
+              {
+                title: 'Log Information',
+                fields: [
+                  { label: 'Tag ID', value: selectedLog.tagId },
+                  { label: 'Reader ID', value: selectedLog.readerId },
+                  { label: 'Location', value: selectedLog.location },
+                  { label: 'Status', value: selectedLog.status },
+                  { label: 'Scan Type', value: selectedLog.scanType },
+                  { label: 'Timestamp', value: selectedLog.timestamp },
+                ]
+              },
+              {
+                title: 'Subject',
+                fields: [
+                  { label: 'Student ID', value: selectedLog.studentId || '—' },
+                  { label: 'Student Name', value: selectedLog.studentName || '—' },
+                  { label: 'Duration (min)', value: selectedLog.duration ? String(selectedLog.duration) : '—' },
+                  { label: 'Notes', value: selectedLog.notes || '—' },
+                ]
+              }
+            ]}
+            tooltipText="View detailed RFID log information"
+          />
+        )}
         <SortDialog
           open={sortDialogOpen}
           onOpenChange={setSortDialogOpen}
-          sortField={sortField}
-          setSortField={field => setSortField(field as RFIDLogSortField)}
-          sortOrder={sortOrder}
-          setSortOrder={setSortOrder}
-          sortFieldOptions={rfidLogSortFieldOptions}
-          onApply={() => {
-            setSortFields([{ field: sortField as SortField, order: sortOrder }]);
-            setSortDialogOpen(false);
-          }}
-          onReset={() => {
-            setSortField('timestamp');
-            setSortOrder('desc');
-            setSortFields([{ field: 'timestamp' as SortField, order: 'desc' }]);
-            setSortDialogOpen(false);
+          sortOptions={rfidLogSortFieldOptions}
+          currentSort={{ field: sortField, order: sortOrder }}
+          onSortChange={(field, order) => {
+            setSortField(field as RFIDLogSortField);
+            setSortOrder(order as RFIDLogSortOrder);
+            setSortFields([{ field: field as SortField, order }]);
           }}
           title="Sort RFID Logs"
-          tooltip="Sort RFID logs by different fields. Choose the field and order to organize your list."
+          description="Sort RFID logs by different fields. Choose the field and order to organize your list."
+          entityType="rfid_logs"
         />
 
         <ExportDialog
           open={exportDialogOpen}
           onOpenChange={setExportDialogOpen}
-          exportableColumns={exportableColumnsForExport}
-          exportColumns={exportableColumns.map(col => col.accessor)}
-          setExportColumns={() => {}}
-          exportFormat={exportFormat}
-          setExportFormat={setExportFormat}
-          onExport={() => {/* Add export logic */}}
-          title="Export RFID Logs"
-          tooltip="Export RFID log data in various formats. Choose your preferred export options."
+          selectedItems={logs.filter(l => selectedIds.includes(l.id))}
+          entityType="rfidLog"
+          entityLabel="log"
+          exportColumns={rfidLogColumns.map(col => ({ id: col.key, label: col.label, default: true }))}
+          onExport={async (options) => {
+            try {
+              const requested = (options.columns as any[]) || [];
+              const cols = requested
+                .map((c: any) => {
+                  const key = typeof c === 'string' ? c : c?.id;
+                  const found = rfidLogColumns.find(col => col.key === key);
+                  return found ? { id: found.key, label: found.label } : null;
+                })
+                .filter((c: any): c is { id: string; label: string } => Boolean(c));
+              const dataSource = selectedIds.length > 0 ? logs.filter(l => selectedIds.includes(l.id)) : filteredLogs;
+              if (dataSource.length === 0) {
+                toast.error('No data to export');
+                return;
+              }
+              const fmt = String(options.format || '').toLowerCase();
+              if (fmt === 'csv') {
+                exportToCSV(dataSource, cols, 'rfid-logs.csv');
+              } else if (fmt === 'excel') {
+                await exportToXLSX(dataSource, cols, 'rfid-logs.xlsx');
+              } else if (fmt === 'pdf') {
+                await exportToPDF(dataSource, cols, 'rfid-logs.pdf');
+              }
+              toast.success(`Exported ${dataSource.length} record(s) to ${String(options.format).toUpperCase()}`);
+            } catch (e: any) {
+              toast.error(e?.message || 'Failed to export logs');
+            }
+          }}
+        />
+
+        <ImportDialog
+          open={importDialogOpen}
+          onOpenChange={setImportDialogOpen}
+          onImport={async (records: any[]) => {
+            try {
+              // Basic client-side validation aligned with RFIDLogs schema
+              const required = ['rfidTag','readerId','scanType','scanStatus','location','timestamp','userId','userRole'];
+              const invalid: number[] = [];
+              const normalized = records.map((r: any, idx: number) => {
+                const rec: any = {
+                  rfidTag: r.rfidTag ?? r.tagId ?? r.tag ?? '',
+                  readerId: Number(r.readerId ?? 0),
+                  scanType: r.scanType ?? 'CHECK_IN',
+                  scanStatus: r.scanStatus ?? 'SUCCESS',
+                  location: r.location ?? '',
+                  timestamp: r.timestamp ?? new Date().toISOString(),
+                  userId: Number(r.userId ?? 0),
+                  userRole: r.userRole ?? 'STUDENT',
+                };
+                const missing = required.some(k => rec[k] === undefined || rec[k] === null || rec[k] === '' || (k.endsWith('Id') && isNaN(Number(rec[k]))));
+                if (missing) invalid.push(idx + 1);
+                return rec;
+              });
+              if (invalid.length > 0) {
+                throw new Error(`Invalid rows: ${invalid.join(', ')}. Ensure required columns are present and correctly typed.`);
+              }
+              const res = await fetch('/api/rfid/logs/bulk', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ records: normalized, options: { skipDuplicates: true, updateExisting: true } })
+              });
+              if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err?.error || `Import failed (HTTP ${res.status})`);
+              }
+              const result = await res.json().catch(() => ({}));
+              await fetchLogs();
+              toast.success('Logs imported successfully');
+              return {
+                success: result?.results?.success ?? 0,
+                failed: result?.results?.failed ?? 0,
+                errors: result?.results?.errors ?? []
+              };
+            } catch (e: any) {
+              toast.error(e?.message || 'Failed to import logs');
+              return { success: 0, failed: records.length, errors: [e?.message || 'Unknown import error'] };
+            }
+          }}
+          entityName="RFIDLog"
+          templateUrl="/api/rfid/logs/template"
+          acceptedFileTypes={[".csv", ".xlsx", ".xls"]}
+          maxFileSize={5}
         />
 
         <VisibleColumnsDialog

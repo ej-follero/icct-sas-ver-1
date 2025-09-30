@@ -658,21 +658,23 @@ function BulkActionsDialog<T = any>({
   const handleExportAction = async (items: T[], config: any) => {
     const { exportConfig, format } = config;
     
-    for (const item of items) {
+    // Set all items to in_progress
+    const initialProgress: ActionProgress = {};
+    items.forEach(item => {
       const itemId = getItemId(item);
-      
-      setActionProgress(prev => ({
-        ...prev,
-        [itemId]: {
-          status: 'in_progress',
-          progress: 0,
-          message: 'Preparing export...'
-        }
-      }));
+      initialProgress[itemId] = {
+        status: 'in_progress',
+        progress: 0,
+        message: 'Preparing export...'
+      };
+    });
+    setActionProgress(initialProgress);
 
-      try {
-        // Simulate export preparation
-        for (let i = 0; i <= 50; i += 10) {
+    try {
+      // Simulate export preparation for all items at once
+      for (let i = 0; i <= 50; i += 10) {
+        items.forEach(item => {
+          const itemId = getItemId(item);
           setActionProgress(prev => ({
             ...prev,
             [itemId]: {
@@ -681,59 +683,62 @@ function BulkActionsDialog<T = any>({
               message: `Preparing ${getItemDisplayName(item)} for export...`
             }
           }));
-          await new Promise(resolve => setTimeout(resolve, 50));
-        }
-
-        // Prepare data for export
-        const exportData = items.map(item => {
-          const row: any = {};
-          exportConfig.selectedColumns.forEach((columnKey: string) => {
-            if (columnKey === 'id') row[columnKey] = getItemId(item);
-            else if (columnKey === 'name') row[columnKey] = getItemDisplayName(item);
-            else if (columnKey === 'status') row[columnKey] = getItemStatus(item);
-            else {
-              const value = (item as any)[columnKey];
-              // Handle nested objects like department
-              if (columnKey === 'department' && value && typeof value === 'object') {
-                row[columnKey] = value.departmentName || value.name || 'Unknown Department';
-              }
-              // Handle other nested objects
-              else if (value && typeof value === 'object') {
-                row[columnKey] = JSON.stringify(value);
-              }
-              else {
-                row[columnKey] = value || '';
-              }
-            }
-          });
-          return row;
         });
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
 
-        // Generate file content based on format
-        let fileContent = '';
-        let fileName = exportConfig.fileName || `${entityLabel}_export_${new Date().toISOString().split('T')[0]}`;
-        
-        switch (exportConfig.format) {
-          case 'csv':
-            fileContent = generateCSV(exportData, exportConfig.includeHeaders);
-            fileName += '.csv';
-            break;
-          case 'excel':
-            fileContent = generateExcel(exportData, exportConfig.includeHeaders);
-            fileName += '.xlsx';
-            break;
-          case 'pdf':
-            fileContent = generatePDF(exportData, exportConfig.includeHeaders);
-            fileName += '.pdf';
-            break;
-          case 'json':
-            fileContent = generateJSON(exportData);
-            fileName += '.json';
-            break;
-        }
+      // Prepare data for export (all items at once)
+      const exportData = items.map(item => {
+        const row: any = {};
+        exportConfig.selectedColumns.forEach((columnKey: string) => {
+          if (columnKey === 'id') row[columnKey] = getItemId(item);
+          else if (columnKey === 'name') row[columnKey] = getItemDisplayName(item);
+          else if (columnKey === 'status') row[columnKey] = getItemStatus(item);
+          else {
+            const value = (item as any)[columnKey];
+            // Handle nested objects like department
+            if (columnKey === 'department' && value && typeof value === 'object') {
+              row[columnKey] = value.departmentName || value.name || 'Unknown Department';
+            }
+            // Handle other nested objects
+            else if (value && typeof value === 'object') {
+              row[columnKey] = JSON.stringify(value);
+            }
+            else {
+              row[columnKey] = value || '';
+            }
+          }
+        });
+        return row;
+      });
 
-        // Simulate file generation
-        for (let i = 50; i <= 100; i += 10) {
+      // Generate file content based on format (single file for all items)
+      let fileContent = '';
+      let fileName = exportConfig.fileName || `${entityLabel}_export_${new Date().toISOString().split('T')[0]}`;
+      
+      switch (exportConfig.format) {
+        case 'csv':
+          fileContent = generateCSV(exportData, exportConfig.includeHeaders);
+          fileName += '.csv';
+          break;
+        case 'excel':
+          fileContent = generateExcel(exportData, exportConfig.includeHeaders);
+          fileName += '.xlsx';
+          break;
+        case 'pdf':
+          fileContent = generatePDF(exportData, exportConfig.includeHeaders);
+          fileName += '.pdf';
+          break;
+        case 'json':
+          fileContent = generateJSON(exportData);
+          fileName += '.json';
+          break;
+      }
+
+      // Simulate file generation for all items
+      for (let i = 50; i <= 100; i += 10) {
+        items.forEach(item => {
+          const itemId = getItemId(item);
           setActionProgress(prev => ({
             ...prev,
             [itemId]: {
@@ -742,12 +747,16 @@ function BulkActionsDialog<T = any>({
               message: `Generating ${format.label} file...`
             }
           }));
-          await new Promise(resolve => setTimeout(resolve, 50));
-        }
+        });
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
 
-        // Download the file
-        downloadFile(fileContent, fileName, format.mimeType);
+      // Download the file ONCE for all items
+      downloadFile(fileContent, fileName, format.mimeType);
 
+      // Mark all items as completed
+      items.forEach(item => {
+        const itemId = getItemId(item);
         setActionProgress(prev => ({
           ...prev,
           [itemId]: {
@@ -756,8 +765,12 @@ function BulkActionsDialog<T = any>({
             message: `Exported as ${format.label}`
           }
         }));
+      });
 
-      } catch (error) {
+    } catch (error) {
+      // Mark all items as failed if there's an error
+      items.forEach(item => {
+        const itemId = getItemId(item);
         setActionProgress(prev => ({
           ...prev,
           [itemId]: {
@@ -767,7 +780,7 @@ function BulkActionsDialog<T = any>({
             error: error instanceof Error ? error.message : 'Unknown error'
           }
         }));
-      }
+      });
     }
   };
 

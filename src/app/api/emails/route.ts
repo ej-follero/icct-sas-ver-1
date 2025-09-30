@@ -1,206 +1,154 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { Prisma, Priority, EmailStatus, EmailFolder } from '@prisma/client';
-import { EmailService } from '@/lib/services/email.service';
+import { z } from 'zod';
+import nodemailer from 'nodemailer';
+
+const emailSchema = z.object({
+  to: z.string().email(),
+  subject: z.string().min(1).max(200),
+  body: z.string().min(1),
+  type: z.enum(['INBOX', 'SENT', 'DRAFT', 'FAILED']).optional(),
+  priority: z.enum(['LOW', 'NORMAL', 'HIGH', 'URGENT']).optional(),
+  attachments: z.array(z.object({
+    filename: z.string(),
+    content: z.string(),
+    contentType: z.string()
+  })).optional()
+});
 
 export async function GET(request: NextRequest) {
   try {
-    // Authorization: allow ADMIN and INSTRUCTOR (set by middleware header)
-    const role = request.headers.get('x-user-role');
-    // Allow unauthenticated access in development to avoid blocking local testing
-    const isDev = process.env.NODE_ENV !== 'production';
-    if (!isDev) {
-      if (!role || (role !== 'ADMIN' && role !== 'INSTRUCTOR')) {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-      }
-    }
     const { searchParams } = new URL(request.url);
-    const search = (searchParams.get('search') || '').trim();
-    const status = searchParams.get('status') as EmailStatus | 'all' | null;
-    const priority = searchParams.get('priority') as Priority | 'all' | null;
-    const folder = searchParams.get('folder') as EmailFolder | 'all' | null;
-    const page = Math.max(parseInt(searchParams.get('page') || '1', 10), 1);
-    const pageSize = Math.min(Math.max(parseInt(searchParams.get('pageSize') || '20', 10), 1), 100);
-    const sortByParam = (searchParams.get('sortBy') || 'timestamp') as string;
-    const sortOrderParam = (searchParams.get('sortOrder') || 'desc') as 'asc' | 'desc';
+    const type = searchParams.get('type') || 'all';
+    const status = searchParams.get('status') || 'all';
+    const search = searchParams.get('search') || '';
+    const page = parseInt(searchParams.get('page') || '1');
+    const limit = parseInt(searchParams.get('limit') || '10');
 
-    const sortWhitelist: Record<string, true> = {
-      timestamp: true,
-      subject: true,
-      sender: true,
-      status: true,
-      priority: true,
-    };
-    const sortBy = sortWhitelist[sortByParam] ? (sortByParam as any) : 'timestamp';
-    const sortOrder = sortOrderParam === 'asc' ? 'asc' : 'desc';
-    const skip = (page - 1) * pageSize;
+    const where: any = {};
+    
+    if (type !== 'all') {
+      where.type = type;
+    }
+    
+    if (status !== 'all') {
+      where.status = status;
+    }
 
-    const where: Prisma.EmailWhereInput = {
-      AND: [
-        status && status !== 'all' ? { status } : {},
-        priority && priority !== 'all' ? { priority } : {},
-        folder && folder !== 'all' ? { type: folder as EmailFolder } : {},
-        search
-          ? {
-              OR: [
-                { subject: { contains: search, mode: 'insensitive' } },
-                { sender: { contains: search, mode: 'insensitive' } },
-                { recipient: { contains: search, mode: 'insensitive' } },
-              ],
-            }
-          : {},
-      ],
-    };
+    if (search) {
+      where.OR = [
+        { subject: { contains: search, mode: 'insensitive' } },
+        { content: { contains: search, mode: 'insensitive' } },
+        { recipient: { contains: search, mode: 'insensitive' } },
+        { sender: { contains: search, mode: 'insensitive' } }
+      ];
+    }
 
-    const [items, total] = await Promise.all([
-      prisma.email.findMany({
-        where,
-        orderBy: { [sortBy]: sortOrder },
-        take: pageSize,
-        skip,
-      }),
-      prisma.email.count({ where }),
-    ]);
+    const emails = await prisma.email.findMany({
+      where,
+      orderBy: { timestamp: 'desc' },
+      skip: (page - 1) * limit,
+      take: limit
+    });
 
-    // Server-side stats (global, not limited by current filters)
-    const [inbox, sentCount, draft, spam, trash, unread, failedTotal] = await Promise.all([
-      prisma.email.count({ where: { type: 'INBOX' } }),
-      prisma.email.count({ where: { type: 'SENT' } }),
-      prisma.email.count({ where: { type: 'DRAFT' } }),
-      prisma.email.count({ where: { type: 'SPAM' } }),
-      prisma.email.count({ where: { type: 'TRASH' } }),
-      prisma.email.count({ where: { isRead: false } }),
-      prisma.email.count({ where: { status: 'FAILED' } }),
-    ]);
+    const total = await prisma.email.count({ where });
 
-    const stats = {
-      totalAll: inbox + sentCount + draft + spam + trash,
-      byFolder: { inbox, sent: sentCount, draft, spam, trash },
-      unread,
-      failed: failedTotal,
-    };
-
-    return NextResponse.json({ items, total, page, pageSize, stats });
+    return NextResponse.json({
+      data: emails,
+      pagination: {
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit)
+      }
+    });
   } catch (error) {
-    console.error('GET /api/emails error', error);
-    return NextResponse.json({ error: 'Failed to fetch emails' }, { status: 500 });
+    console.error('Error fetching emails:', error);
+    return NextResponse.json(
+      { error: 'Failed to fetch emails' },
+      { status: 500 }
+    );
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    // Authorization: only ADMIN can create (adjust if instructors should also send)
-    const role = request.headers.get('x-user-role');
-    if (!role || role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
-
     const body = await request.json();
-    const {
-      subject,
-      sender,
-      recipient,
-      content,
-      priority = 'NORMAL',
-      type = 'SENT',
-      status = 'PENDING',
-      recipients = [], // optional detailed recipients [{ address, rtype }]
-      attachments = [], // optional attachments [{ name, url }]
-    } = body as {
-      subject: string;
-      sender: string;
-      recipient: string;
-      content: string;
-      priority?: Priority;
-      type?: EmailFolder;
-      status?: EmailStatus;
-      recipients?: Array<{ address: string; rtype: 'TO' | 'CC' | 'BCC' }>;
-      attachments?: Array<{ name: string; url: string }>;
-    };
+    const validatedData = emailSchema.parse(body);
 
-    if (!subject || !sender || !recipient || !content) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
-    }
-
-    // Create email record in database first
-    const created = await prisma.email.create({
+    // Create email record
+    const email = await prisma.email.create({
       data: {
-        subject,
-        sender,
-        recipient,
-        content,
-        priority,
-        type,
-        status,
-        recipients: recipients.length
-          ? {
-              createMany: {
-                data: recipients.map((r) => ({ address: r.address, rtype: r.rtype })),
-              },
-            }
-          : undefined,
-        attachments: attachments.length
-          ? {
-              createMany: {
-                data: attachments.map((a) => ({ name: a.name, url: a.url })),
-              },
-            }
-          : undefined,
-      },
+        recipient: validatedData.to,
+        subject: validatedData.subject,
+        content: validatedData.body,
+        type: validatedData.type || 'SENT',
+        priority: validatedData.priority || 'NORMAL',
+        status: 'PENDING',
+        sender: 'system@icct.edu.ph' // TODO: Get from session
+      }
     });
 
-    // Send actual email if status is SENT or PENDING
-    if (status === 'SENT' || status === 'PENDING') {
-      try {
-        const emailService = new EmailService();
-        
-        // Prepare recipients list for email sending
-        const toRecipients = recipients.filter(r => r.rtype === 'TO').map(r => r.address);
-        const ccRecipients = recipients.filter(r => r.rtype === 'CC').map(r => r.address);
-        const bccRecipients = recipients.filter(r => r.rtype === 'BCC').map(r => r.address);
-        
-        // Combine all recipients for the "to" field
-        const allRecipients = [...toRecipients, ...ccRecipients, ...bccRecipients];
-        if (allRecipients.length === 0) {
-          allRecipients.push(recipient); // fallback to main recipient
+    // Send email using nodemailer
+    try {
+      const transporter = nodemailer.createTransporter({
+        host: process.env.SMTP_HOST,
+        port: parseInt(process.env.SMTP_PORT || '587'),
+        secure: false,
+        auth: {
+          user: process.env.SMTP_USER,
+          pass: process.env.SMTP_PASS
         }
+      });
 
-        // Send email
-        const emailSent = await emailService.sendEmail({
-          to: allRecipients.join(', '),
-          subject,
-          html: content,
-          from: sender,
-        });
+      const mailOptions = {
+        from: process.env.SMTP_FROM,
+        to: validatedData.to,
+        subject: validatedData.subject,
+        html: validatedData.body,
+        attachments: validatedData.attachments?.map(att => ({
+          filename: att.filename,
+          content: att.content,
+          contentType: att.contentType
+        }))
+      };
 
-        // Update email status based on sending result
-        const finalStatus = emailSent ? 'SENT' : 'FAILED';
-        await prisma.email.update({
-          where: { id: created.id },
-          data: { status: finalStatus },
-        });
+      await transporter.sendMail(mailOptions);
 
-        // Update the created object to reflect the final status
-        created.status = finalStatus as EmailStatus;
+      // Update email status to sent
+      await prisma.email.update({
+        where: { id: email.id },
+        data: { 
+          status: 'SENT'
+        }
+      });
 
-      } catch (emailError) {
-        console.error('Email sending failed:', emailError);
-        
-        // Update status to FAILED
-        await prisma.email.update({
-          where: { id: created.id },
-          data: { status: 'FAILED' },
-        });
-        
-        created.status = 'FAILED' as EmailStatus;
-      }
+    } catch (emailError) {
+      console.error('Error sending email:', emailError);
+      
+      // Update email status to failed
+      await prisma.email.update({
+        where: { id: email.id },
+        data: { 
+          status: 'FAILED'
+        }
+      });
     }
 
-    return NextResponse.json(created, { status: 201 });
+    return NextResponse.json({ data: email });
   } catch (error) {
-    console.error('POST /api/emails error', error);
-    return NextResponse.json({ error: 'Failed to create email' }, { status: 500 });
+    console.error('Error creating email:', error);
+    
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: 'Invalid email data', details: error.errors },
+        { status: 400 }
+      );
+    }
+
+    return NextResponse.json(
+      { error: 'Failed to create email' },
+      { status: 500 }
+    );
   }
 }
-
-
