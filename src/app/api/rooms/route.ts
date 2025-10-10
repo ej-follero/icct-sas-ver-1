@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from '@/lib/prisma';
 
@@ -33,29 +33,52 @@ interface Room {
 }
 
 // GET handler
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    // Use raw SQL to fetch enum fields as strings
-    const rooms = await prisma.$queryRaw<Room[]>`SELECT "roomId", "roomNo", "roomType"::text as "roomType", "roomCapacity", "roomBuildingLoc"::text as "roomBuildingLoc", "roomFloorLoc"::text as "roomFloorLoc", "readerId", "status"::text as "status", "isActive", "lastMaintenance", "nextMaintenance", "notes", "createdAt", "updatedAt" FROM "Room"`;
-    // Fetch SubjectSchedule for all rooms
-    const schedules = await prisma.subjectSchedule.findMany({
-      select: {
-        subjectSchedId: true,
-        roomId: true,
-        day: true,
-        startTime: true,
-        endTime: true,
-        subject: { select: { subjectName: true } },
-        instructor: { select: { firstName: true, lastName: true } },
-        section: { select: { sectionName: true } },
-      }
+    // JWT Authentication
+    const token = request.cookies.get('token')?.value;
+    if (!token) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = Number((decoded as any)?.userId);
+    if (!Number.isFinite(userId)) {
+      return NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 });
+    }
+
+    // Check user exists and is active
+    const user = await prisma.user.findUnique({
+      where: { userId },
+      select: { status: true, role: true }
     });
-    // Attach schedules to rooms
-    const roomsWithSchedules = (rooms as Room[]).map((room: Room) => ({
-      ...room,
-      SubjectSchedule: schedules.filter(s => s.roomId === room.roomId)
-    }));
-    return NextResponse.json(roomsWithSchedules);
+
+    if (!user || user.status !== 'ACTIVE') {
+      return NextResponse.json({ error: 'User not found or inactive' }, { status: 401 });
+    }
+
+    // Role-based access control
+    const allowedRoles = ['SUPER_ADMIN', 'ADMIN', 'DEPARTMENT_HEAD', 'INSTRUCTOR'];
+    if (!allowedRoles.includes(user.role)) {
+      return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
+    }
+
+    // Use standard Prisma query instead of raw SQL
+    const rooms = await prisma.room.findMany({
+      include: {
+        SubjectSchedule: {
+          include: {
+            subject: { select: { subjectName: true } },
+            instructor: { select: { firstName: true, lastName: true } },
+            section: { select: { sectionName: true } },
+          }
+        }
+      },
+      orderBy: { roomNo: 'asc' }
+    });
+
+    return NextResponse.json(rooms);
   } catch (error) {
     console.error('Error in /api/rooms:', error);
     return NextResponse.json({ error: "Failed to fetch rooms" }, { status: 500 });
@@ -63,8 +86,37 @@ export async function GET() {
 }
 
 // POST handler
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    // JWT Authentication
+    const token = request.cookies.get('token')?.value;
+    if (!token) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = Number((decoded as any)?.userId);
+    if (!Number.isFinite(userId)) {
+      return NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 });
+    }
+
+    // Check user exists and is active
+    const user = await prisma.user.findUnique({
+      where: { userId },
+      select: { status: true, role: true }
+    });
+
+    if (!user || user.status !== 'ACTIVE') {
+      return NextResponse.json({ error: 'User not found or inactive' }, { status: 401 });
+    }
+
+    // Admin-only access control
+    const adminRoles = ['SUPER_ADMIN', 'ADMIN'];
+    if (!adminRoles.includes(user.role)) {
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+    }
+
     const body = await request.json();
     const validatedData = roomSchema.parse({
       ...body,

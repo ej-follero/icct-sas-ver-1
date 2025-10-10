@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
-import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -40,6 +39,7 @@ import {
   TrendingUp,
   TrendingDown,
   Building,
+  Target,
   PieChart as PieChartIcon,
   BarChart as BarChartIcon,
   LineChart as LineChartIcon,
@@ -86,7 +86,7 @@ import { Toast } from '@/components/ui/toast';
 // Enhanced TypeScript interfaces for advanced interactivity
 interface DrillDownState {
   isActive: boolean;
-  level: 'department' | 'instructor' | 'class' | 'session';
+  level: 'department' | 'class' | 'session';
   data: any;
   breadcrumbs: string[];
   filters: Record<string, any>;
@@ -120,7 +120,7 @@ interface LoadingState {
 interface AttendanceAnalyticsProps {
   data: AttendanceData[];
   loading?: boolean;
-  type: 'instructor' | 'student';
+  type: 'student';
   onDrillDown?: (filter: { type: string; value: string }) => void;
   onExport?: (format: 'pdf' | 'csv' | 'excel') => void;
   onRefresh?: () => void;
@@ -134,6 +134,17 @@ interface AttendanceAnalyticsProps {
   selectedSubject?: string;
   onSubjectChange?: (value: string) => void;
   subjects?: Array<{ id: string; name: string }>;
+  // Callback to bubble up filter snapshot for table sync
+  onFiltersChange?: (filters: {
+    departmentId?: string;
+    courseId?: string;
+    sectionId?: string;
+    yearLevel?: string;
+    subjectId?: string;
+    timeRange?: string;
+    startDate?: string;
+    endDate?: string;
+  }) => void;
 }
 
 // Utility functions imported from analytics-utils
@@ -145,7 +156,7 @@ interface AttendanceAnalyticsProps {
 // Utility functions imported from analytics-utils
 
 // Calculate trend indicators based on data
-const calculateTrends = (data: AttendanceData[], type: 'instructor' | 'student') => {
+const calculateTrends = (data: AttendanceData[], type: 'student') => {
   if (!data || data.length === 0) {
     return {
       totalCount: { change: 0, direction: 'neutral' },
@@ -318,7 +329,7 @@ export const AttendanceDistributionModal = ({
   totalPresent: number;
   totalLate: number;
   totalAbsent: number;
-  type: 'instructor' | 'student';
+  type: 'student';
 }) => {
   return (
     <Dialog>
@@ -336,7 +347,7 @@ export const AttendanceDistributionModal = ({
             </div>
             <div>
               <div className="text-xl font-bold text-gray-900">Detailed Attendance Breakdown</div>
-              <div className="text-sm text-gray-600">Comprehensive analysis for {type === 'instructor' ? 'instructors' : 'students'}</div>
+              <div className="text-sm text-gray-600">Comprehensive analysis for students</div>
             </div>
           </DialogTitle>
         </DialogHeader>
@@ -378,7 +389,7 @@ export const FullscreenAttendanceDistributionModal = ({
   totalPresent: number;
   totalLate: number;
   totalAbsent: number;
-  type: 'instructor' | 'student';
+  type: 'student';
   trigger: React.ReactNode;
   onExport?: (format: 'pdf' | 'csv' | 'excel') => void;
   selectedCourse?: string;
@@ -411,7 +422,7 @@ export const FullscreenAttendanceDistributionModal = ({
               <div>
                 <div className="text-2xl font-bold text-white tracking-tight">Attendance Distribution</div>
                 <div className="text-blue-100 mt-1 flex items-center gap-2 text-sm">
-                  Complete analysis with chart and detailed breakdown for {type === 'instructor' ? 'instructors' : 'students'}
+                  Complete analysis with chart and detailed breakdown for students
                 </div>
               </div>
             </DialogTitle>
@@ -510,7 +521,7 @@ export const FullscreenWeeklyTrendModal = ({
   showSecondaryFilters = true
 }: {
   weeklyData: any[];
-  type: 'instructor' | 'student';
+  type: 'student';
   trigger: React.ReactNode;
   onExport?: (format: 'pdf' | 'csv' | 'excel') => void;
   getXAxisConfig?: () => any;
@@ -551,7 +562,7 @@ export const FullscreenWeeklyTrendModal = ({
                   )}
                 </div>
                 <div className="text-blue-100 mt-1 flex items-center gap-2 text-sm">
-                  Complete trend analysis for {type === 'instructor' ? 'instructors' : 'students'}
+                  Complete trend analysis for students
                 </div>
               </div>
             </DialogTitle>
@@ -788,7 +799,7 @@ export const FullscreenLateArrivalModal = ({
   showSecondaryFilters = true
 }: {
   lateData: any[];
-  type: 'instructor' | 'student';
+  type: 'student';
   trigger: React.ReactNode;
   onExport?: (format: 'pdf' | 'csv' | 'excel') => void;
   getXAxisConfig?: () => any;
@@ -829,7 +840,7 @@ export const FullscreenLateArrivalModal = ({
                   )}
                 </div>
                 <div className="text-blue-100 mt-1 flex items-center gap-2 text-sm">
-                  Late arrival trend analysis for {type === 'instructor' ? 'instructors' : 'students'}
+                  Late arrival trend analysis for students
                 </div>
               </div>
             </DialogTitle>
@@ -1061,7 +1072,7 @@ export const FullscreenRiskDistributionModal = ({
   showSecondaryFilters = true
 }: {
   riskLevelData: any[];
-  type: 'instructor' | 'student';
+  type: 'student';
   trigger: React.ReactNode;
   onExport?: (format: 'pdf' | 'csv' | 'excel') => void;
   selectedCourse?: string;
@@ -1093,8 +1104,7 @@ export const FullscreenRiskDistributionModal = ({
               </div>
               <div>
                 <div className="text-2xl font-bold text-gray-900">Risk Level Distribution - Full View</div>
-                <div className="text-sm text-gray-600">Complete risk analysis for {type === 'instructor' ? 'instructors' : 'students'}
-                </div>
+                <div className="text-sm text-gray-600">Complete risk analysis for students</div>
               </div>
             </DialogTitle>
             <Button
@@ -1240,7 +1250,7 @@ export const FullscreenDepartmentPerformanceModal = ({
   showSecondaryFilters = true
 }: {
   departmentStats: any[];
-  type: 'instructor' | 'student';
+  type: 'student';
   trigger: React.ReactNode;
   onExport?: (format: 'pdf' | 'csv' | 'excel') => void;
   selectedCourse?: string;
@@ -1273,9 +1283,7 @@ export const FullscreenDepartmentPerformanceModal = ({
                 <div className="text-2xl font-bold text-white tracking-tight">
                   Department Performance
                 </div>
-                <div className="text-blue-100 mt-1 flex items-center gap-2 text-sm">
-                  Complete department analysis for {type === 'instructor' ? 'instructors' : 'students'}
-                </div>
+                  <div className="text-blue-100 mt-1 flex items-center gap-2 text-sm">Complete department analysis for students</div>
               </div>
             </DialogTitle>
             <Button
@@ -1393,7 +1401,7 @@ export const FullscreenDepartmentPerformanceModal = ({
                           <span className="font-medium text-gray-700">{dept.name}</span>
                           <div className="text-right">
                             <div className="text-lg font-bold text-gray-900">{attendanceRate.toFixed(1)}%</div>
-                            <div className="text-sm text-gray-600">{count} {type === 'instructor' ? 'instructors' : 'students'}</div>
+                            <div className="text-sm text-gray-600">{count} students</div>
                           </div>
                         </div>
                       );
@@ -1445,7 +1453,7 @@ export const AttendanceDistributionChart = ({
   // If no data, show a message instead of blank chart
   if (total === 0) {
     return (
-      <div className="w-full h-[280px] flex items-center justify-center bg-gray-50 rounded-lg">
+      <div className="w-full h-[280px] flex items-center justify-center bg-gray-50 rounded">
         <div className="text-center">
           <div className="text-gray-400 text-4xl mb-2">📊</div>
           <div className="text-gray-600 font-medium">No attendance data available</div>
@@ -1549,17 +1557,14 @@ export const DepartmentTrendsChart = ({ data }: { data: { name: string; avgAtten
 );
 
 // Enhanced Loading and Error Components
-const AnalyticsSkeleton = () => (
-  <div className="space-y-6">
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-      {[1, 2, 3].map(i => (
-        <Skeleton key={i} className="h-32" />
-      ))}
+const AnalyticsLoadingSpinner = () => (
+  <div className="flex flex-col items-center justify-center py-12 space-y-4">
+    <div className="relative">
+      <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
     </div>
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      {[1, 2, 3, 4].map(i => (
-        <Skeleton key={i} className="h-80" />
-      ))}
+    <div className="text-center">
+      <h3 className="text-lg font-semibold text-gray-900 mb-2">Loading Analytics</h3>
+      <p className="text-sm text-gray-600">Processing student attendance data...</p>
     </div>
   </div>
 );
@@ -1570,13 +1575,15 @@ const ChartNoData = ({
   description, 
   icon: Icon, 
   iconColor = "text-gray-400",
-  bgColor = "bg-gray-50"
+  bgColor = "bg-gray-50",
+  chartType = "general"
 }: {
   title: string;
   description: string;
   icon: any;
   iconColor?: string;
   bgColor?: string;
+  chartType?: string;
 }) => (
   <div className={`${bgColor} rounded border-2 border-dashed border-gray-200 p-8 text-center`}>
     <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -1585,6 +1592,94 @@ const ChartNoData = ({
     <h4 className="text-sm font-semibold text-gray-700 mb-2">{title}</h4>
     <p className="text-xs text-gray-500">{description}</p>
   </div>
+);
+
+// Small helper button shown with no-data placeholders to quickly reset filters
+const ClearFiltersButton = ({ onClear }: { onClear: () => void }) => (
+  <div className="mt-4 flex items-center justify-center">
+    <Button variant="outline" size="sm" className="h-8 px-3" onClick={onClear}>
+      <X className="w-3 h-3 mr-2" />
+      Clear filters
+    </Button>
+  </div>
+);
+
+// Enhanced placeholder components for different chart types
+const AttendanceTrendNoData = ({ timeRange }: { timeRange: string }) => (
+  <ChartNoData
+    title="No Attendance Data"
+    description={`No attendance records found for ${timeRange === 'today' ? 'today' : timeRange === 'week' ? 'this week' : timeRange === 'month' ? 'this month' : timeRange === 'quarter' ? 'this quarter' : 'this year'}. Try selecting a different time period.`}
+    icon={TrendingUp}
+    iconColor="text-blue-400"
+    bgColor="bg-blue-50"
+    chartType="attendance-trend"
+  />
+);
+
+const LateArrivalNoData = ({ timeRange }: { timeRange: string }) => (
+  <ChartNoData
+    title="No Late Arrival Data"
+    description={`No late arrival records found for ${timeRange === 'today' ? 'today' : timeRange === 'week' ? 'this week' : timeRange === 'month' ? 'this month' : timeRange === 'quarter' ? 'this quarter' : 'this year'}. All students arrived on time!`}
+    icon={Clock}
+    iconColor="text-orange-400"
+    bgColor="bg-orange-50"
+    chartType="late-arrival"
+  />
+);
+
+const RiskLevelNoData = ({ timeRange }: { timeRange: string }) => (
+  <ChartNoData
+    title="No Risk Assessment Data"
+    description={`No attendance risk data available for ${timeRange === 'today' ? 'today' : timeRange === 'week' ? 'this week' : timeRange === 'month' ? 'this month' : timeRange === 'quarter' ? 'this quarter' : 'this year'}.`}
+    icon={AlertTriangle}
+    iconColor="text-red-400"
+    bgColor="bg-red-50"
+    chartType="risk-level"
+  />
+);
+
+const StreakAnalysisNoData = ({ timeRange }: { timeRange: string }) => (
+  <ChartNoData
+    title="No Streak Data"
+    description={`No attendance streak data available for ${timeRange === 'today' ? 'today' : timeRange === 'week' ? 'this week' : timeRange === 'month' ? 'this month' : timeRange === 'quarter' ? 'this quarter' : 'this year'}.`}
+    icon={Target}
+    iconColor="text-green-400"
+    bgColor="bg-green-50"
+    chartType="streak-analysis"
+  />
+);
+
+const DepartmentPerformanceNoData = ({ timeRange }: { timeRange: string }) => (
+  <ChartNoData
+    title="No Department Data"
+    description={`No department performance data available for ${timeRange === 'today' ? 'today' : timeRange === 'week' ? 'this week' : timeRange === 'month' ? 'this month' : timeRange === 'quarter' ? 'this quarter' : 'this year'}.`}
+    icon={Building}
+    iconColor="text-purple-400"
+    bgColor="bg-purple-50"
+    chartType="department-performance"
+  />
+);
+
+const PatternAnalysisNoData = ({ timeRange }: { timeRange: string }) => (
+  <ChartNoData
+    title="No Pattern Data"
+    description={`No attendance pattern data available for ${timeRange === 'today' ? 'today' : timeRange === 'week' ? 'this week' : timeRange === 'month' ? 'this month' : timeRange === 'quarter' ? 'this quarter' : 'this year'}.`}
+    icon={BarChart3}
+    iconColor="text-indigo-400"
+    bgColor="bg-indigo-50"
+    chartType="pattern-analysis"
+  />
+);
+
+const AttendanceDistributionNoData = ({ timeRange }: { timeRange: string }) => (
+  <ChartNoData
+    title="No Attendance Data"
+    description={`No attendance records found for ${timeRange === 'today' ? 'today' : timeRange === 'week' ? 'this week' : timeRange === 'month' ? 'this month' : timeRange === 'quarter' ? 'this quarter' : 'this year'}. Try selecting a different time period.`}
+    icon={Users}
+    iconColor="text-blue-400"
+    bgColor="bg-blue-50"
+    chartType="attendance-distribution"
+  />
 );
 
 // Secondary Filter Component for Drill-Down
@@ -1617,7 +1712,7 @@ const SecondaryFilters = ({
             )}
           </SelectValue>
         </SelectTrigger>
-        <SelectContent className="w-48 max-h-60 rounded-lg" position="popper" side="bottom" align="end" sideOffset={4}>
+        <SelectContent className="w-48 max-h-60 rounded" position="popper" side="bottom" align="end" sideOffset={4}>
           <div className="p-2 border-b border-gray-200">
                           <input
                 type="text"
@@ -1765,7 +1860,7 @@ const NoDataState = ({
   subjects = []
 }: { 
   selectedSubject: string; 
-  type: 'instructor' | 'student';
+  type: 'student';
   subjects?: Array<{ id: string; name: string }>;
 }) => {
   const selectedSubjectName = selectedSubject === 'all' ? 'All Subjects' : 
@@ -1810,7 +1905,7 @@ export const FullscreenPatternAnalysisModal = ({
   showSecondaryFilters = true
 }: {
   patternData: any[];
-  type: 'instructor' | 'student';
+  type: 'student';
   trigger: React.ReactNode;
   onExport?: (format: 'pdf' | 'csv' | 'excel') => void;
   getXAxisConfig?: () => any;
@@ -1845,7 +1940,7 @@ export const FullscreenPatternAnalysisModal = ({
                   Attendance Pattern Analysis
                 </div>
                 <div className="text-blue-100 mt-1 flex items-center gap-2 text-sm">
-                  Pattern analysis with moving averages and peak detection for {type === 'instructor' ? 'instructors' : 'students'}
+                  Pattern analysis with moving averages and peak detection for students
                 </div>
               </div>
             </DialogTitle>
@@ -2069,7 +2164,7 @@ export const FullscreenStreakAnalysisModal = ({
   showSecondaryFilters = true
 }: {
   streakData: { data: any[]; stats: any };
-  type: 'instructor' | 'student';
+  type: 'student';
   trigger: React.ReactNode;
   onExport?: (format: 'pdf' | 'csv' | 'excel') => void;
   getXAxisConfig?: () => any;
@@ -2104,7 +2199,7 @@ export const FullscreenStreakAnalysisModal = ({
                   Streak Analysis
                 </div>
                 <div className="text-blue-100 mt-1 flex items-center gap-2 text-sm">
-                  {type === 'instructor' ? 'Teaching' : 'Student'} attendance streak patterns and insights
+                  Student attendance streak patterns and insights
                 </div>
               </div>
             </DialogTitle>
@@ -2134,26 +2229,26 @@ export const FullscreenStreakAnalysisModal = ({
           {/* Streak Statistics Overview */}
           <div className="grid grid-cols-4 gap-4">
             <div className="bg-green-50 border border-green-200 rounded p-4">
-              <div className="text-3xl font-bold text-green-600">{streakData.stats.maxGoodStreak}</div>
+              <div className="text-3xl font-bold text-green-600">{streakData?.stats?.maxGoodStreak || 0}</div>
               <div className="text-sm text-green-600 font-medium">Longest Good Streak</div>
               <div className="text-xs text-green-500 mt-1">Consecutive days ≥85%</div>
             </div>
             <div className="bg-red-50 border border-red-200 rounded p-4">
-              <div className="text-3xl font-bold text-red-600">{streakData.stats.maxPoorStreak}</div>
+              <div className="text-3xl font-bold text-red-600">{streakData?.stats?.maxPoorStreak || 0}</div>
               <div className="text-sm text-red-600 font-medium">Longest Poor Streak</div>
               <div className="text-xs text-red-500 mt-1">Consecutive days &lt;85%</div>
             </div>
             <div className="bg-blue-50 border border-blue-200 rounded p-4">
-              <div className="text-3xl font-bold text-blue-600">{Math.abs(streakData.stats.currentStreak)}</div>
+              <div className="text-3xl font-bold text-blue-600">{Math.abs(streakData?.stats?.currentStreak || 0)}</div>
               <div className="text-sm text-blue-600 font-medium">
-                Current {streakData.stats.currentStreakType === 'good' ? 'Good' : 'Poor'} Streak
+                Current {streakData?.stats?.currentStreakType === 'good' ? 'Good' : 'Poor'} Streak
               </div>
               <div className="text-xs text-blue-500 mt-1">Active streak</div>
             </div>
             <div className="bg-gray-50 border border-gray-200 rounded p-4">
-              <div className="text-3xl font-bold text-gray-600">{streakData.stats.totalGoodDays}</div>
+              <div className="text-3xl font-bold text-gray-600">{streakData?.stats?.totalGoodDays || 0}</div>
               <div className="text-sm text-gray-600 font-medium">Total Good Days</div>
-              <div className="text-xs text-gray-500 mt-1">Out of {streakData.data.length} days</div>
+              <div className="text-xs text-gray-500 mt-1">Out of {streakData?.data?.length || 0} days</div>
             </div>
           </div>
 
@@ -2165,12 +2260,12 @@ export const FullscreenStreakAnalysisModal = ({
               <h3 className="text-lg font-bold text-blue-900">Streak Timeline</h3>
             </div>
             <div className="h-96">
-              {streakData.data.length === 0 ? (
+              {(!streakData?.data || streakData?.data.length === 0) ? (
                 <NoDataState selectedSubject={localSelectedSubject} type={type} subjects={subjects} />
               ) : (
                 <div data-chart="streak-analysis" className="w-full h-full">
                   <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={streakData.data}>
+                  <BarChart data={streakData?.data || []}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
                   <XAxis 
                     dataKey={getXAxisConfig?.().dataKey || 'date'}
@@ -2215,7 +2310,7 @@ export const FullscreenStreakAnalysisModal = ({
                     fill="#6b7280"
                     radius={[2, 2, 0, 0]}
                   >
-                    {streakData.data.map((entry: any, index: number) => (
+                    {(streakData?.data || []).map((entry: any, index: number) => (
                       <Cell 
                         key={`cell-${index}`}
                         fill={entry.currentStreak > 0 ? '#22c55e' : entry.currentStreak < 0 ? '#ef4444' : '#6b7280'}
@@ -2242,8 +2337,8 @@ export const FullscreenStreakAnalysisModal = ({
                 let currentStreak = 0;
                 let currentType = 'none';
                 
-                for (let i = 0; i < streakData.data.length; i++) {
-                  const point = streakData.data[i];
+                for (let i = 0; i < (streakData?.data || []).length; i++) {
+                  const point = (streakData?.data || [])[i];
                   if (point.isStreakBreak || i === 0) {
                     if (currentStreak > 0) {
                       streaks.push({
@@ -2265,8 +2360,8 @@ export const FullscreenStreakAnalysisModal = ({
                   streaks.push({
                     type: currentType,
                     length: currentStreak,
-                    startIndex: streakData.data.length - currentStreak,
-                    endIndex: streakData.data.length - 1
+                    startIndex: (streakData?.data || []).length - currentStreak,
+                    endIndex: (streakData?.data || []).length - 1
                   });
                 }
 
@@ -2332,7 +2427,10 @@ export function AttendanceAnalytics({
   showSecondaryFilters = true,
   selectedSubject = 'all',
   onSubjectChange,
-  subjects = []
+  subjects = [],
+  
+  // New filter props
+  onFiltersChange
 }: AttendanceAnalyticsProps) {
   console.log('🎯 AttendanceAnalytics received data:', {
     dataLength: data?.length,
@@ -2371,19 +2469,29 @@ export function AttendanceAnalytics({
 
 
   const [timeRange, setTimeRange] = useState<TimeRange>({
-    start: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // 30 days ago
-    end: new Date(),
-    preset: 'month'
+    start: new Date(new Date().getFullYear(), 0, 1), // January 1st of current year
+    end: new Date(new Date().getFullYear(), 11, 31), // December 31st of current year
+    preset: 'year'
   });
 
   // Comparison state
   const [showComparison, setShowComparison] = useState(false);
   const [showLateComparison, setShowLateComparison] = useState(false);
 
-  // Secondary filter state for drill-down
+  // Enhanced filter state for cascading filters
   const [selectedCourse, setSelectedCourse] = useState('all');
   const [selectedSection, setSelectedSection] = useState('all');
   const [selectedYearLevel, setSelectedYearLevel] = useState('all');
+  const [internalSelectedSubject, setInternalSelectedSubject] = useState(selectedSubject || 'all');
+  
+  // Filter options for cascading dropdowns
+  const [filterOptions, setFilterOptions] = useState({
+    departments: [],
+    courses: [],
+    subjects: [],
+    sections: [],
+    yearLevels: [] as Array<{ id: string; name: string }>
+  });
 
   // Performance optimizations
   const analyticsDataRef = useRef<AnalyticsData | null>(null);
@@ -2415,11 +2523,8 @@ export function AttendanceAnalytics({
         filteredData = filteredData.filter(item => item.riskLevel === selectedRiskLevel);
       }
 
-      // Apply time range filter - DISABLED for now to show all data
-      // TODO: Implement proper time range filtering later
-      console.log('🕒 Time range filtering DISABLED - showing all data');
-      
-      if (false && timeRange && timeRange.preset !== 'custom') {
+      // Apply time range filter (inclusive)
+      if (timeRange && timeRange.preset !== 'custom') {
         const now = new Date();
         let startDate: Date;
         let endDate: Date = now;
@@ -2445,12 +2550,9 @@ export function AttendanceAnalytics({
             startDate = new Date(0); // Beginning of time
         }
 
-        console.log('🕒 Time range filtering:', {
-          preset: timeRange.preset,
-          startDate: startDate.toISOString(),
-          endDate: endDate.toISOString(),
-          dataLength: filteredData.length
-        });
+        // Normalize to full-day inclusive range
+        startDate.setHours(0, 0, 0, 0);
+        endDate.setHours(23, 59, 59, 999);
 
         filteredData = filteredData.filter(item => {
           // If no lastAttendance, include the item (don't filter out)
@@ -2458,48 +2560,26 @@ export function AttendanceAnalytics({
           
           try {
             const attendanceDate = new Date(item.lastAttendance);
-            console.log('🔍 Checking attendance date:', {
-              itemName: item.name,
-              lastAttendance: item.lastAttendance,
-              attendanceDate: attendanceDate.toISOString(),
-              startDate: startDate.toISOString(),
-              endDate: endDate.toISOString(),
-              isInRange: attendanceDate >= startDate && attendanceDate <= endDate
-            });
             return attendanceDate >= startDate && attendanceDate <= endDate;
           } catch (error) {
-            console.log('❌ Date parsing error for item:', item.name, error);
             // If date parsing fails, include the item
             return true;
           }
         });
-
-        console.log('🕒 After time range filtering:', {
-          originalLength: data.length,
-          filteredLength: filteredData.length,
-          removed: data.length - filteredData.length
-        });
-      } else if (false && timeRange && timeRange.preset === 'custom') {
-        // Custom date range filtering - more lenient approach
+      } else if (timeRange && timeRange.preset === 'custom') {
+        // Custom date range filtering (inclusive)
         if (timeRange.start && timeRange.end) {
           const startDate = new Date(timeRange.start);
           const endDate = new Date(timeRange.end);
-          
-          // Reset time to start/end of day for proper comparison
           startDate.setHours(0, 0, 0, 0);
           endDate.setHours(23, 59, 59, 999);
-          
+
           filteredData = filteredData.filter(item => {
-            // If no lastAttendance, include the item (don't filter out)
             if (!item.lastAttendance) return true;
-            
             try {
               const attendanceDate = new Date(item.lastAttendance);
-              // Reset time to start of day for comparison
-              attendanceDate.setHours(0, 0, 0, 0);
               return attendanceDate >= startDate && attendanceDate <= endDate;
-            } catch (error) {
-              // If date parsing fails, include the item
+            } catch {
               return true;
             }
           });
@@ -2648,71 +2728,159 @@ export function AttendanceAnalytics({
     riskLevelData: [],
     lateArrivalData: [],
     patternData: [],
-    streakData: { data: [], stats: {} }
+    streakData: { data: [], stats: {} },
+    summary: undefined
   });
 
+  // Determine if server-side analytics has any data to render
+  const hasServerData = useMemo(() => {
+    return (
+      (chartData?.timeBasedData?.length || 0) > 0 ||
+      (chartData?.departmentStats?.length || 0) > 0 ||
+      (chartData?.riskLevelData?.length || 0) > 0 ||
+      (chartData?.lateArrivalData?.length || 0) > 0 ||
+      (chartData?.patternData?.length || 0) > 0 ||
+      ((chartData?.streakData?.data || []).length || 0) > 0
+    );
+  }, [chartData]);
+
   // Fetch real analytics data from API
+  const abortRef = useRef<AbortController | null>(null);
+  const MIN_LOADING_MS = 700;
+  const [hasFetchedOnce, setHasFetchedOnce] = useState(false);
   const fetchAnalyticsData = useCallback(async () => {
     try {
+      // Cancel any in-flight request to avoid race conditions/stale data
+      if (abortRef.current) {
+        abortRef.current.abort();
+      }
+      abortRef.current = new AbortController();
+
       setLoadingState(prev => ({
         ...prev,
         isLoading: true,
         message: 'Fetching analytics data...',
         stage: 'fetching'
       }));
+      const startTs = Date.now();
+
+      // Optimistically clear chartData AFTER toggling loading, to prevent no-data flash
+      setChartData({
+        timeBasedData: [],
+        departmentStats: [],
+        riskLevelData: [],
+        lateArrivalData: [],
+        patternData: [],
+        streakData: { data: [], stats: {} },
+        summary: undefined
+      });
 
       const params = new URLSearchParams({
         type,
         timeRange: timeRange?.preset || 'week',
         ...(selectedDepartment !== 'all' && { departmentId: selectedDepartment }),
         ...(selectedSubject !== 'all' && { subjectId: selectedSubject }),
+        ...(selectedCourse !== 'all' && { courseId: selectedCourse }),
+        ...(selectedSection !== 'all' && { sectionId: selectedSection }),
+        ...(selectedYearLevel !== 'all' && { yearLevel: selectedYearLevel }),
         ...(timeRange?.start && { startDate: timeRange.start.toISOString() }),
         ...(timeRange?.end && { endDate: timeRange.end.toISOString() })
       });
 
-      const response = await fetch(`/api/attendance/analytics?${params}`);
+      // Force bypass of HTTP caches and server cache
+      const response = await fetch(`/api/attendance/analytics?noCache=1&${params}`, {
+        cache: 'no-store',
+        signal: abortRef.current.signal
+      });
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
       const result = await response.json();
+      console.log('📊 Analytics API response:', result);
       
       if (result.success) {
+        console.log('📊 Setting chart data:', result.data);
         setChartData(result.data);
+        const elapsed = Date.now() - startTs;
+        const waitMs = Math.max(0, MIN_LOADING_MS - elapsed);
+        if (waitMs > 0) {
+          await new Promise(res => setTimeout(res, waitMs));
+        }
         setLoadingState(prev => ({
           ...prev,
           isLoading: false,
           message: 'Data loaded successfully',
           stage: 'rendering'
         }));
+        setHasFetchedOnce(true);
       } else {
         throw new Error(result.error || 'Failed to fetch analytics data');
       }
     } catch (error) {
+      if ((error as any)?.name === 'AbortError') {
+        // Swallow aborts; a newer request is in-flight
+        return;
+      }
       console.error('Error fetching analytics data:', error);
       setError(error instanceof Error ? error.message : 'Failed to fetch analytics data');
+      const elapsed = 0; // ensure we still respect minimum spinner time
+      const waitMs = Math.max(0, MIN_LOADING_MS - elapsed);
+      if (waitMs > 0) {
+        await new Promise(res => setTimeout(res, waitMs));
+      }
       setLoadingState(prev => ({
         ...prev,
         isLoading: false,
         message: 'Error loading data',
         stage: 'fetching'
       }));
+      setHasFetchedOnce(true);
     }
-  }, [type, timeRange, selectedDepartment, selectedSubject]);
+  }, [type, timeRange, selectedDepartment, selectedSubject, selectedCourse, selectedSection, selectedYearLevel]);
 
   // Fetch data when dependencies change
   useEffect(() => {
+    console.log('🔄 AttendanceAnalytics: fetchAnalyticsData triggered', {
+      timeRange: timeRange?.preset,
+      selectedDepartment,
+      selectedSubject,
+      selectedCourse,
+      selectedSection
+    });
     fetchAnalyticsData();
   }, [fetchAnalyticsData]);
 
+  // Fetch filter options when component mounts
+  useEffect(() => {
+    fetchFilterOptions();
+  }, []);
+
+  // Fetch filter options
+  const fetchFilterOptions = async () => {
+    try {
+      const response = await fetch('/api/analytics/filter-options');
+      if (response.ok) {
+        const options = await response.json();
+        setFilterOptions(options);
+      }
+    } catch (error) {
+      console.error('Error fetching filter options:', error);
+    }
+  };
+
   // Generate dynamic chart data using real database data
   const generateDynamicChartData = () => {
+    console.log('📊 generateDynamicChartData - chartData.timeBasedData:', chartData.timeBasedData);
+    console.log('📊 generateDynamicChartData - timeRange:', timeRange?.preset);
+    console.log('📊 generateDynamicChartData - selectedCourse:', selectedCourse);
     return chartData.timeBasedData || [];
   };
 
   // Generate late arrival trend data using real database data
   const generateLateArrivalData = () => {
+    console.log('📊 generateLateArrivalData - chartData.lateArrivalData:', chartData.lateArrivalData);
     return chartData.lateArrivalData || [];
   };
 
@@ -2723,6 +2891,7 @@ export function AttendanceAnalytics({
 
   // Generate streak analysis data using real database data
   const generateStreakAnalysisData = useMemo(() => {
+    console.log('📊 generateStreakAnalysisData - chartData.streakData:', chartData.streakData);
     return chartData.streakData || { data: [], stats: { maxGoodStreak: 0, maxPoorStreak: 0, currentStreak: 0, currentStreakType: 'none', totalGoodDays: 0, totalPoorDays: 0 } };
   }, [chartData.streakData]);
 
@@ -2742,6 +2911,60 @@ export function AttendanceAnalytics({
 
   const handleRiskLevelChange = useCallback((value: string) => {
     setSelectedRiskLevel(value);
+  }, []);
+
+  const handleSubjectChange = useCallback((value: string) => {
+    setInternalSelectedSubject(value);
+    if (onSubjectChange) {
+      onSubjectChange(value);
+    }
+  }, [onSubjectChange]);
+
+  // Emit unified filter snapshot to parent when analytics filters change
+  useEffect(() => {
+    const snapshot = {
+      departmentId: selectedDepartment !== 'all' ? selectedDepartment : undefined,
+      courseId: selectedCourse !== 'all' ? selectedCourse : undefined,
+      sectionId: selectedSection !== 'all' ? selectedSection : undefined,
+      yearLevel: selectedYearLevel !== 'all' ? selectedYearLevel : undefined,
+      subjectId: internalSelectedSubject !== 'all' ? internalSelectedSubject : undefined,
+      timeRange: timeRange?.preset || 'year',
+      startDate: timeRange?.start?.toISOString(),
+      endDate: timeRange?.end?.toISOString()
+    };
+    // Only call if parent provided a handler
+    // @ts-ignore - optional prop not in original typing
+    if (typeof onFiltersChange === 'function') {
+      // @ts-ignore
+      onFiltersChange(snapshot);
+    }
+  }, [selectedDepartment, selectedCourse, selectedSection, selectedYearLevel, internalSelectedSubject, timeRange]);
+
+  // Clear all applied filters (useful for no-data states)
+  const clearAllFilters = useCallback(() => {
+    setSelectedDepartment('all');
+    setSelectedRiskLevel('all');
+    setSelectedCourse('all');
+    setSelectedSection('all');
+    setSelectedYearLevel('all');
+    setInternalSelectedSubject('all');
+    // Reset time range to current year
+    const now = new Date();
+    const newRange = {
+      start: new Date(now.getFullYear(), 0, 1),
+      end: new Date(now.getFullYear(), 11, 31),
+      preset: 'year' as const
+    };
+    setTimeRange(newRange);
+  }, []);
+
+  const clearTimeRange = useCallback(() => {
+    const now = new Date();
+    setTimeRange({
+      start: new Date(now.getFullYear(), 0, 1),
+      end: new Date(now.getFullYear(), 11, 31),
+      preset: 'year'
+    });
   }, []);
 
 
@@ -2873,7 +3096,7 @@ export function AttendanceAnalytics({
       setDrillDownState(prev => ({
         ...prev,
         breadcrumbs: prev.breadcrumbs.slice(0, index + 1),
-        level: index === 0 ? 'department' : 'instructor'
+        level: 'department'
       }));
     }
   }, []);
@@ -2906,7 +3129,7 @@ export function AttendanceAnalytics({
             loading={loading}
           />
         )}
-        <AnalyticsSkeleton />
+        <AnalyticsLoadingSpinner />
       </div>
     );
   }
@@ -2934,8 +3157,9 @@ export function AttendanceAnalytics({
   console.log('Has totalCount?', analyticsData?.totalCount);
   console.log('Data array length:', data?.length);
 
-  // Show analytics even when there's no data, but with a helpful message
-  if (!data || data.length === 0) {
+  // If neither client-provided data nor server-fetched data exist, show empty state
+  // Only show when NOT loading
+  if (!loadingState.isLoading && hasFetchedOnce && !hasServerData && (!data || data.length === 0)) {
     return (
       <div className="space-y-6">
         {showHeader && (
@@ -2961,6 +3185,8 @@ export function AttendanceAnalytics({
     );
   }
 
+  const isBusy = loading || loadingState.isLoading || !hasFetchedOnce;
+
   return (
     <div className="p-0">
       {/* Toast Notifications */}
@@ -2984,21 +3210,22 @@ export function AttendanceAnalytics({
       )}
 
       <div className="px-6 py-6">
-        {/* Show loading or empty state when analyticsData is null */}
-        {!analyticsData && (
+        {/* Show loading or empty state only when neither analyticsData nor server data exist */}
+        {!isBusy && !analyticsData && !hasServerData && (
           <div className="flex flex-col items-center justify-center py-12">
             <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
               <BarChart3 className="w-8 h-8 text-gray-400" />
             </div>
             <h3 className="text-lg font-semibold text-gray-900 mb-2">No Data Available</h3>
-            <p className="text-gray-500 text-center max-w-md">
+            <p className="text-blue-500 text-center max-w-md">
               {loading ? 'Loading analytics data...' : 'No attendance data found. Please check your data source.'}
             </p>
+            <ClearFiltersButton onClear={clearAllFilters} />
           </div>
         )}
 
         {/* Advanced Interactivity Features */}
-        {enableAdvancedFeatures && analyticsData && (
+        {enableAdvancedFeatures && (isBusy || analyticsData || hasServerData) && (
           <div className="space-y-4">
             {/* Drill-down Breadcrumbs */}
             {drillDownState.isActive && (
@@ -3009,990 +3236,1014 @@ export function AttendanceAnalytics({
                 />
               </div>
             )}
-
-
           </div>
         )}
 
-      {/* Tabbed Analytics Interface */}
-      {analyticsData && (
-      <div className="space-y-6 pt-4">
+        {/* Tabbed Analytics Interface */}
+        {(isBusy || analyticsData || hasServerData) && (
+        <div className="space-y-6 pt-4">
 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          {/* Combined Header with Tabs and Filters */}
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 lg:gap-6 mb-6">
-            {/* Left: Tab Navigation */}
-            <TabsList className="inline-flex h-auto w-auto items-center justify-start bg-transparent border-b border-gray-200 p-0 gap-0">
-              <TabsTrigger 
-                value="overview" 
-                className="flex items-center gap-2 px-4 py-3 bg-transparent border-b-2 border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300 data-[state=active]:text-blue-600 data-[state=active]:border-blue-600 data-[state=active]:bg-transparent rounded-none font-medium transition-all duration-200"
-              >
-                <Activity className="w-4 h-4" />
-                <span className="hidden sm:inline">Dashboard</span>
-              </TabsTrigger>
-              <TabsTrigger 
-                value="charts" 
-                className="flex items-center gap-2 px-4 py-3 bg-transparent border-b-2 border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300 data-[state=active]:text-blue-600 data-[state=active]:border-blue-600 data-[state=active]:bg-transparent rounded-none font-medium transition-all duration-200"
-              >
-                <BarChartIcon className="w-4 h-4" />
-                <span className="hidden sm:inline">Trends</span>
-              </TabsTrigger>
-              <TabsTrigger 
-                value="advanced" 
-                className="flex items-center gap-2 px-4 py-3 bg-transparent border-b-2 border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300 data-[state=active]:text-blue-600 data-[state=active]:border-blue-600 data-[state=active]:bg-transparent rounded-none font-medium transition-all duration-200"
-              >
-                <Clock className="w-4 h-4" />
-                <span className="hidden sm:inline">Patterns</span>
-              </TabsTrigger>
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            {/* Combined Header with Tabs and Filters */}
+            <div className="flex flex-col gap-4 mb-6">
+              {/* Left: Tab Navigation */}
+              <TabsList className="inline-flex h-auto w-auto items-center justify-start bg-transparent border-b border-gray-200 p-0 gap-0">
+                <TabsTrigger 
+                  value="overview" 
+                  className="flex items-center gap-2 px-4 py-3 bg-transparent border-b-2 border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300 data-[state=active]:text-blue-600 data-[state=active]:border-blue-600 data-[state=active]:bg-transparent rounded-none font-medium transition-all duration-200"
+                >
+                  <Activity className="w-4 h-4" />
+                  <span className="hidden sm:inline">Dashboard</span>
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="charts" 
+                  className="flex items-center gap-2 px-4 py-3 bg-transparent border-b-2 border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300 data-[state=active]:text-blue-600 data-[state=active]:border-blue-600 data-[state=active]:bg-transparent rounded-none font-medium transition-all duration-200"
+                >
+                  <BarChartIcon className="w-4 h-4" />
+                  <span className="hidden sm:inline">Trends</span>
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="advanced" 
+                  className="flex items-center gap-2 px-4 py-3 bg-transparent border-b-2 border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300 data-[state=active]:text-blue-600 data-[state=active]:border-blue-600 data-[state=active]:bg-transparent rounded-none font-medium transition-all duration-200"
+                >
+                  <Clock className="w-4 h-4" />
+                  <span className="hidden sm:inline">Patterns</span>
+                </TabsTrigger>
 
-            </TabsList>
-            
-            {/* Right: Analytics Filters */}
-            <div className="flex flex-col sm:flex-row items-start sm:items-center">
-              <AnalyticsFilters
-                selectedDepartment={selectedDepartment}
-                selectedRiskLevel={selectedRiskLevel}
-                departmentStats={chartData.departmentStats.reduce((acc: Record<string, any>, dept: any) => {
-                  acc[dept.name] = dept.attendanceRate || 0;
-                  return acc;
-                }, {} as Record<string, any>)}
-                onDepartmentChange={handleDepartmentChange}
-                onRiskLevelChange={handleRiskLevelChange}
-                enableTimeRange={enableTimeRange}
-                timeRange={timeRange}
-                onTimeRangeChange={handleTimeRangeChange}
-              />
-            </div>
-          </div>
-
-        {/* Dashboard Tab */}
-        <TabsContent value="overview" className="space-y-8 mt-6">
-          {/* Summary header with collapse toggle */}
-          <div className="flex items-center justify-between">
-            <h4 className="text-sm font-semibold text-gray-800">Summary</h4>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-8 px-2 text-xs"
-              onClick={() => setShowOverviewCards(prev => !prev)}
-              aria-expanded={showOverviewCards}
-              aria-controls="overview-summary-cards"
-            >
-              {showOverviewCards ? (
-                <div className="flex items-center gap-1"><ChevronUp className="w-3 h-3" /><span>Hide</span></div>
-              ) : (
-                <div className="flex items-center gap-1"><ChevronDown className="w-3 h-3" /><span>Show</span></div>
-              )}
-            </Button>
-          </div>
-
-          {/* Compact Stats Cards */}
-          {showOverviewCards && analyticsData && (
-          <div id="overview-summary-cards" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* Total Count Card */}
-            {analyticsData.totalCount > 0 ? (
-            <div className="bg-white border border-gray-200 rounded p-4 shadow-sm hover:shadow-md transition-all duration-300">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-xs font-medium text-gray-600">Total {type === 'instructor' ? 'Instructors' : 'Students'}</h3>
-                <div className="w-6 h-6 bg-gray-100 rounded flex items-center justify-center">
-                  <Users className="w-3 h-3 text-gray-600" />
-                </div>
-              </div>
-              <div className="mb-1">
-                <div className="text-xl font-bold text-gray-900">{analyticsData.totalCount.toLocaleString()}</div>
-                <div className="text-xs text-gray-500">{type === 'instructor' ? 'instructors' : 'students'}</div>
-              </div>
-              <div className="flex items-center text-xs text-green-600">
-                {analyticsData.trends?.totalCount.direction === 'up' ? (
-                  <>
-                    <TrendingUp className="w-3 h-3 mr-1" />
-                    <span>+{analyticsData.trends.totalCount.change.toFixed(1)}%</span>
-                  </>
-                ) : analyticsData.trends?.totalCount.direction === 'down' ? (
-                  <>
-                    <TrendingDown className="w-3 h-3 mr-1" />
-                    <span>-{analyticsData.trends.totalCount.change.toFixed(1)}%</span>
-                  </>
-                ) : (
-                  <>
-                    <Minus className="w-3 h-3 mr-1" />
-                    <span>No change</span>
-                  </>
-                )}
-              </div>
-            </div>
-            ) : (
-              <ChartNoData
-                title="No Data Available"
-                description="No attendance records found"
-                icon={Users}
-                iconColor="text-gray-400"
-                bgColor="bg-white"
-              />
-            )}
-
-            {/* Attendance Rate Card */}
-            {analyticsData && (analyticsData.attendedClasses + analyticsData.absentClasses + analyticsData.lateClasses) > 0 ? (
-            <div className="bg-white border border-gray-200 rounded p-4 shadow-sm hover:shadow-md transition-all duration-300">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-xs font-medium text-gray-600">Attendance Rate</h3>
-                <div className="w-6 h-6 bg-gray-100 rounded flex items-center justify-center">
-                  <CheckCircle className="w-3 h-3 text-gray-600" />
-                </div>
-              </div>
-              <div className="mb-1">
-                <div className="text-xl font-bold text-gray-900">
-                  {((analyticsData.attendedClasses / (analyticsData.attendedClasses + analyticsData.absentClasses + analyticsData.lateClasses)) * 100).toFixed(1)}%
-                </div>
-                <div className="text-xs text-gray-500">overall rate</div>
-              </div>
-              <div className="flex items-center text-xs text-green-600">
-                {analyticsData.trends?.attendanceRate.direction === 'up' ? (
-                  <>
-                    <TrendingUp className="w-3 h-3 mr-1" />
-                    <span>+{analyticsData.trends.attendanceRate.change.toFixed(1)}%</span>
-                  </>
-                ) : analyticsData.trends?.attendanceRate.direction === 'down' ? (
-                  <>
-                    <TrendingDown className="w-3 h-3 mr-1" />
-                    <span>-{analyticsData.trends.attendanceRate.change.toFixed(1)}%</span>
-                  </>
-                ) : (
-                  <>
-                    <Minus className="w-3 h-3 mr-1" />
-                    <span>No change</span>
-                  </>
-                )}
-              </div>
-            </div>
-            ) : (
-              <ChartNoData
-                title="No Attendance Data"
-                description="No attendance records available"
-                icon={CheckCircle}
-                iconColor="text-gray-400"
-                bgColor="bg-white"
-              />
-            )}
-
-            {/* Departments Card */}
-            {chartData.departmentStats.length > 0 ? (
-            <div className="bg-white border border-gray-200 rounded p-4 shadow-sm hover:shadow-md transition-all duration-300">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-xs font-medium text-gray-600">Departments</h3>
-                <div className="w-6 h-6 bg-gray-100 rounded flex items-center justify-center">
-                  <Building className="w-3 h-3 text-gray-600" />
-                </div>
-              </div>
-              <div className="mb-1">
-                <div className="text-xl font-bold text-gray-900">{chartData.departmentStats.length}</div>
-                <div className="text-xs text-gray-500">active departments</div>
-              </div>
-              <div className="flex items-center text-xs text-gray-500">
-                {analyticsData.trends?.departments.direction === 'up' ? (
-                  <>
-                    <TrendingUp className="w-3 h-3 mr-1" />
-                    <span>+{analyticsData.trends.departments.change.toFixed(1)}%</span>
-                  </>
-                ) : analyticsData.trends?.departments.direction === 'down' ? (
-                  <>
-                    <TrendingDown className="w-3 h-3 mr-1" />
-                    <span>-{analyticsData.trends.departments.change.toFixed(1)}%</span>
-                  </>
-                ) : (
-                  <>
-                    <Minus className="w-3 h-3 mr-1" />
-                    <span>No change</span>
-                  </>
-                )}
-              </div>
-            </div>
-            ) : (
-              <ChartNoData
-                title="No Departments"
-                description="No department data available"
-                icon={Building}
-                iconColor="text-gray-400"
-                bgColor="bg-white"
-              />
-            )}
-
-            {/* High Risk Card */}
-            {(chartData.riskLevelData?.find((r: any) => r.level === 'high')?.count || 0) > 0 ? (
-            <div className="bg-white border border-gray-200 rounded p-4 shadow-sm hover:shadow-md transition-all duration-300">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-xs font-medium text-gray-600">High Risk</h3>
-                <div className="w-6 h-6 bg-gray-100 rounded-md flex items-center justify-center">
-                  <AlertTriangle className="w-3 h-3 text-gray-600" />
-                </div>
-              </div>
-              <div className="mb-1">
-                  <div className="text-xl font-bold text-gray-900">{chartData.riskLevelData?.find((r: any) => r.level === 'high')?.count || 0}</div>
-                <div className="text-xs text-gray-500">high risk cases</div>
-              </div>
-              <div className="flex items-center text-xs text-red-600">
-                  {analyticsData.trends?.highRisk?.direction === 'up' ? (
-                  <>
-                    <TrendingUp className="w-3 h-3 mr-1" />
-                      <span>+{analyticsData.trends?.highRisk?.change?.toFixed(1) || '0'}%</span>
-                  </>
-                  ) : analyticsData.trends?.highRisk?.direction === 'down' ? (
-                  <>
-                    <TrendingDown className="w-3 h-3 mr-1" />
-                      <span>-{analyticsData.trends?.highRisk?.change?.toFixed(1) || '0'}%</span>
-                  </>
-                ) : (
-                  <>
-                    <Minus className="w-3 h-3 mr-1" />
-                    <span>No change</span>
-                  </>
-                )}
-              </div>
-            </div>
-            ) : (
-              <ChartNoData
-                title="No High Risk Cases"
-                description="No high risk individuals found"
-                icon={AlertTriangle}
-                iconColor="text-green-500"
-                bgColor="bg-white"
-              />
-            )}
-          </div>
-          )}
-
-          {/* Combined Row: Attendance Distribution and Department Performance */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Compact Attendance Distribution Card */}
-            <div className="bg-white border border-gray-200 rounded-2xl p-8 shadow-sm hover:shadow-md transition-all duration-300">
-              <div className="flex items-center justify-between mb-6">
-                <div>
-                  <h4 className="text-xl font-bold text-blue-900 mb-1">Attendance Distribution</h4>
-                  <p className="text-sm text-gray-600">Quick overview of attendance status</p>
-                </div>
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <FullscreenAttendanceDistributionModal
-                        totalPresent={analyticsData.attendedClasses}
-                        totalLate={analyticsData.lateClasses}
-                        totalAbsent={analyticsData.absentClasses}
-                        type={type}
-                        onExport={handleExport}
-                        selectedSubject={selectedSubject}
-                        onSubjectChange={onSubjectChange || (() => {})}
-                        subjects={subjects}
-                        loading={loading}
-                        trigger={
-                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-gray-100 rounded-xl">
-                            <Maximize2 className="w-4 h-4 text-gray-400" />
-                          </Button>
-                        }
-                      />
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>View fullscreen with detailed breakdown</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              </div>
+              </TabsList>
               
-              {/* Donut Chart */}
-              {analyticsData && (analyticsData.attendedClasses + analyticsData.absentClasses + analyticsData.lateClasses) > 0 ? (
-              <div className="flex items-center justify-center mb-6">
-                <div className="relative w-56 h-56">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={[
-                          { 
-                            name: 'Present', 
-                            value: analyticsData.attendedClasses, 
-                            color: '#1e40af' // Dark blue
-                          },
-                          { 
-                            name: 'Late', 
-                            value: analyticsData.lateClasses, 
-                            color: '#0ea5e9' // Light blue/cyan
-                          },
-                          { 
-                            name: 'Absent', 
-                            value: analyticsData.absentClasses, 
-                            color: '#9ca3af' // Light gray
-                          }
-                        ]}
-                        cx="50%"
-                        cy="50%"
-                        outerRadius={100}
-                        innerRadius={60}
-                        dataKey="value"
-                        paddingAngle={2}
-                      >
-                        {[
-                          { name: 'Present', value: analyticsData.attendedClasses, color: '#1e40af' },
-                          { name: 'Late', value: analyticsData.lateClasses, color: '#0ea5e9' },
-                          { name: 'Absent', value: analyticsData.absentClasses, color: '#9ca3af' }
-                        ].map((entry, index) => (
-                          <Cell 
-                            key={`cell-${index}`} 
-                            fill={entry.color}
-                            stroke="#ffffff"
-                            strokeWidth={2}
-                          />
-                        ))}
-                      </Pie>
-                      <RechartsTooltip 
-                      contentStyle={{
-                        backgroundColor: 'white',
-                        border: '1px solid #e5e7eb',
-                        borderRadius: '8px',
-                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-                      }}
-                        formatter={(value: any, name: any) => [
-                          `${value.toLocaleString()} (${((value / (analyticsData.attendedClasses + analyticsData.absentClasses + analyticsData.lateClasses)) * 100).toFixed(1)}%)`, 
-                          name
-                        ]}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
+              {/* Filters moved to next line below tabs */}
+              <div className="flex w-full justify-end">
+                <AnalyticsFilters
+                  selectedDepartment={selectedDepartment}
+                  selectedRiskLevel={selectedRiskLevel}
+                  selectedCourse={selectedCourse}
+                  selectedSubject={internalSelectedSubject}
+                  selectedSection={selectedSection}
+                  selectedYearLevel={selectedYearLevel}
+                  departmentStats={chartData.departmentStats.reduce((acc: Record<string, any>, dept: any) => {
+                    acc[dept.name] = dept.attendanceRate || 0;
+                    return acc;
+                  }, {} as Record<string, any>)}
+                  filterOptions={filterOptions}
+                  onDepartmentChange={handleDepartmentChange}
+                  onRiskLevelChange={handleRiskLevelChange}
+                  onCourseChange={setSelectedCourse}
+                  onSubjectChange={handleSubjectChange}
+                  onSectionChange={setSelectedSection}
+                  onYearLevelChange={setSelectedYearLevel}
+                  enableTimeRange={enableTimeRange}
+                  timeRange={timeRange}
+                  onTimeRangeChange={handleTimeRangeChange}
+                />
               </div>
-              ) : (
-                <div className="flex items-center justify-center mb-6">
+            </div>
+
+            {/* Dashboard Tab */}
+            <TabsContent value="overview" className="space-y-8 mt-6">
+              {/* Summary header with collapse toggle */}
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-semibold text-gray-800">Summary</h4>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 px-2 text-xs"
+                  onClick={() => setShowOverviewCards(prev => !prev)}
+                  aria-expanded={showOverviewCards}
+                  aria-controls="overview-summary-cards"
+                >
+                  {showOverviewCards ? (
+                    <div className="flex items-center gap-1"><ChevronUp className="w-3 h-3" /><span>Hide</span></div>
+                  ) : (
+                    <div className="flex items-center gap-1"><ChevronDown className="w-3 h-3" /><span>Show</span></div>
+                  )}
+                </Button>
+              </div>
+
+              {/* Compact Stats Cards */}
+              {showOverviewCards && (
+              <div id="overview-summary-cards" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                {/* Total Count Card */}
+                {((chartData.summary?.totalStudents ?? 0) > 0) ? (
+                <div className="bg-white border border-gray-200 rounded p-4 shadow-sm hover:shadow-md transition-all duration-300">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-xs font-medium text-gray-600">Total Students</h3>
+                    <div className="w-6 h-6 bg-gray-100 rounded flex items-center justify-center">
+                      <Users className="w-3 h-3 text-gray-600" />
+                    </div>
+                  </div>
+                  <div className="mb-1">
+                    <div className="text-xl font-bold text-gray-900">{(chartData.summary?.totalStudents ?? 0).toLocaleString()}</div>
+                    <div className="text-xs text-gray-500">students</div>
+                  </div>
+                  <div className="flex items-center text-xs text-green-600">
+                    {analyticsData?.trends?.totalCount.direction === 'up' ? (
+                      <>
+                        <TrendingUp className="w-3 h-3 mr-1" />
+                        <span>+{analyticsData?.trends?.totalCount.change.toFixed(1)}%</span>
+                      </>
+                    ) : analyticsData?.trends?.totalCount.direction === 'down' ? (
+                      <>
+                        <TrendingDown className="w-3 h-3 mr-1" />
+                        <span>-{analyticsData?.trends?.totalCount.change.toFixed(1)}%</span>
+                      </>
+                    ) : (
+                      <>
+                        <Minus className="w-3 h-3 mr-1" />
+                        <span>No change</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+                ) : (
+                  <ChartNoData
+                    title="No Data Available"
+                    description="No attendance records found"
+                    icon={Users}
+                    iconColor="text-gray-400"
+                    bgColor="bg-white"
+                  />
+                )}
+
+                {/* Attendance Rate Card */}
+                {((chartData.summary?.totalAttendance ?? 0) > 0) ? (
+                <div className="bg-white border border-gray-200 rounded p-4 shadow-sm hover:shadow-md transition-all duration-300">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-xs font-medium text-gray-600">Attendance Rate</h3>
+                    <div className="w-6 h-6 bg-gray-100 rounded flex items-center justify-center">
+                      <CheckCircle className="w-3 h-3 text-gray-600" />
+                    </div>
+                  </div>
+                  <div className="mb-1">
+                    <div className="text-xl font-bold text-gray-900">
+                      {(chartData.summary?.attendanceRate ?? 0).toFixed(1)}%
+                    </div>
+                    <div className="text-xs text-gray-500">overall rate</div>
+                  </div>
+                  <div className="flex items-center text-xs text-green-600">
+                    {analyticsData?.trends?.attendanceRate.direction === 'up' ? (
+                      <>
+                        <TrendingUp className="w-3 h-3 mr-1" />
+                        <span>+{analyticsData?.trends?.attendanceRate.change.toFixed(1)}%</span>
+                      </>
+                    ) : analyticsData?.trends?.attendanceRate.direction === 'down' ? (
+                      <>
+                        <TrendingDown className="w-3 h-3 mr-1" />
+                        <span>-{analyticsData?.trends?.attendanceRate.change.toFixed(1)}%</span>
+                      </>
+                    ) : (
+                      <>
+                        <Minus className="w-3 h-3 mr-1" />
+                        <span>No change</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+                ) : (
                   <ChartNoData
                     title="No Attendance Data"
-                    description="No attendance records to display"
-                    icon={BarChart3}
+                    description="No attendance records available"
+                    icon={CheckCircle}
                     iconColor="text-gray-400"
-                    bgColor="bg-transparent"
+                    bgColor="bg-white"
                   />
+                )}
+
+                {/* Departments Card */}
+                {chartData.departmentStats.length > 0 ? (
+                <div className="bg-white border border-gray-200 rounded p-4 shadow-sm hover:shadow-md transition-all duration-300">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-xs font-medium text-gray-600">Departments</h3>
+                    <div className="w-6 h-6 bg-gray-100 rounded flex items-center justify-center">
+                      <Building className="w-3 h-3 text-gray-600" />
+                    </div>
+                  </div>
+                  <div className="mb-1">
+                    <div className="text-xl font-bold text-gray-900">{chartData.departmentStats.length}</div>
+                    <div className="text-xs text-gray-500">active departments</div>
+                  </div>
+                  <div className="flex items-center text-xs text-gray-500">
+                    {analyticsData?.trends?.departments?.direction === 'up' ? (
+                      <>
+                        <TrendingUp className="w-3 h-3 mr-1" />
+                        <span>+{analyticsData?.trends?.departments.change.toFixed(1)}%</span>
+                      </>
+                    ) : analyticsData?.trends?.departments?.direction === 'down' ? (
+                      <>
+                        <TrendingDown className="w-3 h-3 mr-1" />
+                        <span>-{analyticsData?.trends?.departments.change.toFixed(1)}%</span>
+                      </>
+                    ) : (
+                      <>
+                        <Minus className="w-3 h-3 mr-1" />
+                        <span>No change</span>
+                      </>
+                    )}
+                  </div>
                 </div>
+                ) : (
+                  <ChartNoData
+                    title="No Departments"
+                    description="No department data available"
+                    icon={Building}
+                    iconColor="text-gray-400"
+                    bgColor="bg-white"
+                  />
+                )}
+
+                {/* High Risk Card */}
+                {(chartData.riskLevelData?.find((r: any) => r.level === 'high')?.count || 0) > 0 ? (
+                <div className="bg-white border border-gray-200 rounded p-4 shadow-sm hover:shadow-md transition-all duration-300">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-xs font-medium text-gray-600">High Risk</h3>
+                    <div className="w-6 h-6 bg-gray-100 rounded-md flex items-center justify-center">
+                      <AlertTriangle className="w-3 h-3 text-gray-600" />
+                    </div>
+                  </div>
+                  <div className="mb-1">
+                      <div className="text-xl font-bold text-gray-900">{chartData.riskLevelData?.find((r: any) => r.level === 'high')?.count || 0}</div>
+                    <div className="text-xs text-gray-500">high risk cases</div>
+                  </div>
+                  <div className="flex items-center text-xs text-red-600">
+                      {analyticsData?.trends?.highRisk?.direction === 'up' ? (
+                      <>
+                        <TrendingUp className="w-3 h-3 mr-1" />
+                        <span>+{analyticsData?.trends?.highRisk?.change?.toFixed(1) || '0'}%</span>
+                      </>
+                      ) : analyticsData?.trends?.highRisk?.direction === 'down' ? (
+                      <>
+                        <TrendingDown className="w-3 h-3 mr-1" />
+                        <span>-{analyticsData?.trends?.highRisk?.change?.toFixed(1) || '0'}%</span>
+                      </>
+                    ) : (
+                      <>
+                        <Minus className="w-3 h-3 mr-1" />
+                        <span>No change</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+                ) : (
+                  <ChartNoData
+                    title="No High Risk Cases"
+                    description="No high risk individuals found"
+                    icon={AlertTriangle}
+                    iconColor="text-green-500"
+                    bgColor="bg-white"
+                  />
+                )}
+              </div>
               )}
-              
-              {/* Horizontal Legend */}
-              <div className="flex items-center justify-center mb-4 mt-8">
-                <div className="flex items-center gap-6">
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 bg-blue-700 rounded-sm"></div>
-                    <span className="text-sm text-gray-700">Present</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 bg-cyan-500 rounded-sm"></div>
-                    <span className="text-sm text-gray-700">Late</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 bg-gray-400 rounded-sm"></div>
-                    <span className="text-sm text-gray-700">Absent</span>
-                  </div>
-                </div>
-              </div>
-              
 
-            </div>
-
-            {/* Simplified Department Performance Card */}
-            <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all duration-300">
-              <div className="flex items-center justify-between mb-6">
-                <div>
-                  <h4 className="text-xl font-bold text-blue-900 mb-1">Department Performance</h4>
-                  <p className="text-sm text-gray-600">Attendance rates by department</p>
-                </div>
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <FullscreenDepartmentPerformanceModal
-                        departmentStats={chartData.departmentStats}
-                        type={type}
-                        onExport={handleExport}
-                        selectedSubject={selectedSubject}
-                        onSubjectChange={onSubjectChange || (() => {})}
-                        subjects={subjects}
-                        trigger={
-                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-gray-100 rounded-xl">
-                            <Maximize2 className="w-4 h-4 text-gray-400" />
-                          </Button>
-                        }
-                      />
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>View fullscreen with detailed breakdown</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              </div>
-              
-              {/* Simple Bar Chart */}
-              <div className={`transition-all duration-300 ${expandedCharts.has("department-performance-overview") ? 'h-96' : 'h-80'}`}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chartData.departmentStats}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
-                    <XAxis 
-                      dataKey="code" 
-                      tick={{ fontSize: 11, fill: '#6b7280' }}
-                      axisLine={{ stroke: '#e5e7eb' }}
-                    />
-                    <YAxis 
-                      tick={{ fontSize: 11, fill: '#6b7280' }}
-                      axisLine={{ stroke: '#e5e7eb' }}
-                      tickFormatter={(value) => `${value}%`}
-                      domain={[0, 100]}
-                    />
-                    <RechartsTooltip 
-                      contentStyle={{
-                        backgroundColor: 'white',
-                        border: '1px solid #e5e7eb',
-                        borderRadius: '8px',
-                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-                      }}
-                      formatter={(value: any) => [`${value.toFixed(1)}%`, 'Attendance Rate']}
-                    />
-                    <Bar 
-                      dataKey="attendanceRate" 
-                      fill="#1e40af"
-                      radius={[4, 4, 0, 0]}
-                    />
-                    <ReferenceLine 
-                      y={85} 
-                      stroke="#0ea5e9" 
-                      strokeDasharray="5 5" 
-                      strokeWidth={2}
-                      label={{ 
-                        value: "Target 85%", 
-                        position: "insideTopRight",
-                        fill: "#0ea5e9",
-                        fontSize: 11,
-                        fontWeight: "bold"
-                      }}
-                    />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-
-              {/* Simple Legend */}
-              <div className="mt-4 flex items-center justify-center">
-                <div className="flex items-center gap-4 text-sm">
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 bg-blue-700 rounded"></div>
-                    <span className="text-gray-600">Attendance Rate</span>
+              {/* Combined Row: Attendance Distribution and Department Performance */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Compact Attendance Distribution Card */}
+                <div className="bg-white border border-gray-200 rounded-2xl p-8 shadow-sm hover:shadow-md transition-all duration-300">
+                  <div className="flex items-center justify-between mb-6">
+                    <div>
+                      <h4 className="text-xl font-bold text-blue-900 mb-1">Attendance Distribution</h4>
+                      <p className="text-sm text-gray-600">Quick overview of attendance status</p>
+                    </div>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <FullscreenAttendanceDistributionModal
+                            totalPresent={analyticsData ? analyticsData.attendedClasses : (chartData.timeBasedData || []).reduce((s: number, d: any) => s + (d.presentCount || 0), 0)}
+                            totalLate={analyticsData ? analyticsData.lateClasses : (chartData.timeBasedData || []).reduce((s: number, d: any) => s + (d.lateCount || 0), 0)}
+                            totalAbsent={analyticsData ? analyticsData.absentClasses : (chartData.timeBasedData || []).reduce((s: number, d: any) => s + (d.absentCount || 0), 0)}
+                            type={type}
+                            onExport={handleExport}
+                            showSecondaryFilters={false}
+                            loading={loading}
+                            trigger={
+                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-gray-100 rounded-xl">
+                                <Maximize2 className="w-4 h-4 text-gray-400" />
+                              </Button>
+                            }
+                          />
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>View fullscreen with detailed breakdown</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 bg-cyan-500 rounded"></div>
-                    <span className="text-gray-600">Target (85%)</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-          </div>
-        </TabsContent>
-
-        {/* Trends Tab */}
-        <TabsContent value="charts" className="space-y-8 mt-6">
-          
-
-          {/* Primary Charts Grid - Essential for Classroom Management */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Overall Attendance Performance */}
-            <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all duration-300 group">
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-3">
-                  <div>
-                    <h4 className="text-lg font-bold text-blue-900">Attendance Trend Analysis</h4>
-                    <p className="text-sm text-gray-600">
-                      Complete trend analysis for {type === 'instructor' ? 'instructors' : 'students'}
-                      {showComparison && (
-                        <span className="ml-2 inline-flex items-center gap-1 text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full">
-                          <TrendingUp className="w-3 h-3" />
-                          Comparison enabled
-                        </span>
-                      )}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  {/* Comparison Toggle */}
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant={showComparison ? "default" : "outline"}
-                          size="sm"
-                          onClick={() => setShowComparison(!showComparison)}
-                          className="h-8 px-3 text-xs rounded"
-                        >
-                          <TrendingUp className="w-3 h-3 mr-1" />
-                          {showComparison ? "Hide" : "Compare"}
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>{showComparison ? "Hide previous period comparison" : "Show comparison with previous period"}</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
                   
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <FullscreenWeeklyTrendModal
-                          weeklyData={generateDynamicChartData()}
-                          type={type}
-                          onExport={handleExport}
-                          getXAxisConfig={getXAxisConfig}
-                          showComparison={showComparison}
-                          selectedSubject={selectedSubject}
-                          onSubjectChange={onSubjectChange || (() => {})}
-                          subjects={subjects}
-                          trigger={
-                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-gray-100 rounded-xl">
-                              <Maximize2 className="w-4 h-4 text-gray-400" />
-                            </Button>
-                          }
-                        />
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>View fullscreen with detailed breakdown</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                </div>
-              </div>
-              <div className={`transition-all duration-300 ${expandedCharts.has("weekly-trend") ? 'h-96' : 'h-80'}`}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={generateDynamicChartData()}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
-                    <XAxis 
-                      dataKey={getXAxisConfig().dataKey}
-                      tick={{ fontSize: 12, fill: '#6b7280' }}
-                      axisLine={{ stroke: '#e5e7eb' }}
-                      tickFormatter={getXAxisConfig().tickFormatter}
-                    />
-                    <YAxis 
-                      tick={{ fontSize: 12, fill: '#6b7280' }}
-                      axisLine={{ stroke: '#e5e7eb' }}
-                      tickFormatter={(value) => `${value}%`}
-                      domain={[0, 100]}
-                    />
-                    <RechartsTooltip 
-                      contentStyle={{
-                        backgroundColor: 'white',
-                        border: '1px solid #e5e7eb',
-                        borderRadius: '8px',
-                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-                      }}
-                      labelFormatter={(label) => {
-                        const xAxisConfig = getXAxisConfig();
-                        if (xAxisConfig.tickFormatter) {
-                          return xAxisConfig.tickFormatter(label);
-                        }
-                        return label;
-                      }}
-                      formatter={(value: any, name: any, props: any) => {
-                        if (showComparison && props.payload.previousAttendanceRate !== undefined) {
-                          const current = props.payload.attendanceRate;
-                          const previous = props.payload.previousAttendanceRate;
-                          const change = current - previous;
-                          const changePercent = ((change / previous) * 100).toFixed(1);
-                          const changeText = change >= 0 ? `+${changePercent}%` : `${changePercent}%`;
-                          const changeColor = change >= 0 ? '#10b981' : '#ef4444';
-                          
-                          return [
-                            [
-                              `${value}% (Current)`,
-                              `${previous}% (Previous)`,
-                              `${changeText} change`
-                            ],
-                            [name, 'Previous Period', 'Change']
-                          ];
-                        }
-                        return [`${value}%`, name];
-                      }}
-                    />
-                    <Line 
-                      type="monotone" 
-                      dataKey="attendanceRate" 
-                      stroke="#1e40af" 
-                      strokeWidth={3}
-                      dot={{ fill: '#1e40af', strokeWidth: 2, r: 5, stroke: 'white' }}
-                      activeDot={{ r: 7, stroke: '#1e40af', strokeWidth: 3, fill: '#1e40af' }}
-                      name="Current Period"
-                    />
-                    {showComparison && (
-                      <Line 
-                        type="monotone" 
-                        dataKey="previousAttendanceRate" 
-                        stroke="#6b7280" 
-                        strokeWidth={2}
-                        strokeDasharray="5 5"
-                        dot={{ fill: '#6b7280', strokeWidth: 2, r: 4, stroke: 'white' }}
-                        activeDot={{ r: 6, stroke: '#6b7280', strokeWidth: 2, fill: '#6b7280' }}
-                        name="Previous Period"
-                      />
-                    )}
-                    <Legend 
-                      verticalAlign="top" 
-                      height={36}
-                      iconType="line"
-                      wrapperStyle={{ paddingBottom: '10px' }}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            {/* Late Arrival Trends */}
-            <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all duration-300 group">
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-3">
-                  <div>
-                    <h4 className="text-lg font-bold text-blue-900">Late Arrival Trends</h4>
-                    <p className="text-sm text-gray-600">
-                      Late arrival trend analysis for {type === 'instructor' ? 'instructors' : 'students'}
-                      {showLateComparison && (
-                        <span className="ml-2 inline-flex items-center gap-1 text-xs bg-red-100 text-red-700 px-2 py-1 rounded-full">
-                          <TrendingUp className="w-3 h-3" />
-                          Comparison enabled
-                        </span>
-                      )}
-                    </p>
+                  {/* Donut Chart */}
+                  {isBusy ? (
+                    <div className="flex items-center justify-center mb-6"><AnalyticsLoadingSpinner /></div>
+                  ) : (chartData.timeBasedData && chartData.timeBasedData.length > 0 ? (
+                  <div className="flex items-center justify-center mb-6">
+                    <div className="relative w-56 h-56">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={[
+                              { 
+                                name: 'Present', 
+                                value: chartData.timeBasedData.reduce((sum: number, item: any) => sum + (item.presentCount || 0), 0), 
+                                color: '#1e40af' // Dark blue
+                              },
+                              { 
+                                name: 'Late', 
+                                value: chartData.timeBasedData.reduce((sum: number, item: any) => sum + (item.lateCount || 0), 0), 
+                                color: '#0ea5e9' // Light blue/cyan
+                              },
+                              { 
+                                name: 'Absent', 
+                                value: chartData.timeBasedData.reduce((sum: number, item: any) => sum + (item.absentCount || 0), 0), 
+                                color: '#9ca3af' // Light gray
+                              }
+                            ]}
+                            cx="50%"
+                            cy="50%"
+                            outerRadius={100}
+                            innerRadius={60}
+                            dataKey="value"
+                            paddingAngle={2}
+                          >
+                            {[
+                              { name: 'Present', value: chartData.timeBasedData.reduce((sum: number, item: any) => sum + (item.presentCount || 0), 0), color: '#1e40af' },
+                              { name: 'Late', value: chartData.timeBasedData.reduce((sum: number, item: any) => sum + (item.lateCount || 0), 0), color: '#0ea5e9' },
+                              { name: 'Absent', value: chartData.timeBasedData.reduce((sum: number, item: any) => sum + (item.absentCount || 0), 0), color: '#9ca3af' }
+                            ].map((entry, index) => (
+                              <Cell 
+                                key={`cell-${index}`} 
+                                fill={entry.color}
+                                stroke="#ffffff"
+                                strokeWidth={2}
+                              />
+                            ))}
+                          </Pie>
+                          <RechartsTooltip 
+                          contentStyle={{
+                            backgroundColor: 'white',
+                            border: '1px solid #e5e7eb',
+                            borderRadius: '8px',
+                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                          }}
+                            formatter={(value: any, name: any) => {
+                              const total = chartData.timeBasedData.reduce((sum: number, item: any) => sum + (item.presentCount || 0) + (item.lateCount || 0) + (item.absentCount || 0), 0);
+                              return [
+                                `${value.toLocaleString()} (${total > 0 ? ((value / total) * 100).toFixed(1) : '0'}%)`, 
+                                name
+                              ];
+                            }}
+                          />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                  ) : (
+                    <div className="flex items-center justify-center mb-6">
+                      <AttendanceDistributionNoData timeRange={timeRange?.preset || 'week'} />
+                    </div>
+                  ))}
+                  
+                  {/* Horizontal Legend */}
+                  <div className="flex items-center justify-center mb-4 mt-8">
+                    <div className="flex items-center gap-6">
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 bg-blue-700 rounded-sm"></div>
+                        <span className="text-sm text-gray-700">Present</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 bg-cyan-500 rounded-sm"></div>
+                        <span className="text-sm text-gray-700">Late</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 bg-gray-400 rounded-sm"></div>
+                        <span className="text-sm text-gray-700">Absent</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  {/* Comparison Toggle */}
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant={showLateComparison ? "default" : "outline"}
-                          size="sm"
-                          onClick={() => setShowLateComparison(!showLateComparison)}
-                          className="h-8 px-3 text-xs rounded"
-                        >
-                          <TrendingUp className="w-3 h-3 mr-1" />
-                          {showLateComparison ? "Hide" : "Compare"}
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>{showLateComparison ? "Hide previous period comparison" : "Show comparison with previous period"}</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
+
+                {/* Simplified Department Performance Card */}
+                <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all duration-300">
+                  <div className="flex items-center justify-between mb-6">
+                    <div>
+                      <h4 className="text-xl font-bold text-blue-900 mb-1">Department Performance</h4>
+                      <p className="text-sm text-gray-600">Attendance rates by department</p>
+                    </div>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <FullscreenDepartmentPerformanceModal
+                            departmentStats={chartData.departmentStats}
+                            type={type}
+                            onExport={handleExport}
+                            showSecondaryFilters={false}
+                            trigger={
+                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-gray-100 rounded-xl">
+                                <Maximize2 className="w-4 h-4 text-gray-400" />
+                              </Button>
+                            }
+                          />
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>View fullscreen with detailed breakdown</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </div>
                   
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <FullscreenLateArrivalModal
-                          lateData={generateLateArrivalData()}
-                          type={type}
-                          onExport={handleExport}
-                          getXAxisConfig={getXAxisConfig}
-                          showComparison={showLateComparison}
-                          selectedSubject={selectedSubject}
-                          onSubjectChange={onSubjectChange || (() => {})}
-                          subjects={subjects}
-                          trigger={
-                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-gray-100 rounded-xl">
-                              <Maximize2 className="w-4 h-4 text-gray-400" />
-                            </Button>
-                          }
+                  {/* Simple Bar Chart */}
+                  <div className={`transition-all duration-300 ${expandedCharts.has("department-performance-overview") ? 'h-96' : 'h-80'}`}>
+                    {isBusy ? (
+                      <div className="py-12"><AnalyticsLoadingSpinner /></div>
+                    ) : (chartData.departmentStats.length === 0 ? (
+                      <div>
+                        <DepartmentPerformanceNoData timeRange={timeRange?.preset || 'week'} />
+                        <ClearFiltersButton onClear={clearAllFilters} />
+                      </div>
+                    ) : (
+                      <div data-chart="department-stats" className="w-full h-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={chartData.departmentStats}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
+                        <XAxis 
+                          dataKey="code" 
+                          tick={{ fontSize: 11, fill: '#6b7280' }}
+                          axisLine={{ stroke: '#e5e7eb' }}
                         />
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>View fullscreen with detailed breakdown</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                </div>
-              </div>
-              <div className={`transition-all duration-300 ${expandedCharts.has("late-arrival-trends") ? 'h-96' : 'h-80'}`}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={generateLateArrivalData()}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
-                    <XAxis 
-                      dataKey={getXAxisConfig().dataKey}
-                      tick={{ fontSize: 12, fill: '#6b7280' }}
-                      axisLine={{ stroke: '#e5e7eb' }}
-                      tickFormatter={getXAxisConfig().tickFormatter}
-                    />
-                    <YAxis 
-                      domain={[0, 25]} 
-                      tick={{ fontSize: 12, fill: '#6b7280' }}
-                      axisLine={{ stroke: '#e5e7eb' }}
-                      tickFormatter={(value) => `${value}%`}
-                    />
-                    <RechartsTooltip 
-                      contentStyle={{
-                        backgroundColor: 'white',
-                        border: '1px solid #e5e7eb',
-                        borderRadius: '8px',
-                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-                      }}
-                      labelFormatter={(label) => {
-                        const xAxisConfig = getXAxisConfig();
-                        if (xAxisConfig.tickFormatter) {
-                          return xAxisConfig.tickFormatter(label);
-                        }
-                        return label;
-                      }}
-                      formatter={(value: any, name: any, props: any) => {
-                        if (showLateComparison && props.payload.previousLateRate !== undefined) {
-                          const current = props.payload.lateRate;
-                          const previous = props.payload.previousLateRate;
-                          const change = current - previous;
-                          const changePercent = ((change / previous) * 100).toFixed(1);
-                          const changeText = change >= 0 ? `+${changePercent}%` : `${changePercent}%`;
-                          
-                          return [
-                            [
-                              `${value}% (Current)`,
-                              `${previous}% (Previous)`,
-                              `${changeText} change`
-                            ],
-                            [name, 'Previous Period', 'Change']
-                          ];
-                        }
-                        return [`${value}%`, name];
-                      }}
-                    />
-                    <Line 
-                      type="monotone" 
-                      dataKey="lateRate" 
-                      stroke="#ef4444" 
-                      strokeWidth={3}
-                      dot={{ fill: '#ef4444', strokeWidth: 2, r: 5, stroke: 'white' }}
-                      activeDot={{ r: 7, stroke: '#ef4444', strokeWidth: 3, fill: '#ef4444' }}
-                      name="Current Period"
-                    />
-                    {showLateComparison && (
-                      <Line 
-                        type="monotone" 
-                        dataKey="previousLateRate" 
-                        stroke="#94a3b8" 
-                        strokeWidth={2}
-                        strokeDasharray="5 5"
-                        dot={{ fill: '#94a3b8', strokeWidth: 2, r: 4, stroke: 'white' }}
-                        activeDot={{ r: 6, stroke: '#94a3b8', strokeWidth: 2, fill: '#94a3b8' }}
-                        name="Previous Period"
-                      />
-                    )}
-                    <Legend 
-                      verticalAlign="top" 
-                      height={36}
-                      iconType="line"
-                      wrapperStyle={{ paddingBottom: '10px' }}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-
-           </div>
-         </TabsContent>
-
-        {/* Patterns Tab */}
-        <TabsContent value="advanced" className="space-y-8 mt-6">
-          {/* Additional Charts for Advanced Features */}
-          {enableAdvancedFeatures && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Attendance Pattern Analysis */}
-          <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all duration-300 group">
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3">
-                <div>
-                  <h4 className="text-lg font-bold text-blue-900">Attendance Pattern Analysis</h4>
-                  <p className="text-sm text-gray-600">Moving average and peak/low pattern detection</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <FullscreenPatternAnalysisModal
-                        patternData={generatePatternAnalysisData}
-                        type={type}
-                        onExport={handleExport}
-                        getXAxisConfig={getXAxisConfig}
-                        selectedCourse={selectedCourse}
-                        selectedSubject={selectedSubject}
-                        onSubjectChange={onSubjectChange || (() => {})}
-                        subjects={subjects}
-                        trigger={
-                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-gray-100 rounded-xl">
-                            <Maximize2 className="w-4 h-4 text-gray-400" />
-                          </Button>
-                        }
-                      />
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>View fullscreen</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              </div>
-            </div>
-            <div className={`transition-all duration-300 ${expandedCharts.has("pattern-analysis") ? 'h-96' : 'h-80'}`}>
-              <ResponsiveContainer width="100%" height="100%">
-                                    <LineChart data={generatePatternAnalysisData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
-                  <XAxis 
-                    dataKey={getXAxisConfig().dataKey}
-                    tick={{ fontSize: 12, fill: '#6b7280' }}
-                    axisLine={{ stroke: '#e5e7eb' }}
-                    tickFormatter={getXAxisConfig().tickFormatter}
-                  />
-                  <YAxis 
-                    tick={{ fontSize: 12, fill: '#6b7280' }}
-                    axisLine={{ stroke: '#e5e7eb' }}
-                    tickFormatter={(value) => `${value}%`}
-                    domain={[0, 100]}
-                  />
-                  <RechartsTooltip 
-                    contentStyle={{
-                      backgroundColor: 'white',
-                      border: '1px solid #e5e7eb',
-                      borderRadius: '8px',
-                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-                    }}
-                    labelFormatter={(label) => {
-                      const xAxisConfig = getXAxisConfig();
-                      if (xAxisConfig.tickFormatter) {
-                        return xAxisConfig.tickFormatter(label);
-                      }
-                      return label;
-                    }}
-                    formatter={(value: any, name: any, props: any) => {
-                      const isPeak = props?.payload?.isPeak;
-                      const isValley = props?.payload?.isValley;
-                      const markers = isPeak ? ' (peak)' : isValley ? ' (low)' : '';
-                      if (name === 'movingAverage') return [`${value.toFixed?.(1) ?? value}%`, 'Moving Avg'];
-                      return [`${value}%${markers}`, 'Attendance Rate'];
-                    }}
-                  />
-                  <Line 
-                    type="monotone" 
-                    dataKey="attendanceRate" 
-                    stroke="#1e40af" 
-                    strokeWidth={2}
-                    dot={false}
-                    name="Attendance Rate"
-                  />
-                  <Line 
-                    type="monotone" 
-                    dataKey="movingAverage" 
-                    stroke="#22c55e" 
-                    strokeWidth={3}
-                    dot={false}
-                    name="Moving Avg"
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          {/* Streak Analysis */}
-          <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all duration-300 group">
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3">
-                <div>
-                  <h4 className="text-lg font-bold text-blue-900">Streak Analysis</h4>
-                  <p className="text-sm text-gray-600">Consecutive days of good/poor attendance patterns</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <FullscreenStreakAnalysisModal
-                        streakData={generateStreakAnalysisData}
-                        type={type}
-                        onExport={handleExport}
-                        getXAxisConfig={getXAxisConfig}
-                        selectedSubject={selectedSubject}
-                        onSubjectChange={onSubjectChange || (() => {})}
-                        subjects={subjects}
-                        trigger={
-                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-gray-100 rounded-xl">
-                            <Maximize2 className="w-4 h-4 text-gray-400" />
-                          </Button>
-                        }
-                      />
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>View fullscreen</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              </div>
-            </div>
-            
-
-
-            <div className={`transition-all duration-300 ${expandedCharts.has("streak-analysis") ? 'h-96' : 'h-80'}`}>
-              <ResponsiveContainer width="100%" height="100%">
-                                  <BarChart data={generateStreakAnalysisData.data}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
-                  <XAxis 
-                    dataKey={getXAxisConfig().dataKey}
-                    tick={{ fontSize: 10, fill: '#6b7280' }}
-                    axisLine={{ stroke: '#e5e7eb' }}
-                    tickFormatter={getXAxisConfig().tickFormatter}
-                  />
-                  <YAxis 
-                    tick={{ fontSize: 10, fill: '#6b7280' }}
-                    axisLine={{ stroke: '#e5e7eb' }}
-                    tickFormatter={(value) => `${Math.abs(value)}`}
-                  />
-                  <RechartsTooltip 
-                    contentStyle={{
-                      backgroundColor: 'white',
-                      border: '1px solid #e5e7eb',
-                      borderRadius: '8px',
-                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-                    }}
-                    labelFormatter={(label) => {
-                      const xAxisConfig = getXAxisConfig();
-                      if (xAxisConfig.tickFormatter) {
-                        return xAxisConfig.tickFormatter(label);
-                      }
-                      return label;
-                    }}
-                    formatter={(value: any, name: any, props: any) => {
-                      const streakType = props?.payload?.streakType;
-                      const isBreak = props?.payload?.isStreakBreak;
-                      const attendanceRate = props?.payload?.attendanceRate;
-                      const streakLabel = streakType === 'good' ? 'Good Streak' : 'Poor Streak';
-                      const breakLabel = isBreak ? ' (Streak Break)' : '';
-                      return [
-                        `${Math.abs(value)} days${breakLabel}`,
-                        streakLabel,
-                        `Attendance: ${attendanceRate}%`
-                      ];
-                    }}
-                  />
-                  <Bar 
-                    dataKey="currentStreak" 
-                    fill="#6b7280"
-                    radius={[2, 2, 0, 0]}
-                  >
-                    {generateStreakAnalysisData.data.map((entry: any, index: number) => (
-                      <Cell 
-                        key={`cell-${index}`}
-                        fill={entry.currentStreak > 0 ? '#22c55e' : entry.currentStreak < 0 ? '#ef4444' : '#6b7280'}
-                      />
+                        <YAxis 
+                          tick={{ fontSize: 11, fill: '#6b7280' }}
+                          axisLine={{ stroke: '#e5e7eb' }}
+                          tickFormatter={(value) => `${value}%`}
+                          domain={[0, 100]}
+                        />
+                        <RechartsTooltip 
+                          contentStyle={{
+                            backgroundColor: 'white',
+                            border: '1px solid #e5e7eb',
+                            borderRadius: '8px',
+                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                          }}
+                          formatter={(value: any) => [`${value.toFixed(1)}%`, 'Attendance Rate']}
+                        />
+                        <Bar 
+                          dataKey="attendanceRate" 
+                          fill="#1e40af"
+                          radius={[4, 4, 0, 0]}
+                        />
+                        <ReferenceLine 
+                          y={85} 
+                          stroke="#0ea5e9" 
+                          strokeDasharray="5 5" 
+                          strokeWidth={2}
+                          label={{ 
+                            value: "Target 85%", 
+                            position: "insideTopRight",
+                            fill: "#0ea5e9",
+                            fontSize: 11,
+                            fontWeight: "bold"
+                          }}
+                        />
+                      </BarChart>
+                    </ResponsiveContainer>
+                    </div>
                     ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
+                  </div>
+
+                </div>
+              </div>
+            </TabsContent>
+
+            {/* Trends Tab */}
+            <TabsContent value="charts" className="space-y-8 mt-6">
+              {/* Primary Charts Grid - Essential for Classroom Management */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Overall Attendance Performance */}
+                <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all duration-300 group">
+                  <div className="flex items-center justify-between mb-6">
+                    <div className="flex items-center gap-3">
+                      <div>
+                        <h4 className="text-lg font-bold text-blue-900">Attendance Trend Analysis</h4>
+                        <p className="text-sm text-gray-600">
+                          Complete trend analysis for students
+                          {showComparison && (
+                            <span className="ml-2 inline-flex items-center gap-1 text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full">
+                              <TrendingUp className="w-3 h-3" />
+                              Comparison enabled
+                            </span>
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {/* Comparison Toggle */}
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant={showComparison ? "default" : "outline"}
+                              size="sm"
+                              onClick={() => setShowComparison(!showComparison)}
+                              className="h-8 px-3 text-xs rounded"
+                            >
+                              <TrendingUp className="w-3 h-3 mr-1" />
+                              {showComparison ? "Hide" : "Compare"}
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>{showComparison ? "Hide previous period comparison" : "Show comparison with previous period"}</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                      
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <FullscreenWeeklyTrendModal
+                              weeklyData={generateDynamicChartData()}
+                              type={type}
+                              onExport={handleExport}
+                              getXAxisConfig={getXAxisConfig}
+                              showComparison={showComparison}
+                              showSecondaryFilters={false}
+                              trigger={
+                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-gray-100 rounded-xl">
+                                  <Maximize2 className="w-4 h-4 text-gray-400" />
+                                </Button>
+                              }
+                            />
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>View fullscreen with detailed breakdown</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </div>
+                  </div>
+                  <div className={`transition-all duration-300 ${expandedCharts.has("weekly-trend") ? 'h-96' : 'h-80'}`}>
+                    {isBusy ? (
+                      <div className="py-12"><AnalyticsLoadingSpinner /></div>
+                    ) : (generateDynamicChartData().length === 0 ? (
+                      <div>
+                        <AttendanceTrendNoData timeRange={timeRange?.preset || 'week'} />
+                        <ClearFiltersButton onClear={clearAllFilters} />
+                      </div>
+                    ) : (
+                      <div data-chart="attendance-trend" className="w-full h-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={generateDynamicChartData()}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
+                        <XAxis 
+                          dataKey={getXAxisConfig().dataKey}
+                          tick={{ fontSize: 12, fill: '#6b7280' }}
+                          axisLine={{ stroke: '#e5e7eb' }}
+                          tickFormatter={getXAxisConfig().tickFormatter}
+                        />
+                        <YAxis 
+                          tick={{ fontSize: 12, fill: '#6b7280' }}
+                          axisLine={{ stroke: '#e5e7eb' }}
+                          tickFormatter={(value) => `${value}%`}
+                          domain={[0, 100]}
+                        />
+                        <RechartsTooltip 
+                          contentStyle={{
+                            backgroundColor: 'white',
+                            border: '1px solid #e5e7eb',
+                            borderRadius: '8px',
+                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                          }}
+                          labelFormatter={(label) => {
+                            const xAxisConfig = getXAxisConfig();
+                            if (xAxisConfig.tickFormatter) {
+                              return xAxisConfig.tickFormatter(label);
+                            }
+                            return label;
+                          }}
+                          formatter={(value: any, name: any, props: any) => {
+                            if (showComparison && props.payload.previousAttendanceRate !== undefined) {
+                              const current = props.payload.attendanceRate;
+                              const previous = props.payload.previousAttendanceRate;
+                              const change = current - previous;
+                              const changePercent = ((change / previous) * 100).toFixed(1);
+                              const changeText = change >= 0 ? `+${changePercent}%` : `${changePercent}%`;
+                              const changeColor = change >= 0 ? '#10b981' : '#ef4444';
+                              
+                              return [
+                                [
+                                  `${value}% (Current)`,
+                                  `${previous}% (Previous)`,
+                                  `${changeText} change`
+                                ],
+                                [name, 'Previous Period', 'Change']
+                              ];
+                            }
+                            return [`${value}%`, name];
+                          }}
+                        />
+                        <Line 
+                          type="monotone" 
+                          dataKey="attendanceRate" 
+                          stroke="#1e40af" 
+                          strokeWidth={3}
+                          dot={{ fill: '#1e40af', strokeWidth: 2, r: 5, stroke: 'white' }}
+                          activeDot={{ r: 7, stroke: '#1e40af', strokeWidth: 3, fill: '#1e40af' }}
+                          name="Current Period"
+                        />
+                        {showComparison && (
+                          <Line 
+                            type="monotone" 
+                            dataKey="previousAttendanceRate" 
+                            stroke="#6b7280" 
+                            strokeWidth={2}
+                            strokeDasharray="5 5"
+                            dot={{ fill: '#6b7280', strokeWidth: 2, r: 4, stroke: 'white' }}
+                            activeDot={{ r: 6, stroke: '#6b7280', strokeWidth: 2, fill: '#6b7280' }}
+                            name="Previous Period"
+                          />
+                        )}
+                        <Legend 
+                          verticalAlign="top" 
+                          height={36}
+                          iconType="line"
+                          wrapperStyle={{ paddingBottom: '10px' }}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                    </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Late Arrival Trends */}
+                <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all duration-300 group">
+                  <div className="flex items-center justify-between mb-6">
+                    <div className="flex items-center gap-3">
+                      <div>
+                        <h4 className="text-lg font-bold text-blue-900">Late Arrival Trends</h4>
+                        <p className="text-sm text-gray-600">
+                          Late arrival trend analysis for students
+                          {showLateComparison && (
+                            <span className="ml-2 inline-flex items-center gap-1 text-xs bg-red-100 text-red-700 px-2 py-1 rounded-full">
+                              <TrendingUp className="w-3 h-3" />
+                              Comparison enabled
+                            </span>
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {/* Comparison Toggle */}
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant={showLateComparison ? "default" : "outline"}
+                              size="sm"
+                              onClick={() => setShowLateComparison(!showLateComparison)}
+                              className="h-8 px-3 text-xs rounded"
+                            >
+                              <TrendingUp className="w-3 h-3 mr-1" />
+                              {showLateComparison ? "Hide" : "Compare"}
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>{showLateComparison ? "Hide previous period comparison" : "Show comparison with previous period"}</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                      
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <FullscreenLateArrivalModal
+                              lateData={generateLateArrivalData()}
+                              type={type}
+                              onExport={handleExport}
+                              getXAxisConfig={getXAxisConfig}
+                              showComparison={showLateComparison}
+                              showSecondaryFilters={false}
+                              trigger={
+                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-gray-100 rounded-xl">
+                                  <Maximize2 className="w-4 h-4 text-gray-400" />
+                                </Button>
+                              }
+                            />
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>View fullscreen with detailed breakdown</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </div>
+                  </div>
+                  <div className={`transition-all duration-300 ${expandedCharts.has("late-arrival-trends") ? 'h-96' : 'h-80'}`}>
+                    {isBusy ? (
+                      <div className="py-12"><AnalyticsLoadingSpinner /></div>
+                    ) : (generateLateArrivalData().length === 0 ? (
+                      <div>
+                        <LateArrivalNoData timeRange={timeRange?.preset || 'week'} />
+                        <ClearFiltersButton onClear={clearAllFilters} />
+                      </div>
+                    ) : (
+                      <div data-chart="late-arrival" className="w-full h-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={generateLateArrivalData()}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
+                        <XAxis 
+                          dataKey={getXAxisConfig().dataKey}
+                          tick={{ fontSize: 12, fill: '#6b7280' }}
+                          axisLine={{ stroke: '#e5e7eb' }}
+                          tickFormatter={getXAxisConfig().tickFormatter}
+                        />
+                        <YAxis 
+                          domain={[0, 25]} 
+                          tick={{ fontSize: 12, fill: '#6b7280' }}
+                          axisLine={{ stroke: '#e5e7eb' }}
+                          tickFormatter={(value) => `${value}%`}
+                        />
+                        <RechartsTooltip 
+                          contentStyle={{
+                            backgroundColor: 'white',
+                            border: '1px solid #e5e7eb',
+                            borderRadius: '8px',
+                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                          }}
+                          labelFormatter={(label) => {
+                            const xAxisConfig = getXAxisConfig();
+                            if (xAxisConfig.tickFormatter) {
+                              return xAxisConfig.tickFormatter(label);
+                            }
+                            return label;
+                          }}
+                          formatter={(value: any, name: any, props: any) => {
+                            if (showLateComparison && props.payload.previousLateRate !== undefined) {
+                              const current = props.payload.lateRate;
+                              const previous = props.payload.previousLateRate;
+                              const change = current - previous;
+                              const changePercent = ((change / previous) * 100).toFixed(1);
+                              const changeText = change >= 0 ? `+${changePercent}%` : `${changePercent}%`;
+                              
+                              return [
+                                [
+                                  `${value}% (Current)`,
+                                  `${previous}% (Previous)`,
+                                  `${changeText} change`
+                                ],
+                                [name, 'Previous Period', 'Change']
+                              ];
+                            }
+                            return [`${value}%`, name];
+                          }}
+                        />
+                        <Line 
+                          type="monotone" 
+                          dataKey="lateRate" 
+                          stroke="#ef4444" 
+                          strokeWidth={3}
+                          dot={{ fill: '#ef4444', strokeWidth: 2, r: 5, stroke: 'white' }}
+                          activeDot={{ r: 7, stroke: '#ef4444', strokeWidth: 3, fill: '#ef4444' }}
+                          name="Current Period"
+                        />
+                        {showLateComparison && (
+                          <Line 
+                            type="monotone" 
+                            dataKey="previousLateRate" 
+                            stroke="#94a3b8" 
+                            strokeWidth={2}
+                            strokeDasharray="5 5"
+                            dot={{ fill: '#94a3b8', strokeWidth: 2, r: 4, stroke: 'white' }}
+                            activeDot={{ r: 6, stroke: '#94a3b8', strokeWidth: 2, fill: '#94a3b8' }}
+                            name="Previous Period"
+                          />
+                        )}
+                        <Legend 
+                          verticalAlign="top" 
+                          height={36}
+                          iconType="line"
+                          wrapperStyle={{ paddingBottom: '10px' }}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                    </div>
+                    ))}
+                  </div>
+                </div>
+
+              </div>
+            </TabsContent>
+
+            {/* Patterns Tab */}
+            <TabsContent value="advanced" className="space-y-8 mt-6">
+              {/* Additional Charts for Advanced Features */}
+              {enableAdvancedFeatures && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Attendance Pattern Analysis */}
+                <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all duration-300 group">
+                  <div className="flex items-center justify-between mb-6">
+                    <div className="flex items-center gap-3">
+                      <div>
+                        <h4 className="text-lg font-bold text-blue-900">Attendance Pattern Analysis</h4>
+                        <p className="text-sm text-gray-600">Moving average and peak/low pattern detection</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <FullscreenPatternAnalysisModal
+                              patternData={generatePatternAnalysisData}
+                              type={type}
+                              onExport={handleExport}
+                              getXAxisConfig={getXAxisConfig}
+                              showSecondaryFilters={false}
+                              trigger={
+                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-gray-100 rounded-xl">
+                                  <Maximize2 className="w-4 h-4 text-gray-400" />
+                                </Button>
+                              }
+                            />
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>View fullscreen</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </div>
+                  </div>
+                  <div className={`transition-all duration-300 ${expandedCharts.has("pattern-analysis") ? 'h-96' : 'h-80'}`}>
+                    {isBusy ? (
+                      <div className="py-12"><AnalyticsLoadingSpinner /></div>
+                    ) : (generatePatternAnalysisData.length === 0 ? (
+                      <div>
+                        <PatternAnalysisNoData timeRange={timeRange?.preset || 'week'} />
+                        <ClearFiltersButton onClear={clearAllFilters} />
+                      </div>
+                    ) : (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={generatePatternAnalysisData}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
+                        <XAxis 
+                          dataKey={getXAxisConfig().dataKey}
+                          tick={{ fontSize: 12, fill: '#6b7280' }}
+                          axisLine={{ stroke: '#e5e7eb' }}
+                          tickFormatter={getXAxisConfig().tickFormatter}
+                        />
+                        <YAxis 
+                          tick={{ fontSize: 12, fill: '#6b7280' }}
+                          axisLine={{ stroke: '#e5e7eb' }}
+                          tickFormatter={(value) => `${value}%`}
+                          domain={[0, 100]}
+                        />
+                        <RechartsTooltip 
+                          contentStyle={{
+                            backgroundColor: 'white',
+                            border: '1px solid #e5e7eb',
+                            
+                            borderRadius: '8px',
+                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                          }}
+                          labelFormatter={(label) => {
+                            const xAxisConfig = getXAxisConfig();
+                            if (xAxisConfig.tickFormatter) {
+                              return xAxisConfig.tickFormatter(label);
+                            }
+                            return label;
+                          }}
+                          formatter={(value: any, name: any, props: any) => {
+                            const isPeak = props?.payload?.isPeak;
+                            const isValley = props?.payload?.isValley;
+                            const markers = isPeak ? ' (peak)' : isValley ? ' (low)' : '';
+                            if (name === 'movingAverage') return [`${value.toFixed?.(1) ?? value}%`, 'Moving Avg'];
+                            return [`${value}%${markers}`, 'Attendance Rate'];
+                          }}
+                        />
+                        <Line 
+                          type="monotone" 
+                          dataKey="attendanceRate" 
+                          stroke="#1e40af" 
+                          strokeWidth={2}
+                          dot={false}
+                          name="Attendance Rate"
+                        />
+                        <Line 
+                          type="monotone" 
+                          dataKey="movingAverage" 
+                          stroke="#22c55e" 
+                          strokeWidth={3}
+                          dot={false}
+                          name="Moving Avg"
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Streak Analysis */}
+                <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all duration-300 group">
+                  <div className="flex items-center justify-between mb-6">
+                    <div className="flex items-center gap-3">
+                      <div>
+                        <h4 className="text-lg font-bold text-blue-900">Streak Analysis</h4>
+                        <p className="text-sm text-gray-600">Consecutive days of good/poor attendance patterns</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <FullscreenStreakAnalysisModal
+                              streakData={generateStreakAnalysisData}
+                              type={type}
+                              onExport={handleExport}
+                              getXAxisConfig={getXAxisConfig}
+                              showSecondaryFilters={false}
+                              trigger={
+                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-gray-100 rounded-xl">
+                                  <Maximize2 className="w-4 h-4 text-gray-400" />
+                                </Button>
+                              }
+                            />
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>View fullscreen</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </div>
+                  </div>
+                  
+
+
+                  <div className={`transition-all duration-300 ${expandedCharts.has("streak-analysis") ? 'h-96' : 'h-80'}`}>
+                    {isBusy ? (
+                      <div className="py-12"><AnalyticsLoadingSpinner /></div>
+                    ) : (generateStreakAnalysisData.data.length === 0 ? (
+                      <div>
+                        <StreakAnalysisNoData timeRange={timeRange?.preset || 'week'} />
+                        <ClearFiltersButton onClear={clearAllFilters} />
+                      </div>
+                    ) : (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={generateStreakAnalysisData.data}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
+                        <XAxis 
+                          dataKey={getXAxisConfig().dataKey}
+                          tick={{ fontSize: 10, fill: '#6b7280' }}
+                          axisLine={{ stroke: '#e5e7eb' }}
+                          tickFormatter={getXAxisConfig().tickFormatter}
+                        />
+                        <YAxis 
+                          tick={{ fontSize: 10, fill: '#6b7280' }}
+                          axisLine={{ stroke: '#e5e7eb' }}
+                          tickFormatter={(value) => `${Math.abs(value)}`}
+                        />
+                        <RechartsTooltip 
+                          contentStyle={{
+                            backgroundColor: 'white',
+                            border: '1px solid #e5e7eb',
+                            borderRadius: '8px',
+                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                          }}
+                          labelFormatter={(label) => {
+                            const xAxisConfig = getXAxisConfig();
+                            if (xAxisConfig.tickFormatter) {
+                              return xAxisConfig.tickFormatter(label);
+                            }
+                            return label;
+                          }}
+                          formatter={(value: any, name: any, props: any) => {
+                            const streakType = props?.payload?.streakType;
+                            const isBreak = props?.payload?.isStreakBreak;
+                            const attendanceRate = props?.payload?.attendanceRate;
+                            const streakLabel = streakType === 'good' ? 'Good Streak' : 'Poor Streak';
+                            const breakLabel = isBreak ? ' (Streak Break)' : '';
+                            return [
+                              `${Math.abs(value)} days${breakLabel}`,
+                              streakLabel,
+                              `Attendance: ${attendanceRate}%`
+                            ];
+                          }}
+                        />
+                        <Bar 
+                          dataKey="currentStreak" 
+                          fill="#6b7280"
+                          radius={[2, 2, 0, 0]}
+                        >
+                          {generateStreakAnalysisData.data.map((entry: any, index: number) => (
+                            <Cell 
+                              key={`cell-${index}`}
+                              fill={entry.currentStreak > 0 ? '#22c55e' : entry.currentStreak < 0 ? '#ef4444' : '#6b7280'}
+                            />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              )}
+            </TabsContent>
+          </Tabs>
         </div>
-          )}
-        </TabsContent>
-
-
-        </Tabs>
-      </div>
-      )}
+        )}
       </div>
     </div>
   );

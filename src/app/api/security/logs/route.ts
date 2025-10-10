@@ -1,102 +1,109 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '@/lib/prisma';
 
-const prisma = new PrismaClient();
-
-export async function GET(req: NextRequest) {
+export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(req.url);
+    // JWT Authentication - Admin only
+    const token = request.cookies.get('token')?.value;
+    if (!token) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = Number((decoded as any)?.userId);
+    if (!Number.isFinite(userId)) {
+      return NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 });
+    }
+
+    // Check user exists and is active
+    const user = await prisma.user.findUnique({
+      where: { userId },
+      select: { status: true, role: true }
+    });
+
+    if (!user || user.status !== 'ACTIVE') {
+      return NextResponse.json({ error: 'User not found or inactive' }, { status: 401 });
+    }
+
+    // Admin-only access control
+    const adminRoles = ['SUPER_ADMIN', 'ADMIN'];
+    if (!adminRoles.includes(user.role)) {
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+    }
+
+    const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '20');
-    const eventType = searchParams.get('eventType');
-    const severity = searchParams.get('severity');
-    const resolved = searchParams.get('resolved');
+    const search = searchParams.get('search') || '';
+    const level = searchParams.get('level') || 'all';
+    const module = searchParams.get('module') || 'all';
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
 
-    // Build where clause
+    const skip = (page - 1) * limit;
+
+    // Build where clause for filtering
     const where: any = {};
 
-    if (eventType) {
-      where.eventType = eventType;
+    if (search) {
+      where.OR = [
+        { action: { contains: search, mode: 'insensitive' } },
+        { message: { contains: search, mode: 'insensitive' } },
+        { userEmail: { contains: search, mode: 'insensitive' } }
+      ];
     }
 
-    if (severity) {
-      where.severity = severity;
+    if (level !== 'all') {
+      where.level = level;
     }
 
-    if (resolved !== null && resolved !== undefined) {
-      where.resolved = resolved === 'true';
+    if (module !== 'all') {
+      where.module = module;
     }
 
-    if (startDate || endDate) {
-      where.timestamp = {};
-      if (startDate) {
-        where.timestamp.gte = new Date(startDate);
-      }
-      if (endDate) {
-        where.timestamp.lte = new Date(endDate);
-      }
+    if (startDate && endDate) {
+      where.timestamp = {
+        gte: new Date(startDate),
+        lte: new Date(endDate)
+      };
     }
 
-    // Get total count for pagination
-    const total = await prisma.securityLog.count({ where });
-
-    // Get logs with pagination
-    const logs = await prisma.securityLog.findMany({
-      where,
-      orderBy: { timestamp: 'desc' },
-      skip: (page - 1) * limit,
-      take: limit,
-      include: {
-        user: {
-          select: {
-            userId: true,
-            userName: true,
-            email: true
-          }
-        },
-        resolver: {
-          select: {
-            userId: true,
-            userName: true,
-            email: true
-          }
+    // Fetch security logs with pagination
+    const [logs, total] = await Promise.all([
+      prisma.securityLog.findMany({
+        where,
+        orderBy: { timestamp: 'desc' },
+        skip,
+        take: limit,
+        select: {
+          id: true,
+          timestamp: true,
+          level: true,
+          module: true,
+          action: true,
+          userId: true,
+          userEmail: true,
+          ipAddress: true,
+          userAgent: true,
+          details: true,
+          severity: true,
+          eventType: true,
+          resolved: true,
+          message: true
         }
-      }
-    });
-
-    // Get event type statistics
-    const eventTypeStats = await prisma.securityLog.groupBy({
-      by: ['eventType'],
-      where,
-      _count: {
-        eventType: true
-      }
-    });
-
-    // Get severity statistics
-    const severityStats = await prisma.securityLog.groupBy({
-      by: ['severity'],
-      where,
-      _count: {
-        severity: true
-      }
-    });
+      }),
+      prisma.securityLog.count({ where })
+    ]);
 
     return NextResponse.json({
-      logs,
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit)
-      },
-      statistics: {
-        eventTypes: eventTypeStats,
-        severities: severityStats
-      }
+      data: logs,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit)
     });
+
   } catch (error) {
     console.error('Error fetching security logs:', error);
     return NextResponse.json(
@@ -105,38 +112,3 @@ export async function GET(req: NextRequest) {
     );
   }
 }
-
-export async function POST(req: NextRequest) {
-  try {
-    const data = await req.json();
-    
-    const log = await prisma.securityLog.create({
-      data: {
-        eventType: data.eventType,
-        severity: data.severity,
-        description: data.description,
-        userId: data.userId || null,
-        ipAddress: data.ipAddress || null,
-        userAgent: data.userAgent || null,
-        details: data.details || null
-      },
-      include: {
-        user: {
-          select: {
-            userId: true,
-            userName: true,
-            email: true
-          }
-        }
-      }
-    });
-
-    return NextResponse.json(log);
-  } catch (error) {
-    console.error('Error creating security log:', error);
-    return NextResponse.json(
-      { error: 'Failed to create security log' },
-      { status: 500 }
-    );
-  }
-} 

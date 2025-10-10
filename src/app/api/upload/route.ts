@@ -2,9 +2,32 @@ import { NextRequest, NextResponse } from 'next/server';
 import { writeFile, mkdir } from 'fs/promises';
 import { join } from 'path';
 import { existsSync } from 'fs';
+import { prisma } from '@/lib/prisma';
 
 export async function POST(request: NextRequest) {
   try {
+    // JWT Authentication - Admin only
+    const token = request.cookies.get('token')?.value;
+    if (!token) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = Number((decoded as any)?.userId);
+    if (!Number.isFinite(userId)) {
+      return NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 });
+    }
+
+    const user = await prisma.user.findUnique({ where: { userId }, select: { status: true, role: true } });
+    if (!user || user.status !== 'ACTIVE') {
+      return NextResponse.json({ error: 'User not found or inactive' }, { status: 401 });
+    }
+    const adminRoles = ['SUPER_ADMIN', 'ADMIN'];
+    if (!adminRoles.includes(user.role)) {
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+    }
+
     const formData = await request.formData();
     const file = formData.get('file') as File;
     
@@ -15,10 +38,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate file type
-    if (!file.type.startsWith('image/')) {
+    // Validate file type (whitelist)
+    const allowedTypes = ['image/png','image/jpeg','image/jpg','image/webp','image/svg+xml'];
+    if (!allowedTypes.includes(file.type)) {
       return NextResponse.json(
-        { error: 'Only image files are allowed' },
+        { error: 'Only PNG, JPEG, WEBP, or SVG images are allowed' },
         { status: 400 }
       );
     }
@@ -37,16 +61,24 @@ export async function POST(request: NextRequest) {
       await mkdir(uploadsDir, { recursive: true });
     }
 
-    // Generate unique filename
+    // Generate unique, sanitized filename
     const timestamp = Date.now();
-    const fileExtension = file.name.split('.').pop();
-    const fileName = `department-logo-${timestamp}.${fileExtension}`;
+    const inferredExt = (() => {
+      switch (file.type) {
+        case 'image/png': return 'png';
+        case 'image/jpeg':
+        case 'image/jpg': return 'jpg';
+        case 'image/webp': return 'webp';
+        case 'image/svg+xml': return 'svg';
+        default: return 'img';
+      }
+    })();
+    const fileName = `department-logo-${timestamp}.${inferredExt}`;
     const filePath = join(uploadsDir, fileName);
 
     // Convert file to buffer and save
     const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-    await writeFile(filePath, buffer);
+    await writeFile(filePath, new Uint8Array(bytes));
 
     // Return the public URL
     const publicUrl = `/uploads/${fileName}`;

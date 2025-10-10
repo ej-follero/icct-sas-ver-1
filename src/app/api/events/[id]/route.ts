@@ -2,18 +2,30 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { EventType, EventStatus, Priority } from '@prisma/client';
 
-export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+async function assertRole(request: NextRequest, allowed: Array<'SUPER_ADMIN' | 'ADMIN' | 'INSTRUCTOR'>) {
+  const token = request.cookies.get('token')?.value;
+  const isDev = process.env.NODE_ENV !== 'production';
+  if (!token) return isDev ? { ok: true, role: 'ADMIN' } as const : { ok: false, res: NextResponse.json({ error: 'Authentication required' }, { status: 401 }) };
+  try {
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const role = decoded.role as string | undefined;
+    if (!role || !allowed.includes(role as any)) {
+      return { ok: false, res: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
+    }
+    return { ok: true, role: role as any } as const;
+  } catch {
+    return { ok: false, res: NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 }) };
+  }
+}
+
+export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     // Authorization: allow ADMIN and INSTRUCTOR
-    const role = _request.headers.get('x-user-role');
-    const isDev = process.env.NODE_ENV !== 'production';
-    if (!isDev) {
-      if (!role || (role !== 'ADMIN' && role !== 'INSTRUCTOR')) {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-      }
-    }
+    const gate = await assertRole(request, ['SUPER_ADMIN', 'ADMIN', 'INSTRUCTOR']);
+    if (!('ok' in gate) || gate.ok !== true) return gate.res;
 
-    const { id } = await params;
+    const { id } = params;
     const event = await prisma.event.findFirst({
       where: { 
         eventId: parseInt(id),
@@ -76,18 +88,13 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   }
 }
 
-export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     // Authorization: allow ADMIN and INSTRUCTOR
-    const role = request.headers.get('x-user-role');
-    const isDev = process.env.NODE_ENV !== 'production';
-    if (!isDev) {
-      if (!role || (role !== 'ADMIN' && role !== 'INSTRUCTOR')) {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-      }
-    }
+    const gate = await assertRole(request, ['SUPER_ADMIN', 'ADMIN', 'INSTRUCTOR']);
+    if (!('ok' in gate) || gate.ok !== true) return gate.res;
 
-    const { id } = await params;
+    const { id } = params;
     const body = await request.json();
     const {
       title,
@@ -176,18 +183,13 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   }
 }
 
-export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     // Authorization: allow ADMIN and INSTRUCTOR
-    const role = request.headers.get('x-user-role');
-    const isDev = process.env.NODE_ENV !== 'production';
-    if (!isDev) {
-      if (!role || (role !== 'ADMIN' && role !== 'INSTRUCTOR')) {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-      }
-    }
+    const gate = await assertRole(request, ['SUPER_ADMIN', 'ADMIN', 'INSTRUCTOR']);
+    if (!('ok' in gate) || gate.ok !== true) return gate.res;
 
-    const { id } = await params;
+    const { id } = params;
     const body = await request.json();
     const {
       title,
@@ -275,18 +277,13 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   }
 }
 
-export async function DELETE(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     // Authorization: allow ADMIN only
-    const role = _request.headers.get('x-user-role');
-    const isDev = process.env.NODE_ENV !== 'production';
-    if (!isDev) {
-      if (!role || role !== 'ADMIN') {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-      }
-    }
+    const gate = await assertRole(request, ['SUPER_ADMIN', 'ADMIN']);
+    if (!('ok' in gate) || gate.ok !== true) return gate.res;
 
-    const { id } = await params;
+    const { id } = params;
     
     // Check if event exists and is not already deleted
     const event = await prisma.event.findFirst({
@@ -305,7 +302,7 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
       where: { eventId: parseInt(id) },
       data: { 
         deletedAt: new Date(),
-        status: 'CANCELLED' // Also update status to cancelled
+        status: EventStatus.CANCELLED // Also update status to cancelled
       },
     });
 

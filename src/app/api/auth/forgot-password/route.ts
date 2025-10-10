@@ -1,12 +1,9 @@
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
-import bcrypt from 'bcrypt';
-import jwt from 'jsonwebtoken';
+import { prisma } from '@/lib/prisma';
+import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 
-const prisma = new PrismaClient();
-
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { email } = body;
@@ -21,11 +18,11 @@ export async function POST(request: Request) {
     // Find user by email
     const user = await prisma.user.findUnique({
       where: { email },
-      include: {
-        Student: true,
-        Instructor: true,
-        Guardian: true,
-      },
+      select: {
+        userId: true,
+        status: true,
+        email: true
+      }
     });
 
     if (!user) {
@@ -86,7 +83,5 @@ export async function POST(request: Request) {
       { error: 'Internal server error' },
       { status: 500 }
     );
-  } finally {
-    await prisma.$disconnect();
   }
 } 

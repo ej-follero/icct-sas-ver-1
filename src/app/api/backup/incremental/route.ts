@@ -1,11 +1,30 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { incrementalBackupService } from "@/lib/services/incremental-backup.service";
-import { db } from "@/lib/db";
+import { prisma } from "@/lib/prisma";
 import { BackupType, BackupStatus } from "@prisma/client";
 
-// GET /api/backup/incremental - Get incremental backup information
-export async function GET(request: Request) {
+async function assertAdmin(request: NextRequest) {
+  const token = request.cookies.get('token')?.value;
+  if (!token) return { ok: false, res: NextResponse.json({ error: 'Authentication required' }, { status: 401 }) };
   try {
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = decoded.userId as number;
+    const user = await prisma.user.findUnique({ where: { userId }, select: { role: true } });
+    if (!user || (user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN')) {
+      return { ok: false, res: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
+    }
+    return { ok: true } as const;
+  } catch {
+    return { ok: false, res: NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 }) };
+  }
+}
+
+// GET /api/backup/incremental - Get incremental backup information
+export async function GET(request: NextRequest) {
+  try {
+    const gate = await assertAdmin(request);
+    if (!('ok' in gate) || gate.ok !== true) return gate.res;
     const { searchParams } = new URL(request.url);
     const baseBackupId = searchParams.get('baseBackupId');
 
@@ -37,8 +56,10 @@ export async function GET(request: Request) {
 }
 
 // POST /api/backup/incremental - Create an incremental backup
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    const gate = await assertAdmin(request);
+    if (!('ok' in gate) || gate.ok !== true) return gate.res;
     const body = await request.json();
     const { 
       name, 
@@ -59,11 +80,8 @@ export async function POST(request: Request) {
 
     console.log("Creating incremental backup...");
     
-    // Ensure database connection
-    await db.$connect();
-    
     // Create backup record
-    const newBackup = await db.systemBackup.create({
+    const newBackup = await prisma.systemBackup.create({
       data: {
         name,
         description,
@@ -87,7 +105,7 @@ export async function POST(request: Request) {
     });
 
     // Create a log entry
-    await db.backupLog.create({
+    await prisma.backupLog.create({
       data: {
         backupId: newBackup.id,
         action: "CREATE_INCREMENTAL",
@@ -113,12 +131,8 @@ export async function POST(request: Request) {
       options: options || {}
     }).then(async (result) => {
       try {
-        // Create a new Prisma connection for the background process
-        const backgroundPrisma = new (await import('@prisma/client')).PrismaClient();
-        await backgroundPrisma.$connect();
-        
         // Update backup with completion data
-        await backgroundPrisma.systemBackup.update({
+        await prisma.systemBackup.update({
           where: { id: newBackup.id },
           data: {
             status: BackupStatus.COMPLETED,
@@ -129,7 +143,7 @@ export async function POST(request: Request) {
         });
 
         // Create completion log
-        await backgroundPrisma.backupLog.create({
+        await prisma.backupLog.create({
           data: {
             backupId: newBackup.id,
             action: "COMPLETE_INCREMENTAL",
@@ -138,8 +152,6 @@ export async function POST(request: Request) {
             createdBy: parseInt(createdBy),
           },
         });
-        
-        await backgroundPrisma.$disconnect();
       } catch (error) {
         console.error('Error updating incremental backup completion:', error);
       }
@@ -147,12 +159,8 @@ export async function POST(request: Request) {
       console.error('Incremental backup failed:', error);
       
       try {
-        // Create a new Prisma connection for the background process
-        const backgroundPrisma = new (await import('@prisma/client')).PrismaClient();
-        await backgroundPrisma.$connect();
-        
         // Update backup with failure data
-        await backgroundPrisma.systemBackup.update({
+        await prisma.systemBackup.update({
           where: { id: newBackup.id },
           data: {
             status: BackupStatus.FAILED,
@@ -161,7 +169,7 @@ export async function POST(request: Request) {
         });
 
         // Create failure log
-        await backgroundPrisma.backupLog.create({
+        await prisma.backupLog.create({
           data: {
             backupId: newBackup.id,
             action: "FAIL_INCREMENTAL",
@@ -170,8 +178,6 @@ export async function POST(request: Request) {
             createdBy: parseInt(createdBy),
           },
         });
-        
-        await backgroundPrisma.$disconnect();
       } catch (updateError) {
         console.error('Error updating incremental backup failure:', updateError);
       }

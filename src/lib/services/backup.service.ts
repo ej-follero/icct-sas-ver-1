@@ -1,7 +1,5 @@
-import { PrismaClient } from '@prisma/client';
-
-// Note: This service is designed for server-side use only
-// File system operations are not available in browser environment
+// Note: This service is designed for client-side use with API routes
+// All database operations are handled through API endpoints
 
 export interface BackupItem {
   id: string;
@@ -32,22 +30,22 @@ export interface RestorePoint {
 }
 
 class BackupService {
-  private prisma: PrismaClient;
-  private backupDir: string;
   private progressCallbacks: Map<string, (progress: any) => void> = new Map();
 
   constructor() {
-    this.prisma = new PrismaClient();
-    this.backupDir = process.env.BACKUP_DIR || './backups';
+    // No Prisma client needed for client-side service
   }
 
   async getBackups(): Promise<BackupItem[]> {
     try {
-      const backups = await this.prisma.backup.findMany({
-        orderBy: { createdAt: 'desc' }
-      });
+      const response = await fetch('/api/backups');
+      const data = await response.json();
+      
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to fetch backups');
+      }
 
-      return backups.map(backup => ({
+      return data.items.map((backup: any) => ({
         id: backup.id.toString(),
         name: backup.name,
         description: backup.description,
@@ -72,11 +70,14 @@ class BackupService {
 
   async getRestorePoints(): Promise<RestorePoint[]> {
     try {
-      const restorePoints = await this.prisma.restorePoint.findMany({
-        orderBy: { createdAt: 'desc' }
-      });
+      const response = await fetch('/api/restore-points');
+      const data = await response.json();
+      
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to fetch restore points');
+      }
 
-      return restorePoints.map(point => ({
+      return data.items.map((point: any) => ({
         id: point.id.toString(),
         name: point.name,
         description: point.description,
@@ -316,6 +317,23 @@ class BackupService {
       return true;
     } catch (error) {
       console.error('Error deleting backup:', error);
+      return false;
+    }
+  }
+
+  async updateBackupStatus(backupId: string, status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED' | 'SCHEDULED', reason?: string): Promise<boolean> {
+    try {
+      await this.prisma.backup.update({
+        where: { id: parseInt(backupId) },
+        data: {
+          status,
+          errorMessage: reason || null,
+          ...(status === 'COMPLETED' ? { completedAt: new Date() } : {})
+        }
+      });
+      return true;
+    } catch (error) {
+      console.error('Error updating backup status:', error);
       return false;
     }
   }

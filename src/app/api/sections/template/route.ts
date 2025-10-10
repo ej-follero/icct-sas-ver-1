@@ -1,7 +1,36 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    // JWT Authentication
+    const token = request.cookies.get('token')?.value;
+    if (!token) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = Number((decoded as any)?.userId);
+    if (!Number.isFinite(userId)) {
+      return NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 });
+    }
+
+    // Check user exists and is active
+    const user = await prisma.user.findUnique({
+      where: { userId },
+      select: { status: true, role: true }
+    });
+
+    if (!user || user.status !== 'ACTIVE') {
+      return NextResponse.json({ error: 'User not found or inactive' }, { status: 401 });
+    }
+
+    // Role-based access control
+    const allowedRoles = ['SUPER_ADMIN', 'ADMIN', 'DEPARTMENT_HEAD', 'INSTRUCTOR'];
+    if (!allowedRoles.includes(user.role)) {
+      return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
+    }
     // Define the template data for section import (compliant with Section schema)
     const templateData = [
       {
@@ -9,6 +38,7 @@ export async function GET() {
         sectionCapacity: 30,
         yearLevel: 1,
         courseId: 1,
+        semesterId: 1,
         academicYear: '2024-2025',
         semester: 'FIRST_SEMESTER',
         sectionStatus: 'ACTIVE',
@@ -21,6 +51,7 @@ export async function GET() {
         sectionCapacity: 25,
         yearLevel: 1,
         courseId: 1,
+        semesterId: 1,
         academicYear: '2024-2025',
         semester: 'FIRST_SEMESTER',
         sectionStatus: 'ACTIVE',
@@ -33,6 +64,7 @@ export async function GET() {
         sectionCapacity: 35,
         yearLevel: 2,
         courseId: 2,
+        semesterId: 2,
         academicYear: '2024-2025',
         semester: 'SECOND_SEMESTER',
         sectionStatus: 'ACTIVE',
@@ -45,6 +77,7 @@ export async function GET() {
         sectionCapacity: 28,
         yearLevel: 2,
         courseId: 2,
+        semesterId: 2,
         academicYear: '2024-2025',
         semester: 'SECOND_SEMESTER',
         sectionStatus: 'ACTIVE',
@@ -57,6 +90,7 @@ export async function GET() {
         sectionCapacity: 20,
         yearLevel: 3,
         courseId: 1,
+        semesterId: 3,
         academicYear: '2024-2025',
         semester: 'THIRD_SEMESTER',
         sectionStatus: 'ACTIVE',

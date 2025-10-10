@@ -4,6 +4,35 @@ import { prisma } from '@/lib/prisma';
 // Search students or instructors by name/id
 export async function GET(req: NextRequest) {
   try {
+    // JWT Authentication
+    const token = req.cookies.get('token')?.value;
+    if (!token) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = Number((decoded as any)?.userId);
+    if (!Number.isFinite(userId)) {
+      return NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 });
+    }
+
+    // Check user exists and is active
+    const user = await prisma.user.findUnique({
+      where: { userId },
+      select: { status: true, role: true }
+    });
+
+    if (!user || user.status !== 'ACTIVE') {
+      return NextResponse.json({ error: 'User not found or inactive' }, { status: 401 });
+    }
+
+    // Role-based access control
+    const allowedRoles = ['SUPER_ADMIN', 'ADMIN', 'DEPARTMENT_HEAD', 'INSTRUCTOR'];
+    if (!allowedRoles.includes(user.role)) {
+      return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
+    }
+
     const { searchParams } = new URL(req.url);
     const type = (searchParams.get('type') || 'student') as 'student' | 'instructor';
     const q = (searchParams.get('q') || '').trim();

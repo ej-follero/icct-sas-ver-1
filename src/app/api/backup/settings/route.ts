@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { prisma } from "@/lib/prisma";
 
 export interface BackupSettings {
   autoBackup: boolean;
@@ -11,11 +11,30 @@ export interface BackupSettings {
   maxBackupSize: number; // in GB
 }
 
-// GET - Retrieve backup settings
-export async function GET() {
+async function assertAdmin(request: NextRequest) {
+  const token = request.cookies.get('token')?.value;
+  if (!token) return { ok: false, res: NextResponse.json({ error: 'Authentication required' }, { status: 401 }) };
   try {
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = decoded.userId as number;
+    const user = await prisma.user.findUnique({ where: { userId }, select: { role: true } });
+    if (!user || (user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN')) {
+      return { ok: false, res: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
+    }
+    return { ok: true } as const;
+  } catch {
+    return { ok: false, res: NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 }) };
+  }
+}
+
+// GET - Retrieve backup settings
+export async function GET(request: NextRequest) {
+  try {
+    const gate = await assertAdmin(request);
+    if (!('ok' in gate) || gate.ok !== true) return gate.res;
     // Get the first (and should be only) backup settings record
-    const settings = await db.backupSettings.findFirst();
+    const settings = await prisma.backupSettings.findFirst();
     
     if (!settings) {
       // Return default settings if none exist
@@ -53,6 +72,8 @@ export async function GET() {
 // POST - Update backup settings
 export async function POST(request: NextRequest) {
   try {
+    const gate = await assertAdmin(request);
+    if (!('ok' in gate) || gate.ok !== true) return gate.res;
     const body: BackupSettings = await request.json();
     
     // Validate required fields
@@ -85,7 +106,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Upsert settings (create if doesn't exist, update if it does)
-    const updatedSettings = await db.backupSettings.upsert({
+    const updatedSettings = await prisma.backupSettings.upsert({
       where: { id: 1 }, // Assuming we only have one settings record
       update: {
         autoBackup: body.autoBackup,

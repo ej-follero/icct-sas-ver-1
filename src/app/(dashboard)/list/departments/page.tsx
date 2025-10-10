@@ -17,7 +17,7 @@ import { Settings, Plus, Trash2, Printer, Loader2, MoreHorizontal, Upload, List,
 import { ImportDialog } from "@/components/reusable/Dialogs/ImportDialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ExportDialog } from '@/components/reusable/Dialogs/ExportDialog';
-import { SortDialog, SortFieldOption } from '@/components/reusable/Dialogs/SortDialog';
+import { SortDialog } from '@/components/reusable/Dialogs/SortDialog';
 import BulkActionsBar from '@/components/reusable/BulkActionsBar';
 import { PrintLayout } from '@/components/PrintLayout';
 import { TableCardView } from '@/components/reusable/Table/TableCardView';
@@ -37,6 +37,7 @@ import { ViewDialog } from '@/components/reusable/Dialogs/ViewDialog';
 import { QuickActionsPanel } from '@/components/reusable/QuickActionsPanel';
 import { SummaryCardSkeleton, PageSkeleton } from '@/components/reusable/Skeleton';
 import { VisibleColumnsDialog, ColumnOption } from '@/components/reusable/Dialogs/VisibleColumnsDialog';
+import { ExportService } from '@/lib/services/export.service';
 
 
 
@@ -76,7 +77,8 @@ type SortFieldKey = 'name' | 'code' | 'totalInstructors' | 'totalCourses' | 'sta
 type SortOrder = 'asc' | 'desc';
 type MultiSortField = { field: SortFieldKey; order: SortOrder };
 
-const departmentSortFieldOptions: SortFieldOption<string>[] = [
+type LocalSortOption = { value: string; label: string };
+const departmentSortFieldOptions: LocalSortOption[] = [
   { value: 'name', label: 'Department Name' },
   { value: 'code', label: 'Department Code' },
   { value: 'head', label: 'Head of Department' },
@@ -636,9 +638,10 @@ export default function DepartmentListPage() {
     },
   ];
 
-  // Update exportableColumns to use the shared configuration
-  const exportableColumns = DEPARTMENT_COLUMNS.map(col => ({
-    key: col.accessor,
+  // Update exportableColumns to use the shared configuration with safe typing
+  type DepartmentExportKey = keyof Department | 'totalCourses';
+  const exportableColumns: { key: DepartmentExportKey; label: string }[] = DEPARTMENT_COLUMNS.map(col => ({
+    key: col.accessor as DepartmentExportKey,
     label: typeof col.header === 'string' ? col.header : col.accessor
   }));
 
@@ -649,7 +652,7 @@ export default function DepartmentListPage() {
   })).filter(col => col.accessor !== 'logo'); // Exclude logo from print as it's not text
 
   // Add export columns state
-  const [exportColumns, setExportColumns] = useState<string[]>(exportableColumns.map(col => col.key));
+  const [exportColumns, setExportColumns] = useState<DepartmentExportKey[]>(exportableColumns.map(col => col.key));
 
   // Additional state variables
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
@@ -1323,6 +1326,48 @@ export default function DepartmentListPage() {
     }
   };
 
+  // Build flat rows for export service
+  const buildDepartmentExportRows = (list: Department[]) => {
+    return list.map((dept) => ({
+      departmentName: dept.name,
+      code: dept.code,
+      headOfDepartment: dept.headOfDepartment || 'Not Assigned',
+      status: (dept.status || 'inactive').toUpperCase(),
+      totalInstructors: dept.totalInstructors || 0,
+      totalCourses: dept.courseOfferings?.length || 0,
+      description: dept.description || ''
+    }));
+  };
+
+  // Centralized export using shared ExportService
+  const exportDepartments = async (
+    format: 'pdf' | 'csv' | 'excel',
+    rows?: Array<Record<string, any>>,
+    filenameBase?: string
+  ) => {
+    const dataRows = rows || buildDepartmentExportRows(filteredDepartments);
+    const filename = filenameBase || `departments-${new Date().toISOString().split('T')[0]}`;
+    const selectedColumns = ['departmentName','code','headOfDepartment','status','totalInstructors','totalCourses','description'];
+
+    const exportData = {
+      type: 'department',
+      data: dataRows,
+      filters: { status: statusFilter, head: headFilter }
+    };
+
+    const options = {
+      format,
+      filename,
+      includeCharts: format === 'pdf',
+      includeFilters: true,
+      includeSummary: false,
+      includeTable: format !== 'pdf',
+      selectedColumns
+    } as const;
+
+    await ExportService.exportAnalytics(exportData as any, options as any);
+  };
+
   // Print handler using PrintLayout
   const handlePrint = () => {
     const printData = filteredDepartments.map((d) => ({
@@ -1890,43 +1935,9 @@ export default function DepartmentListPage() {
 
     try {
       setPageState(prev => ({ ...prev, isExporting: true }));
-      
-      // Prepare data for export
-      const exportData = selected.map(dept => ({
-        'Department Name': dept.name,
-        'Code': dept.code,
-        'Head of Department': dept.headOfDepartment || 'Not Assigned',
-        'Status': dept.status,
-        'Total Instructors': dept.totalInstructors || 0,
-        'Total Courses': dept.courseOfferings?.length || 0,
-        'Description': dept.description || ''
-      }));
-
-      // Create workbook and worksheet
-      const wb = XLSX.utils.book_new();
-      const ws = XLSX.utils.json_to_sheet(exportData);
-
-      // Auto-size columns
-      const colWidths = Object.keys(exportData[0] || {}).map(key => {
-        const maxLength = Math.max(
-          key.length,
-          ...exportData.map(row => String(row[key as keyof typeof row] || '').length)
-        );
-        return { wch: Math.min(Math.max(maxLength + 2, 10), 50) };
-      });
-      ws['!cols'] = colWidths;
-
-      // Add worksheet to workbook
-      XLSX.utils.book_append_sheet(wb, ws, "Selected Departments");
-
-      // Generate filename with timestamp
-      const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
-      const filename = `selected-departments-${timestamp}.xlsx`;
-
-      // Write and download file
-      XLSX.writeFile(wb, filename);
-      
-      toast.success(`${selected.length} departments exported successfully to ${filename}`);
+      const rows = buildDepartmentExportRows(selected);
+      await exportDepartments('excel', rows, `selected-departments-${new Date().toISOString().slice(0,10)}`);
+      toast.success(`${selected.length} departments exported successfully`);
       
     } catch (error) {
       console.error('Export failed:', error);
@@ -2229,7 +2240,7 @@ export default function DepartmentListPage() {
                     placeholder="Search departments..."
                     value={search}
                     onChange={e => setSearch(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 sm:py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:outline-none text-sm"
+                    className="w-full pl-10 pr-4 py-2.5 sm:py-3 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:outline-none text-sm"
                   />
                 </div>
                 
@@ -2509,38 +2520,31 @@ export default function DepartmentListPage() {
       <ExportDialog
         open={exportDialogOpen}
         onOpenChange={(open) => setExportDialogOpen(open)}
-        exportableColumns={exportableColumns}
-        exportColumns={exportColumns}
-        setExportColumns={setExportColumns}
-        exportFormat={exportFormat}
-        setExportFormat={setExportFormat}
-        pdfOrientation={pdfOrientation}
-        setPdfOrientation={setPdfOrientation}
-        includeLogos={includeLogos}
-        setIncludeLogos={setIncludeLogos}
-        onExport={handleExport}
-        title="Export Departments"
-        tooltip="Export department data in various formats. Choose your preferred export options."
+        onExport={async (format, _options) => {
+          try {
+            await exportDepartments(format);
+            setLastActionTime('Just now');
+          } catch (e) {
+            toast.error(e instanceof Error ? e.message : 'Export failed');
+          }
+        }}
+        dataCount={filteredDepartments.length}
+        entityType="department"
       />
 
       <SortDialog
         open={sortDialogOpen}
         onOpenChange={(open) => setSortDialogOpen(open)}
-        sortField={sortField}
-        setSortField={(field) => setSortField(field as SortFieldKey)}
-        sortOrder={sortOrder}
-        setSortOrder={(order) => setSortOrder(order as SortOrder)}
-        sortFieldOptions={departmentSortFieldOptions}
-        onApply={() => {
-          setSortFields([{ field: sortField, order: sortOrder }]);
-        }}
-        onReset={() => {
-          setSortField('name');
-          setSortOrder('asc');
-          setSortFields([{ field: 'name', order: 'asc' }]);
+        sortOptions={departmentSortFieldOptions}
+        currentSort={{ field: sortField, order: sortOrder }}
+        onSortChange={(field: string, order: 'asc' | 'desc') => {
+          setSortField(field as SortFieldKey);
+          setSortOrder(order as SortOrder);
+          setSortFields([{ field: field as SortFieldKey, order: order as SortOrder }]);
         }}
         title="Sort Departments"
-        tooltip="Sort departments by different fields. Choose the field and order to organize your list."
+        description="Sort departments by different fields. Choose the field and order to organize your list."
+        entityType="departments"
       />
 
       <ViewDialog

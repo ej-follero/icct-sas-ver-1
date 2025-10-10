@@ -60,12 +60,56 @@ export function ManualAttendanceDialog({
   const [entityId, setEntityId] = useState<string>(defaultEntityId ? String(defaultEntityId) : "");
   const [status, setStatus] = useState<ManualAttendancePayload["status"]>("PRESENT");
   const [subjectSchedId, setSubjectSchedId] = useState<string>(defaultSubjectSchedId ? String(defaultSubjectSchedId) : "");
+  const [enrolledOptions, setEnrolledOptions] = useState<Array<{ value: string; label: string }>>([]);
   const [timestamp, setTimestamp] = useState<string>(() => new Date().toISOString().slice(0, 16)); // yyyy-MM-ddTHH:mm
   const [notes, setNotes] = useState<string>("");
+
+  // Reset all fields to defaults
+  const resetForm = useMemo(() => (
+    () => {
+      setEntityType(detectedEntityType);
+      setEntityId(defaultEntityId ? String(defaultEntityId) : "");
+      setStatus("PRESENT");
+      setSubjectSchedId(defaultSubjectSchedId ? String(defaultSubjectSchedId) : "");
+      setEnrolledOptions([]);
+      setTimestamp(new Date().toISOString().slice(0, 16));
+      setNotes("");
+      setUploadFile(null);
+      setUploadProgress(0);
+      setUploadResults(null);
+      setError(null);
+      setActiveTab("manual");
+    }
+  ), [detectedEntityType, defaultEntityId, defaultSubjectSchedId]);
 
   // Clear subject schedule when entity changes
   useEffect(() => {
     setSubjectSchedId("");
+  }, [entityType, entityId]);
+
+  // When a student is selected, fetch enrolled schedules for convenient picking
+  useEffect(() => {
+    let cancelled = false;
+    async function loadEnrolled() {
+      try {
+        if (entityType !== 'student') { setEnrolledOptions([]); return; }
+        const numericId = Number(entityId);
+        if (!numericId || !Number.isFinite(numericId)) { setEnrolledOptions([]); return; }
+        const res = await fetch(`/api/students/${numericId}/enrolled-schedules`, { cache: 'no-store' });
+        if (!res.ok) { setEnrolledOptions([]); return; }
+        const data = await res.json();
+        if (cancelled) return;
+        setEnrolledOptions(Array.isArray(data.items) ? data.items : []);
+        // If exactly one schedule, preselect it for convenience
+        if (Array.isArray(data.items) && data.items.length === 1) {
+          setSubjectSchedId(data.items[0].value);
+        }
+      } catch {
+        if (!cancelled) setEnrolledOptions([]);
+      }
+    }
+    loadEnrolled();
+    return () => { cancelled = true; };
   }, [entityType, entityId]);
 
   // File upload states
@@ -115,6 +159,7 @@ export function ManualAttendanceDialog({
 
       const result = await res.json();
 
+      resetForm();
       onOpenChange(false);
       if (onSuccess) onSuccess();
     } catch (e) {
@@ -299,8 +344,16 @@ export function ManualAttendanceDialog({
     }
   };
 
+  const handleOpenChange = (v: boolean) => {
+    if (submitting) return;
+    if (!v) {
+      resetForm();
+    }
+    onOpenChange(v);
+  };
+
   return (
-    <Dialog open={open} onOpenChange={(v) => !submitting && onOpenChange(v)}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-full w-full max-h-[90vh] overflow-hidden bg-white/95 backdrop-blur-sm border border-blue-200 shadow-2xl rounded-2xl p-0 mx-2 my-1 sm:max-w-[700px] sm:mx-4 sm:my-1 md:max-w-[800px] md:mx-6 md:my-1 flex flex-col h-full">
         {/* Header with gradient */}
         <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-blue-800 rounded-t-2xl p-6 relative flex-shrink-0">
@@ -310,7 +363,7 @@ export function ManualAttendanceDialog({
             </div>
             <div className="flex-1 min-w-0">
               <DialogTitle className="text-white text-2xl font-bold">Manual Attendance</DialogTitle>
-              <p className="text-white/80 text-sm">Record a manual attendance entry for a student or instructor</p>
+              <p className="text-white/80 text-sm">Record a manual attendance entry for a student</p>
             </div>
           </div>
           <div className="absolute top-6 right-6">
@@ -408,7 +461,7 @@ export function ManualAttendanceDialog({
                 <Label>Event/Schedule (optional)</Label>
                 <div className="relative">
                   <SearchableSelect
-                    options={[]}
+                    options={enrolledOptions}
                     value={subjectSchedId}
                     onChange={(v) => setSubjectSchedId(v)}
                     placeholder="Search by subject code, subject name, or section..."
@@ -442,16 +495,13 @@ export function ManualAttendanceDialog({
                         return [];
                       } catch (error) {
                         // Return some fallback data for development
-                        return [
-                          { value: "1", label: "CS101 • Section A • Monday 09:00-10:30 • John Doe" },
-                          { value: "2", label: "CS102 • Section B • Tuesday 10:00-11:30 • Jane Smith" }
-                        ];
+                        return enrolledOptions.length > 0 ? enrolledOptions : [];
                       }
                     }}
                   />
                 </div>
                 <div className="text-xs text-muted-foreground">
-                  Tip: Links attendance to a specific class/event. Shows only schedules for the selected {entityType}. Search by subject code, subject name, or section name
+                  Tip: Links attendance to a specific class/event. For students, the dropdown shows their enrolled schedules; you can also search to narrow down.
                 </div>
               </div>
 

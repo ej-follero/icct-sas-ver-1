@@ -424,6 +424,10 @@ export default function RolesPage() {
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      // Only activate shortcuts if we're on a page with search functionality
+      const hasSearchInput = document.querySelector('input[placeholder="Search roles..."]');
+      if (!hasSearchInput) return;
+      
       // Ctrl/Cmd + N to create new role
       if ((event.ctrlKey || event.metaKey) && event.key === 'n') {
         event.preventDefault();

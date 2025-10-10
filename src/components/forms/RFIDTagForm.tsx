@@ -32,11 +32,11 @@ const rfidTagFormSchema = z.object({
     .min(1, "Tag number is required")
     .max(50, "Tag number must be less than 50 characters")
     .regex(/^[A-Z0-9\-_]+$/, "Tag number can only contain uppercase letters, numbers, hyphens, and underscores"),
-  tagType: z.enum(["STUDENT_CARD", "INSTRUCTOR_CARD", "TEMPORARY_PASS", "VISITOR_PASS", "MAINTENANCE", "TEST"]),
+  tagType: z.enum(["STUDENT_CARD", "TEMPORARY_PASS", "VISITOR_PASS", "MAINTENANCE", "TEST"]),
   status: z.enum(["ACTIVE", "INACTIVE", "LOST", "DAMAGED", "EXPIRED", "REPLACED", "RESERVED"]),
   notes: z.string().optional(),
   studentId: z.number().optional(),
-  instructorId: z.number().optional(),
+  // Instructor assignment removed
   assignedBy: z.number().optional(),
   assignmentReason: z.string().optional(),
   expiresAt: z.string().optional(),
@@ -48,11 +48,11 @@ interface RFIDTagFormProps {
   initialData?: {
     tagId: number;
     tagNumber: string;
-    tagType: 'STUDENT_CARD' | 'INSTRUCTOR_CARD' | 'TEMPORARY_PASS' | 'VISITOR_PASS' | 'MAINTENANCE' | 'TEST';
+    tagType: 'STUDENT_CARD' | 'TEMPORARY_PASS' | 'VISITOR_PASS' | 'MAINTENANCE' | 'TEST';
     status: 'ACTIVE' | 'INACTIVE' | 'LOST' | 'DAMAGED' | 'EXPIRED' | 'REPLACED' | 'RESERVED';
     notes?: string;
     studentId?: number;
-    instructorId?: number;
+    
     assignedBy?: number;
     assignmentReason?: string;
     expiresAt?: string;
@@ -80,7 +80,7 @@ export function RFIDTagForm({
       status: initialData?.status || 'ACTIVE',
       notes: initialData?.notes || '',
       studentId: initialData?.studentId || undefined,
-      instructorId: initialData?.instructorId || undefined,
+      
       assignedBy: initialData?.assignedBy || undefined,
       assignmentReason: initialData?.assignmentReason || '',
       expiresAt: initialData?.expiresAt || '',
@@ -101,7 +101,7 @@ export function RFIDTagForm({
 
   const tagTypeOptions = [
     { value: 'STUDENT_CARD', label: 'Student Card' },
-    { value: 'INSTRUCTOR_CARD', label: 'Instructor Card' },
+    
     { value: 'TEMPORARY_PASS', label: 'Temporary Pass' },
     { value: 'VISITOR_PASS', label: 'Visitor Pass' },
     { value: 'MAINTENANCE', label: 'Maintenance' },
@@ -285,30 +285,7 @@ export function RFIDTagForm({
               )}
             />
 
-            {/* Instructor ID */}
-            <FormField
-              control={form.control}
-              name="instructorId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-sm font-medium text-gray-700">
-                    Instructor ID
-                  </FormLabel>
-                  <FormControl>
-                    <Input
-                      {...field}
-                      type="number"
-                      placeholder="Instructor ID"
-                      className="w-full"
-                      disabled={isSubmitting || isLoading}
-                      value={field.value || ''}
-                      onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : undefined)}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            
 
             {/* Assigned By */}
             <FormField

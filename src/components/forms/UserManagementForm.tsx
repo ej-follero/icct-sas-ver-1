@@ -47,7 +47,6 @@ const studentUserSchema = z.object({
   // Account settings
   status: z.enum(['ACTIVE', 'INACTIVE', 'PENDING']).default('PENDING'),
   isEmailVerified: z.boolean().default(false),
-  isPhoneVerified: z.boolean().default(false),
   twoFactorEnabled: z.boolean().default(false),
 }).refine(data => {
   if (!data.generatePassword) {
@@ -93,7 +92,6 @@ export default function UserManagementForm({
       requirePasswordChange: true,
       status: 'PENDING',
       isEmailVerified: false,
-      isPhoneVerified: false,
       twoFactorEnabled: false,
       ...initialData
     }
@@ -469,10 +467,6 @@ export default function UserManagementForm({
                   <Label htmlFor="isEmailVerified">Mark email as verified</Label>
                 </div>
 
-                <div className="flex items-center space-x-2">
-                  <Checkbox id="isPhoneVerified" {...register('isPhoneVerified')} />
-                  <Label htmlFor="isPhoneVerified">Mark phone as verified</Label>
-                </div>
 
                 <div className="flex items-center space-x-2">
                   <Checkbox id="twoFactorEnabled" {...register('twoFactorEnabled')} />

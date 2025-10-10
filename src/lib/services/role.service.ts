@@ -43,7 +43,7 @@ class RoleService {
   // Get all roles
   async getAllRoles(): Promise<Role[]> {
     try {
-      const response = await fetch(this.baseUrl);
+      const response = await fetch(this.baseUrl, { cache: 'no-store' });
       
       if (!response.ok) {
         // Try to parse error response as JSON first

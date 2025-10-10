@@ -1,9 +1,30 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { encryptionService } from "@/lib/services/encryption.service";
 
-// GET /api/backup/encryption - Get encryption status and statistics
-export async function GET() {
+// Helper: admin auth check
+async function assertAdmin(request: NextRequest) {
+  const token = request.cookies.get('token')?.value;
+  if (!token) return { ok: false, res: NextResponse.json({ error: 'Authentication required' }, { status: 401 }) };
   try {
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = decoded.userId as number;
+    const { prisma } = await import('@/lib/prisma');
+    const user = await prisma.user.findUnique({ where: { userId }, select: { role: true } });
+    if (!user || (user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN')) {
+      return { ok: false, res: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
+    }
+    return { ok: true } as const;
+  } catch {
+    return { ok: false, res: NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 }) };
+  }
+}
+
+// GET /api/backup/encryption - Get encryption status and statistics
+export async function GET(request: NextRequest) {
+  try {
+    const gate = await assertAdmin(request);
+    if (!('ok' in gate) || gate.ok !== true) return gate.res;
     const stats = encryptionService.getEncryptionStats();
     const keys = encryptionService.getKeys().map(key => ({
       id: key.id,
@@ -34,8 +55,10 @@ export async function GET() {
 }
 
 // POST /api/backup/encryption - Create new encryption key
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    const gate = await assertAdmin(request);
+    if (!('ok' in gate) || gate.ok !== true) return gate.res;
     const body = await request.json();
     const { keyId, password } = body;
 
@@ -72,8 +95,10 @@ export async function POST(request: Request) {
 }
 
 // PUT /api/backup/encryption - Update encryption key status
-export async function PUT(request: Request) {
+export async function PUT(request: NextRequest) {
   try {
+    const gate = await assertAdmin(request);
+    if (!('ok' in gate) || gate.ok !== true) return gate.res;
     const body = await request.json();
     const { keyId, action } = body;
 

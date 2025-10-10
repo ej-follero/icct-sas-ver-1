@@ -1,4 +1,5 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
 
 // Mock authentication for API routes
 interface AuthSession {
@@ -58,18 +59,28 @@ interface CacheStatus {
   lastCheck: string;
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession();
-    
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    // JWT Authentication - Admin only
+    const token = request.cookies.get('token')?.value;
+    if (!token) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
 
-    // Check if user has permission to view system status
-    const userRole = session.user?.role;
-    if (!userRole || !['SUPER_ADMIN', 'ADMIN', 'SYSTEM_AUDITOR'].includes(userRole)) {
-      return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = Number((decoded as any)?.userId);
+    if (!Number.isFinite(userId)) {
+      return NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 });
+    }
+
+    const user = await prisma.user.findUnique({ where: { userId }, select: { status: true, role: true } });
+    if (!user || user.status !== 'ACTIVE') {
+      return NextResponse.json({ error: 'User not found or inactive' }, { status: 401 });
+    }
+    const adminRoles = ['SUPER_ADMIN', 'ADMIN'];
+    if (!adminRoles.includes(user.role)) {
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
 
     // Simulate cache monitoring data

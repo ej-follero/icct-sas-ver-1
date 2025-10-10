@@ -292,12 +292,12 @@ export default function PerformanceMonitor() {
           </TabsList>
 
           <TabsContent value="overview" className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 pt-4">
               <Card>
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium text-muted-foreground">Performance Score</p>
+                      <p className="text-sm font-medium text-blue-900">Performance Score</p>
                       <p className="text-2xl font-bold">{performanceStatus.stats.performanceScore}/100</p>
                     </div>
                     <Target className="w-8 h-8 text-blue-500" />
@@ -310,7 +310,7 @@ export default function PerformanceMonitor() {
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium text-muted-foreground">Total Queries</p>
+                      <p className="text-sm font-medium text-blue-900">Total Queries</p>
                       <p className="text-2xl font-bold">{performanceStatus.stats.totalQueries.toLocaleString()}</p>
                     </div>
                     <Database className="w-8 h-8 text-green-500" />
@@ -326,7 +326,7 @@ export default function PerformanceMonitor() {
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium text-muted-foreground">Avg Query Time</p>
+                      <p className="text-sm font-medium text-blue-900">Avg Query Time</p>
                       <p className="text-2xl font-bold">{formatDuration(performanceStatus.stats.averageQueryTime)}</p>
                     </div>
                     <Clock className="w-8 h-8 text-orange-500" />
@@ -342,13 +342,13 @@ export default function PerformanceMonitor() {
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium text-muted-foreground">Active Alerts</p>
+                      <p className="text-sm font-medium text-blue-900">Active Alerts</p>
                       <p className="text-2xl font-bold">{performanceStatus.alerts.length}</p>
                     </div>
                     <AlertTriangle className="w-8 h-8 text-red-500" />
                   </div>
                   <div className="flex items-center mt-2">
-                    <span className="text-xs text-muted-foreground">
+                    <span className="text-xs text-blue-900">
                       {performanceStatus.alerts.filter(a => a.severity === 'critical').length} critical
                     </span>
                   </div>

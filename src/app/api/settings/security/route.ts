@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 
@@ -27,8 +27,37 @@ const securitySettingsSchema = z.object({
   dataEncryptionAtRest: z.boolean()
 });
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    // JWT Authentication - Admin only
+    const token = request.cookies.get('token')?.value;
+    if (!token) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = Number((decoded as any)?.userId);
+    if (!Number.isFinite(userId)) {
+      return NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 });
+    }
+
+    // Check user exists and is active
+    const user = await prisma.user.findUnique({
+      where: { userId },
+      select: { status: true, role: true }
+    });
+
+    if (!user || user.status !== 'ACTIVE') {
+      return NextResponse.json({ error: 'User not found or inactive' }, { status: 401 });
+    }
+
+    // Admin-only access control
+    const adminRoles = ['SUPER_ADMIN', 'ADMIN'];
+    if (!adminRoles.includes(user.role)) {
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+    }
+
     const settings = await prisma.securitySettings.findUnique({
       where: { id: 1 }
     });
@@ -73,8 +102,37 @@ export async function GET() {
   }
 }
 
-export async function PUT(request: Request) {
+export async function PUT(request: NextRequest) {
   try {
+    // JWT Authentication - Admin only
+    const token = request.cookies.get('token')?.value;
+    if (!token) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = Number((decoded as any)?.userId);
+    if (!Number.isFinite(userId)) {
+      return NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 });
+    }
+
+    // Check user exists and is active
+    const user = await prisma.user.findUnique({
+      where: { userId },
+      select: { status: true, role: true }
+    });
+
+    if (!user || user.status !== 'ACTIVE') {
+      return NextResponse.json({ error: 'User not found or inactive' }, { status: 401 });
+    }
+
+    // Admin-only access control
+    const adminRoles = ['SUPER_ADMIN', 'ADMIN'];
+    if (!adminRoles.includes(user.role)) {
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+    }
+
     const body = await request.json();
     
     // Validate the request body
@@ -84,26 +142,26 @@ export async function PUT(request: Request) {
     const settings = await prisma.securitySettings.upsert({
       where: { id: 1 },
       update: {
-        ...validatedData,
-        updatedAt: new Date()
+        ...validatedData
       },
       create: {
         id: 1,
-        ...validatedData,
-        createdAt: new Date(),
-        updatedAt: new Date()
+        ...validatedData
       }
     });
 
-    // Log the security settings change
+    // Log the security settings change (align with SecurityLog schema)
     await prisma.securityLog.create({
       data: {
-        userId: 1, // TODO: Get from session
+        userId,
+        level: 'INFO',
+        module: 'SECURITY',
+        action: 'UPDATE_SETTINGS',
         eventType: 'SECURITY_SETTINGS_CHANGED',
         severity: 'MEDIUM',
-        description: 'Security settings updated',
-        ipAddress: request.headers.get('x-forwarded-for') || 'unknown',
-        userAgent: request.headers.get('user-agent') || 'unknown'
+        message: 'Security settings updated',
+        ipAddress: request.headers.get('x-forwarded-for') || undefined,
+        userAgent: request.headers.get('user-agent') || undefined,
       }
     });
 

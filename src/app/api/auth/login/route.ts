@@ -1,52 +1,54 @@
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
-import bcrypt from 'bcrypt';
+import { prisma } from '@/lib/prisma';
+import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { auditService } from '@/lib/services/audit.service';
 import { env } from '@/lib/env-validation';
 
-const prisma = new PrismaClient();
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { email, studentId, employeeId, password, rememberMe } = body;
+    let { email, studentIdNum, employeeId, password, rememberMe, identifier } = body;
+    
+    // Support a single concise identifier: email OR studentIdNum (e.g., 2025-01234) OR employeeId
+    if (identifier && !email && !studentIdNum && !employeeId) {
+      const idStr = String(identifier).trim();
+      const isEmail = /.+@.+\..+/.test(idStr);
+      const isStudentIdNum = /^(\d{4}-\d{5})$/.test(idStr);
+      const isNumeric = /^\d+$/.test(idStr);
+      if (isEmail) {
+        email = idStr.toLowerCase();
+      } else if (isStudentIdNum) {
+        studentIdNum = idStr;
+      } else if (isNumeric) {
+        employeeId = idStr;
+      }
+    }
     let user = null;
 
     if (email) {
       user = await prisma.user.findUnique({
-        where: { email },
-        include: {
-          Student: true,
-          Instructor: true,
-        },
+        where: { email: String(email).toLowerCase() },
       });
-    } else if (studentId) {
+    } else if (studentIdNum) {
       const student = await prisma.student.findUnique({
-        where: { studentIdNum: studentId },
+        where: { studentIdNum: studentIdNum },
         include: { User: true },
       });
       if (student) {
-        user = await prisma.user.findUnique({
-          where: { userId: student.userId },
-          include: {
-            Student: true,
-            Instructor: true,
-          },
-        });
+        user = student.User;
       }
     } else if (employeeId) {
+      // Look up instructor by employeeId
       const instructor = await prisma.instructor.findUnique({
-        where: { instructorId: Number(employeeId) },
-        include: { User: true },
+        where: { employeeId: String(employeeId).trim() },
       });
+      
       if (instructor) {
+        // Find user by instructor email
         user = await prisma.user.findUnique({
-          where: { userId: instructor.instructorId },
-          include: {
-            Student: true,
-            Instructor: true,
-          },
+          where: { email: instructor.email },
         });
       }
     }
@@ -56,7 +58,7 @@ export async function POST(request: Request) {
       await auditService.logAuthEvent(
         0, // No user ID for failed login
         'LOGIN_FAILED',
-        `Failed login attempt for email: ${email}`,
+        `Failed login attempt for identifier: ${identifier || email || studentIdNum || employeeId}`,
         request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown',
         request.headers.get('user-agent') || 'unknown'
       );
@@ -93,9 +95,13 @@ export async function POST(request: Request) {
     }
 
     // Verify password
-    const isValidPassword = await bcrypt.compare(password, user.passwordHash);
+    let isValidPassword = false;
+    
+    // For all users (including instructors), verify password
+    isValidPassword = await bcrypt.compare(password, user.passwordHash);
+    
     if (!isValidPassword) {
-      // Increment failed login attempts
+      // Update failed attempts for all users
       await prisma.user.update({
         where: { userId: user.userId },
         data: { 
@@ -170,9 +176,6 @@ export async function POST(request: Request) {
       email: user.email,
       role: user.role,
       status: user.status,
-      student: user.Student,
-      instructor: user.Instructor,
-      // guardian removed; guardians are not users
     };
 
     // Set HTTP-only cookie with the token

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
 
 export async function POST(request: NextRequest) {
   try {
@@ -22,22 +23,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Here you would typically:
-    // 1. Save to database
-    // 2. Send email notification
-    // 3. Send auto-reply to user
-    
-    // For now, we'll just log the contact form submission
-    console.log('Contact form submission:', {
-      name,
-      email,
-      message,
-      timestamp: new Date().toISOString(),
-      ip: request.ip || request.headers.get('x-forwarded-for') || 'unknown'
+    // Persist contact message to Email table for audit and follow-up
+    const toAddress = process.env.SUPPORT_EMAIL || 'support@example.com';
+    await prisma.email.create({
+      data: {
+        subject: `Contact from ${name}`,
+        sender: email,
+        recipient: toAddress,
+        content: message
+      }
     });
-
-    // Simulate processing time
-    await new Promise(resolve => setTimeout(resolve, 500));
 
     return NextResponse.json({
       success: true,

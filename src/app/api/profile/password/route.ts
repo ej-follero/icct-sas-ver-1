@@ -17,13 +17,34 @@ export async function PUT(request: NextRequest) {
     const body = await request.json();
     const validatedData = passwordChangeSchema.parse(body);
     
-    // TODO: Get user ID from session/token
-    const userId = 1; // This should come from authentication
+    // Get user ID from JWT token in cookies
+    const token = request.cookies.get('token')?.value;
+    
+    if (!token) {
+      return NextResponse.json(
+        { error: 'Authentication required' },
+        { status: 401 }
+      );
+    }
+
+    // Verify JWT token and extract user ID
+    let userId: number;
+    try {
+      const jwt = require('jsonwebtoken');
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      const userIdRaw = (decoded as any)?.userId;
+      userId = Number(userIdRaw);
+      if (!Number.isFinite(userId)) throw new Error('Invalid user id');
+    } catch (jwtError) {
+      console.error('JWT verification failed:', jwtError);
+      return NextResponse.json(
+        { error: 'Invalid authentication token' },
+        { status: 401 }
+      );
+    }
 
     // Get current user
-    const user = await prisma.user.findUnique({
-      where: { userId }
-    });
+    const user = await prisma.user.findUnique({ where: { userId } });
 
     if (!user) {
       return NextResponse.json(
@@ -59,12 +80,13 @@ export async function PUT(request: NextRequest) {
     });
 
     // Log password change event
-    await prisma.securityLogs.create({
+    await prisma.securityLog.create({
       data: {
         userId,
-        eventType: 'PASSWORD_CHANGED',
-        severity: 'MEDIUM',
-        description: 'User changed their password',
+        level: 'MEDIUM',
+        module: 'AUTH',
+        action: 'PASSWORD_CHANGED',
+        details: 'User changed their password',
         ipAddress: request.headers.get('x-forwarded-for') || 'unknown',
         userAgent: request.headers.get('user-agent') || 'unknown'
       }

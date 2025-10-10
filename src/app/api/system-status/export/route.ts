@@ -1,9 +1,31 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
 import { performanceService } from '@/lib/services/performance.service';
 import { AttendanceService } from '@/lib/services/attendance.service';
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    // JWT Authentication - Admin only
+    const token = request.cookies.get('token')?.value;
+    if (!token) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = Number((decoded as any)?.userId);
+    if (!Number.isFinite(userId)) {
+      return NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 });
+    }
+
+    const user = await prisma.user.findUnique({ where: { userId }, select: { status: true, role: true } });
+    if (!user || user.status !== 'ACTIVE') {
+      return NextResponse.json({ error: 'User not found or inactive' }, { status: 401 });
+    }
+    const adminRoles = ['SUPER_ADMIN', 'ADMIN'];
+    if (!adminRoles.includes(user.role)) {
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+    }
     const { format = 'json', includeDetails = true, dateRange } = await request.json();
     
     // Get system health data
@@ -95,7 +117,8 @@ export async function POST(request: Request) {
         break;
     }
 
-    const response = new NextResponse(responseData);
+    const bodyInit = typeof responseData === 'string' ? responseData : new Uint8Array(responseData);
+    const response = new NextResponse(bodyInit);
     response.headers.set('Content-Type', contentType);
     response.headers.set('Content-Disposition', `attachment; filename="${filename}"`);
     
@@ -182,7 +205,7 @@ function convertToCSV(data: any): string {
   return lines.join('\n');
 }
 
-async function generatePDF(data: any): Promise<Buffer> {
+async function generatePDF(data: any): Promise<Uint8Array> {
   // This is a simplified PDF generation
   // In a real implementation, you'd use a library like puppeteer or jsPDF
   
@@ -205,5 +228,5 @@ async function generatePDF(data: any): Promise<Buffer> {
   `;
   
   // Return a simple text-based PDF (in real implementation, use proper PDF library)
-  return Buffer.from(pdfContent, 'utf-8');
+  return new TextEncoder().encode(pdfContent);
 }

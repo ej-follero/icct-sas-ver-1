@@ -1,105 +1,113 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
-// Map Prisma enums to UI values
-function mapScanStatusToUi(status: string): 'success' | 'error' | 'unauthorized' | 'timeout' {
-  switch (status) {
-    case 'SUCCESS':
-      return 'success';
-    case 'UNAUTHORIZED':
-      return 'unauthorized';
-    // There is no TIMEOUT in schema; treat FAILED and others as error
-    case 'FAILED':
-    default:
-      return 'error';
-  }
-}
-
-function mapScanTypeToUi(type: string): 'entry' | 'exit' | 'attendance' | 'access' {
-  switch (type) {
-    case 'CHECK_IN':
-      return 'entry';
-    case 'CHECK_OUT':
-      return 'exit';
-    case 'VERIFICATION':
-      return 'access';
-    case 'TEST_SCAN':
-    case 'MAINTENANCE':
-    default:
-      return 'access';
-  }
-}
-
-function mapUiStatusToPrisma(status: string | null | undefined) {
-  if (!status) return undefined;
-  const s = status.toLowerCase();
-  if (s === 'success') return 'SUCCESS';
-  if (s === 'unauthorized') return 'UNAUTHORIZED';
-  if (s === 'error') return 'FAILED';
-  return undefined;
-}
-
-function mapUiScanTypeToPrisma(type: string | null | undefined) {
-  if (!type) return undefined;
-  const t = type.toLowerCase();
-  if (t === 'entry') return 'CHECK_IN';
-  if (t === 'exit') return 'CHECK_OUT';
-  if (t === 'access') return 'VERIFICATION';
-  // no direct mapping for 'attendance' in current enum -> treat as VERIFICATION
-  if (t === 'attendance') return 'VERIFICATION';
-  return undefined;
-}
-
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
-    const url = new URL(request.url);
-    const statusParam = url.searchParams.get('status');
-    const scanTypeParam = url.searchParams.get('scanType');
-    const locationParam = url.searchParams.get('location');
-    const dateParam = url.searchParams.get('date'); // YYYY-MM-DD (UTC day)
-    const startIso = url.searchParams.get('start'); // ISO string (client-local day start)
-    const endIso = url.searchParams.get('end');     // ISO string (client-local day end)
+    // Auth: require valid JWT and allowed roles (SUPER_ADMIN, ADMIN, DEPARTMENT_HEAD, INSTRUCTOR)
+    const token = request.cookies.get('token')?.value;
+    if (!token) {
+      return NextResponse.json(
+        { error: 'Authentication required' },
+        { status: 401 }
+      );
+    }
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = Number((decoded as any)?.userId);
+    if (!Number.isFinite(userId)) {
+      return NextResponse.json(
+        { error: 'Invalid authentication token' },
+        { status: 401 }
+      );
+    }
+    const user = await prisma.user.findUnique({ where: { userId }, select: { role: true, status: true } });
+    if (!user || user.status !== 'ACTIVE') {
+      return NextResponse.json(
+        { error: 'User not found or inactive' },
+        { status: 404 }
+      );
+    }
+    const allowedRoles = ['SUPER_ADMIN', 'ADMIN', 'DEPARTMENT_HEAD', 'INSTRUCTOR'];
+    if (!allowedRoles.includes(user.role)) {
+      return NextResponse.json(
+        { error: 'Insufficient permissions' },
+        { status: 403 }
+      );
+    }
+    const { searchParams } = new URL(request.url);
+    const page = parseInt(searchParams.get('page') || '1');
+    const limit = parseInt(searchParams.get('limit') || '20');
+    const search = searchParams.get('search') || '';
+    const level = searchParams.get('level') || 'all';
+    const module = searchParams.get('module') || 'all';
+    const startDate = searchParams.get('startDate');
+    const endDate = searchParams.get('endDate');
 
+    const skip = (page - 1) * limit;
+
+    // Build where clause for filtering
     const where: any = {};
-    const statusPrisma = mapUiStatusToPrisma(statusParam || undefined);
-    const typePrisma = mapUiScanTypeToPrisma(scanTypeParam || undefined);
-    if (statusPrisma) where.scanStatus = statusPrisma;
-    if (typePrisma) where.scanType = typePrisma;
-    if (locationParam && locationParam !== 'all') where.location = locationParam;
-    if (startIso && endIso) {
-      where.timestamp = { gte: new Date(startIso), lte: new Date(endIso) };
-    } else if (dateParam) {
-      const start = new Date(`${dateParam}T00:00:00.000Z`);
-      const end = new Date(`${dateParam}T23:59:59.999Z`);
-      where.timestamp = { gte: start, lte: end };
+
+    if (search) {
+      where.OR = [
+        { rfidTag: { contains: search, mode: 'insensitive' } },
+        { location: { contains: search, mode: 'insensitive' } },
+        { user: { is: { email: { contains: search, mode: 'insensitive' } } } },
+        { user: { is: { userName: { contains: search, mode: 'insensitive' } } } }
+      ];
     }
 
-    const logs = await prisma.rFIDLogs.findMany({
-      where,
-      orderBy: { timestamp: 'desc' },
-      take: 500,
-      include: {
-        user: true,
-        reader: true,
-      },
-    });
+    // level/module filters are not applicable to RFIDLogs; ignore
 
-    const data = logs.map((l) => ({
-      id: String(l.logsId),
-      tagId: l.rfidTag,
-      readerId: String(l.readerId),
-      studentId: undefined as string | undefined,
-      studentName: l.user ? `${l.user.userName}` : undefined,
-      location: l.location,
-      timestamp: l.timestamp.toISOString(),
-      status: mapScanStatusToUi(String(l.scanStatus)),
-      scanType: mapScanTypeToUi(String(l.scanType)),
-      duration: undefined as number | undefined,
-      notes: undefined as string | undefined,
+    if (startDate && endDate) {
+      where.timestamp = {
+        gte: new Date(startDate),
+        lte: new Date(endDate)
+      };
+    }
+
+    // Fetch RFID logs with pagination
+    const [logs, total] = await Promise.all([
+      prisma.rFIDLogs.findMany({
+        where,
+        orderBy: { timestamp: 'desc' },
+        skip,
+        take: limit,
+        include: {
+          user: { select: { email: true, userName: true } },
+          reader: { select: { deviceName: true } }
+        }
+      }),
+      prisma.rFIDLogs.count({ where })
+    ]);
+
+    const data = logs.map((log: any) => ({
+      id: log.logsId,
+      timestamp: log.timestamp,
+      rfidTag: log.rfidTag,
+      readerId: log.readerId,
+      readerName: log.reader?.deviceName || null,
+      scanType: log.scanType,
+      scanStatus: log.scanStatus,
+      location: log.location,
+      userId: log.userId,
+      userEmail: log.user?.email || null,
+      userName: log.user?.userName || null
     }));
 
-    return NextResponse.json(data);
-  } catch (e: any) {
-    return NextResponse.json({ error: e?.message || 'Failed to fetch RFID logs' }, { status: 500 });
+    return NextResponse.json({
+      data,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit)
+    });
+
+  } catch (error) {
+    console.error('Error fetching RFID logs:', error);
+    return NextResponse.json(
+      { error: 'Failed to fetch RFID logs' },
+      { status: 500 }
+    );
   }
 }

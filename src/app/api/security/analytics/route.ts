@@ -1,11 +1,38 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
 import { SecurityLogger } from '@/lib/services/security-logger.service';
-
-const prisma = new PrismaClient();
+import { prisma } from '@/lib/prisma';
 
 export async function GET(req: NextRequest) {
   try {
+    // JWT Authentication - Admin only
+    const token = req.cookies.get('token')?.value;
+    if (!token) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = Number((decoded as any)?.userId);
+    if (!Number.isFinite(userId)) {
+      return NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 });
+    }
+
+    // Check user exists and is active
+    const user = await prisma.user.findUnique({
+      where: { userId },
+      select: { status: true, role: true }
+    });
+
+    if (!user || user.status !== 'ACTIVE') {
+      return NextResponse.json({ error: 'User not found or inactive' }, { status: 401 });
+    }
+
+    // Admin-only access control
+    const adminRoles = ['SUPER_ADMIN', 'ADMIN'];
+    if (!adminRoles.includes(user.role)) {
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+    }
+
     const { searchParams } = new URL(req.url);
     const days = parseInt(searchParams.get('days') || '30');
 
@@ -17,21 +44,21 @@ export async function GET(req: NextRequest) {
 
     // Calculate event type distribution
     const eventTypeDistribution = stats.reduce((acc, stat) => {
-      const eventType = stat.eventType;
-      if (!acc[eventType]) {
-        acc[eventType] = 0;
+      const key = stat.eventType ?? 'UNKNOWN';
+      if (!acc[key]) {
+        acc[key] = 0;
       }
-      acc[eventType] += stat._count.id;
+      acc[key] += stat._count.id;
       return acc;
     }, {} as Record<string, number>);
 
     // Calculate severity distribution
     const severityDistribution = stats.reduce((acc, stat) => {
-      const severity = stat.severity;
-      if (!acc[severity]) {
-        acc[severity] = 0;
+      const key = stat.severity ?? 'UNKNOWN';
+      if (!acc[key]) {
+        acc[key] = 0;
       }
-      acc[severity] += stat._count.id;
+      acc[key] += stat._count.id;
       return acc;
     }, {} as Record<string, number>);
 
@@ -126,7 +153,7 @@ export async function GET(req: NextRequest) {
         id: event.id,
         eventType: event.eventType,
         severity: event.severity,
-        description: event.description,
+        description: (event as any).description ?? event.message,
         timestamp: event.timestamp,
         ipAddress: event.ipAddress,
         user: event.user,

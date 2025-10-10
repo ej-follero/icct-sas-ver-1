@@ -7,7 +7,7 @@ import { TablePagination } from "@/components/reusable/Table/TablePagination";
 import { toast } from "sonner";
 import Fuse from "fuse.js";
 import React from "react";
-import { Settings, Plus, Trash2, Printer, Loader2, Upload, List, Columns3, ChevronDown, ChevronUp, UserCheck, UserX, RefreshCw, Download, Search, Bell, X, ChevronRight, Clock, CreditCard, MapPin, AlertTriangle, Eye, Pencil } from "lucide-react";
+import { Settings, Plus, Trash2, Printer, Loader2, Upload, List, Columns3, ChevronDown, ChevronUp, UserCheck, UserX, RefreshCw, Download, Search, Bell, X, ChevronRight, Clock, CreditCard, MapPin, AlertTriangle, Eye, Pencil, ScanLine } from "lucide-react";
 import { ImportDialog } from "@/components/reusable/Dialogs/ImportDialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ExportDialog } from '@/components/reusable/Dialogs/ExportDialog';
@@ -29,6 +29,8 @@ import { QuickActionsPanel } from '@/components/reusable/QuickActionsPanel';
 import { VisibleColumnsDialog, ColumnOption } from '@/components/reusable/Dialogs/VisibleColumnsDialog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import BatchAssign from '@/components/rfid/BatchAssign';
+import { useRFIDScanMonitor } from '@/hooks/useRFIDRealTime';
 import { Label } from "@/components/ui/label";
 import { Checkbox as SharedCheckbox } from '@/components/ui/checkbox';
 import { RFIDTagFormDialog } from "@/components/forms/RFIDTagFormDialog";
@@ -101,14 +103,14 @@ const COLUMN_OPTIONS: ColumnOption[] = tagColumns.map(col => ({
 interface RFIDTag {
   tagId: number;
   tagNumber: string;
-  tagType: 'STUDENT_CARD' | 'INSTRUCTOR_CARD' | 'TEMPORARY_PASS' | 'VISITOR_PASS' | 'MAINTENANCE' | 'TEST';
+  tagType: 'STUDENT_CARD' | 'TEMPORARY_PASS' | 'VISITOR_PASS' | 'MAINTENANCE' | 'TEST';
   assignedAt: string;
   lastUsed?: string;
   expiresAt?: string;
   status: 'ACTIVE' | 'INACTIVE' | 'LOST' | 'DAMAGED' | 'EXPIRED' | 'REPLACED' | 'RESERVED';
   notes?: string;
   studentId?: number;
-  instructorId?: number;
+  
   assignedBy?: number;
   assignmentReason?: string;
   student?: {
@@ -117,12 +119,7 @@ interface RFIDTag {
     lastName: string;
     studentIdNum: string;
   };
-  instructor?: {
-    instructorId: number;
-    firstName: string;
-    lastName: string;
-    email: string;
-  };
+  
 }
 
 export default function RFIDTagsPage() {
@@ -165,6 +162,12 @@ export default function RFIDTagsPage() {
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(new Date());
   const [createForm, setCreateForm] = useState<{ tagNumber: string; tagType: RFIDTag['tagType']; status: RFIDTag['status']; notes?: string }>({ tagNumber: '', tagType: 'STUDENT_CARD', status: 'ACTIVE', notes: '' });
+  const [batchAssignOpen, setBatchAssignOpen] = useState(false);
+  const [batchQueue, setBatchQueue] = useState<Array<{ studentIdNum: string; tagNumber: string; replace: boolean }>>([]);
+  const [batchReplace, setBatchReplace] = useState(false);
+  const [batchStudentIdNum, setBatchStudentIdNum] = useState('');
+  const [batchTagNumber, setBatchTagNumber] = useState('');
+  const [savingBatch, setSavingBatch] = useState(false);
 
   const fetchTags = async () => {
     try {
@@ -175,7 +178,18 @@ export default function RFIDTagsPage() {
         throw new Error('Failed to fetch RFID tags');
       }
       const data = await response.json();
-      setTags(data);
+      const normalized: RFIDTag[] = Array.isArray(data)
+        ? data
+        : Array.isArray(data?.data)
+          ? data.data
+          : Array.isArray(data?.items)
+            ? data.items
+            : Array.isArray(data?.records)
+              ? data.records
+              : Array.isArray(data?.results)
+                ? data.results
+                : [];
+      setTags(normalized);
       setLastUpdated(new Date());
     } catch (err) {
       console.error('Error fetching RFID tags:', err);
@@ -190,16 +204,27 @@ export default function RFIDTagsPage() {
     fetchTags();
   }, []);
 
+  useRFIDScanMonitor({
+    enabled: batchAssignOpen,
+    onNewScan: (scan) => {
+      const tag = String(scan?.tagNumber || scan?.tagId || '').trim();
+      if (!tag) return;
+      if (batchAssignOpen) setBatchTagNumber(tag);
+      toast.success('Card detected');
+    }
+  });
+
 
   // Add Fuse.js setup with proper types
-  const fuse = useMemo(() => new Fuse<RFIDTag>(tags, {
-    keys: ["tagNumber", "student.firstName", "student.lastName", "instructor.firstName", "instructor.lastName"],
+  const fuse = useMemo(() => new Fuse<RFIDTag>(Array.isArray(tags) ? tags : [], {
+    keys: ["tagNumber", "student.firstName", "student.lastName"],
     threshold: 0.4,
     includeMatches: true,
   }), [tags]);
 
   const fuzzyResults = useMemo(() => {
-    if (!searchInput) return tags.map((t: RFIDTag, i: number) => ({ item: t, refIndex: i }));
+    const list = Array.isArray(tags) ? tags : [];
+    if (!searchInput) return list.map((t: RFIDTag, i: number) => ({ item: t, refIndex: i }));
     return fuse.search(searchInput) as FuseResult<RFIDTag>[];
   }, [searchInput, fuse, tags]);
 
@@ -213,14 +238,48 @@ export default function RFIDTagsPage() {
 
     // Apply multi-sort
     if (sortFields.length > 0) {
+      const getSortValue = (tag: RFIDTag, field: SortField): string | number | null => {
+        switch (field) {
+          case 'tagId':
+            return tag.tagId;
+          case 'studentName': {
+            if (tag.student) return `${tag.student.firstName} ${tag.student.lastName}`.toLowerCase();
+            return '';
+          }
+          case 'status':
+            return tag.status;
+          case 'lastSeen':
+            return tag.lastUsed ? new Date(tag.lastUsed).getTime() : 0;
+          case 'location':
+            return (tag.notes || '').toLowerCase();
+          case 'scanCount':
+            return tag.tagType;
+          case 'assignedAt':
+            return tag.assignedAt ? new Date(tag.assignedAt).getTime() : 0;
+          default:
+            return null;
+        }
+      };
+
       filtered.sort((a, b) => {
         for (const { field, order } of sortFields) {
-          const aValue = a[field as keyof RFIDTag];
-          const bValue = b[field as keyof RFIDTag];
-          
+          const aValue = getSortValue(a, field as SortField);
+          const bValue = getSortValue(b, field as SortField);
+
           if (aValue === bValue) continue;
-          
-          const comparison = (aValue ?? '') < (bValue ?? '') ? -1 : 1;
+
+          // numeric compare for timestamps and numbers
+          const aNum = typeof aValue === 'number' ? aValue : null;
+          const bNum = typeof bValue === 'number' ? bValue : null;
+          let comparison = 0;
+          if (aNum !== null && bNum !== null) {
+            comparison = aNum < bNum ? -1 : 1;
+          } else {
+            const aStr = String(aValue ?? '').toLowerCase();
+            const bStr = String(bValue ?? '').toLowerCase();
+            if (aStr === bStr) continue;
+            comparison = aStr < bStr ? -1 : 1;
+          }
           return order === 'asc' ? comparison : -comparison;
         }
         return 0;
@@ -250,20 +309,27 @@ export default function RFIDTagsPage() {
 
   const totalPages = Math.ceil(filteredTags.length / itemsPerPage);
 
-  const stats = useMemo(() => ({
-    total: tags.length,
-    active: tags.filter(t => t.status === 'ACTIVE').length,
-    inactive: tags.filter(t => t.status === 'INACTIVE').length,
-    lost: tags.filter(t => t.status === 'LOST').length,
-    damaged: tags.filter(t => t.status === 'DAMAGED').length,
-  }), [tags]);
+  const stats = useMemo(() => {
+    const list = Array.isArray(tags) ? tags : [];
+    return {
+      total: list.length,
+      active: list.filter(t => t.status === 'ACTIVE').length,
+      inactive: list.filter(t => t.status === 'INACTIVE').length,
+      lost: list.filter(t => t.status === 'LOST').length,
+      damaged: list.filter(t => t.status === 'DAMAGED').length,
+    };
+  }, [tags]);
 
   const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'active': return <Badge variant="default">Active</Badge>;
-      case 'inactive': return <Badge variant="secondary">Inactive</Badge>;
-      case 'lost': return <Badge variant="destructive">Lost</Badge>;
-      case 'damaged': return <Badge variant="destructive">Damaged</Badge>;
+    const norm = status.toUpperCase();
+    switch (norm) {
+      case 'ACTIVE': return <Badge variant="default">Active</Badge>;
+      case 'INACTIVE': return <Badge variant="secondary">Inactive</Badge>;
+      case 'LOST': return <Badge variant="destructive">Lost</Badge>;
+      case 'DAMAGED': return <Badge variant="destructive">Damaged</Badge>;
+      case 'EXPIRED': return <Badge variant="destructive">Expired</Badge>;
+      case 'REPLACED': return <Badge variant="secondary">Replaced</Badge>;
+      case 'RESERVED': return <Badge variant="default">Reserved</Badge>;
       default: return <Badge variant="outline">Unknown</Badge>;
     }
   };
@@ -463,9 +529,7 @@ export default function RFIDTagsPage() {
                       <div className="flex justify-between items-center py-2">
                         <span className="text-slate-600 text-sm font-medium">Current Holder</span>
                         <span className="font-semibold text-blue-900 text-sm max-w-32 truncate">
-                          {item.student ? `${item.student.firstName} ${item.student.lastName}` : 
-                           item.instructor ? `${item.instructor.firstName} ${item.instructor.lastName}` : 
-                           'Unassigned'}
+                          {item.student ? `${item.student.firstName} ${item.student.lastName}` : 'Unassigned'}
                         </span>
                       </div>
                     </div>
@@ -585,13 +649,6 @@ export default function RFIDTagsPage() {
                         dangerouslySetInnerHTML={{ __html: safeHighlight(`${item.student.firstName} ${item.student.lastName}`, nameMatches) }}
                       />
                       <div className="text-sm text-muted-foreground">{item.student.studentIdNum}</div>
-                    </div>
-                  ) : item.instructor ? (
-                    <div>
-                      <div className="font-medium text-blue-900">
-                        {item.instructor.firstName} {item.instructor.lastName}
-                      </div>
-                      <div className="text-sm text-muted-foreground">Instructor</div>
                     </div>
                   ) : (
                     <span className="text-muted-foreground">Unassigned</span>
@@ -733,7 +790,7 @@ export default function RFIDTagsPage() {
     }
   ];
 
-  const selectedTags = tags.filter(tag => selectedIds.includes(tag.tagId.toString()));
+  const selectedTags = (Array.isArray(tags) ? tags : []).filter(tag => selectedIds.includes(tag.tagId.toString()));
 
   const handleQuickExportSelectedTags = () => {
     const selected = selectedTags;
@@ -784,7 +841,7 @@ export default function RFIDTagsPage() {
 
     const printData = filteredTags.map((t) => ({
       tagId: t.tagNumber,
-      studentName: t.student ? `${t.student.firstName} ${t.student.lastName}` : (t.instructor ? `${t.instructor.firstName} ${t.instructor.lastName}` : ''),
+      studentName: t.student ? `${t.student.firstName} ${t.student.lastName}` : '',
       status: t.status,
       lastSeen: t.lastUsed ? new Date(t.lastUsed).toLocaleString() : 'Never',
       location: t.notes || '',
@@ -946,6 +1003,13 @@ export default function RFIDTagsPage() {
                 description: 'Manage table columns',
                 icon: <Columns3 className="w-5 h-5 text-white" />,
                 onClick: () => setVisibleColumnsDialogOpen(true)
+              },
+              {
+                id: 'batch-assign',
+                label: 'Batch-Scan Assign',
+                description: 'Assign cards by scanning',
+                icon: <CreditCard className="w-5 h-5 text-white" />,
+                onClick: () => setBatchAssignOpen(true)
               },
               {
                 id: 'refresh-data',
@@ -1179,12 +1243,10 @@ export default function RFIDTagsPage() {
         <ExportDialog
           open={exportDialogOpen}
           onOpenChange={setExportDialogOpen}
-          selectedItems={selectedTags}
-          entityType="tag"
-          entityLabel="tag"
-          exportColumns={tagColumns.map(col => ({ id: col.key, label: col.label, default: true }))}
-          onExport={(options) => {
-            toast.success(`Exported ${options.format} with ${options.columns.length} columns`);
+          dataCount={selectedTags.length}
+          entityType="student"
+          onExport={async (format, _options) => {
+            toast.success(`Exported ${format.toUpperCase()} for ${selectedTags.length} item(s)`);
           }}
         />
 
@@ -1197,6 +1259,18 @@ export default function RFIDTagsPage() {
           acceptedFileTypes={[".csv", ".xlsx", ".xls"]}
           maxFileSize={5}
         />
+
+        {/* Batch-Scan Assign Dialog */}
+        <Dialog open={batchAssignOpen} onOpenChange={setBatchAssignOpen}>
+          <DialogContent className="sm:max-w-[560px] p-0 overflow-hidden">
+            <DialogHeader className="sr-only">
+              <DialogTitle>Batch-Scan Assign</DialogTitle>
+            </DialogHeader>
+            <BatchAssign isFullscreen={false} onClose={() => setBatchAssignOpen(false)} onAssigned={() => { setBatchAssignOpen(false); fetchTags(); }} />
+          </DialogContent>
+        </Dialog>
+
+        {/* Kiosk Bind (Admin) Dialog - Removed as requested */}
 
         {/* Add Tag Dialog */}
         <RFIDTagFormDialog
@@ -1247,7 +1321,6 @@ export default function RFIDTagsPage() {
                 title: "Assignment",
                 fields: [
                   { label: 'Student', value: selectedTag.student ? `${selectedTag.student.firstName} ${selectedTag.student.lastName} (${selectedTag.student.studentIdNum})` : '—' },
-                  { label: 'Instructor', value: selectedTag.instructor ? `${selectedTag.instructor.firstName} ${selectedTag.instructor.lastName}` : '—' },
                   { label: 'Assigned By', value: selectedTag.assignedBy ? String(selectedTag.assignedBy) : '—' },
                   { label: 'Reason', value: selectedTag.assignmentReason || '—' },
                 ]

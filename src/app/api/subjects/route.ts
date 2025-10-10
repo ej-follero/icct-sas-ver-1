@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { SubjectType, SemesterType } from "@prisma/client";
@@ -19,8 +19,29 @@ const subjectSchema = z.object({
 });
 
 // GET handler
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
+    // JWT Authentication (SUPER_ADMIN, ADMIN, DEPARTMENT_HEAD, INSTRUCTOR)
+    const token = request.cookies.get('token')?.value;
+    if (!token) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = Number((decoded as any)?.userId);
+    if (!Number.isFinite(userId)) {
+      return NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 });
+    }
+
+    const user = await prisma.user.findUnique({ where: { userId }, select: { status: true, role: true } });
+    if (!user || user.status !== 'ACTIVE') {
+      return NextResponse.json({ error: 'User not found or inactive' }, { status: 401 });
+    }
+    const allowedRoles = ['SUPER_ADMIN', 'ADMIN', 'DEPARTMENT_HEAD', 'INSTRUCTOR'];
+    if (!allowedRoles.includes(user.role)) {
+      return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
+    }
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page') || '1', 10);
     const pageSize = parseInt(searchParams.get('pageSize') || '10', 10);
@@ -47,19 +68,25 @@ export async function GET(request: Request) {
     if (searchParams.get('type') && searchParams.get('type') !== 'all') {
       const type = searchParams.get('type');
       if (type) {
-        where.subjectType = type.toUpperCase();
+        const map: any = { lecture: 'LECTURE', laboratory: 'LABORATORY', both: 'HYBRID' };
+        const normalized = map[type] || type.toUpperCase();
+        if (['LECTURE','LABORATORY','HYBRID','THESIS','RESEARCH','INTERNSHIP'].includes(normalized)) {
+          where.subjectType = normalized;
+        }
       }
     }
     if (searchParams.get('semester') && searchParams.get('semester') !== 'all') {
       const semester = searchParams.get('semester');
       if (semester) {
-        where.semester = semester.toUpperCase();
+        const sem = semester.toUpperCase();
+        if (['FIRST_SEMESTER','SECOND_SEMESTER','THIRD_SEMESTER'].includes(sem)) where.semester = sem;
       }
     }
     if (searchParams.get('status') && searchParams.get('status') !== 'all') {
       const status = searchParams.get('status');
       if (status) {
-        where.status = status.toUpperCase();
+        const st = status.toUpperCase();
+        if (['ACTIVE','INACTIVE','ARCHIVED','PENDING_REVIEW'].includes(st)) where.status = st;
       }
     }
     if (searchParams.get('department') && searchParams.get('department') !== 'all') {
@@ -171,9 +198,34 @@ export async function GET(request: Request) {
 }
 
 // POST handler
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    // JWT Authentication - Admin only
+    const token = request.cookies.get('token')?.value;
+    if (!token) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = Number((decoded as any)?.userId);
+    if (!Number.isFinite(userId)) {
+      return NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 });
+    }
+
+    const user = await prisma.user.findUnique({ where: { userId }, select: { status: true, role: true } });
+    if (!user || user.status !== 'ACTIVE') {
+      return NextResponse.json({ error: 'User not found or inactive' }, { status: 401 });
+    }
+    const adminRoles = ['SUPER_ADMIN', 'ADMIN'];
+    if (!adminRoles.includes(user.role)) {
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+    }
     const body = await request.json();
+    const courseIdNum = Number((body as any)?.courseId);
+    if (!Number.isFinite(courseIdNum)) {
+      return NextResponse.json({ error: 'courseId is required and must be a number' }, { status: 400 });
+    }
     const validatedData = subjectSchema.parse(body);
 
     // Map the validated data to database fields
@@ -181,19 +233,22 @@ export async function POST(request: Request) {
       data: {
         subjectName: validatedData.name,
         subjectCode: validatedData.code,
-        subjectType: validatedData.type.toUpperCase() as SubjectType,
-        status: "ACTIVE",
+        subjectType: ((t: string) => {
+          const map: any = { lecture: 'LECTURE', laboratory: 'LABORATORY', both: 'HYBRID' };
+          return map[t] || t.toUpperCase();
+        })(validatedData.type) as SubjectType,
+        status: 'ACTIVE',
         description: validatedData.description || "",
         lectureUnits: validatedData.lecture_units,
         labUnits: validatedData.laboratory_units,
         creditedUnits: validatedData.units,
         totalHours: validatedData.lecture_units + validatedData.laboratory_units,
         prerequisites: "",
-        courseId: 1, // Default course ID - should be passed from frontend
+        courseId: courseIdNum,
         departmentId: parseInt(validatedData.department),
-        academicYear: "2024-2025", // Should be passed from frontend
+        academicYear: (body as any)?.academicYear || "2024-2025",
         semester: validatedData.semester.toUpperCase() as SemesterType,
-        maxStudents: 30,
+        maxStudents: (body as any)?.maxStudents ? Number((body as any).maxStudents) : 30,
       },
     });
 

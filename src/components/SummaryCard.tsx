@@ -24,7 +24,7 @@ const SummaryCard: React.FC<SummaryCardProps> = ({
       <CardContent className="p-5 flex flex-col gap-2 min-h-[120px]">
         {/* Top Row: Label and Icon */}
         <div className="flex items-center justify-between mb-1">
-          <span className="text-base font-semibold text-blue-800 tracking-tight">{label}</span>
+          <span className="text-base font-semibold text-blue-900 tracking-tight">{label}</span>
           <span className="w-5 h-5 flex items-center justify-center text-blue-500/80">{icon}</span>
         </div>
         {/* Divider */}
@@ -42,7 +42,7 @@ const SummaryCard: React.FC<SummaryCardProps> = ({
         )}
         {/* Sublabel/Description */}
         {sublabel && (
-          <p className="text-sm text-gray-500 mt-0.5 mb-0">{sublabel}</p>
+          <p className="text-sm text-blue-900 mt-0.5 mb-0">{sublabel}</p>
         )}
       </CardContent>
     </Card>

@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { performanceService } from '@/lib/services/performance.service';
+import { redisService } from '@/lib/services/redis.service';
+import { websocketService } from '@/lib/services/websocket.service';
 
 export async function GET() {
   try {
@@ -18,31 +20,16 @@ export async function GET() {
       console.error('Database health check failed:', error);
     }
 
-    // Check cache system (Redis)
-    let cacheStatus = 'healthy';
-    let cacheSize = 0;
-    let cacheKeys = 0;
-    try {
-      // TODO: Implement real Redis health check
-      // const redis = new Redis(process.env.REDIS_URL);
-      // await redis.ping();
-      // cacheSize = await redis.memory('usage');
-      // cacheKeys = await redis.dbsize();
-    } catch (error) {
-      cacheStatus = 'unhealthy';
-      console.error('Cache health check failed:', error);
-    }
+    // Check cache system (Redis) - Real implementation
+    const cacheHealth = await redisService.getHealthStatus();
+    const cacheStatus = cacheHealth.status;
+    const cacheSize = cacheHealth.cacheSize;
+    const cacheKeys = cacheHealth.cacheKeys;
 
-    // Check WebSocket server
-    let websocketStatus = 'healthy';
-    let activeConnections = 0;
-    try {
-      // TODO: Implement real WebSocket health check
-      // activeConnections = await getWebSocketConnections();
-    } catch (error) {
-      websocketStatus = 'unhealthy';
-      console.error('WebSocket health check failed:', error);
-    }
+    // Check WebSocket server - Real implementation
+    const websocketHealth = await websocketService.getHealthStatus();
+    const websocketStatus = websocketHealth.status;
+    const activeConnections = websocketHealth.activeConnections;
 
     // Get system performance metrics
     const memoryUsage = process.memoryUsage();
@@ -65,7 +52,7 @@ export async function GET() {
         },
         cache: {
           status: cacheStatus,
-          cacheSize: `${Math.round(cacheSize / 1024 / 1024)} MB`,
+          cacheSize: `${cacheSize} MB`,
           cacheKeys: cacheKeys
         },
         websocket: {
@@ -120,8 +107,32 @@ export async function GET() {
 
 async function getQueryStatistics() {
   try {
+    // Check if query_logs table exists first
+    const tableExists = await prisma.$queryRaw<Array<{ exists: boolean }>>`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'query_logs'
+      );
+    `;
+    
+    if (!Array.isArray(tableExists) || !tableExists[0]?.exists) {
+      console.log('query_logs table does not exist, using default values');
+      return {
+        totalQueries: 0,
+        averageQueryTime: 0,
+        errorRate: 0,
+        slowQueries: 0
+      };
+    }
+
     // Get query statistics from database
-    const stats = await prisma.$queryRaw`
+    const stats = await prisma.$queryRaw<Array<{
+      total_queries: number;
+      avg_query_time: number | null;
+      error_rate: number | null;
+      slow_queries: number;
+    }>>`
       SELECT 
         COUNT(*) as total_queries,
         AVG(EXTRACT(EPOCH FROM (end_time - start_time)) * 1000) as avg_query_time,
@@ -131,11 +142,12 @@ async function getQueryStatistics() {
       WHERE created_at > NOW() - INTERVAL '1 hour'
     `;
     
+    const row = Array.isArray(stats) ? stats[0] : undefined;
     return {
-      totalQueries: stats[0]?.total_queries || 0,
-      averageQueryTime: Math.round(stats[0]?.avg_query_time || 0),
-      errorRate: Math.round(stats[0]?.error_rate || 0),
-      slowQueries: stats[0]?.slow_queries || 0
+      totalQueries: row?.total_queries ?? 0,
+      averageQueryTime: Math.round((row?.avg_query_time ?? 0)),
+      errorRate: Math.round((row?.error_rate ?? 0)),
+      slowQueries: row?.slow_queries ?? 0
     };
   } catch (error) {
     console.error('Error getting query statistics:', error);

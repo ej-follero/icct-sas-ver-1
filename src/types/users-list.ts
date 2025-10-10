@@ -12,7 +12,6 @@ export interface User {
   lastPasswordChange?: string;
   failedLoginAttempts: number;
   isEmailVerified: boolean;
-  isPhoneVerified: boolean;
   twoFactorEnabled: boolean;
   createdAt: string;
   updatedAt: string;

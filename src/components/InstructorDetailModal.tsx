@@ -13,11 +13,11 @@ import {
   Calendar as CalendarIcon, Activity, Shield, AlertTriangle, CheckCircle,
   X, Building, GraduationCap, Target, Zap, Users, BarChart3, Eye
 } from 'lucide-react';
-import { InstructorAttendance, ScheduleAttendance, WeeklyAttendancePattern } from '@/types/instructor-attendance';
+// Instructor attendance types removed
 import { getAttendanceRateColor } from '@/lib/colors';
 
 interface InstructorDetailModalProps {
-  instructor: InstructorAttendance | null;
+  instructor: any;
   isOpen: boolean;
   onClose: () => void;
 }
@@ -51,7 +51,7 @@ const InstructorDetailModal: React.FC<InstructorDetailModalProps> = ({
     }
   };
 
-  const WeeklyPatternChart = ({ pattern }: { pattern: WeeklyAttendancePattern }) => {
+  const WeeklyPatternChart = ({ pattern }: { pattern: any }) => {
     const days = [
       { key: 'monday', label: 'Mon', value: pattern.monday },
       { key: 'tuesday', label: 'Tue', value: pattern.tuesday },
@@ -77,7 +77,7 @@ const InstructorDetailModal: React.FC<InstructorDetailModalProps> = ({
     );
   };
 
-  const ScheduleCard = ({ schedule }: { schedule: ScheduleAttendance }) => (
+  const ScheduleCard = ({ schedule }: { schedule: any }) => (
     <Card className="mb-3">
       <CardContent className="p-4">
         <div className="flex justify-between items-start mb-2">

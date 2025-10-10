@@ -8,17 +8,45 @@ export async function PUT(
 ) {
   try {
     const { id } = params;
+    // AuthN/AuthZ: only SUPER_ADMIN or ADMIN can update backups
+    const token = (request as any).cookies?.get?.('token')?.value || (request as any).headers?.get?.('cookie');
+    const cookieToken = token && typeof token === 'string' && token.includes('token=')
+      ? (token.split('token=')[1].split(';')[0])
+      : (typeof token === 'string' ? token : undefined);
+    if (!cookieToken) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+    try {
+      const jwt = require('jsonwebtoken');
+      const decoded = jwt.verify(cookieToken, process.env.JWT_SECRET);
+      const userId = decoded.userId as number;
+      const user = await prisma.user.findUnique({ where: { userId }, select: { role: true } });
+      if (!user || (user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN')) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+    } catch {
+      return NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 });
+    }
     const body = await request.json();
     const { status, errorMessage, size, completedAt, filePath } = body;
+
+    // Validate status against schema enum
+    const allowedStatuses = new Set(['SCHEDULED','IN_PROGRESS','COMPLETED','FAILED','CANCELLED']);
+    const statusUpdate = status && allowedStatuses.has(String(status).toUpperCase())
+      ? String(status).toUpperCase()
+      : undefined;
+
+    // Coerce size to string per schema
+    const sizeUpdate = typeof size === 'number' ? String(size) : (typeof size === 'string' ? size : undefined);
 
     const updatedBackup = await prisma.systemBackup.update({
       where: { id: parseInt(id) },
       data: {
-        status,
-        errorMessage,
-        size,
-        filePath,
-        completedAt: completedAt ? new Date(completedAt) : undefined,
+        ...(statusUpdate ? { status: statusUpdate as any } : {}),
+        ...(typeof errorMessage === 'string' ? { errorMessage } : {}),
+        ...(sizeUpdate ? { size: sizeUpdate } : {}),
+        ...(typeof filePath === 'string' ? { filePath } : {}),
+        ...(completedAt ? { completedAt: new Date(completedAt) } : {}),
       },
       include: {
         createdByUser: {
@@ -69,6 +97,26 @@ export async function DELETE(
 ) {
   try {
     const { id } = params;
+
+    // AuthN/AuthZ: only SUPER_ADMIN or ADMIN can delete backups
+    const token = (request as any).cookies?.get?.('token')?.value || (request as any).headers?.get?.('cookie');
+    const cookieToken = token && typeof token === 'string' && token.includes('token=')
+      ? (token.split('token=')[1].split(';')[0])
+      : (typeof token === 'string' ? token : undefined);
+    if (!cookieToken) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+    try {
+      const jwt = require('jsonwebtoken');
+      const decoded = jwt.verify(cookieToken, process.env.JWT_SECRET);
+      const userId = decoded.userId as number;
+      const user = await prisma.user.findUnique({ where: { userId }, select: { role: true } });
+      if (!user || (user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN')) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+    } catch {
+      return NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 });
+    }
 
     await prisma.systemBackup.delete({
       where: { id: parseInt(id) },

@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
       timestamp,
       notes,
     } = body as {
-      entityType: 'student' | 'instructor';
+      entityType: 'student';
       entityId: number;
       status: 'PRESENT' | 'ABSENT' | 'LATE' | 'EXCUSED';
       subjectSchedId?: number;
@@ -26,10 +26,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    // Validate entity exists and get userId
+    // Validate entity exists and get userId (students only)
     let actualUserId: number;
-    let userRole: 'STUDENT' | 'INSTRUCTOR';
-    
+    let userRole: 'STUDENT' = 'STUDENT';
+
     if (entityType === 'student') {
       const student = await prisma.student.findUnique({ 
         where: { studentId: Number(entityId) }, 
@@ -37,58 +37,29 @@ export async function POST(req: NextRequest) {
       });
       if (!student) return NextResponse.json({ error: 'Student not found' }, { status: 404 });
       actualUserId = student.userId;
-      userRole = 'STUDENT';
     } else {
-      // For instructors, we need to find or create a User record
-      const instructor = await prisma.instructor.findUnique({ 
-        where: { instructorId: Number(entityId) }, 
-        select: { instructorId: true, email: true, firstName: true, lastName: true } 
-      });
-      if (!instructor) return NextResponse.json({ error: 'Instructor not found' }, { status: 404 });
-      
-      // Check if instructor has a User record
-      let user = await prisma.user.findUnique({ 
-        where: { email: instructor.email },
-        select: { userId: true }
-      });
-      
-      if (!user) {
-        // Create a User record for the instructor
-        const newUser = await prisma.user.create({
-          data: {
-            userName: `${instructor.firstName.toLowerCase()}.${instructor.lastName.toLowerCase()}`,
-            email: instructor.email,
-            passwordHash: 'temp_password', // This should be set properly in a real system
-            role: 'INSTRUCTOR'
-          },
-          select: { userId: true }
-        });
-        actualUserId = newUser.userId;
-      } else {
-        actualUserId = user.userId;
-      }
-      userRole = 'INSTRUCTOR';
+      return NextResponse.json({ error: 'Only student manual attendance is supported' }, { status: 410 });
     }
 
-    // Validate subject schedule if provided
-    let eventId: number | undefined;
-    if (subjectSchedId) {
-      const schedule = await prisma.subjectSchedule.findUnique({ 
-        where: { subjectSchedId: Number(subjectSchedId) }, 
-        select: { subjectSchedId: true } 
+    // Validate subject schedule if provided (maps to subjectSchedId in schema)
+    let validatedSubjectSchedId: number | null = null;
+    if (subjectSchedId !== undefined && subjectSchedId !== null) {
+      const schedule = await prisma.subjectSchedule.findUnique({
+        where: { subjectSchedId: Number(subjectSchedId) },
+        select: { subjectSchedId: true }
       });
       if (!schedule) {
         return NextResponse.json({ error: 'Subject schedule not found' }, { status: 404 });
       }
-      // For now, we'll use the schedule ID as eventId, but this should be properly mapped
-      eventId = schedule.subjectSchedId;
+      validatedSubjectSchedId = schedule.subjectSchedId;
     }
 
     // Create attendance record according to schema
     const attendanceData = {
-      eventId: eventId || null,
       userId: actualUserId,
       userRole: userRole,
+      studentId: Number(entityId),
+      subjectSchedId: validatedSubjectSchedId,
       status: status,
       attendanceType: 'MANUAL_ENTRY' as const,
       verification: 'PENDING' as const,

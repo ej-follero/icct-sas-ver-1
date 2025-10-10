@@ -1,8 +1,38 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
 
 // CSV template aligned with Prisma RFIDReader model
 // Based on schema: readerId (auto), roomId (required), deviceId (required), deviceName, status, ipAddress, notes
-export async function GET() {
+export async function GET(request: NextRequest) {
+  try {
+    // JWT Authentication
+    const token = request.cookies.get('token')?.value;
+    if (!token) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = Number((decoded as any)?.userId);
+    if (!Number.isFinite(userId)) {
+      return NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 });
+    }
+
+    // Check user exists and is active
+    const user = await prisma.user.findUnique({
+      where: { userId },
+      select: { status: true, role: true }
+    });
+
+    if (!user || user.status !== 'ACTIVE') {
+      return NextResponse.json({ error: 'User not found or inactive' }, { status: 401 });
+    }
+
+    // Role-based access control
+    const allowedRoles = ['SUPER_ADMIN', 'ADMIN', 'DEPARTMENT_HEAD', 'INSTRUCTOR'];
+    if (!allowedRoles.includes(user.role)) {
+      return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
+    }
   const headers = [
     'deviceId',           // Required: Unique device identifier
     'deviceName',         // Optional: Human-readable name
@@ -51,13 +81,17 @@ export async function GET() {
     )
   ].join('\n');
   
-  return new NextResponse(csvContent, {
-    status: 200,
-    headers: new Headers({
-      'Content-Type': 'text/csv; charset=utf-8',
-      'Content-Disposition': 'attachment; filename="rfid-readers-template.csv"',
-    })
-  });
+    return new NextResponse(csvContent, {
+      status: 200,
+      headers: new Headers({
+        'Content-Type': 'text/csv; charset=utf-8',
+        'Content-Disposition': 'attachment; filename="rfid-readers-template.csv"',
+      })
+    });
+  } catch (error) {
+    console.error('Error generating RFID readers template:', error);
+    return NextResponse.json({ error: 'Failed to generate template' }, { status: 500 });
+  }
 }
 
 

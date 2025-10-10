@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
+import { prisma } from '@/lib/prisma';
 
 // GET - Fetch single student by ID
 export async function GET(
@@ -7,6 +7,27 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
+    // JWT Authentication (SUPER_ADMIN, ADMIN, DEPARTMENT_HEAD, INSTRUCTOR)
+    const token = request.cookies.get('token')?.value;
+    if (!token) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const reqUserId = Number((decoded as any)?.userId);
+    if (!Number.isFinite(reqUserId)) {
+      return NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 });
+    }
+
+    const reqUser = await prisma.user.findUnique({ where: { userId: reqUserId }, select: { status: true, role: true } });
+    if (!reqUser || reqUser.status !== 'ACTIVE') {
+      return NextResponse.json({ error: 'User not found or inactive' }, { status: 401 });
+    }
+    const allowedRoles = ['SUPER_ADMIN', 'ADMIN', 'DEPARTMENT_HEAD', 'INSTRUCTOR'];
+    if (!allowedRoles.includes(reqUser.role)) {
+      return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
+    }
     const studentId = parseInt(params.id);
     
     if (isNaN(studentId)) {
@@ -84,6 +105,27 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
+    // JWT Authentication - Admin only
+    const token = request.cookies.get('token')?.value;
+    if (!token) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const reqUserId = Number((decoded as any)?.userId);
+    if (!Number.isFinite(reqUserId)) {
+      return NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 });
+    }
+
+    const reqUser = await prisma.user.findUnique({ where: { userId: reqUserId }, select: { status: true, role: true } });
+    if (!reqUser || reqUser.status !== 'ACTIVE') {
+      return NextResponse.json({ error: 'User not found or inactive' }, { status: 401 });
+    }
+    const adminRoles = ['SUPER_ADMIN', 'ADMIN'];
+    if (!adminRoles.includes(reqUser.role)) {
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+    }
     const studentId = parseInt(params.id);
     
     if (isNaN(studentId)) {
@@ -115,8 +157,19 @@ export async function PUT(
     if (body.studentIdNum) updateData.studentIdNum = body.studentIdNum;
     if (body.email) updateData.email = body.email;
     if (body.phoneNumber) updateData.phoneNumber = body.phoneNumber;
-    if (body.yearLevel) updateData.yearLevel = body.yearLevel;
-    if (body.status) updateData.status = body.status;
+    if (body.yearLevel !== undefined) {
+      const ylMap: any = {
+        1: 'FIRST_YEAR',
+        2: 'SECOND_YEAR',
+        3: 'THIRD_YEAR',
+        4: 'FOURTH_YEAR'
+      };
+      updateData.yearLevel = ylMap[body.yearLevel] || body.yearLevel;
+    }
+    if (body.status) {
+      const allowedStatus = new Set(['ACTIVE', 'INACTIVE', 'ARCHIVED']);
+      updateData.status = allowedStatus.has(body.status) ? body.status : undefined;
+    }
     
     // Handle department and course updates if provided
     if (body.department) {
@@ -170,6 +223,27 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   try {
+    // JWT Authentication - Admin only
+    const token = request.cookies.get('token')?.value;
+    if (!token) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const reqUserId = Number((decoded as any)?.userId);
+    if (!Number.isFinite(reqUserId)) {
+      return NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 });
+    }
+
+    const reqUser = await prisma.user.findUnique({ where: { userId: reqUserId }, select: { status: true, role: true } });
+    if (!reqUser || reqUser.status !== 'ACTIVE') {
+      return NextResponse.json({ error: 'User not found or inactive' }, { status: 401 });
+    }
+    const adminRoles = ['SUPER_ADMIN', 'ADMIN'];
+    if (!adminRoles.includes(reqUser.role)) {
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+    }
     const studentId = parseInt(params.id);
     
     if (isNaN(studentId)) {
@@ -196,7 +270,20 @@ export async function PATCH(
     // Update only the provided fields
     const updatedStudent = await prisma.student.update({
       where: { studentId },
-      data: body,
+      data: {
+        ...body,
+        ...(body?.yearLevel !== undefined && {
+          yearLevel: ({
+            1: 'FIRST_YEAR',
+            2: 'SECOND_YEAR',
+            3: 'THIRD_YEAR',
+            4: 'FOURTH_YEAR'
+          } as any)[body.yearLevel] || body.yearLevel
+        }),
+        ...(body?.status && {
+          status: (['ACTIVE', 'INACTIVE', 'ARCHIVED'].includes(body.status) ? body.status : undefined)
+        })
+      },
       include: {
         Department: true,
         CourseOffering: true,
@@ -224,6 +311,27 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
+    // JWT Authentication - Admin only
+    const token = request.cookies.get('token')?.value;
+    if (!token) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const reqUserId = Number((decoded as any)?.userId);
+    if (!Number.isFinite(reqUserId)) {
+      return NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 });
+    }
+
+    const reqUser = await prisma.user.findUnique({ where: { userId: reqUserId }, select: { status: true, role: true } });
+    if (!reqUser || reqUser.status !== 'ACTIVE') {
+      return NextResponse.json({ error: 'User not found or inactive' }, { status: 401 });
+    }
+    const adminRoles = ['SUPER_ADMIN', 'ADMIN'];
+    if (!adminRoles.includes(reqUser.role)) {
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+    }
     const studentId = parseInt(params.id);
     
     if (isNaN(studentId)) {

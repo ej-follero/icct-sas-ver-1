@@ -133,6 +133,12 @@ export class AuditService {
   // Create audit log entry
   private async createAuditLog(auditLog: AuditLog): Promise<void> {
     try {
+      // Skip audit log if userId is 0 (failed login attempts)
+      if (auditLog.userId === 0) {
+        console.log(`Audit log skipped for failed login: ${auditLog.details}`);
+        return;
+      }
+      
       await prisma.systemLogs.create({
         data: {
           userId: auditLog.userId,

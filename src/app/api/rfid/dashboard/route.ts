@@ -1,9 +1,40 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
+import { prisma } from '@/lib/prisma';
 
 export async function GET(request: NextRequest) {
   try {
     console.log('RFID Dashboard API called');
+    // Auth: require valid JWT and allowed roles (SUPER_ADMIN, ADMIN, DEPARTMENT_HEAD, INSTRUCTOR)
+    const token = request.cookies.get('token')?.value;
+    if (!token) {
+      return NextResponse.json(
+        { success: false, error: 'Authentication required' },
+        { status: 401 }
+      );
+    }
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = Number((decoded as any)?.userId);
+    if (!Number.isFinite(userId)) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid authentication token' },
+        { status: 401 }
+      );
+    }
+    const user = await prisma.user.findUnique({ where: { userId }, select: { role: true, status: true } });
+    if (!user || user.status !== 'ACTIVE') {
+      return NextResponse.json(
+        { success: false, error: 'User not found or inactive' },
+        { status: 404 }
+      );
+    }
+    const allowedRoles = ['SUPER_ADMIN', 'ADMIN', 'DEPARTMENT_HEAD', 'INSTRUCTOR'];
+    if (!allowedRoles.includes(user.role)) {
+      return NextResponse.json(
+        { success: false, error: 'Insufficient permissions' },
+        { status: 403 }
+      );
+    }
     
     // Get query parameters
     const { searchParams } = new URL(request.url);
@@ -32,7 +63,8 @@ export async function GET(request: NextRequest) {
       logWhere.location = { in: locationParam.split(',').map((l) => l.trim()).filter(Boolean) };
     }
     if (readerId) {
-      logWhere.readerId = readerId;
+      const rid = Number(readerId);
+      if (Number.isFinite(rid)) logWhere.readerId = rid;
     }
     if (tagId) {
       logWhere.rfidTag = tagId;

@@ -1,9 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
+import { prisma } from '@/lib/prisma';
 
 // GET - Fetch all students with relations
 export async function GET(request: NextRequest) {
   try {
+    // JWT Authentication (SUPER_ADMIN, ADMIN, DEPARTMENT_HEAD, INSTRUCTOR)
+    const token = request.cookies.get('token')?.value;
+    if (!token) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const reqUserId = Number((decoded as any)?.userId);
+    if (!Number.isFinite(reqUserId)) {
+      return NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 });
+    }
+
+    const reqUser = await prisma.user.findUnique({ where: { userId: reqUserId }, select: { status: true, role: true } });
+    if (!reqUser || reqUser.status !== 'ACTIVE') {
+      return NextResponse.json({ error: 'User not found or inactive' }, { status: 401 });
+    }
+    const allowedRoles = ['SUPER_ADMIN', 'ADMIN', 'DEPARTMENT_HEAD', 'INSTRUCTOR'];
+    if (!allowedRoles.includes(reqUser.role)) {
+      return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
+    }
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '50');
@@ -30,33 +51,33 @@ export async function GET(request: NextRequest) {
       ];
     }
 
-    // Status filter
+    // Status filter (Status enum)
     if (status && status !== 'all') {
-      where.status = status.toUpperCase();
+      const s = status.toUpperCase();
+      if (['ACTIVE','INACTIVE','ARCHIVED'].includes(s)) where.status = s;
     }
 
-    // Year level filter
+    // Year level filter (yearLevel enum)
     if (yearLevel && yearLevel !== 'all') {
-      where.yearLevel = yearLevel.toUpperCase();
+      const ylMap: any = { '1':'FIRST_YEAR','2':'SECOND_YEAR','3':'THIRD_YEAR','4':'FOURTH_YEAR' };
+      const yl = ylMap[yearLevel] || yearLevel.toUpperCase();
+      if (['FIRST_YEAR','SECOND_YEAR','THIRD_YEAR','FOURTH_YEAR'].includes(yl)) where.yearLevel = yl;
     }
 
-    // Student type filter
+    // Student type filter (StudentType enum)
     if (studentType && studentType !== 'all') {
-      where.studentType = studentType.toUpperCase();
+      const st = studentType.toUpperCase();
+      if (['REGULAR','IRREGULAR'].includes(st)) where.studentType = st;
     }
 
-    // Department filter
+    // Department filter (relation path)
     if (department && department !== 'all') {
-      where.Department = {
-        departmentName: department
-      };
+      where.Department = { is: { departmentName: department } };
     }
 
-    // Course filter
+    // Course filter (relation path)
     if (course && course !== 'all') {
-      where.CourseOffering = {
-        courseName: course
-      };
+      where.CourseOffering = { is: { courseName: course } };
     }
 
     // Fetch students with relations

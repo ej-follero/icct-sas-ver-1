@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { prisma } from '@/lib/prisma';
 
 // Simple in-memory cache for analytics data
 const analyticsCache = new Map<string, { data: any; timestamp: number }>();
@@ -12,8 +10,13 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const type = searchParams.get('type') || 'student';
     const timeRange = searchParams.get('timeRange') || 'week';
+    const noCache = searchParams.get('noCache') === '1' || searchParams.get('noCache') === 'true';
     const departmentId = searchParams.get('departmentId');
     const riskLevel = searchParams.get('riskLevel');
+    const subjectId = searchParams.get('subjectId');
+    const courseId = searchParams.get('courseId');
+    const sectionId = searchParams.get('sectionId');
+    const yearLevel = searchParams.get('yearLevel');
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
 
@@ -22,59 +25,80 @@ export async function GET(request: NextRequest) {
       timeRange,
       departmentId,
       riskLevel,
+      subjectId,
+      courseId,
+      sectionId,
       startDate,
       endDate
     });
 
     // Create cache key
-    const cacheKey = `${type}-${timeRange}-${departmentId || 'all'}-${riskLevel || 'all'}-${startDate || 'default'}-${endDate || 'default'}`;
+    const cacheKey = `${type}-${timeRange}-${departmentId || 'all'}-${riskLevel || 'all'}-${subjectId || 'all'}-${courseId || 'all'}-${sectionId || 'all'}-${yearLevel || 'all'}-${startDate || 'default'}-${endDate || 'default'}`;
     
-    // Check cache first
-    const cached = analyticsCache.get(cacheKey);
-    if (cached && (Date.now() - cached.timestamp) < CACHE_DURATION) {
-      console.log('Returning cached analytics data');
-      return NextResponse.json(cached.data);
+    // Check cache first unless bypassed
+    if (!noCache) {
+      const cached = analyticsCache.get(cacheKey);
+      if (cached && (Date.now() - cached.timestamp) < CACHE_DURATION) {
+        console.log('Returning cached analytics data');
+        return NextResponse.json(cached.data);
+      }
     }
 
-    // Calculate date range based on timeRange
-    // Use the seeded data period: April 1 - June 30, 2025
-    const seededStartDate = new Date('2025-04-01');
-    const seededEndDate = new Date('2025-06-30');
+    // Calculate date range based on timeRange or custom range
     let dateStart: Date;
     let dateEnd: Date;
 
-    // Always use seeded data period regardless of frontend parameters
-    // if (startDate && endDate) {
-    //   dateStart = new Date(startDate);
-    //   dateEnd = new Date(endDate);
-    // } else {
+    if (startDate && endDate) {
+      // Use custom date range if provided
+      dateStart = new Date(startDate);
+      dateEnd = new Date(endDate);
+      // Set dateEnd to end of the day
+      dateEnd.setHours(23, 59, 59, 999);
+    } else {
     switch (timeRange) {
       case 'today':
-          // Use a random day from the seeded period
-          dateStart = new Date('2025-05-15');
-          dateEnd = new Date('2025-05-15');
+          // Use current date
+          const today = new Date();
+          dateStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+          dateEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate());
         break;
       case 'week':
-          dateStart = new Date('2025-05-12');
-          dateEnd = new Date('2025-05-18');
+          // Use current week
+          const now = new Date();
+          const weekStart = new Date(now);
+          weekStart.setDate(now.getDate() - now.getDay());
+          const weekEnd = new Date(weekStart);
+          weekEnd.setDate(weekStart.getDate() + 6);
+          dateStart = weekStart;
+          dateEnd = weekEnd;
         break;
       case 'month':
-          dateStart = new Date('2025-05-01');
-          dateEnd = new Date('2025-05-31');
+          // Use current month
+          const currentMonth = new Date();
+          dateStart = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
+          dateEnd = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0);
         break;
       case 'quarter':
-          dateStart = seededStartDate;
-          dateEnd = seededEndDate;
+          // Use current quarter
+          const currentQuarter = new Date();
+          const quarterStart = new Date(currentQuarter.getFullYear(), Math.floor(currentQuarter.getMonth() / 3) * 3, 1);
+          const quarterEnd = new Date(currentQuarter.getFullYear(), Math.floor(currentQuarter.getMonth() / 3) * 3 + 3, 0);
+          dateStart = quarterStart;
+          dateEnd = quarterEnd;
         break;
       case 'year':
-          dateStart = new Date('2025-01-01');
-          dateEnd = new Date('2025-12-31');
+          // Use current year - this will show data because seeded data is in 2025
+          const currentYear = new Date();
+          dateStart = new Date(currentYear.getFullYear(), 0, 1);
+          dateEnd = new Date(currentYear.getFullYear(), 11, 31);
         break;
       default:
-          dateStart = seededStartDate;
-          dateEnd = seededEndDate;
+          // Default to current year
+          const defaultYear = new Date();
+          dateStart = new Date(defaultYear.getFullYear(), 0, 1);
+          dateEnd = new Date(defaultYear.getFullYear(), 11, 31);
       }
-    // }
+    }
 
     console.log('Date range:', { dateStart, dateEnd });
 
@@ -86,52 +110,163 @@ export async function GET(request: NextRequest) {
       }
     };
 
-    // Add department filter if specified
+    // Build a separate student where for total enrolled count (ignores date range)
+    const studentWhere: any = {};
+
+    // Add department filter if specified (accepts numeric ID or code)
     if (departmentId && departmentId !== 'all') {
-  if (type === 'student') {
+      const deptNum = Number(departmentId);
+      if (!Number.isNaN(deptNum) && Number.isFinite(deptNum)) {
         attendanceWhere.student = {
+          ...attendanceWhere.student,
+          departmentId: deptNum
+        };
+        studentWhere.departmentId = deptNum;
+      } else {
+        attendanceWhere.student = {
+          ...attendanceWhere.student,
           Department: {
-            departmentId: parseInt(departmentId)
+            ...(attendanceWhere.student?.Department || {}),
+            is: {
+              ...(attendanceWhere.student?.Department?.is || {}),
+              departmentCode: departmentId
+            }
+          }
+        };
+        studentWhere.Department = { is: { departmentCode: departmentId } };
+      }
+    }
+
+    // Add course filter for student if specified (accepts numeric ID or courseCode)
+    if (courseId && courseId !== 'all') {
+      const cNum = Number(courseId);
+      if (!Number.isNaN(cNum) && Number.isFinite(cNum)) {
+        attendanceWhere.student = {
+          ...attendanceWhere.student,
+          courseId: cNum
+        };
+        studentWhere.courseId = cNum;
+      } else {
+        attendanceWhere.student = {
+          ...attendanceWhere.student,
+          CourseOffering: {
+            ...(attendanceWhere.student?.CourseOffering || {}),
+            is: {
+              ...(attendanceWhere.student?.CourseOffering?.is || {}),
+              courseCode: courseId
+            }
+          }
+        };
+        studentWhere.CourseOffering = { is: { courseCode: courseId } };
+      }
+    }
+
+    // Add year level filter if specified (Student.yearLevel enum)
+    if (yearLevel && yearLevel !== 'all') {
+      attendanceWhere.student = {
+        ...attendanceWhere.student,
+        yearLevel: yearLevel as any
+      };
+      studentWhere.yearLevel = yearLevel as any;
+    }
+
+    // Add subject filter if specified
+    if (subjectId && subjectId !== 'all') {
+      attendanceWhere.subjectSchedule = {
+        ...attendanceWhere.subjectSchedule,
+        subject: {
+          ...(attendanceWhere.subjectSchedule?.subject || {}),
+          subjectId: parseInt(subjectId)
+        }
+      };
+    }
+
+    // Add course filter for subject schedule if specified (accepts numeric ID or courseCode)
+    if (courseId && courseId !== 'all') {
+      const cNum2 = Number(courseId);
+      if (!Number.isNaN(cNum2) && Number.isFinite(cNum2)) {
+        attendanceWhere.subjectSchedule = {
+          ...attendanceWhere.subjectSchedule,
+          subject: {
+            ...(attendanceWhere.subjectSchedule?.subject || {}),
+            CourseOffering: {
+              ...(attendanceWhere.subjectSchedule?.subject?.CourseOffering || {}),
+              courseId: cNum2
+            }
           }
         };
       } else {
-        attendanceWhere.instructor = {
-          Department: {
-            departmentId: parseInt(departmentId)
+        attendanceWhere.subjectSchedule = {
+          ...attendanceWhere.subjectSchedule,
+          subject: {
+            ...(attendanceWhere.subjectSchedule?.subject || {}),
+            CourseOffering: {
+              ...(attendanceWhere.subjectSchedule?.subject?.CourseOffering || {}),
+              is: {
+                ...((attendanceWhere.subjectSchedule?.subject?.CourseOffering as any)?.is || {}),
+                courseCode: courseId
+              }
+            }
           }
         };
       }
     }
 
+    // Add section filter if specified
+    if (sectionId && sectionId !== 'all') {
+      attendanceWhere.subjectSchedule = {
+        ...attendanceWhere.subjectSchedule,
+        sectionId: parseInt(sectionId)
+      };
+      studentWhere.StudentSection = {
+        some: { sectionId: parseInt(sectionId) }
+      };
+    }
+
     // Get attendance records with optimized query
     const attendanceRecords = await prisma.attendance.findMany({
       where: attendanceWhere,
-    select: {
+      select: {
         attendanceId: true,
-      status: true,
+        status: true,
         timestamp: true,
         studentId: true,
-      instructorId: true,
         student: {
-    select: {
+          select: {
             studentId: true,
+            departmentId: true,
+            courseId: true,
             Department: {
               select: {
                 departmentId: true,
                 departmentName: true,
                 departmentCode: true
               }
+            },
+            CourseOffering: {
+              select: {
+                courseId: true,
+                courseCode: true,
+                courseName: true
+              }
             }
           }
         },
-        instructor: {
-    select: {
-            instructorId: true,
-            Department: {
+        subjectSchedule: {
+          select: {
+            subjectSchedId: true,
+            subject: {
               select: {
-                departmentId: true,
-                departmentName: true,
-                departmentCode: true
+                subjectId: true,
+                subjectCode: true,
+                subjectName: true,
+                CourseOffering: {
+                  select: {
+                    courseId: true,
+                    courseCode: true,
+                    courseName: true
+                  }
+                }
               }
             }
           }
@@ -139,21 +274,57 @@ export async function GET(request: NextRequest) {
       },
       orderBy: {
         timestamp: 'asc'
-      },
-      take: 10000 // Limit to prevent memory issues
+      }
+      // Note: For year view, we need all records to properly aggregate by month
+      // Removed the take limit to allow processing all records across months
     });
 
     console.log(`Found ${attendanceRecords.length} attendance records`);
+  console.log('Sample attendance records:', attendanceRecords.slice(0, 5).map(r => ({
+    timestamp: r.timestamp,
+    month: r.timestamp.getMonth() + 1,
+    status: r.status
+  })));
+
+    // Compute total enrolled students matching filters (ignoring date range)
+    const totalStudents = await prisma.student.count({ where: studentWhere });
 
     // Process data for charts
     const timeBasedData = processTimeBasedData(attendanceRecords, timeRange, dateStart, dateEnd);
-    const departmentStats = processDepartmentStats(attendanceRecords, type);
-    const riskLevelData = processRiskLevelData(attendanceRecords, type);
+    const departmentStats = processDepartmentStats(attendanceRecords);
+    const riskLevelData = processRiskLevelData(attendanceRecords);
     const lateArrivalData = processLateArrivalData(attendanceRecords, timeRange, dateStart, dateEnd);
 
     // Process pattern and streak analysis data
     const patternData = processPatternAnalysis(attendanceRecords, timeRange, dateStart, dateEnd);
     const streakData = processStreakAnalysis(attendanceRecords, timeRange, dateStart, dateEnd);
+
+    // Build summary for quick cards based on the filtered dataset
+    const uniqueStudentIds = new Set<number>();
+    let presentCount = 0;
+    let lateCount = 0;
+    let absentCount = 0;
+    let excusedCount = 0;
+    for (let i = 0; i < attendanceRecords.length; i++) {
+      const r = attendanceRecords[i];
+      if (r.studentId != null) uniqueStudentIds.add(r.studentId);
+      switch (r.status) {
+        case 'PRESENT':
+          presentCount++;
+          break;
+        case 'LATE':
+          lateCount++;
+          break;
+        case 'ABSENT':
+          absentCount++;
+          break;
+        case 'EXCUSED':
+          excusedCount++;
+          break;
+      }
+    }
+    const totalAttendance = attendanceRecords.length;
+    const attendanceRateSummary = totalAttendance > 0 ? ((presentCount + lateCount) / totalAttendance) * 100 : 0;
 
     const result = {
       success: true,
@@ -163,7 +334,17 @@ export async function GET(request: NextRequest) {
         riskLevelData,
         lateArrivalData,
         patternData,
-        streakData
+        streakData,
+        summary: {
+          totalStudents, // enrolled matching filters
+          uniqueStudentsWithAttendance: uniqueStudentIds.size,
+          presentCount,
+          lateCount,
+          absentCount,
+          excusedCount,
+          totalAttendance,
+          attendanceRate: attendanceRateSummary
+        }
       }
     };
 
@@ -176,11 +357,13 @@ export async function GET(request: NextRequest) {
       streakDataLength: streakData.data.length
     });
 
-    // Cache the result
-    analyticsCache.set(cacheKey, {
-      data: result,
-      timestamp: Date.now()
-    });
+    // Cache the result unless bypassed
+    if (!noCache) {
+      analyticsCache.set(cacheKey, {
+        data: result,
+        timestamp: Date.now()
+      });
+    }
 
     return NextResponse.json(result);
 
@@ -221,16 +404,23 @@ function processTimeBasedData(records: any[], timeRange: string, dateStart: Date
         key = timestamp.getHours().toString();
         break;
       case 'week':
-        key = timestamp.toISOString().split('T')[0]; // YYYY-MM-DD
+        // Group by week for better trend visualization
+        const weekStart = new Date(timestamp);
+        weekStart.setDate(timestamp.getDate() - timestamp.getDay());
+        key = weekStart.toISOString().split('T')[0];
         break;
       case 'month':
-        key = timestamp.toISOString().split('T')[0]; // YYYY-MM-DD
+        // Group by week for month view to show trends
+        const monthWeekStart = new Date(timestamp);
+        monthWeekStart.setDate(timestamp.getDate() - timestamp.getDay());
+        key = monthWeekStart.toISOString().split('T')[0];
         break;
       case 'quarter':
         const weekNumber = Math.ceil((timestamp.getTime() - dateStart.getTime()) / multiplier);
         key = `Week ${weekNumber}`;
         break;
       case 'year':
+        // Group by month for year view
         key = (timestamp.getMonth() + 1).toString();
         break;
       default:
@@ -243,13 +433,13 @@ function processTimeBasedData(records: any[], timeRange: string, dateStart: Date
         absentCount: 0,
         lateCount: 0,
         excusedCount: 0,
-        totalAttendance: 0,
+        totalCount: 0,
         attendanceRate: 0
       });
     }
     
     const data = dataMap.get(key);
-    data.totalAttendance++;
+    data.totalCount++;
     
     // Use direct property access for better performance
     switch (record.status) {
@@ -270,22 +460,31 @@ function processTimeBasedData(records: any[], timeRange: string, dateStart: Date
   
   // Calculate attendance rates in batch
   for (const [key, data] of dataMap.entries()) {
-    data.attendanceRate = data.totalAttendance > 0 
-      ? ((data.presentCount + data.lateCount) / data.totalAttendance) * 100 
+    data.attendanceRate = data.totalCount > 0 
+      ? ((data.presentCount + data.lateCount) / data.totalCount) * 100 
       : 0;
   }
   
-  return Array.from(dataMap.entries()).map(([key, value]) => ({
+  const result = Array.from(dataMap.entries()).map(([key, value]) => ({
     [timeRange === 'today' ? 'hour' : timeRange === 'year' ? 'month' : 'date']: key,
-    ...value
+    attendanceRate: value.attendanceRate,
+    presentCount: value.presentCount,
+    lateCount: value.lateCount,
+    absentCount: value.absentCount,
+    totalCount: value.totalCount,
+    week: timeRange === 'week' ? key : undefined
   }));
+  
+  console.log(`📊 processTimeBasedData - Generated ${result.length} data points for ${timeRange}:`, result);
+  console.log(`📊 processTimeBasedData - DataMap entries:`, Array.from(dataMap.entries()));
+  return result;
 }
 
-function processDepartmentStats(records: any[], type: string) {
+function processDepartmentStats(records: any[]) {
   const deptMap = new Map();
   
   records.forEach(record => {
-    const dept = type === 'student' ? record.student?.Department : record.instructor?.Department;
+    const dept = record.student?.Department;
     if (!dept) return;
     
     const deptKey = dept.departmentName;
@@ -317,14 +516,14 @@ function processDepartmentStats(records: any[], type: string) {
   return Array.from(deptMap.values());
 }
 
-function processRiskLevelData(records: any[], type: string) {
+function processRiskLevelData(records: any[]) {
   const riskMap = new Map();
   
   // Group records by entity (student or instructor)
   const entityMap = new Map();
   
   records.forEach(record => {
-    const entityId = type === 'student' ? record.studentId : record.instructorId;
+    const entityId = record.studentId;
     if (!entityId) return;
     
     if (!entityMap.has(entityId)) {
@@ -392,16 +591,23 @@ function processLateArrivalData(records: any[], timeRange: string, dateStart: Da
         key = timestamp.getHours().toString();
         break;
       case 'week':
-        key = timestamp.toISOString().split('T')[0];
+        // Group by week for better trend visualization
+        const weekStart = new Date(timestamp);
+        weekStart.setDate(timestamp.getDate() - timestamp.getDay());
+        key = weekStart.toISOString().split('T')[0];
         break;
       case 'month':
-        key = timestamp.toISOString().split('T')[0];
+        // Group by week for month view to show trends
+        const monthWeekStart = new Date(timestamp);
+        monthWeekStart.setDate(timestamp.getDate() - timestamp.getDay());
+        key = monthWeekStart.toISOString().split('T')[0];
         break;
       case 'quarter':
         const weekNumber = Math.ceil((timestamp.getTime() - dateStart.getTime()) / (7 * 24 * 60 * 60 * 1000));
         key = `Week ${weekNumber}`;
         break;
       case 'year':
+        // Group by month for year view
         key = (timestamp.getMonth() + 1).toString();
         break;
       default:
@@ -409,16 +615,29 @@ function processLateArrivalData(records: any[], timeRange: string, dateStart: Da
     }
     
     if (!dataMap.has(key)) {
-      dataMap.set(key, { lateCount: 0 });
+      dataMap.set(key, { lateCount: 0, totalCount: 0 });
     }
     
     dataMap.get(key).lateCount++;
+    dataMap.get(key).totalCount++;
   });
   
-  return Array.from(dataMap.entries()).map(([key, value]) => ({
+  // Calculate late rates as percentages
+  for (const [key, data] of dataMap.entries()) {
+    data.lateRate = data.totalCount > 0 ? (data.lateCount / data.totalCount) * 100 : 0;
+  }
+  
+  const result = Array.from(dataMap.entries()).map(([key, value]) => ({
     [timeRange === 'today' ? 'hour' : timeRange === 'year' ? 'month' : 'date']: key,
-    ...value
+    lateRate: value.lateRate,
+    lateCount: value.lateCount,
+    totalCount: value.totalCount,
+    week: timeRange === 'week' ? key : undefined
   }));
+  
+  console.log(`📊 processLateArrivalData - Generated ${result.length} data points for ${timeRange}:`, result);
+  console.log(`📊 processLateArrivalData - DataMap entries:`, Array.from(dataMap.entries()));
+  return result;
 }
 
 function processPatternAnalysis(records: any[], timeRange: string, dateStart: Date, dateEnd: Date) {
@@ -529,14 +748,39 @@ function processStreakAnalysis(records: any[], timeRange: string, dateStart: Dat
     streakType: data.streakType
   }));
   
-  // Calculate overall statistics
+  // Calculate overall statistics for the UI
+  const goodStreaks = streakData.filter(s => s.streakType === 'present' && s.attendanceRate >= 85);
+  const poorStreaks = streakData.filter(s => s.streakType === 'absent' && s.attendanceRate < 85);
+  
+  const maxGoodStreak = goodStreaks.length > 0 ? Math.max(...goodStreaks.map(s => s.longestStreak)) : 0;
+  const maxPoorStreak = poorStreaks.length > 0 ? Math.max(...poorStreaks.map(s => s.longestStreak)) : 0;
+  
+  // Calculate current streak (average of all current streaks)
+  const currentStreak = streakData.length > 0 ? 
+    Math.round(streakData.reduce((sum, s) => sum + s.currentStreak, 0) / streakData.length) : 0;
+  
+  // Determine current streak type based on average attendance
+  const avgAttendance = streakData.length > 0 ? 
+    streakData.reduce((sum, s) => sum + s.attendanceRate, 0) / streakData.length : 0;
+  const currentStreakType = avgAttendance >= 85 ? 'good' : 'poor';
+  
+  // Calculate total good days
+  const totalGoodDays = streakData.reduce((sum, s) => sum + s.presentDays, 0);
+  
   const stats = {
+    maxGoodStreak,
+    maxPoorStreak,
+    currentStreak,
+    currentStreakType,
+    totalGoodDays,
     totalStudents: streakData.length,
     averageStreak: streakData.reduce((sum, s) => sum + s.currentStreak, 0) / streakData.length,
     longestStreak: Math.max(...streakData.map(s => s.longestStreak)),
     presentStreaks: streakData.filter(s => s.streakType === 'present').length,
     absentStreaks: streakData.filter(s => s.streakType === 'absent').length
   };
+  
+  console.log('Streak analysis stats:', stats);
   
   return {
     data: streakData,

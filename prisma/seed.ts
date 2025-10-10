@@ -431,7 +431,6 @@ async function main() {
     }));
   }
 
-  // System Auditor role removed; no action needed
 
   // 2. Create Departments
   console.log('🏢 Creating departments...');
@@ -1016,48 +1015,6 @@ async function main() {
     );
 
     for (const date of attendanceDates) {
-      // Create one instructor attendance per schedule occurrence (aligned with subject schedule)
-      const instructorForSchedule = instructors.find(i => i.instructorId === subjectSchedule.instructorId);
-      const isFullTimeInstructor = instructorForSchedule?.instructorType === InstructorType.FULL_TIME;
-      const instructorRandom = Math.random();
-      let instructorStatus: AttendanceStatus;
-      if (isFullTimeInstructor) {
-        instructorStatus = instructorRandom < 0.92 ? AttendanceStatus.PRESENT : instructorRandom < 0.96 ? AttendanceStatus.LATE : AttendanceStatus.ABSENT;
-      } else {
-        instructorStatus = instructorRandom < 0.85 ? AttendanceStatus.PRESENT : instructorRandom < 0.92 ? AttendanceStatus.LATE : AttendanceStatus.ABSENT;
-      }
-
-      // Skip some absences to avoid over-representation
-      if (instructorStatus === AttendanceStatus.ABSENT && Math.random() < 0.4) {
-        // no record for this occurrence
-      } else {
-        const instructorTimestamp = new Date(date);
-        instructorTimestamp.setHours(
-          parseInt(subjectSchedule.startTime.split(':')[0]),
-          parseInt(subjectSchedule.startTime.split(':')[1]),
-          0,
-          0
-        );
-        if (instructorStatus === AttendanceStatus.PRESENT) {
-          instructorTimestamp.setMinutes(instructorTimestamp.getMinutes() + faker.number.int({ min: -10, max: 5 }));
-        } else if (instructorStatus === AttendanceStatus.LATE) {
-          instructorTimestamp.setMinutes(instructorTimestamp.getMinutes() + faker.number.int({ min: 5, max: 30 }));
-        }
-
-        attendanceRecords.push({
-          subjectSchedId: subjectSchedule.subjectSchedId,
-          studentId: null,
-          instructorId: subjectSchedule.instructorId,
-          userId: subjectSchedule.instructorId,
-          userRole: Role.INSTRUCTOR,
-          status: instructorStatus,
-          attendanceType: AttendanceType.RFID_SCAN,
-          verification: AttendanceVerification.VERIFIED,
-          timestamp: instructorTimestamp,
-          semesterId: trimester.semesterId,
-        });
-      }
-
       // Then create student attendance for the same occurrence
       for (const student of scheduleStudents) {
         const isRegularStudent = student.studentType === StudentType.REGULAR;
@@ -1084,7 +1041,6 @@ async function main() {
         attendanceRecords.push({
           subjectSchedId: subjectSchedule.subjectSchedId,
           studentId: student.studentId,
-          instructorId: subjectSchedule.instructorId,
           userId: student.userId,
           userRole: Role.STUDENT,
           status: status,
@@ -1125,19 +1081,7 @@ async function main() {
     });
   }
 
-  for (const instructor of instructors) {
-    await prisma.rFIDTags.create({
-      data: {
-        tagNumber: instructor.rfidTag,
-        tagType: TagType.INSTRUCTOR_CARD,
-        assignedAt: faker.date.past(),
-        status: RFIDStatus.ACTIVE,
-        instructorId: instructor.instructorId,
-        assignedBy: adminUsers[0].userId,
-        assignmentReason: 'Initial assignment',
-      }
-    });
-  }
+  // Instructor tag assignment removed
 
   // 16. Create RFID Readers
   console.log('📡 Creating RFID readers...');
@@ -1916,8 +1860,9 @@ async function main() {
   for (let i = 0; i < 200; i++) {
     const tag = faker.helpers.arrayElement(allTags);
     const reader = faker.helpers.arrayElement(allReaders);
-    const userId = tag.studentId ? (await prisma.student.findUnique({ where: { studentId: tag.studentId } }))?.userId : tag.instructorId ? (await prisma.instructor.findUnique({ where: { instructorId: tag.instructorId } }))?.instructorId : null;
-    if (!userId) continue;
+    if (!tag.studentId) continue; // only student tags are supported
+    const studentUserId = (await prisma.student.findUnique({ where: { studentId: tag.studentId } }))?.userId;
+    if (!studentUserId) continue;
     await prisma.rFIDLogs.create({
       data: {
         rfidTag: tag.tagNumber,
@@ -1926,8 +1871,8 @@ async function main() {
         scanStatus: faker.helpers.arrayElement([ScanStatus.SUCCESS, ScanStatus.FAILED, ScanStatus.DUPLICATE]),
         location: String(reader.deviceName ?? 'Unknown Location'),
         timestamp: faker.date.between({ from: currentTrimester.startDate, to: currentTrimester.endDate }),
-        userId: userId,
-        userRole: tag.studentId ? Role.STUDENT : Role.INSTRUCTOR,
+        userId: studentUserId,
+        userRole: Role.STUDENT,
         deviceInfo: { device: reader.deviceName },
         ipAddress: faker.internet.ip(),
       }
@@ -1995,17 +1940,14 @@ async function main() {
   // 23. Populate RFIDTagAssignmentLog
   console.log('📋 Populating RFIDTagAssignmentLog...');
   for (const tag of allTags) {
+    if (!tag.studentId) continue;
     await prisma.rFIDTagAssignmentLog.create({
       data: {
         tagId: tag.tagId,
         action: faker.helpers.arrayElement(['ASSIGN', 'UNASSIGN']),
-        assignedToType: tag.studentId ? 'STUDENT' : 'INSTRUCTOR',
-        assignedToId: tag.studentId || tag.instructorId,
-        assignedToName: tag.studentId
-          ? ((await prisma.student.findUnique({ where: { studentId: tag.studentId } }))?.firstName ?? 'Student')
-          : tag.instructorId
-          ? ((await prisma.instructor.findUnique({ where: { instructorId: tag.instructorId } }))?.firstName ?? 'Instructor')
-          : 'Unknown',
+        assignedToType: 'STUDENT',
+        assignedToId: tag.studentId,
+        assignedToName: (await prisma.student.findUnique({ where: { studentId: tag.studentId } }))?.firstName ?? 'Student',
         performedBy: adminUsers[0].userId,
         performedByName: 'Admin',
         timestamp: faker.date.between({ from: currentTrimester.startDate, to: currentTrimester.endDate }),

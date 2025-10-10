@@ -1,91 +1,96 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
+    // JWT Authentication - Admin only
+    const token = request.cookies.get('token')?.value;
+    if (!token) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = Number((decoded as any)?.userId);
+    if (!Number.isFinite(userId)) {
+      return NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 });
+    }
+
+    const user = await prisma.user.findUnique({ where: { userId }, select: { status: true, role: true } });
+    if (!user || user.status !== 'ACTIVE') {
+      return NextResponse.json({ error: 'User not found or inactive' }, { status: 401 });
+    }
+    const adminRoles = ['SUPER_ADMIN', 'ADMIN'];
+    if (!adminRoles.includes(user.role)) {
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+    }
+
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '20');
     const search = searchParams.get('search') || '';
-    const level = searchParams.get('level') || '';
-    const moduleFilter = searchParams.get('module') || '';
+    const level = searchParams.get('level') || 'all';
+    const module = searchParams.get('module') || 'all';
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
 
-    // Build where clause
+    const skip = (page - 1) * limit;
+
+    // Build where clause for filtering
     const where: any = {};
 
     if (search) {
       where.OR = [
-        { actionType: { contains: search, mode: 'insensitive' } },
-        { module: { contains: search, mode: 'insensitive' } },
-        { details: { contains: search, mode: 'insensitive' } },
+        { action: { contains: search, mode: 'insensitive' } },
+        { message: { contains: search, mode: 'insensitive' } },
+        { userEmail: { contains: search, mode: 'insensitive' } }
       ];
     }
 
-    if (level && level !== 'all') {
-      // Map level to actionType patterns
-      const levelPatterns = {
-        'ERROR': { contains: 'error', mode: 'insensitive' },
-        'WARNING': { contains: 'warning', mode: 'insensitive' },
-        'INFO': { contains: 'info', mode: 'insensitive' },
-        'DEBUG': { contains: 'debug', mode: 'insensitive' }
+    if (level !== 'all') {
+      where.level = level;
+    }
+
+    if (module !== 'all') {
+      where.module = module;
+    }
+
+    if (startDate && endDate) {
+      where.timestamp = {
+        gte: new Date(startDate),
+        lte: new Date(endDate)
       };
-      if (levelPatterns[level as keyof typeof levelPatterns]) {
-        where.actionType = levelPatterns[level as keyof typeof levelPatterns];
-      }
     }
 
-    if (moduleFilter && moduleFilter !== 'all') {
-      where.module = moduleFilter;
-    }
-
-    if (startDate || endDate) {
-      where.timestamp = {};
-      if (startDate) {
-        where.timestamp.gte = new Date(startDate);
-      }
-      if (endDate) {
-        where.timestamp.lte = new Date(endDate);
-      }
-    }
-
-    // Get total count for pagination
-    const total = await prisma.systemLogs.count({ where });
-
-    // Get logs with pagination
-    const logs = await prisma.systemLogs.findMany({
-      where,
-      orderBy: { timestamp: 'desc' },
-      skip: (page - 1) * limit,
-      take: limit,
-      include: {
-        user: {
-          select: {
-            userName: true,
-            email: true,
-            role: true,
-          },
-        },
-      },
-    });
-
-    // Transform logs for frontend
-    const transformedLogs = logs.map(log => ({
-      id: log.id.toString(),
-      timestamp: log.timestamp.toISOString(),
-      level: determineLogLevel(log.actionType),
-      module: log.module,
-      action: log.actionType,
-      userId: log.userId.toString(),
-      userEmail: log.user?.email || 'Unknown',
-      ipAddress: log.ipAddress || 'Unknown',
-      userAgent: log.userAgent || 'Unknown',
-      details: log.details || '',
-    }));
+    // Fetch logs with pagination
+    const [logs, total] = await Promise.all([
+      prisma.systemLog.findMany({
+        where,
+        orderBy: { timestamp: 'desc' },
+        skip,
+        take: limit,
+        select: {
+          id: true,
+          timestamp: true,
+          level: true,
+          module: true,
+          action: true,
+          userId: true,
+          userEmail: true,
+          ipAddress: true,
+          userAgent: true,
+          details: true,
+          severity: true,
+          eventType: true,
+          resolved: true,
+          message: true
+        }
+      }),
+      prisma.systemLog.count({ where })
+    ]);
 
     return NextResponse.json({
-      data: transformedLogs,
+      data: logs,
       total,
       page,
       limit,
@@ -99,12 +104,4 @@ export async function GET(request: Request) {
       { status: 500 }
     );
   }
-}
-
-function determineLogLevel(actionType: string): string {
-  const lowerAction = actionType.toLowerCase();
-  if (lowerAction.includes('error') || lowerAction.includes('fail')) return 'ERROR';
-  if (lowerAction.includes('warn')) return 'WARNING';
-  if (lowerAction.includes('debug')) return 'DEBUG';
-  return 'INFO';
 }

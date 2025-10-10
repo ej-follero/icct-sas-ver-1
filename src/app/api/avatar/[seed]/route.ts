@@ -8,8 +8,8 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ seed: string }> }
 ) {
+  const { seed } = await params;
   try {
-    const { seed } = await params;
     const { searchParams } = new URL(request.url);
     
     if (!seed) {
@@ -19,22 +19,46 @@ export async function GET(
       );
     }
 
-    // Get query parameters
-    const size = searchParams.get('size') || '100';
-    const backgroundColor = searchParams.get('backgroundColor');
+    // Get and sanitize query parameters
+    const rawSize = searchParams.get('size');
+    const style = (searchParams.get('style') || 'avataaars').trim();
+    const backgroundColor = searchParams.get('backgroundColor') || undefined;
+
+    // Sanitize seed: keep alphanum, dash, underscore; cap length
+    const safeSeed = String(seed).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 100) || 'user';
+
+    // Validate and clamp size
+    let sizeNum = parseInt(rawSize || '100', 10);
+    if (!Number.isFinite(sizeNum)) sizeNum = 100;
+    sizeNum = Math.max(24, Math.min(512, sizeNum));
     
     // Create cache key
-    const cacheKey = `${seed}-${size}-${backgroundColor || 'default'}`;
+    const cacheKey = `${style}-${safeSeed}-${sizeNum}-${backgroundColor || 'default'}`;
     
     // Check cache first
     const cached = avatarCache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+      // Handle conditional request (ETag)
+      const ifNoneMatch = request.headers.get('if-none-match');
+      const etag = `"${cacheKey}"`;
+      if (ifNoneMatch && ifNoneMatch === etag) {
+        return new NextResponse(null, {
+          status: 304,
+          headers: {
+            'ETag': etag,
+            'Cache-Control': 'public, max-age=31536000, immutable',
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET',
+            'Access-Control-Allow-Headers': 'Content-Type',
+          }
+        });
+      }
       return new NextResponse(cached.svg, {
         status: 200,
         headers: {
           'Content-Type': 'image/svg+xml',
           'Cache-Control': 'public, max-age=31536000, immutable',
-          'ETag': `"${cacheKey}"`,
+          'ETag': etag,
           'Access-Control-Allow-Origin': '*',
           'Access-Control-Allow-Methods': 'GET',
           'Access-Control-Allow-Headers': 'Content-Type',
@@ -42,17 +66,18 @@ export async function GET(
       });
     }
     
-    // Construct the Dicebear API URL with parameters
+    // Construct the DiceBear API URL with parameters
     const dicebearParams = new URLSearchParams({
-      seed: seed,
-      size: size,
+      seed: safeSeed,
+      size: String(sizeNum),
     });
     
-    if (backgroundColor) {
+    // Validate backgroundColor (hex without #)
+    if (backgroundColor && /^[0-9a-fA-F]{3,8}$/.test(backgroundColor)) {
       dicebearParams.append('backgroundColor', backgroundColor);
     }
     
-    const dicebearUrl = `https://api.dicebear.com/7.x/avataaars/svg?${dicebearParams.toString()}`;
+    const dicebearUrl = `https://api.dicebear.com/7.x/${encodeURIComponent(style)}/svg?${dicebearParams.toString()}`;
     
     // Fetch the avatar from Dicebear
     const response = await fetch(dicebearUrl, {

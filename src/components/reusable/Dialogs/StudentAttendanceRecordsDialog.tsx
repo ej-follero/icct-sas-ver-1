@@ -6,9 +6,11 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { ChevronLeft, ChevronRight, Download, X, Calendar, Copy, Printer, ClipboardList, User } from "lucide-react";
+import DateRangePicker, { RangeValue, DateRangePickerDialog } from "@/components/reusable/DateRangePicker";
+import { ChevronLeft, ChevronRight, Download, X, Calendar, Copy, Printer, ClipboardList, User, FileSpreadsheet, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { ExportService } from "@/lib/services/export.service";
 
 interface AttendanceRecord {
   id: string;
@@ -66,6 +68,8 @@ export default function StudentAttendanceRecordsDialog({
   const [pageSize, setPageSize] = useState(10);
   const [fetchedRecords, setFetchedRecords] = useState<AttendanceRecord[] | null>(null);
   const [fetching, setFetching] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [exportFormat, setExportFormat] = useState<'csv' | 'excel' | 'pdf'>('csv');
   
   // Date picker state
   const [customDateRange, setCustomDateRange] = useState<{ start: Date; end: Date }>({
@@ -103,27 +107,131 @@ export default function StudentAttendanceRecordsDialog({
     toast.success('Print dialog opened');
   };
 
-  const handleExport = () => {
-    toast.info('Export functionality coming soon');
+  const handleExport = async (format: 'csv' | 'excel' | 'pdf' = exportFormat) => {
+    if (!student || filteredRecords.length === 0) {
+      toast.error('No data to export');
+      return;
+    }
+
+    try {
+      setExporting(true);
+      
+      // Prepare export data
+      const exportData = {
+        type: 'student-attendance',
+        data: filteredRecords.map(record => ({
+          id: record.id,
+          studentName: student.studentName,
+          studentId: student.studentIdNum,
+          department: student.department,
+          date: record.date,
+          timeIn: record.timeIn || '',
+          timeOut: record.timeOut || '',
+          status: record.status,
+          subject: record.subject,
+          room: record.room,
+          notes: record.notes || '',
+          isManualEntry: record.isManualEntry,
+          createdAt: record.createdAt,
+          updatedAt: record.updatedAt
+        })),
+        filters: {
+          dateRange,
+          selectedSubject,
+          selectedStatus,
+          customDateRange: dateRange === 'custom' ? customDateRange : null
+        },
+        studentInfo: {
+          name: student.studentName,
+          id: student.studentIdNum,
+          department: student.department,
+          attendanceRate: student.attendanceRate,
+          attendedClasses: student.attendedClasses,
+          absentClasses: student.absentClasses,
+          lateClasses: student.lateClasses,
+          totalScheduledClasses: student.totalScheduledClasses
+        }
+      };
+
+      // Generate filename with student info and date range
+      const dateStr = dateRange === 'custom' 
+        ? `${customDateRange.start.toLocaleDateString()}-${customDateRange.end.toLocaleDateString()}`
+        : dateRange;
+      const filenameBase = `attendance-records-${student.studentName.replace(/\s+/g, '-')}-${dateStr}`;
+
+      if (format === 'csv') {
+        // Export as CSV
+        await ExportService.exportToCSV(exportData, {
+          filename: `${filenameBase}.csv`,
+          includeHeaders: true
+        });
+      } else {
+        // Export as Excel or PDF using the analytics export service
+        // Transform data to match the expected format for the API
+        const transformedData = {
+          type: 'student-attendance',
+          data: exportData.data,
+          analytics: {
+            summary: {
+              totalStudents: 1, // Single student
+              attendanceRate: student.attendanceRate,
+              presentCount: student.attendedClasses,
+              lateCount: student.lateClasses,
+              absentCount: student.absentClasses,
+              excusedCount: 0 // Not tracked in current data
+            }
+          },
+          tableView: exportData.data, // Use the same data for table view
+          filtersSnapshot: exportData.filters,
+          timeRange: {
+            start: exportData.filters.customDateRange?.start || new Date(),
+            end: exportData.filters.customDateRange?.end || new Date()
+          }
+        };
+
+        console.log('Exporting with data:', {
+          format,
+          dataLength: transformedData.data.length,
+          hasAnalytics: !!transformedData.analytics,
+          hasTableView: !!transformedData.tableView
+        });
+
+        await ExportService.exportAnalytics(transformedData, {
+          format: format,
+          filename: `${filenameBase}.${format}`,
+          includeCharts: false,
+          includeFilters: true,
+          includeSummary: true,
+          includeTable: true
+        });
+      }
+
+      toast.success(`Attendance records exported as ${format.toUpperCase()} successfully`);
+    } catch (error) {
+      console.error('Export failed:', error);
+      toast.error(`Failed to export attendance records as ${format.toUpperCase()}`);
+    } finally {
+      setExporting(false);
+    }
   };
 
   // Date picker helper functions
   const getDaysInMonth = (date: Date) => {
     const year = date.getFullYear();
     const month = date.getMonth();
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
-    const startDate = new Date(firstDay);
-    startDate.setDate(startDate.getDate() - firstDay.getDay());
-    
-    const days = [];
-    const currentDate = new Date(startDate);
-    
-    while (currentDate <= lastDay || currentDate.getDay() !== 0) {
-      days.push(new Date(currentDate));
-      currentDate.setDate(currentDate.getDate() + 1);
+    const firstOfMonth = new Date(year, month, 1);
+    const start = new Date(firstOfMonth);
+    // Calendar starts on Monday (Mo)
+    const weekday = start.getDay(); // 0..6 (Sun..Sat)
+    const mondayOffset = weekday === 0 ? -6 : 1 - weekday;
+    start.setDate(start.getDate() + mondayOffset);
+    start.setHours(0, 0, 0, 0);
+    const days: Date[] = [];
+    const current = new Date(start);
+    for (let i = 0; i < 42; i++) {
+      days.push(new Date(current));
+      current.setDate(current.getDate() + 1);
     }
-    
     return days;
   };
 
@@ -163,6 +271,8 @@ export default function StudentAttendanceRecordsDialog({
         setRangeSelectionStep('start');
         // Trigger data refresh for range completion
         setDateRange('custom');
+        // Auto-close picker after selecting the end date
+        setIsDatePickerOpen(false);
       }
     }
   };
@@ -229,14 +339,12 @@ export default function StudentAttendanceRecordsDialog({
     });
   };
 
-  const navigateMonth = (direction: 'prev' | 'next', event: React.MouseEvent) => {
-    const newMonth = new Date(currentMonth);
-    if (direction === 'prev') {
-      newMonth.setMonth(newMonth.getMonth() - 1);
-    } else {
-      newMonth.setMonth(newMonth.getMonth() + 1);
-    }
-    setCurrentMonth(newMonth);
+  const navigateMonth = (delta: number) => {
+    setCurrentMonth(prev => {
+      const next = new Date(prev);
+      next.setMonth(next.getMonth() + delta);
+      return next;
+    });
   };
 
   const getNextMonth = () => {
@@ -257,7 +365,7 @@ export default function StudentAttendanceRecordsDialog({
             <Button
               variant="ghost"
               size="sm"
-              onClick={(event) => navigateMonth('prev', event)}
+              onClick={() => navigateMonth(-1)}
               className="h-6 w-6 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
             >
               <ChevronLeft className="h-3 w-3" />
@@ -265,7 +373,7 @@ export default function StudentAttendanceRecordsDialog({
             <Button
               variant="ghost"
               size="sm"
-              onClick={(event) => navigateMonth('next', event)}
+              onClick={() => navigateMonth(1)}
               className="h-6 w-6 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
             >
               <ChevronRight className="h-3 w-3" />
@@ -290,6 +398,7 @@ export default function StudentAttendanceRecordsDialog({
             
             return (
               <button
+                type="button"
                 key={index}
                 onClick={(event) => handleDateClick(day, event)}
                 onMouseEnter={() => setHoveredDate(day)}
@@ -374,9 +483,7 @@ export default function StudentAttendanceRecordsDialog({
       try {
         setFetching(true);
         const params = new URLSearchParams();
-        params.append('studentId', student?.studentId || '');
-
-        // Date range presets
+        // Compute date range
         const now = new Date();
         let start: Date | null = null;
         let end: Date | null = now;
@@ -389,7 +496,6 @@ export default function StudentAttendanceRecordsDialog({
         } else if (dateRange === 'this-month') {
           start = new Date(now.getFullYear(), now.getMonth(), 1);
         } else if (dateRange === 'this-semester') {
-          // Approximate to last 4 months
           start = new Date();
           start.setMonth(start.getMonth() - 4);
         } else if (dateRange === 'custom') {
@@ -399,16 +505,14 @@ export default function StudentAttendanceRecordsDialog({
 
         if (start) params.append('startDate', start.toISOString());
         if (end) params.append('endDate', end.toISOString());
-
         if (selectedStatus !== 'all') params.append('status', selectedStatus);
         if (selectedSubject !== 'all') params.append('subjectName', selectedSubject);
 
-        const res = await fetch(`/api/attendance/students?${params.toString()}`);
+        const res = await fetch(`/api/students/${encodeURIComponent(student.studentId)}/details?${params.toString()}`, { cache: 'no-store' });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
-        const stud = Array.isArray(data) ? data[0] : null;
-        const apiRecords: AttendanceRecord[] = Array.isArray(stud?.attendanceRecords)
-          ? stud.attendanceRecords.map((r: any) => ({
+        const apiRecords: AttendanceRecord[] = Array.isArray(data?.attendanceRecords)
+          ? data.attendanceRecords.map((r: any) => ({
               id: String(r.attendanceId ?? `${r.timestamp}-${r.subjectSchedId ?? ''}`),
               date: new Date(r.timestamp).toLocaleDateString(),
               timeIn: r.status === 'PRESENT' || r.status === 'LATE' ? new Date(r.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : undefined,
@@ -558,132 +662,35 @@ export default function StudentAttendanceRecordsDialog({
                 </Select>
                 
                 {dateRange === 'custom' && (
-                  <Popover open={isDatePickerOpen} onOpenChange={setIsDatePickerOpen}>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className="rounded border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
-                        onClick={() => setIsDatePickerOpen(true)}
-                      >
-                        <Calendar className="w-4 h-4 mr-2" />
-                        {formatDateRange()}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent 
-                      className="w-auto p-4 rounded-xl" 
-                      align="start" 
-                      side="bottom" 
-                      sideOffset={5}
-                      alignOffset={-20}
-                      avoidCollisions={true}
-                      collisionPadding={20}
-                      onOpenAutoFocus={(e) => e.preventDefault()}
+                  <>
+                    <Button
+                      variant="outline"
+                      className="rounded border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+                      onClick={() => setIsDatePickerOpen(true)}
                     >
-                      <div className="p-0">
-                        <div className="flex items-center justify-between mb-4">
-                          <h3 className="text-lg font-semibold text-blue-900">Select Date Range</h3>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setIsDatePickerOpen(false)}
-                            className="h-6 w-6 p-0 rounded-full"
-                          >
-                            <X className="h-4 w-4" />
-                          </Button>
-                        </div>
-
-                        {/* Selection Mode Toggle */}
-                        <div className="flex items-center justify-end mb-4 rounded">
-                          <div className="flex items-center gap-2">
-                            <div className="flex bg-white rounded p-1 border">
-                              <button
-                                onClick={() => {
-                                  setSelectionMode('single');
-                                  setRangeSelectionStep('start');
-                                  const today = new Date();
-                                  setCustomDateRange({ start: today, end: today });
-                                }}
-                                className={cn(
-                                  "px-3 py-1 text-xs font-medium rounded transition-colors",
-                                  selectionMode === 'single' 
-                                    ? "bg-blue-600 text-white" 
-                                    : "text-gray-600 hover:text-gray-800"
-                                )}
-                              >
-                                Single Date
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setSelectionMode('range');
-                                  setRangeSelectionStep('start');
-                                  const today = new Date();
-                                  setCustomDateRange({ start: today, end: today });
-                                }}
-                                className={cn(
-                                  "px-3 py-1 text-xs font-medium rounded transition-colors",
-                                  selectionMode === 'range' 
-                                    ? "bg-blue-600 text-white" 
-                                    : "text-gray-600 hover:text-gray-800"
-                                )}
-                              >
-                                Date Range
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Instructions */}
-                        <div className="mb-4 p-2 bg-blue-50 rounded border border-blue-100">
-                          <div className="text-xs text-blue-700">
-                            {selectionMode === 'single' ? (
-                              <span>💡 Click any date to select it. The same date will be used for both start and end.</span>
-                            ) : (
-                              <span>
-                                💡 {rangeSelectionStep === 'start' 
-                                  ? 'Click a date to set the start of your range.' 
-                                  : 'Click a date to set the end of your range. Dates will be automatically ordered.'}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        
-                        <div className={cn("flex gap-4 w-full", selectionMode === 'single' ? "justify-center" : "justify-start")}>
-                          {renderCalendar(currentMonth)}
-                          {selectionMode === 'range' && renderCalendar(getNextMonth(), true)}
-                        </div>
-                        
-                        <div className="flex items-center justify-end gap-2 mt-4 pt-4 border-t">
-                          <Button
-                            variant="outline"
-                            className="rounded text-gray-500"
-                            size="sm"
-                            onClick={() => {
-                              const today = new Date();
-                              setCustomDateRange({
-                                start: today,
-                                end: today
-                              });
-                              // Trigger data refresh
-                              setDateRange('custom');
-                            }}
-                          >
-                            Clear
-                          </Button>
-                          <Button
-                            size="sm"
-                            className="rounded"
-                            onClick={() => {
-                              setIsDatePickerOpen(false);
-                              // Trigger data refresh by updating the dateRange to force useEffect
-                              setDateRange('custom');
-                            }}
-                          >
-                            Apply
-                          </Button>
-                        </div>
-                      </div>
-                    </PopoverContent>
-                  </Popover>
+                      <Calendar className="w-4 h-4 mr-2" />
+                      {formatDateRange()}
+                    </Button>
+                    <DateRangePickerDialog
+                      open={isDatePickerOpen}
+                      onOpenChange={setIsDatePickerOpen}
+                      mode={selectionMode}
+                      value={selectionMode === 'single' ? customDateRange.start : (customDateRange as RangeValue)}
+                      onChange={(val) => {
+                        if (val instanceof Date) {
+                          const d = new Date(val); d.setHours(0,0,0,0);
+                          setSelectionMode('single');
+                          setCustomDateRange({ start: d, end: d });
+                        } else {
+                          setSelectionMode('range');
+                          setCustomDateRange({ start: val.start, end: val.end });
+                        }
+                      }}
+                      onApply={() => {
+                        setDateRange('custom');
+                      }}
+                    />
+                  </>
                 )}
               </div>
             </div>
@@ -837,15 +844,39 @@ export default function StudentAttendanceRecordsDialog({
               </Button>
             )}
             {showExportButton && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleExport}
-                className="rounded border-blue-300 text-blue-700 hover:bg-blue-50"
-              >
-                <Download className="w-4 h-4 mr-2" />
-                Export
-              </Button>
+              <div className="flex items-center gap-2">
+                <Select value={exportFormat} onValueChange={(value: 'csv' | 'excel' | 'pdf') => setExportFormat(value)}>
+                  <SelectTrigger className="w-32 h-8 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="csv">CSV</SelectItem>
+                    <SelectItem value="excel">Excel</SelectItem>
+                    <SelectItem value="pdf">PDF</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleExport(exportFormat)}
+                  disabled={exporting || filteredRecords.length === 0}
+                  className="rounded border-blue-300 text-blue-700 hover:bg-blue-50 disabled:opacity-50"
+                >
+                  {exporting ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
+                      Exporting...
+                    </>
+                  ) : (
+                    <>
+                      {exportFormat === 'csv' && <Download className="w-4 h-4 mr-2" />}
+                      {exportFormat === 'excel' && <FileSpreadsheet className="w-4 h-4 mr-2" />}
+                      {exportFormat === 'pdf' && <FileText className="w-4 h-4 mr-2" />}
+                      Export {exportFormat.toUpperCase()}
+                    </>
+                  )}
+                </Button>
+              </div>
             )}
             <Button
               variant="outline"

@@ -1,8 +1,39 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
+import { prisma } from '@/lib/prisma';
 
 export async function GET(request: NextRequest) {
   try {
+    // Auth: require valid JWT and allowed roles (SUPER_ADMIN, ADMIN, DEPARTMENT_HEAD, INSTRUCTOR)
+    const token = request.cookies.get('token')?.value;
+    if (!token) {
+      return NextResponse.json(
+        { success: false, error: 'Authentication required' },
+        { status: 401 }
+      );
+    }
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = Number((decoded as any)?.userId);
+    if (!Number.isFinite(userId)) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid authentication token' },
+        { status: 401 }
+      );
+    }
+    const user = await prisma.user.findUnique({ where: { userId }, select: { role: true, status: true } });
+    if (!user || user.status !== 'ACTIVE') {
+      return NextResponse.json(
+        { success: false, error: 'User not found or inactive' },
+        { status: 404 }
+      );
+    }
+    const allowedRoles = ['SUPER_ADMIN', 'ADMIN', 'DEPARTMENT_HEAD', 'INSTRUCTOR'];
+    if (!allowedRoles.includes(user.role)) {
+      return NextResponse.json(
+        { success: false, error: 'Insufficient permissions' },
+        { status: 403 }
+      );
+    }
     const { searchParams } = new URL(request.url);
     const format = searchParams.get('format') || 'csv';
     const type = searchParams.get('type') || 'all'; // all, scans, stats, charts
@@ -18,7 +49,10 @@ export async function GET(request: NextRequest) {
     if (to) logWhere.timestamp = { ...(logWhere.timestamp || {}), lte: new Date(to) };
     if (statusFilter && statusFilter.length > 0) logWhere.scanStatus = { in: statusFilter };
     if (locationFilter && locationFilter.length > 0) logWhere.location = { in: locationFilter };
-    if (readerIdFilter) logWhere.readerId = readerIdFilter;
+    if (readerIdFilter) {
+      const rid = Number(readerIdFilter);
+      if (Number.isFinite(rid)) logWhere.readerId = rid;
+    }
     if (tagIdFilter) logWhere.rfidTag = tagIdFilter;
 
     let data: any;

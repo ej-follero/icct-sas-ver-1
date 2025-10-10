@@ -3,14 +3,33 @@ import { prisma } from '@/lib/prisma';
 
 export async function GET(request: NextRequest) {
   try {
-    // Authorization: allow ADMIN and SUPER_ADMIN
-    const role = request.headers.get('x-user-role');
-    const isDev = process.env.NODE_ENV !== 'production';
-    
-    if (!isDev) {
-      if (!role || (role !== 'ADMIN' && role !== 'SUPER_ADMIN')) {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-      }
+    // JWT Authentication
+    const token = request.cookies.get('token')?.value;
+    if (!token) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = Number((decoded as any)?.userId);
+    if (!Number.isFinite(userId)) {
+      return NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 });
+    }
+
+    // Check user exists and is active
+    const user = await prisma.user.findUnique({
+      where: { userId },
+      select: { status: true, role: true }
+    });
+
+    if (!user || user.status !== 'ACTIVE') {
+      return NextResponse.json({ error: 'User not found or inactive' }, { status: 401 });
+    }
+
+    // Admin-only access control
+    const adminRoles = ['SUPER_ADMIN', 'ADMIN'];
+    if (!adminRoles.includes(user.role)) {
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
 
     // Get query parameters
@@ -36,20 +55,40 @@ export async function GET(request: NextRequest) {
     // Get total count
     const total = await prisma.roleManagement.count({ where });
 
-    // Get paginated data with user count
+    // Get paginated data with base role info
     const roles = await prisma.roleManagement.findMany({
       where,
       skip: (page - 1) * pageSize,
       take: pageSize,
       orderBy: { [sortBy]: sortDir },
-      include: {
-        _count: {
-          select: {
-            users: true
-          }
-        }
-      }
+      include: { _count: { select: { users: true } } }
     });
+
+    // Build user counts for enum roles and custom roles in one go
+    const [enumRoleCounts, customRoleCounts] = await Promise.all([
+      prisma.user.groupBy({
+        by: ['role'],
+        _count: { role: true }
+      }).catch(() => [] as Array<{ role: any; _count: { role: number } }>),
+      prisma.user.groupBy({
+        by: ['customRoleId'],
+        _count: { customRoleId: true }
+      }).catch(() => [] as Array<{ customRoleId: number | null; _count: { customRoleId: number } }>)
+    ]);
+
+    const enumCountMap = new Map<string, number>();
+    for (const row of enumRoleCounts as any[]) {
+      if (!row || typeof row.role === 'undefined' || row.role === null) continue;
+      enumCountMap.set(String(row.role), Number(row._count?.role ?? 0));
+    }
+
+    const customCountMap = new Map<number, number>();
+    for (const row of customRoleCounts as any[]) {
+      if (!row || row.customRoleId === null || typeof row.customRoleId === 'undefined') continue;
+      customCountMap.set(Number(row.customRoleId), Number(row._count?.customRoleId ?? 0));
+    }
+
+    const BUILT_IN_ROLES = new Set(['SUPER_ADMIN', 'ADMIN', 'DEPARTMENT_HEAD', 'INSTRUCTOR', 'STUDENT']);
 
     // Transform the data to match the expected format
     const transformedRoles = roles.map(role => ({
@@ -58,7 +97,15 @@ export async function GET(request: NextRequest) {
       description: role.description || '',
       permissions: Array.isArray(role.permissions) ? role.permissions : [],
       status: role.status,
-      totalUsers: role._count.users,
+      totalUsers: (() => {
+        const viaCustom = customCountMap.get(role.id) ?? 0;
+        const viaEnum = BUILT_IN_ROLES.has(role.name) ? (enumCountMap.get(role.name) ?? 0) : 0;
+        // Prefer computed counts; fall back to stored column if both are zero
+        const combined = viaCustom + viaEnum;
+        if (combined > 0) return combined;
+        const included = (role as any)._count?.users ?? 0;
+        return included || role.totalUsers || 0;
+      })(),
       createdAt: role.createdAt.toISOString(),
       updatedAt: role.updatedAt.toISOString()
     }));
@@ -81,14 +128,33 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    // Authorization: allow ADMIN and SUPER_ADMIN
-    const role = request.headers.get('x-user-role');
-    const isDev = process.env.NODE_ENV !== 'production';
-    
-    if (!isDev) {
-      if (!role || (role !== 'ADMIN' && role !== 'SUPER_ADMIN')) {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-      }
+    // JWT Authentication
+    const token = request.cookies.get('token')?.value;
+    if (!token) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = Number((decoded as any)?.userId);
+    if (!Number.isFinite(userId)) {
+      return NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 });
+    }
+
+    // Check user exists and is active
+    const user = await prisma.user.findUnique({
+      where: { userId },
+      select: { status: true, role: true }
+    });
+
+    if (!user || user.status !== 'ACTIVE') {
+      return NextResponse.json({ error: 'User not found or inactive' }, { status: 401 });
+    }
+
+    // Admin-only access control
+    const adminRoles = ['SUPER_ADMIN', 'ADMIN'];
+    if (!adminRoles.includes(user.role)) {
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
 
     const data = await request.json();

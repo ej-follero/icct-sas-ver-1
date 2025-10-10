@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Socket.IO Test</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+</head>
+<body>
+    <h1>Socket.IO Connection Test</h1>
+    <div id="status">Connecting...</div>
+    <div id="messages"></div>
+    
+    <script>
+        const socket = io('http://localhost:3001');
+        
+        socket.on('connect', () => {
+            document.getElementById('status').innerHTML = 'Connected to Socket.IO server!';
+            console.log('Connected:', socket.id);
+        });
+        
+        socket.on('disconnect', () => {
+            document.getElementById('status').innerHTML = 'Disconnected from server';
+        });
+        
+        socket.on('connected', (data) => {
+            document.getElementById('messages').innerHTML += '<p>Server: ' + data.message + '</p>';
+        });
+        
+        socket.on('report_generated', (data) => {
+            document.getElementById('messages').innerHTML += '<p>Report generated: ' + JSON.stringify(data) + '</p>';
+        });
+        
+        // Join reports room
+        socket.emit('join-reports');
+        
+        // Test event after 3 seconds
+        setTimeout(() => {
+            socket.emit('report-generated', { test: true, timestamp: new Date().toISOString() });
+        }, 3000);
+    </script>
+</body>
+</html>

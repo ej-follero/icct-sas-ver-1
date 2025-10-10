@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
+import { ExportService } from '@/lib/services/export.service';
 import { 
   Settings, 
   Download, 
@@ -687,8 +688,8 @@ function BulkActionsDialog<T = any>({
         await new Promise(resolve => setTimeout(resolve, 50));
       }
 
-      // Prepare data for export (all items at once)
-      const exportData = items.map(item => {
+      // Prepare flat rows for centralized export
+      const rows = items.map(item => {
         const row: any = {};
         exportConfig.selectedColumns.forEach((columnKey: string) => {
           if (columnKey === 'id') row[columnKey] = getItemId(item);
@@ -712,47 +713,25 @@ function BulkActionsDialog<T = any>({
         return row;
       });
 
-      // Generate file content based on format (single file for all items)
-      let fileContent = '';
-      let fileName = exportConfig.fileName || `${entityLabel}_export_${new Date().toISOString().split('T')[0]}`;
-      
-      switch (exportConfig.format) {
-        case 'csv':
-          fileContent = generateCSV(exportData, exportConfig.includeHeaders);
-          fileName += '.csv';
-          break;
-        case 'excel':
-          fileContent = generateExcel(exportData, exportConfig.includeHeaders);
-          fileName += '.xlsx';
-          break;
-        case 'pdf':
-          fileContent = generatePDF(exportData, exportConfig.includeHeaders);
-          fileName += '.pdf';
-          break;
-        case 'json':
-          fileContent = generateJSON(exportData);
-          fileName += '.json';
-          break;
-      }
+      // Centralized export via ExportService for reliable CSV/XLSX/PDF
+      const filenameBase = (exportConfig.fileName && exportConfig.fileName.trim().length > 0)
+        ? exportConfig.fileName.trim()
+        : `${entityLabel}_export_${new Date().toISOString().split('T')[0]}`;
 
-      // Simulate file generation for all items
-      for (let i = 50; i <= 100; i += 10) {
-        items.forEach(item => {
-          const itemId = getItemId(item);
-          setActionProgress(prev => ({
-            ...prev,
-            [itemId]: {
-              status: 'in_progress',
-              progress: i,
-              message: `Generating ${format.label} file...`
-            }
-          }));
-        });
-        await new Promise(resolve => setTimeout(resolve, 50));
-      }
-
-      // Download the file ONCE for all items
-      downloadFile(fileContent, fileName, format.mimeType);
+      await ExportService.exportAnalytics(
+        {
+          type: entityType,
+          data: rows
+        },
+        {
+          format: exportConfig.format as 'csv' | 'excel' | 'pdf',
+          filename: filenameBase,
+          includeFilters: false,
+          includeSummary: false,
+          includeTable: true,
+          selectedColumns: exportConfig.selectedColumns
+        }
+      );
 
       // Mark all items as completed
       items.forEach(item => {

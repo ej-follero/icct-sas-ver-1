@@ -59,6 +59,9 @@ type MenuItem = {
   href: string;
   description?: string;
   subItems?: MenuItem[];
+  badge?: string;
+  badgeColor?: string;
+  disabled?: boolean;
 };
 
 type MenuSection = {
@@ -80,6 +83,13 @@ const menuConfig: MenuConfig = {
       sectionIcon: <LayoutDashboard className="w-5 h-5" />,
       items: [
         { icon: <LayoutDashboard className="w-5 h-5" />, label: "System Dashboard", href: "/dashboard", description: "System-wide overview" },
+      ],
+    },
+    {
+      title: "PROFILE",
+      sectionIcon: <User className="w-5 h-5" />,
+      items: [
+        { icon: <User className="w-5 h-5" />, label: "Profile", href: "/profile", description: "Manage your profile" },
       ],
     },
     {
@@ -137,10 +147,12 @@ const menuConfig: MenuConfig = {
           subItems: [
             { icon: <Wifi className="w-5 h-5" />, label: "Readers", href: "/list/rfid/readers", description: "Manage RFID devices" },
             { icon: <CreditCard className="w-5 h-5" />, label: "Tags", href: "/list/rfid/tags", description: "Manage student cards" },
+            { icon: <CreditCard className="w-5 h-5" />, label: "Assign (Batch-Scan)", href: "/list/rfid/assign-batch", description: "Bulk assign cards by scanning" },
           ]
         },
         { icon: <FileText className="w-5 h-5" />, label: "Activity", href: "/list/rfid/logs", description: "View scan history" },
         { icon: <Settings className="w-5 h-5" />, label: "Config", href: "/list/rfid/config", description: "System configuration" },
+        { icon: <ScanLine className="w-5 h-5" />, label: "Kiosk: RFID Bind", href: "/kiosk/rfid-bind", description: "Self-service card binding" },
       ],
     },
     {
@@ -178,24 +190,81 @@ const menuConfig: MenuConfig = {
       compact: true,
       items: [
         {
-          icon: <Shield className="w-5 h-5" />, label: "Access Control", href: "#", description: "Security settings",
+          icon: <Shield className="w-5 h-5" />, 
+          label: "Access Control", 
+          href: "#", 
+          description: "Full access to security settings",
+          badge: "SUPER_ADMIN",
+          badgeColor: "bg-red-500",
           subItems: [
-            { icon: <Shield className="w-5 h-5" />, label: "Security", href: "/settings/security", description: "Security settings" },
+            { 
+              icon: <Shield className="w-5 h-5" />, 
+              label: "Security", 
+              href: "/settings/security", 
+              description: "Security policies and authentication",
+              badge: "FULL ACCESS",
+              badgeColor: "bg-red-500"
+            },
           ]
         },
         {
-          icon: <Activity className="w-5 h-5" />, label: "System Health", href: "#", description: "Monitor and maintain system health",
+          icon: <Activity className="w-5 h-5" />, 
+          label: "System Health", 
+          href: "#", 
+          description: "Full system monitoring and maintenance",
+          badge: "FULL ACCESS",
+          badgeColor: "bg-green-500",
           subItems: [
-            { icon: <Activity className="w-5 h-5" />, label: "Status", href: "/settings/system-status", description: "System status overview" },
-            { icon: <Database className="w-5 h-5" />, label: "Backup", href: "/settings/backup", description: "Backup and restore data" },
+            { 
+              icon: <Activity className="w-5 h-5" />, 
+              label: "Status", 
+              href: "/settings/system-status", 
+              description: "System status overview and monitoring",
+              badge: "FULL ACCESS",
+              badgeColor: "bg-green-500"
+            },
+            { 
+              icon: <Database className="w-5 h-5" />, 
+              label: "Backup", 
+              href: "/settings/backup", 
+              description: "Backup and restore data",
+              badge: "FULL ACCESS",
+              badgeColor: "bg-green-500"
+            },
           ]
         },
         {
-          icon: <Settings className="w-5 h-5" />, label: "Advanced Configuration", href: "#", description: "Advanced system settings",
+          icon: <Settings className="w-5 h-5" />, 
+          label: "Advanced Configuration", 
+          href: "#", 
+          description: "Advanced system settings and overrides",
+          badge: "SUPER_ADMIN",
+          badgeColor: "bg-red-500",
           subItems: [
-            { icon: <Settings className="w-5 h-5" />, label: "System Override", href: "/settings/system-override", description: "System configuration override" },
-            { icon: <Settings className="w-5 h-5" />, label: "Advanced Config", href: "/settings/advanced-config", description: "Advanced system settings" },
-            { icon: <Zap className="w-5 h-5" />, label: "Performance Tuning", href: "/settings/performance-tuning", description: "Performance optimization" },
+            { 
+              icon: <Settings className="w-5 h-5" />, 
+              label: "System Override", 
+              href: "/settings/system-override", 
+              description: "System configuration override",
+              badge: "SUPER_ADMIN",
+              badgeColor: "bg-red-500"
+            },
+            { 
+              icon: <Settings className="w-5 h-5" />, 
+              label: "Advanced Config", 
+              href: "/settings/advanced-config", 
+              description: "Advanced system settings",
+              badge: "SUPER_ADMIN",
+              badgeColor: "bg-red-500"
+            },
+            { 
+              icon: <Zap className="w-5 h-5" />, 
+              label: "Performance Tuning", 
+              href: "/settings/performance-tuning", 
+              description: "Performance optimization",
+              badge: "SUPER_ADMIN",
+              badgeColor: "bg-red-500"
+            },
           ]
         },
       ],
@@ -218,11 +287,17 @@ const menuConfig: MenuConfig = {
       ],
     },
     {
+      title: "PROFILE",
+      sectionIcon: <User className="w-5 h-5" />,
+      items: [
+        { icon: <User className="w-5 h-5" />, label: "Profile", href: "/profile", description: "Manage your profile" },
+      ],
+    },
+    {
       title: "ATTENDANCE MANAGEMENT",
       sectionIcon: <UserCheck className="w-5 h-5" />,
       items: [
         { icon: <Users className="w-5 h-5" />, label: "Student Attendance", href: "/list/attendance/students" },
-        { icon: <UserCheck className="w-5 h-5" />, label: "Instructor Attendance", href: "/list/attendance/instructors" },
         { icon: <Activity className="w-5 h-5" />, label: "Live Attendance Feed", href: "/list/live-attendance" },
       ],
     },
@@ -256,14 +331,14 @@ const menuConfig: MenuConfig = {
         },
       ],
     },
-    {
-      title: "USER MANAGEMENT",
-      sectionIcon: <UserCircle className="w-5 h-5" />,
-      items: [
-        { icon: <Users className="w-5 h-5" />, label: "All Users", href: "/list/users", description: "Manage all users with role-based filtering" },
-        { icon: <Shield className="w-5 h-5" />, label: "Roles & Permissions", href: "/settings/roles", description: "Manage roles and permissions" },
-      ],
-    },
+         {
+       title: "USER MANAGEMENT",
+       sectionIcon: <UserCircle className="w-5 h-5" />,
+       items: [
+         { icon: <Users className="w-5 h-5" />, label: "All Users", href: "/list/users", description: "Manage all users with role-based filtering" },
+         { icon: <Shield className="w-5 h-5" />, label: "Roles & Permissions", href: "/settings/roles", description: "Manage roles and permissions" },
+       ],
+     },
     {
       title: "RFID MANAGEMENT",
       sectionIcon: <ScanLine className="w-5 h-5" />,
@@ -278,10 +353,12 @@ const menuConfig: MenuConfig = {
           subItems: [
             { icon: <Wifi className="w-5 h-5" />, label: "Readers", href: "/list/rfid/readers", description: "Manage RFID devices" },
             { icon: <CreditCard className="w-5 h-5" />, label: "Tags", href: "/list/rfid/tags", description: "Manage student cards" },
+            { icon: <CreditCard className="w-5 h-5" />, label: "Assign (Batch-Scan)", href: "/list/rfid/assign-batch", description: "Bulk assign cards by scanning" },
           ]
         },
         { icon: <FileText className="w-5 h-5" />, label: "Activity", href: "/list/rfid/logs", description: "View scan history" },
         { icon: <Settings className="w-5 h-5" />, label: "Config", href: "/list/rfid/config", description: "System configuration" },
+        { icon: <ScanLine className="w-5 h-5" />, label: "Kiosk: RFID Bind", href: "/kiosk/rfid-bind", description: "Self-service card binding" },
       ],
     },
     {
@@ -308,16 +385,23 @@ const menuConfig: MenuConfig = {
       compact: true,
       items: [
         {
-          icon: <Shield className="w-5 h-5" />, label: "Access Control", href: "#", description: "Security settings",
+          icon: <Activity className="w-5 h-5" />, 
+          label: "System Health", 
+          href: "#", 
+          description: "Monitor and maintain system health",
           subItems: [
-            { icon: <Shield className="w-5 h-5" />, label: "Security", href: "/settings/security", description: "Security settings" },
-          ]
-        },
-        {
-          icon: <Activity className="w-5 h-5" />, label: "System Health", href: "#", description: "Monitor and maintain system health",
-          subItems: [
-            { icon: <Activity className="w-5 h-5" />, label: "Status", href: "/settings/system-status", description: "System status overview" },
-            { icon: <Database className="w-5 h-5" />, label: "Backup", href: "/settings/backup", description: "Backup and restore data" },
+            { 
+              icon: <Activity className="w-5 h-5" />, 
+              label: "Status", 
+              href: "/settings/system-status", 
+              description: "System status overview"
+            },
+            { 
+              icon: <Database className="w-5 h-5" />, 
+              label: "Backup", 
+              href: "/settings/backup", 
+              description: "Backup and restore data"
+            },
           ]
         },
       ],
@@ -337,6 +421,15 @@ const menuConfig: MenuConfig = {
       sectionIcon: <LayoutDashboard className="w-5 h-5" />,
       items: [
         { icon: <LayoutDashboard className="w-5 h-5" />, label: "Dashboard", href: "/dashboard" },
+      ],
+    },
+    {
+      title: "PROFILE",
+      sectionIcon: <User className="w-5 h-5" />,
+      items: [
+        { icon: <User className="w-5 h-5" />, label: "View Profile", href: "/profile", description: "View your profile information" },
+        { icon: <Edit className="w-5 h-5" />, label: "Edit Profile", href: "/profile/edit", description: "Update your personal information" },
+        { icon: <Key className="w-5 h-5" />, label: "Change Password", href: "/profile/password", description: "Update your password" },
       ],
     },
     {
@@ -501,9 +594,7 @@ const menuConfig: MenuConfig = {
       title: "PROFILE",
       sectionIcon: <User className="w-5 h-5" />,
       items: [
-        { icon: <User className="w-5 h-5" />, label: "View Profile", href: "/profile" },
-        { icon: <User className="w-5 h-5" />, label: "Edit Info", href: "/profile/edit" },
-        { icon: <User className="w-5 h-5" />, label: "Change Password", href: "/profile/password" },
+        { icon: <User className="w-5 h-5" />, label: "Profile", href: "/profile" },
       ],
     },
     {
@@ -563,9 +654,7 @@ const menuConfig: MenuConfig = {
       title: "PROFILE",
       sectionIcon: <User className="w-5 h-5" />,
       items: [
-        { icon: <User className="w-5 h-5" />, label: "View Profile", href: "/profile" },
-        { icon: <User className="w-5 h-5" />, label: "Edit Info", href: "/profile/edit" },
-        { icon: <User className="w-5 h-5" />, label: "Change Password", href: "/profile/password" },
+        { icon: <User className="w-5 h-5" />, label: "Profile", href: "/profile" },
       ],
     },
     {
@@ -586,9 +675,22 @@ export default function Sidebar({ role, collapsed = false }: { role: Role; colla
   const [openSections, setOpenSections] = useState<Record<string, boolean>>(() => {
     // Initialize sections based on current path
     const initial: Record<string, boolean> = {};
-    menuConfig[role].forEach((section) => {
-      initial[section.title] = section.items.some((item) => pathname.startsWith(item.href));
-    });
+    
+    // Handle undefined role gracefully
+    if (!role) {
+      return initial;
+    }
+    
+    // Map role to menu config key, handling both uppercase and lowercase roles
+    const normalizedRole = role?.toLowerCase() as Role;
+    const menuSections = menuConfig[normalizedRole];
+    
+    if (menuSections) {
+      menuSections.forEach((section) => {
+        initial[section.title] = section.items.some((item) => pathname.startsWith(item.href));
+      });
+    }
+    
     return initial;
   });
 
@@ -623,7 +725,32 @@ export default function Sidebar({ role, collapsed = false }: { role: Role; colla
         }
       >
         <nav className={`flex-1 bg-[#0c2556] backdrop-blur-md shadow-lg overflow-y-auto ${expanded ? 'px-3 py-6' : 'px-0 py-2'}`}>
-          {menuConfig[role].map((section) => (
+          {(() => {
+            // Handle undefined role gracefully
+            if (!role) {
+              return (
+                <div className="text-center text-blue-400 p-4">
+                  <p className="text-sm">Loading user permissions...</p>
+                </div>
+              );
+            }
+            
+            // Map role to menu config key, handling both uppercase and lowercase roles
+            const normalizedRole = role?.toLowerCase() as Role;
+            const menuSections = menuConfig[normalizedRole];
+            
+            if (!menuSections) {
+              console.error('Menu: Invalid role provided:', role, 'Normalized:', normalizedRole);
+              console.error('Available roles:', Object.keys(menuConfig));
+              return (
+                <div className="text-center text-red-400 p-4">
+                  <p className="text-sm">Invalid role: {role}</p>
+                  <p className="text-xs mt-1">Available roles: {Object.keys(menuConfig).join(', ')}</p>
+                </div>
+              );
+            }
+            
+            return menuSections.map((section) => (
             <div key={section.title} className={`mb-4 ${!expanded ? 'flex flex-col items-center' : ''}`}>
               <button
                 type="button"
@@ -677,19 +804,34 @@ export default function Sidebar({ role, collapsed = false }: { role: Role; colla
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <Link
-                                  href={sub.href}
+                                  href={sub.disabled ? "#" : sub.href}
                                   className={cn(
                                     "flex items-center gap-3 px-3 py-2 rounded text-sm font-medium transition-colors duration-200",
                                     pathname === sub.href
                                       ? "bg-blue-500 text-white font-semibold"
-                                      : "text-blue-100 hover:bg-blue-800/50 hover:text-white",
+                                      : sub.disabled 
+                                        ? "text-gray-400 cursor-not-allowed opacity-50"
+                                        : "text-blue-100 hover:bg-blue-800/50 hover:text-white",
                                     !expanded ? 'justify-center px-0' : 'justify-start text-left',
                                     section.compact ? 'py-1.5' : ''
                                   )}
                                   role="menuitem"
+                                  onClick={sub.disabled ? (e) => e.preventDefault() : undefined}
                                 >
                                   {sub.icon}
-                                  {expanded && <span className="text-left">{sub.label}</span>}
+                                  {expanded && (
+                                    <div className="flex items-center justify-between w-full">
+                                      <span className="text-left">{sub.label}</span>
+                                      {sub.badge && (
+                                        <span className={cn(
+                                          "text-xs px-2 py-0.5 rounded-full font-medium",
+                                          sub.badgeColor || "bg-gray-500 text-white"
+                                        )}>
+                                          {sub.badge}
+                                        </span>
+                                      )}
+                                    </div>
+                                  )}
                                 </Link>
                               </TooltipTrigger>
                               {(!expanded || sub.description) && (
@@ -697,6 +839,17 @@ export default function Sidebar({ role, collapsed = false }: { role: Role; colla
                                   <div>
                                     <p className="font-medium">{sub.label}</p>
                                     {sub.description && <p className="text-xs text-muted-foreground">{sub.description}</p>}
+                                    {sub.badge && (
+                                      <p className={cn(
+                                        "text-xs font-medium mt-1",
+                                        sub.badgeColor === "bg-red-500" ? "text-red-400" :
+                                        sub.badgeColor === "bg-yellow-500" ? "text-yellow-400" :
+                                        sub.badgeColor === "bg-green-500" ? "text-green-400" :
+                                        "text-gray-400"
+                                      )}>
+                                        {sub.badge}
+                                      </p>
+                                    )}
                                   </div>
                                 </TooltipContent>
                               )}
@@ -710,19 +863,34 @@ export default function Sidebar({ role, collapsed = false }: { role: Role; colla
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <Link
-                            href={item.href}
+                            href={item.disabled ? "#" : item.href}
                             className={cn(
                               "flex items-center gap-3 px-3 py-2 rounded text-sm font-medium transition-colors duration-200",
                               pathname === item.href
                                 ? "bg-blue-500 text-white font-semibold"
-                                : "text-blue-100 hover:bg-blue-800/50 hover:text-white",
+                                : item.disabled 
+                                  ? "text-gray-400 cursor-not-allowed opacity-50"
+                                  : "text-blue-100 hover:bg-blue-800/50 hover:text-white",
                               !expanded ? 'justify-center px-0' : 'justify-start text-left',
                               section.compact ? 'py-1.5' : ''
                             )}
                             role="menuitem"
+                            onClick={item.disabled ? (e) => e.preventDefault() : undefined}
                           >
                             {item.icon}
-                            {expanded && <span className="text-left">{item.label}</span>}
+                            {expanded && (
+                              <div className="flex items-center justify-between w-full">
+                                <span className="text-left">{item.label}</span>
+                                {item.badge && (
+                                  <span className={cn(
+                                    "text-xs px-2 py-0.5 rounded-full font-medium",
+                                    item.badgeColor || "bg-gray-500 text-white"
+                                  )}>
+                                    {item.badge}
+                                  </span>
+                                )}
+                              </div>
+                            )}
                           </Link>
                         </TooltipTrigger>
                         {(!expanded || item.description) && (
@@ -730,6 +898,17 @@ export default function Sidebar({ role, collapsed = false }: { role: Role; colla
                             <div>
                               <p className="font-medium">{item.label}</p>
                               {item.description && <p className="text-xs text-muted-foreground">{item.description}</p>}
+                              {item.badge && (
+                                <p className={cn(
+                                  "text-xs font-medium mt-1",
+                                  item.badgeColor === "bg-red-500" ? "text-red-400" :
+                                  item.badgeColor === "bg-yellow-500" ? "text-yellow-400" :
+                                  item.badgeColor === "bg-green-500" ? "text-green-400" :
+                                  "text-gray-400"
+                                )}>
+                                  {item.badge}
+                                </p>
+                              )}
                             </div>
                           </TooltipContent>
                         )}
@@ -739,7 +918,8 @@ export default function Sidebar({ role, collapsed = false }: { role: Role; colla
                 ))}
               </ul>
             </div>
-          ))}
+            ));
+          })()}
         </nav>
       </aside>
     </TooltipProvider>

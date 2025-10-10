@@ -32,26 +32,43 @@ interface DatePickerPopoverProps {
 function DatePickerPopover({ isOpen, onOpenChange, timeRange, onTimeRangeChange, onCustomRangeApply, trigger }: DatePickerPopoverProps) {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [hoveredDate, setHoveredDate] = useState<Date | null>(null);
-  const [selectionMode, setSelectionMode] = useState<'single' | 'range'>('single');
+  const [selectionMode, setSelectionMode] = useState<'single' | 'range'>('range');
   const [rangeSelectionStep, setRangeSelectionStep] = useState<'start' | 'end'>('start');
+  // Local draft state to avoid committing until Apply is pressed
+  const [rangeDraftStart, setRangeDraftStart] = useState<Date>(() => {
+    const d = new Date(timeRange.start); d.setHours(0,0,0,0); return d;
+  });
+  const [rangeDraftEnd, setRangeDraftEnd] = useState<Date>(() => {
+    const d = new Date(timeRange.end); d.setHours(0,0,0,0); return d;
+  });
+
+  // Initialize draft range when the popover opens
+  useEffect(() => {
+    if (isOpen) {
+      const s = new Date(timeRange.start); s.setHours(0,0,0,0);
+      const e = new Date(timeRange.end); e.setHours(0,0,0,0);
+      setRangeDraftStart(s);
+      setRangeDraftEnd(e);
+      setRangeSelectionStep('start');
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
 
   // Generate calendar days for a given month
   const getDaysInMonth = (date: Date) => {
     const year = date.getFullYear();
     const month = date.getMonth();
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
-    const startDate = new Date(firstDay);
-    startDate.setDate(startDate.getDate() - firstDay.getDay());
-    
-    const days = [];
-    const currentDate = new Date(startDate);
-    
-    while (currentDate <= lastDay || currentDate.getDay() !== 0) {
-      days.push(new Date(currentDate));
-      currentDate.setDate(currentDate.getDate() + 1);
+    const firstDayOfMonth = new Date(year, month, 1);
+    const calendarStart = new Date(firstDayOfMonth);
+    const dow = calendarStart.getDay(); // 0=Sun,1=Mon,...
+    const mondayOffset = (dow === 0) ? -6 : (1 - dow); // start from Monday
+    calendarStart.setDate(calendarStart.getDate() + mondayOffset);
+
+    const days: Date[] = [];
+    for (let i = 0; i < 42; i++) {
+      days.push(new Date(calendarStart));
+      calendarStart.setDate(calendarStart.getDate() + 1);
     }
-    
     return days;
   };
 
@@ -59,50 +76,36 @@ function DatePickerPopover({ isOpen, onOpenChange, timeRange, onTimeRangeChange,
   const handleDateClick = (date: Date, event: React.MouseEvent) => {
     event.preventDefault();
     event.stopPropagation();
-    
-    if (timeRange.preset !== 'custom') return;
+    // Allow selection regardless of current preset; we'll commit as 'custom' when needed
     
     const newDate = new Date(date);
     newDate.setHours(0, 0, 0, 0);
     
     if (selectionMode === 'single') {
-      // Single date selection - same date for both start and end
-      onTimeRangeChange({
-        ...timeRange,
-        start: newDate,
-        end: newDate
-      });
+      // Single: update local draft only; commit on Apply
+      const selected = new Date(newDate); selected.setHours(0,0,0,0);
+      setRangeDraftStart(selected);
+      setRangeDraftEnd(selected);
+      setRangeSelectionStep('start');
     } else {
-      // Range selection
+      // Range selection (two clicks)
       if (rangeSelectionStep === 'start') {
-        // First selection - set start date
-        onTimeRangeChange({
-          ...timeRange,
-          start: newDate,
-          end: newDate // Keep end same for now
-        });
+        setRangeDraftStart(newDate);
+        const end = new Date(newDate); end.setHours(0,0,0,0);
+        setRangeDraftEnd(end);
         setRangeSelectionStep('end');
       } else {
-        // Second selection - set end date and order them properly
-        const currentStart = new Date(timeRange.start);
-        currentStart.setHours(0, 0, 0, 0);
-        
-        if (newDate < currentStart) {
-          // New date is earlier than current start
-          onTimeRangeChange({
-            ...timeRange,
-            start: newDate,
-            end: currentStart
-          });
+        // finalize draft in correct order
+        if (newDate < rangeDraftStart) {
+          const start = new Date(newDate); start.setHours(0,0,0,0);
+          const end = new Date(rangeDraftStart); end.setHours(0,0,0,0);
+          setRangeDraftStart(start);
+          setRangeDraftEnd(end);
         } else {
-          // New date is later than or equal to current start
-          onTimeRangeChange({
-            ...timeRange,
-            start: currentStart,
-            end: newDate
-          });
+          const end = new Date(newDate); end.setHours(0,0,0,0);
+          setRangeDraftEnd(end);
         }
-        setRangeSelectionStep('start'); // Reset for next selection
+        setRangeSelectionStep('start');
       }
     }
   };
@@ -110,10 +113,10 @@ function DatePickerPopover({ isOpen, onOpenChange, timeRange, onTimeRangeChange,
   // Check if date is in range (for visual highlighting)
   const isInRange = (date: Date) => {
     if (timeRange.preset !== 'custom') return false;
-    if (!timeRange.start || !timeRange.end) return false;
+    if (!rangeDraftStart || !rangeDraftEnd) return false;
     
-    const start = new Date(timeRange.start);
-    const end = new Date(timeRange.end);
+    const start = new Date(rangeDraftStart);
+    const end = new Date(rangeDraftEnd);
     const current = new Date(date);
     
     // Reset time to compare only dates
@@ -127,10 +130,10 @@ function DatePickerPopover({ isOpen, onOpenChange, timeRange, onTimeRangeChange,
   // Check if date is start or end of range
   const isRangeBoundary = (date: Date) => {
     if (timeRange.preset !== 'custom') return false;
-    if (!timeRange.start || !timeRange.end) return false;
+    if (!rangeDraftStart || !rangeDraftEnd) return false;
     
-    const start = new Date(timeRange.start);
-    const end = new Date(timeRange.end);
+    const start = new Date(rangeDraftStart);
+    const end = new Date(rangeDraftEnd);
     const current = new Date(date);
     
     start.setHours(0, 0, 0, 0);
@@ -143,9 +146,9 @@ function DatePickerPopover({ isOpen, onOpenChange, timeRange, onTimeRangeChange,
   // Check if date is the start of range
   const isRangeStart = (date: Date) => {
     if (timeRange.preset !== 'custom') return false;
-    if (!timeRange.start) return false;
+    if (!rangeDraftStart) return false;
     
-    const start = new Date(timeRange.start);
+    const start = new Date(rangeDraftStart);
     const current = new Date(date);
     
     start.setHours(0, 0, 0, 0);
@@ -157,9 +160,9 @@ function DatePickerPopover({ isOpen, onOpenChange, timeRange, onTimeRangeChange,
   // Check if date is the end of range
   const isRangeEnd = (date: Date) => {
     if (timeRange.preset !== 'custom') return false;
-    if (!timeRange.end) return false;
+    if (!rangeDraftEnd) return false;
     
-    const end = new Date(timeRange.end);
+    const end = new Date(rangeDraftEnd);
     const current = new Date(date);
     
     end.setHours(0, 0, 0, 0);
@@ -170,15 +173,14 @@ function DatePickerPopover({ isOpen, onOpenChange, timeRange, onTimeRangeChange,
 
   // Toggle selection mode
   const toggleSelectionMode = () => {
-    setSelectionMode(prev => prev === 'single' ? 'range' : 'single');
+    const next = selectionMode === 'single' ? 'range' : 'single';
+    setSelectionMode(next);
     setRangeSelectionStep('start');
-    // Reset selection when switching modes
-    const today = new Date();
-    onTimeRangeChange({
-      ...timeRange,
-      start: today,
-      end: today
-    });
+    // Keep draft range locally; do not commit to parent here
+    const d = new Date(); d.setHours(0,0,0,0);
+    setRangeDraftStart(d);
+    const e = new Date(d); e.setHours(0,0,0,0);
+    setRangeDraftEnd(e);
   };
 
   // Navigate months
@@ -247,6 +249,7 @@ function DatePickerPopover({ isOpen, onOpenChange, timeRange, onTimeRangeChange,
             
             return (
               <button
+                type="button"
                 key={index}
                 onClick={(event) => handleDateClick(day, event)}
                 onMouseEnter={() => setHoveredDate(day)}
@@ -294,11 +297,11 @@ function DatePickerPopover({ isOpen, onOpenChange, timeRange, onTimeRangeChange,
         className="w-auto p-4 rounded-xl" 
         align="start" 
         side="bottom" 
-        sideOffset= {40}
-        alignOffset={-20}
+        sideOffset={8}
+        alignOffset={0}
         avoidCollisions={true}
-        collisionPadding={20}
-        onOpenAutoFocus={(e) => e.preventDefault()}
+        collisionPadding={12}
+        onOpenAutoFocus={(e) => { try { e.preventDefault(); } catch {} }}
       >
           <div className="p-0">
             <div className="flex items-center justify-between mb-4">
@@ -322,7 +325,13 @@ function DatePickerPopover({ isOpen, onOpenChange, timeRange, onTimeRangeChange,
             <div className="flex items-center gap-2">
               <div className="flex bg-white rounded p-1 border">
                 <button
-                  onClick={toggleSelectionMode}
+                  type="button"
+                  onClick={() => {
+                    setSelectionMode('single');
+                    setRangeSelectionStep('start');
+                    const d = new Date(); d.setHours(0,0,0,0);
+                    onTimeRangeChange({ ...timeRange, start: d, end: d, preset: 'custom' });
+                  }}
                   className={cn(
                     "px-3 py-1 text-xs font-medium rounded transition-colors",
                     selectionMode === 'single' 
@@ -333,7 +342,13 @@ function DatePickerPopover({ isOpen, onOpenChange, timeRange, onTimeRangeChange,
                   Single Date
                 </button>
                 <button
-                  onClick={toggleSelectionMode}
+                  type="button"
+                  onClick={() => {
+                    setSelectionMode('range');
+                    setRangeSelectionStep('start');
+                    const d = new Date(); d.setHours(0,0,0,0);
+                    onTimeRangeChange({ ...timeRange, start: d, end: d, preset: 'custom' });
+                  }}
                   className={cn(
                     "px-3 py-1 text-xs font-medium rounded transition-colors",
                     selectionMode === 'range' 
@@ -377,11 +392,8 @@ function DatePickerPopover({ isOpen, onOpenChange, timeRange, onTimeRangeChange,
                 event.stopPropagation();
                 // Clear selection
                 const today = new Date();
-                onTimeRangeChange({
-                  ...timeRange,
-                  start: today,
-                  end: today
-                });
+                today.setHours(0,0,0,0);
+                onTimeRangeChange({ ...timeRange, start: today, end: today, preset: 'custom' });
               }}
             >
               Clear
@@ -392,11 +404,15 @@ function DatePickerPopover({ isOpen, onOpenChange, timeRange, onTimeRangeChange,
               onClick={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
+                // Commit draft to parent
+                onTimeRangeChange({
+                  ...timeRange,
+                  start: rangeDraftStart,
+                  end: rangeDraftEnd,
+                  preset: 'custom'
+                });
                 onOpenChange(false);
-                // Call the custom range apply function if provided
-                if (onCustomRangeApply) {
-                  onCustomRangeApply();
-                }
+                if (onCustomRangeApply) onCustomRangeApply();
               }}
             >
               Apply
@@ -459,14 +475,13 @@ export function TimeRangeSelector({ timeRange, onTimeRangeChange, onCustomRangeA
     <div className="flex items-center gap-3">
       <Select 
         value={timeRange.preset} 
-        onValueChange={(preset) => {
-          onTimeRangeChange({ ...timeRange, preset: preset as any });
-          // If custom is selected, open the popover
+          onValueChange={(preset) => {
+          const now = new Date(); now.setHours(0,0,0,0);
           if (preset === 'custom') {
-            // Small delay to ensure the select dropdown closes first
-            setTimeout(() => {
-              setIsOpen(true);
-            }, 100);
+            onTimeRangeChange({ start: now, end: now, preset: 'custom' });
+            setTimeout(() => setIsOpen(true), 100);
+          } else {
+            onTimeRangeChange({ ...timeRange, preset: preset as any });
           }
         }}
       >
@@ -491,7 +506,16 @@ export function TimeRangeSelector({ timeRange, onTimeRangeChange, onCustomRangeA
           timeRange={timeRange}
           onTimeRangeChange={onTimeRangeChange}
           onCustomRangeApply={onCustomRangeApply}
-          trigger={<div />}
+          trigger={
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsOpen(true)}
+              className="h-8 px-3 rounded"
+            >
+              <Calendar className="w-3 h-3 mr-2" /> Pick dates
+            </Button>
+          }
         />
       )}
     </div>

@@ -4,15 +4,12 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 
 export interface User {
-  id: string;
-  name: string;
+  id: number;
   email: string;
-  role: 'super_admin' | 'admin' | 'department_head' | 'teacher' | 'student' | 'parent' | 'system_auditor';
-  avatar?: string;
-  department?: string;
+  role: string;
   permissions: string[];
   lastLogin?: string;
-  isActive: boolean;
+  isActive?: boolean;
 }
 
 export interface UserProfile {
@@ -25,7 +22,6 @@ export interface UserProfile {
   address?: string;
   avatar?: string;
   preferences: {
-    theme: 'light' | 'dark' | 'system';
     language: string;
     notifications: {
       email: boolean;
@@ -35,48 +31,7 @@ export interface UserProfile {
   };
 }
 
-// Mock user data - moved outside to prevent recreation on every render
-const mockUser: User = {
-  id: '1',
-  name: 'EJ Yu',
-  email: 'ej.yu@icct.edu.ph',
-  role: 'admin',
-  avatar: '/api/avatar/1',
-  department: 'Information Technology',
-  permissions: [
-    'dashboard:read',
-    'attendance:read',
-    'attendance:write',
-    'users:read',
-    'users:write',
-    'reports:read',
-    'reports:write',
-    'settings:read',
-    'settings:write'
-  ],
-  lastLogin: new Date().toISOString(),
-  isActive: true
-};
-
-const mockProfile: UserProfile = {
-  id: '1',
-  name: 'EJ Yu',
-  email: 'ej.yu@icct.edu.ph',
-  role: 'Administrator',
-  department: 'Information Technology',
-  phone: '+63 912 345 6789',
-  address: 'Manila, Philippines',
-  avatar: '/api/avatar/1',
-  preferences: {
-    theme: 'light',
-    language: 'en',
-    notifications: {
-      email: true,
-      push: true,
-      
-    }
-  }
-};
+// Remove hardcoded mock admin defaults
 
 export const useUser = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -86,39 +41,101 @@ export const useUser = () => {
   const [isInitialized, setIsInitialized] = useState(false);
   const router = useRouter();
 
-  // Load user data with timeout protection
+  // Load user data with abortable timeout protection and a single silent retry
   const loadUser = useCallback(async () => {
     setLoading(true);
     setError(null);
     
+    const MAX_TIMEOUT_MS = 15000;
+    const RETRY_DELAY_MS = 600;
+
+    const attempt = async (timeoutMs: number): Promise<Response> => {
+      const controller = new AbortController();
+      let settled = false;
+      const timeoutId = setTimeout(() => {
+        if (!settled) {
+          try {
+            // @ts-ignore reason not widely supported
+            controller.abort('User loading timeout');
+          } catch {
+            controller.abort();
+          }
+        }
+      }, timeoutMs);
+      try {
+        const res = await fetch('/api/auth/me', { cache: 'no-store', signal: controller.signal });
+        return res;
+      } finally {
+        settled = true;
+        clearTimeout(timeoutId);
+      }
+    };
+
     try {
-      // Add timeout to prevent infinite loading
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('User loading timeout')), 5000)
-      );
-      
-      const loadPromise = (async () => {
-        // Simulate API call delay
-        await new Promise(resolve => setTimeout(resolve, 300));
-        
-        // In real implementation, fetch from API
-        // const response = await fetch('/api/user/me');
-        // if (!response.ok) throw new Error('Failed to load user');
-        // const data = await response.json();
-        
-        setUser(mockUser);
-        setProfile(mockProfile);
-        setIsInitialized(true);
-      })();
-      
-      await Promise.race([loadPromise, timeoutPromise]);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load user');
-      console.error('Failed to load user:', err);
-      // Set mock data as fallback to prevent infinite loading
-      setUser(mockUser);
-      setProfile(mockProfile);
+      let response = await attempt(MAX_TIMEOUT_MS);
+      if (!response.ok) {
+        throw new Error('Unauthorized');
+      }
+
+      // If we got here, parse and set user
+      const data = await response.json();
+      const normalizedRole = String(data.role).toUpperCase();
+      setUser({
+        id: data.id,
+        email: data.email,
+        role: normalizedRole,
+        permissions: [],
+        isActive: data.status === 'ACTIVE'
+      });
+      setProfile({
+        id: String(data.id),
+        name: data.email,
+        email: data.email,
+        role: normalizedRole,
+        preferences: { language: 'en', notifications: { email: true, push: true } }
+      });
       setIsInitialized(true);
+    } catch (err: any) {
+      // One silent retry for abort/network cases
+      const isAbort = err && (err.name === 'AbortError' || err.code === 'ABORT_ERR');
+      const isNetwork = err && (err.message?.includes('Failed to fetch'));
+      try {
+        if (isAbort || isNetwork) {
+          await new Promise(r => setTimeout(r, RETRY_DELAY_MS));
+          const retryRes = await attempt(MAX_TIMEOUT_MS + 5000);
+          if (!retryRes.ok) throw new Error('Unauthorized');
+          const data = await retryRes.json();
+          const normalizedRole = String(data.role).toUpperCase();
+          setUser({
+            id: data.id,
+            email: data.email,
+            role: normalizedRole,
+            permissions: [],
+            isActive: data.status === 'ACTIVE'
+          });
+          setProfile({
+            id: String(data.id),
+            name: data.email,
+            email: data.email,
+            role: normalizedRole,
+            preferences: { language: 'en', notifications: { email: true, push: true } }
+          });
+          setIsInitialized(true);
+          return;
+        }
+        throw err; // non-retryable, fall through to catch below
+      } catch (finalErr: any) {
+        const isAbortFinal = finalErr && (finalErr.name === 'AbortError' || finalErr.code === 'ABORT_ERR');
+        const message = isAbortFinal ? (finalErr?.message || 'User loading timeout') : (finalErr instanceof Error ? finalErr.message : 'Failed to load user');
+        setError(message);
+        // Avoid noisy logs for abort timeouts; still log others
+        if (!isAbortFinal) {
+          console.error('Failed to load user:', finalErr);
+        }
+        setUser(null);
+        setProfile(null);
+        setIsInitialized(true);
+      }
     } finally {
       setLoading(false);
     }
@@ -210,12 +227,12 @@ export const useUser = () => {
     hasAnyPermission,
     hasAllPermissions,
     isAuthenticated: !!user,
-    isSuperAdmin: user?.role === 'super_admin',
-    isAdmin: user?.role === 'admin',
-    isDepartmentHead: user?.role === 'department_head',
-    isTeacher: user?.role === 'teacher',
-    isStudent: user?.role === 'student',
-    isParent: user?.role === 'parent',
-    isSystemAuditor: user?.role === 'system_auditor'
+    isSuperAdmin: user?.role === 'SUPER_ADMIN',
+    isAdmin: user?.role === 'ADMIN',
+    isDepartmentHead: user?.role === 'DEPARTMENT_HEAD',
+    isTeacher: user?.role === 'INSTRUCTOR' || user?.role === 'TEACHER',
+    isStudent: user?.role === 'STUDENT',
+    isParent: user?.role === 'PARENT',
+    isSystemAuditor: user?.role === 'SYSTEM_AUDITOR'
   };
 }; 

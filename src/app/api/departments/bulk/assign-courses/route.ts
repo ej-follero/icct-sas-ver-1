@@ -7,73 +7,69 @@ const assignCoursesSchema = z.object({
   courseIds: z.array(z.string()).min(1, "At least one course ID is required"),
 });
 
+async function assertAdmin(request: NextRequest) {
+  const token = request.cookies.get('token')?.value;
+  if (!token) return { ok: false, res: NextResponse.json({ error: 'Authentication required' }, { status: 401 }) };
+  try {
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = decoded.userId as number;
+    const user = await prisma.user.findUnique({ where: { userId }, select: { role: true } });
+    if (!user || (user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN')) {
+      return { ok: false, res: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
+    }
+    return { ok: true } as const;
+  } catch {
+    return { ok: false, res: NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 }) };
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
+    const gate = await assertAdmin(request);
+    if (!('ok' in gate) || gate.ok !== true) return gate.res;
     const body = await request.json();
     console.log('Assign courses request body:', JSON.stringify(body, null, 2));
     
     const { departmentIds, courseIds } = assignCoursesSchema.parse(body);
-
-    // Verify departments exist
-    const departments = await prisma.department.findMany({
-      where: {
-        departmentId: {
-          in: departmentIds.map(id => parseInt(id))
-        }
-      }
-    });
-
-    if (departments.length !== departmentIds.length) {
+    // For schema alignment: a CourseOffering belongs to exactly one Department.
+    // Enforce assigning to a single department per request to avoid ambiguity.
+    if (departmentIds.length !== 1) {
       return NextResponse.json({
         success: false,
-        error: "One or more departments not found"
-      }, { status: 404 });
+        error: "Provide exactly one departmentId for assignment"
+      }, { status: 400 });
+    }
+    const targetDepartmentId = parseInt(departmentIds[0]);
+
+    // Verify department exists
+    const targetDepartment = await prisma.department.findUnique({ where: { departmentId: targetDepartmentId } });
+    if (!targetDepartment) {
+      return NextResponse.json({ success: false, error: "Department not found" }, { status: 404 });
     }
 
-    // Verify courses exist
-    const courses = await prisma.course.findMany({
-      where: {
-        courseId: {
-          in: courseIds.map(id => parseInt(id))
-        }
-      }
+    // Verify CourseOffering records exist for given IDs
+    const courseOfferingIds = courseIds.map(id => parseInt(id));
+    const existingCourses = await prisma.courseOffering.findMany({
+      where: { courseId: { in: courseOfferingIds } },
+      select: { courseId: true }
     });
-
-    if (courses.length !== courseIds.length) {
-      return NextResponse.json({
-        success: false,
-        error: "One or more courses not found"
-      }, { status: 404 });
+    if (existingCourses.length !== courseOfferingIds.length) {
+      const existingSet = new Set(existingCourses.map(c => c.courseId));
+      const missing = courseOfferingIds.filter(id => !existingSet.has(id));
+      return NextResponse.json({ success: false, error: `CourseOffering ids not found: ${missing.join(', ')}` }, { status: 404 });
     }
 
-    // Update courses to assign them to departments
-    const updatePromises = courseIds.map(courseId =>
-      departmentIds.map(departmentId =>
-        prisma.courseOffering.create({
-          data: {
-            courseId: parseInt(courseId),
-            departmentId: parseInt(departmentId),
-            academicYear: new Date().getFullYear().toString(),
-            semester: 'FIRST', // Default semester
-            status: 'ACTIVE'
-          }
-        })
-      )
-    ).flat();
-
-    const results = await Promise.allSettled(updatePromises);
-
-    const successful = results.filter(result => result.status === 'fulfilled').length;
-    const failed = results.filter(result => result.status === 'rejected').length;
+    // Assign courses to the target department by updating departmentId
+    const updateResult = await prisma.courseOffering.updateMany({
+      where: { courseId: { in: courseOfferingIds } },
+      data: { departmentId: targetDepartmentId }
+    });
 
     return NextResponse.json({
       success: true,
-      message: `Successfully assigned ${courseIds.length} courses to ${departmentIds.length} departments`,
-      details: {
-        successful,
-        failed,
-        totalAssignments: updatePromises.length
-      }
+      message: `Assigned ${updateResult.count} courses to department ${targetDepartment.departmentName}`,
+      details: { updated: updateResult.count }
     });
 
   } catch (error) {

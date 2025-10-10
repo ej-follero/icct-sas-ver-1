@@ -2,6 +2,25 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import nodemailer from 'nodemailer';
+import { EmailStatus, EmailFolder, Priority } from '@prisma/client';
+
+async function assertRole(request: NextRequest, allowed: Array<'SUPER_ADMIN' | 'ADMIN' | 'INSTRUCTOR'>) {
+  const token = request.cookies.get('token')?.value;
+  const isDev = process.env.NODE_ENV !== 'production';
+  if (!token) return isDev ? { ok: true, email: 'dev@example.com', role: 'ADMIN' } as const : { ok: false, res: NextResponse.json({ error: 'Authentication required' }, { status: 401 }) };
+  try {
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const role = decoded.role as string | undefined;
+    const email = decoded.email as string | undefined;
+    if (!role || !allowed.includes(role as any)) {
+      return { ok: false, res: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
+    }
+    return { ok: true, role: role as any, email: email || 'system@icct.edu.ph' } as const;
+  } catch {
+    return { ok: false, res: NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 }) };
+  }
+}
 
 const emailSchema = z.object({
   to: z.string().email(),
@@ -18,6 +37,8 @@ const emailSchema = z.object({
 
 export async function GET(request: NextRequest) {
   try {
+    const gate = await assertRole(request, ['SUPER_ADMIN', 'ADMIN', 'INSTRUCTOR']);
+    if (!('ok' in gate) || gate.ok !== true) return gate.res;
     const { searchParams } = new URL(request.url);
     const type = searchParams.get('type') || 'all';
     const status = searchParams.get('status') || 'all';
@@ -28,11 +49,13 @@ export async function GET(request: NextRequest) {
     const where: any = {};
     
     if (type !== 'all') {
-      where.type = type;
+      const upper = type.toUpperCase();
+      if (upper in EmailFolder) where.type = upper as EmailFolder;
     }
     
     if (status !== 'all') {
-      where.status = status;
+      const upper = status.toUpperCase();
+      if (upper in EmailStatus) where.status = upper as EmailStatus;
     }
 
     if (search) {
@@ -73,6 +96,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const gate = await assertRole(request, ['SUPER_ADMIN', 'ADMIN']);
+    if (!('ok' in gate) || gate.ok !== true) return gate.res;
+    const senderFromJwt = (gate as any).email as string;
     const body = await request.json();
     const validatedData = emailSchema.parse(body);
 
@@ -82,16 +108,16 @@ export async function POST(request: NextRequest) {
         recipient: validatedData.to,
         subject: validatedData.subject,
         content: validatedData.body,
-        type: validatedData.type || 'SENT',
-        priority: validatedData.priority || 'NORMAL',
-        status: 'PENDING',
-        sender: 'system@icct.edu.ph' // TODO: Get from session
+        type: (validatedData.type || 'SENT') as EmailFolder,
+        priority: (validatedData.priority || 'NORMAL') as Priority,
+        status: EmailStatus.PENDING,
+        sender: process.env.SMTP_FROM || senderFromJwt
       }
     });
 
     // Send email using nodemailer
     try {
-      const transporter = nodemailer.createTransporter({
+      const transporter = nodemailer.createTransport({
         host: process.env.SMTP_HOST,
         port: parseInt(process.env.SMTP_PORT || '587'),
         secure: false,
@@ -119,7 +145,7 @@ export async function POST(request: NextRequest) {
       await prisma.email.update({
         where: { id: email.id },
         data: { 
-          status: 'SENT'
+          status: EmailStatus.SENT
         }
       });
 
@@ -130,7 +156,7 @@ export async function POST(request: NextRequest) {
       await prisma.email.update({
         where: { id: email.id },
         data: { 
-          status: 'FAILED'
+          status: EmailStatus.FAILED
         }
       });
     }

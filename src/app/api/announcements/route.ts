@@ -24,22 +24,33 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get('status') || 'all';
     const search = searchParams.get('search') || '';
     const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '10');
+    const limit = parseInt(searchParams.get('pageSize') || searchParams.get('limit') || '10');
+    const sortBy = searchParams.get('sortBy') || 'createdAt';
+    const sortOrder = searchParams.get('sortOrder') || 'desc';
+    const classFilter = searchParams.get('class') || 'all';
+    const startDate = searchParams.get('startDate');
+    const endDate = searchParams.get('endDate');
 
     const where: any = {};
     
     if (priority !== 'all') {
-      where.priority = priority;
+      where.priority = priority.toUpperCase();
     }
     
     if (audience !== 'all') {
-      where.userType = audience;
+      if (audience === 'STUDENTS') {
+        where.userType = 'STUDENT';
+      } else if (audience === 'INSTRUCTORS') {
+        where.userType = 'INSTRUCTOR';
+      } else if (audience === 'ADMINS') {
+        where.userType = { in: ['SUPER_ADMIN', 'ADMIN'] };
+      }
     }
 
     if (status !== 'all') {
-      if (status === 'published') {
+      if (status === 'ACTIVE' || status === 'normal' || status === 'important') {
         where.status = 'ACTIVE';
-      } else if (status === 'draft') {
+      } else if (status === 'INACTIVE' || status === 'archived') {
         where.status = 'INACTIVE';
       }
     }
@@ -51,9 +62,38 @@ export async function GET(request: NextRequest) {
       ];
     }
 
+    // Handle date range filtering
+    if (startDate || endDate) {
+      where.createdAt = {};
+      if (startDate) {
+        where.createdAt.gte = new Date(startDate);
+      }
+      if (endDate) {
+        where.createdAt.lte = new Date(endDate);
+      }
+    }
+
+    // Handle class filtering (this would need to be implemented based on your schema)
+    if (classFilter !== 'all') {
+      // This would need to be adjusted based on how classes are stored
+      // For now, we'll skip this filter
+    }
+
+    // Handle sorting
+    let orderBy: any = {};
+    if (sortBy === 'title') {
+      orderBy = { title: sortOrder };
+    } else if (sortBy === 'date') {
+      orderBy = { createdAt: sortOrder };
+    } else if (sortBy === 'status') {
+      orderBy = { status: sortOrder };
+    } else {
+      orderBy = { createdAt: 'desc' };
+    }
+
     const announcements = await prisma.announcement.findMany({
       where,
-      orderBy: { createdAt: 'desc' },
+      orderBy,
       skip: (page - 1) * limit,
       take: limit,
       include: {
@@ -61,6 +101,24 @@ export async function GET(request: NextRequest) {
           select: {
             userId: true,
             userName: true,
+            email: true
+          }
+        },
+        section: {
+          select: {
+            sectionName: true
+          }
+        },
+        subject: {
+          select: {
+            subjectName: true,
+            subjectCode: true
+          }
+        },
+        instructor: {
+          select: {
+            firstName: true,
+            lastName: true,
             email: true
           }
         }
@@ -78,15 +136,31 @@ export async function GET(request: NextRequest) {
       normal: announcements.filter(a => a.priority === 'NORMAL').length
     };
 
+    // Transform announcements to match frontend expectations
+    const transformedAnnouncements = announcements.map(announcement => ({
+      id: announcement.announcementId,
+      title: announcement.title,
+      description: announcement.content,
+      class: announcement.section?.sectionName || announcement.subject?.subjectName || 'General',
+      date: announcement.createdAt.toISOString().split('T')[0],
+      status: announcement.status === 'ACTIVE' ? 'normal' : 'archived',
+      priority: announcement.priority.toLowerCase(),
+      createdAt: announcement.createdAt.toISOString(),
+      updatedAt: announcement.updatedAt.toISOString(),
+      createdBy: announcement.admin?.userName || ((announcement.instructor?.firstName || '') + ' ' + (announcement.instructor?.lastName || '')).trim() || 'Unknown',
+      isGeneral: announcement.isGeneral,
+      subjectId: announcement.subjectId,
+      sectionId: announcement.sectionId,
+      instructorId: announcement.instructorId,
+    }));
+
     return NextResponse.json({
-      data: announcements,
+      items: transformedAnnouncements,
+      total: total,
+      page: page,
+      pageSize: limit,
+      totalPages: Math.ceil(total / limit),
       statistics,
-      pagination: {
-        page,
-        limit,
-        total,
-        pages: Math.ceil(total / limit)
-      }
     });
   } catch (error) {
     console.error('Error fetching announcements:', error);
@@ -102,21 +176,48 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const validatedData = announcementSchema.parse(body);
 
+    // Get creator from JWT cookie
+    const token = request.cookies.get('token')?.value;
+    if (!token) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+    let userId: number; let creatorRole: 'SUPER_ADMIN' | 'ADMIN' | 'DEPARTMENT_HEAD' | 'INSTRUCTOR' | 'STUDENT' = 'ADMIN';
+    try {
+      const jwt = require('jsonwebtoken');
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      userId = decoded.userId as number;
+      const roleFromToken = decoded.role as ('SUPER_ADMIN' | 'ADMIN' | 'DEPARTMENT_HEAD' | 'INSTRUCTOR' | 'STUDENT' | undefined);
+      creatorRole = roleFromToken || creatorRole;
+    } catch {
+      return NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 });
+    }
+
+    // Map audience to Role enum (fallback to creator's role); isGeneral for ALL
+    const mapAudienceToRole = (aud?: string): 'STUDENT' | 'INSTRUCTOR' | 'ADMIN' | undefined => {
+      if (!aud || aud === 'ALL') return undefined;
+      if (aud === 'STUDENTS') return 'STUDENT';
+      if (aud === 'INSTRUCTORS') return 'INSTRUCTOR';
+      if (aud === 'ADMINS') return 'ADMIN';
+      return undefined;
+    };
+
+    const userTypeValue = mapAudienceToRole(validatedData.targetAudience) || creatorRole;
+
     const announcement = await prisma.announcement.create({
       data: {
         title: validatedData.title,
         content: validatedData.content,
         priority: validatedData.priority || 'NORMAL',
-        userType: validatedData.targetAudience || 'ALL',
+        userType: userTypeValue as any,
         status: validatedData.isPublished ? 'ACTIVE' : 'INACTIVE',
-        createdby: 1, // TODO: Get from session
+        createdby: userId,
         isGeneral: validatedData.targetAudience === 'ALL'
       }
     });
 
     // If published, send notifications
     if (validatedData.isPublished) {
-      await sendAnnouncementNotifications(announcement);
+      await sendAnnouncementNotifications(announcement, validatedData.targetAudience);
     }
 
     return NextResponse.json({ data: announcement });
@@ -137,26 +238,26 @@ export async function POST(request: NextRequest) {
   }
 }
 
-async function sendAnnouncementNotifications(announcement: any) {
+async function sendAnnouncementNotifications(announcement: any, targetAudience?: 'ALL' | 'STUDENTS' | 'INSTRUCTORS' | 'ADMINS') {
   try {
     // Get target users based on audience
-    let targetUsers = [];
+    let targetUsers: Array<{ userId: number; email: string; userName: string }> = [];
     
-    if (announcement.targetAudience === 'ALL') {
+    if (targetAudience === 'ALL') {
       targetUsers = await prisma.user.findMany({
         select: { userId: true, email: true, userName: true }
       });
-    } else if (announcement.targetAudience === 'STUDENTS') {
+    } else if (targetAudience === 'STUDENTS') {
       targetUsers = await prisma.user.findMany({
         where: { role: 'STUDENT' },
         select: { userId: true, email: true, userName: true }
       });
-    } else if (announcement.targetAudience === 'INSTRUCTORS') {
+    } else if (targetAudience === 'INSTRUCTORS') {
       targetUsers = await prisma.user.findMany({
         where: { role: 'INSTRUCTOR' },
         select: { userId: true, email: true, userName: true }
       });
-    } else if (announcement.targetAudience === 'ADMINS') {
+    } else if (targetAudience === 'ADMINS') {
       targetUsers = await prisma.user.findMany({
         where: { role: { in: ['SUPER_ADMIN', 'ADMIN'] } },
         select: { userId: true, email: true, userName: true }
@@ -164,7 +265,7 @@ async function sendAnnouncementNotifications(announcement: any) {
     }
 
     // Create notification records
-    const notifications = targetUsers.map(user => ({
+    const notifications = targetUsers.map((user) => ({
       userId: user.userId,
       title: `New Announcement: ${announcement.title}`,
       message: announcement.content.substring(0, 200) + (announcement.content.length > 200 ? '...' : ''),

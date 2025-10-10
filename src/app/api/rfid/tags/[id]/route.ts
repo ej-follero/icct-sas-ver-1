@@ -1,10 +1,39 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(
-  request: Request,
+  request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  try {
+    // JWT Authentication
+    const token = request.cookies.get('token')?.value;
+    if (!token) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = Number((decoded as any)?.userId);
+    if (!Number.isFinite(userId)) {
+      return NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 });
+    }
+
+    // Check user exists and is active
+    const user = await prisma.user.findUnique({
+      where: { userId },
+      select: { status: true, role: true }
+    });
+
+    if (!user || user.status !== 'ACTIVE') {
+      return NextResponse.json({ error: 'User not found or inactive' }, { status: 401 });
+    }
+
+    // Role-based access control
+    const allowedRoles = ['SUPER_ADMIN', 'ADMIN', 'DEPARTMENT_HEAD', 'INSTRUCTOR'];
+    if (!allowedRoles.includes(user.role)) {
+      return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
+    }
   try {
     const tag = await prisma.rFIDTags.findUnique({
       where: { tagId: parseInt(params.id) },
@@ -17,9 +46,38 @@ export async function GET(
 }
 
 export async function PUT(
-  request: Request,
+  request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  try {
+    // JWT Authentication - Admin only
+    const token = request.cookies.get('token')?.value;
+    if (!token) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = Number((decoded as any)?.userId);
+    if (!Number.isFinite(userId)) {
+      return NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 });
+    }
+
+    // Check user exists and is active
+    const user = await prisma.user.findUnique({
+      where: { userId },
+      select: { status: true, role: true }
+    });
+
+    if (!user || user.status !== 'ACTIVE') {
+      return NextResponse.json({ error: 'User not found or inactive' }, { status: 401 });
+    }
+
+    // Admin-only access control
+    const adminRoles = ['SUPER_ADMIN', 'ADMIN'];
+    if (!adminRoles.includes(user.role)) {
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+    }
   try {
     const data = await request.json();
     
@@ -48,16 +106,7 @@ export async function PUT(
       studentId = data.studentId;
     }
 
-    let instructorId = null;
-    if (data.instructorId) {
-      const instructor = await prisma.instructor.findUnique({
-        where: { instructorId: data.instructorId }
-      });
-      if (!instructor) {
-        return NextResponse.json({ error: `Instructor with ID ${data.instructorId} not found` }, { status: 400 });
-      }
-      instructorId = data.instructorId;
-    }
+    // Instructor assignment removed
 
     let assignedBy = null;
     if (data.assignedBy) {
@@ -78,7 +127,6 @@ export async function PUT(
         status: data.status,
         notes: data.notes || null,
         studentId,
-        instructorId,
         assignedBy,
         assignmentReason: data.assignmentReason || null,
         expiresAt: data.expiresAt ? new Date(data.expiresAt) : null,
@@ -90,14 +138,6 @@ export async function PUT(
             firstName: true,
             lastName: true,
             studentIdNum: true,
-          },
-        },
-        instructor: {
-          select: {
-            instructorId: true,
-            firstName: true,
-            lastName: true,
-            email: true,
           },
         },
       },
@@ -121,9 +161,38 @@ export async function PUT(
 }
 
 export async function DELETE(
-  request: Request,
+  request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  try {
+    // JWT Authentication - Admin only
+    const token = request.cookies.get('token')?.value;
+    if (!token) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = Number((decoded as any)?.userId);
+    if (!Number.isFinite(userId)) {
+      return NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 });
+    }
+
+    // Check user exists and is active
+    const user = await prisma.user.findUnique({
+      where: { userId },
+      select: { status: true, role: true }
+    });
+
+    if (!user || user.status !== 'ACTIVE') {
+      return NextResponse.json({ error: 'User not found or inactive' }, { status: 401 });
+    }
+
+    // Admin-only access control
+    const adminRoles = ['SUPER_ADMIN', 'ADMIN'];
+    if (!adminRoles.includes(user.role)) {
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+    }
   try {
     await prisma.rFIDTags.delete({
       where: { tagId: parseInt(params.id) },
@@ -135,21 +204,45 @@ export async function DELETE(
 }
 
 export async function PATCH(
-  request: Request,
+  request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  try {
+    // JWT Authentication - Admin only
+    const token = request.cookies.get('token')?.value;
+    if (!token) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = Number((decoded as any)?.userId);
+    if (!Number.isFinite(userId)) {
+      return NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 });
+    }
+
+    // Check user exists and is active
+    const user = await prisma.user.findUnique({
+      where: { userId },
+      select: { status: true, role: true }
+    });
+
+    if (!user || user.status !== 'ACTIVE') {
+      return NextResponse.json({ error: 'User not found or inactive' }, { status: 401 });
+    }
+
+    // Admin-only access control
+    const adminRoles = ['SUPER_ADMIN', 'ADMIN'];
+    if (!adminRoles.includes(user.role)) {
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+    }
   try {
     const data = await request.json();
     let updateData: any = {};
     if (data.unassign) {
       updateData.studentId = null;
-      updateData.instructorId = null;
     } else if (data.studentId) {
       updateData.studentId = data.studentId;
-      updateData.instructorId = null;
-    } else if (data.instructorId) {
-      updateData.instructorId = data.instructorId;
-      updateData.studentId = null;
     } else {
       return NextResponse.json({ error: "Missing assignment data" }, { status: 400 });
     }
@@ -163,14 +256,6 @@ export async function PATCH(
             firstName: true,
             lastName: true,
             studentIdNum: true,
-          },
-        },
-        instructor: {
-          select: {
-            instructorId: true,
-            firstName: true,
-            lastName: true,
-            email: true,
           },
         },
       },

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { Status, DepartmentType } from '@prisma/client';
 import { z } from 'zod';
 
 // Validation schema for import records
@@ -23,6 +24,20 @@ const bulkImportSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
+    // Admin guard
+    const token = request.cookies.get('token')?.value;
+    if (!token) return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    try {
+      const jwt = require('jsonwebtoken');
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      const userId = decoded.userId as number;
+      const user = await prisma.user.findUnique({ where: { userId }, select: { role: true } });
+      if (!user || (user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN')) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+    } catch {
+      return NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 });
+    }
     const body = await request.json();
     console.log('Bulk import request body:', JSON.stringify(body, null, 2));
     
@@ -72,8 +87,8 @@ export async function POST(request: NextRequest) {
               data: {
                 departmentName: record.departmentName,
                 departmentCode: record.departmentCode,
-                departmentDescription: record.departmentDescription || '', // Provide default empty string
-                departmentStatus: record.departmentStatus,
+                departmentDescription: record.departmentDescription || '',
+                departmentStatus: record.departmentStatus as Status,
               }
             });
             
@@ -92,10 +107,9 @@ export async function POST(request: NextRequest) {
           data: {
             departmentName: record.departmentName,
             departmentCode: record.departmentCode,
-            departmentDescription: record.departmentDescription || '', // Provide default empty string
-            departmentStatus: record.departmentStatus,
-            // Set default values for required fields
-            departmentType: 'ACADEMIC',
+            departmentDescription: record.departmentDescription || '',
+            departmentStatus: record.departmentStatus as Status,
+            departmentType: DepartmentType.ACADEMIC,
           }
         });
 

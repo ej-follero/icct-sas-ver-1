@@ -6,14 +6,33 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    // Authorization: allow ADMIN and SUPER_ADMIN
-    const role = request.headers.get('x-user-role');
-    const isDev = process.env.NODE_ENV !== 'production';
-    
-    if (!isDev) {
-      if (!role || (role !== 'ADMIN' && role !== 'SUPER_ADMIN')) {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-      }
+    // JWT Authentication
+    const token = request.cookies.get('token')?.value;
+    if (!token) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = Number((decoded as any)?.userId);
+    if (!Number.isFinite(userId)) {
+      return NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 });
+    }
+
+    // Check user exists and is active
+    const user = await prisma.user.findUnique({
+      where: { userId },
+      select: { status: true, role: true }
+    });
+
+    if (!user || user.status !== 'ACTIVE') {
+      return NextResponse.json({ error: 'User not found or inactive' }, { status: 401 });
+    }
+
+    // Admin-only access control
+    const adminRoles = ['SUPER_ADMIN', 'ADMIN'];
+    if (!adminRoles.includes(user.role)) {
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
 
     const roleId = parseInt(params.id);
@@ -63,14 +82,33 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
-    // Authorization: allow ADMIN and SUPER_ADMIN
-    const role = request.headers.get('x-user-role');
-    const isDev = process.env.NODE_ENV !== 'production';
-    
-    if (!isDev) {
-      if (!role || (role !== 'ADMIN' && role !== 'SUPER_ADMIN')) {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-      }
+    // JWT Authentication
+    const token = request.cookies.get('token')?.value;
+    if (!token) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = Number((decoded as any)?.userId);
+    if (!Number.isFinite(userId)) {
+      return NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 });
+    }
+
+    // Check user exists and is active
+    const user = await prisma.user.findUnique({
+      where: { userId },
+      select: { status: true, role: true }
+    });
+
+    if (!user || user.status !== 'ACTIVE') {
+      return NextResponse.json({ error: 'User not found or inactive' }, { status: 401 });
+    }
+
+    // Admin-only access control
+    const adminRoles = ['SUPER_ADMIN', 'ADMIN'];
+    if (!adminRoles.includes(user.role)) {
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
 
     const roleId = parseInt(params.id);
@@ -159,14 +197,33 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    // Authorization: allow ADMIN and SUPER_ADMIN
-    const role = request.headers.get('x-user-role');
-    const isDev = process.env.NODE_ENV !== 'production';
-    
-    if (!isDev) {
-      if (!role || (role !== 'ADMIN' && role !== 'SUPER_ADMIN')) {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-      }
+    // JWT Authentication
+    const token = request.cookies.get('token')?.value;
+    if (!token) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = Number((decoded as any)?.userId);
+    if (!Number.isFinite(userId)) {
+      return NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 });
+    }
+
+    // Check user exists and is active
+    const user = await prisma.user.findUnique({
+      where: { userId },
+      select: { status: true, role: true }
+    });
+
+    if (!user || user.status !== 'ACTIVE') {
+      return NextResponse.json({ error: 'User not found or inactive' }, { status: 401 });
+    }
+
+    // Admin-only access control
+    const adminRoles = ['SUPER_ADMIN', 'ADMIN'];
+    if (!adminRoles.includes(user.role)) {
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
 
     const roleId = parseInt(params.id);

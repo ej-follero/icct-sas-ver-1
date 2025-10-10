@@ -1,12 +1,30 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
 import { backupSchedulingService } from "@/lib/services/backup-scheduling.service";
 
 // POST /api/backup/schedules/[id]/execute - Execute a backup schedule
 export async function POST(
-  request: Request,
+  request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
+    // Admin auth (SUPER_ADMIN/ADMIN)
+    const token = request.cookies.get('token')?.value;
+    if (!token) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+    try {
+      const jwt = require('jsonwebtoken');
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      const userId = decoded.userId as number;
+      const user = await prisma.user.findUnique({ where: { userId }, select: { role: true } });
+      if (!user || (user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN')) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+    } catch {
+      return NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 });
+    }
+
     const backup = await backupSchedulingService.executeScheduledBackup(params.id);
 
     return NextResponse.json({

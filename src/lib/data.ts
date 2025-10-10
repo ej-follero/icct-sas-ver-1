@@ -3,7 +3,7 @@
 import { UserGender, InstructorType, Status } from "@/types/enums";
 import { Teacher } from "@/types/teacher";
 
-export let role = "admin";
+// Removed hardcoded role - now using actual user role from database
 
 type StudentType = "regular" | "irregular" | "transferee";
 

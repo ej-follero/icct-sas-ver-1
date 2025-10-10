@@ -19,87 +19,7 @@ export interface NotificationStats {
   notifications: number;
 }
 
-// Mock data - moved outside to prevent recreation on every render
-const mockNotifications: NotificationItem[] = [
-  {
-    id: 1,
-    title: "New attendance record",
-    message: "Class ICT101 attendance has been recorded for today",
-    time: "5m ago",
-    unread: true,
-    type: 'notification',
-    priority: 'medium',
-    actionUrl: '/dashboard/attendance'
-  },
-  {
-    id: 2,
-    title: "System Update",
-    message: "System maintenance scheduled for tonight at 10 PM",
-    time: "1h ago",
-    unread: true,
-    type: 'notification',
-    priority: 'high',
-    actionUrl: '/settings/system-status'
-  },
-  {
-    id: 3,
-    title: "Welcome!",
-    message: "Welcome to ICCT Smart Attendance System",
-    time: "2h ago",
-    unread: false,
-    type: 'notification',
-    priority: 'low'
-  },
-  {
-    id: 4,
-    title: "RFID Reader Offline",
-    message: "RFID reader in Room 101 is currently offline",
-    time: "3h ago",
-    unread: false,
-    type: 'notification',
-    priority: 'high',
-    actionUrl: '/list/rfid/readers'
-  }
-];
-
-const mockMessages: NotificationItem[] = [
-  {
-    id: 1,
-    from: "John Doe",
-    message: "When is the next faculty meeting scheduled?",
-    time: "10m ago",
-    unread: true,
-    type: 'message',
-    priority: 'medium'
-  },
-  {
-    id: 2,
-    from: "Jane Smith",
-    message: "Please check the attendance records for ICT101",
-    time: "30m ago",
-    unread: true,
-    type: 'message',
-    priority: 'high'
-  },
-  {
-    id: 3,
-    from: "Admin",
-    message: "Your account settings have been updated successfully",
-    time: "1h ago",
-    unread: false,
-    type: 'message',
-    priority: 'low'
-  },
-  {
-    id: 4,
-    from: "System",
-    message: "New features available in the attendance dashboard",
-    time: "2h ago",
-    unread: false,
-    type: 'message',
-    priority: 'low'
-  }
-];
+// No mocks: use live API; keep a minimal fallback in case of transient errors
 
 export const useNotifications = () => {
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
@@ -110,17 +30,15 @@ export const useNotifications = () => {
   const loadNotifications = useCallback(async () => {
     setLoading(true);
     try {
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      // In real implementation, fetch from API
-      // const response = await fetch('/api/notifications');
-      // const data = await response.json();
-      
-      setNotifications(mockNotifications);
-      setMessages(mockMessages);
+      const response = await fetch('/api/notifications', { cache: 'no-store' });
+      if (!response.ok) throw new Error('Failed to fetch notifications');
+      const data = await response.json();
+      const items: NotificationItem[] = Array.isArray(data?.items) ? data.items : [];
+      setNotifications(items);
+      setMessages([]); // messages feature not yet backed by API
     } catch (error) {
       console.error('Failed to load notifications:', error);
+      // keep existing state on error
     } finally {
       setLoading(false);
     }
@@ -129,8 +47,10 @@ export const useNotifications = () => {
   // Mark notification as read
   const markAsRead = useCallback(async (id: number, type: 'notification' | 'message') => {
     try {
-      // In real implementation, call API
-      // await fetch(`/api/notifications/${id}/read`, { method: 'PUT' });
+      if (type === 'notification') {
+        const res = await fetch(`/api/notifications/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ isRead: true }) });
+        if (!res.ok) throw new Error('Failed to mark as read');
+      }
       
       if (type === 'notification') {
         setNotifications(prev => 

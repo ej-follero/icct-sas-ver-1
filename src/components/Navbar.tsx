@@ -12,62 +12,24 @@ import {
   TooltipContent, 
   TooltipProvider 
 } from "@/components/ui/tooltip";
-import { SearchBar } from "@/components/navbar/SearchBar";
 import { QuickAccessButtons } from "@/components/navbar/QuickAccessButtons";
 import { NotificationPopover } from "@/components/navbar/NotificationPopover";
 import { UserMenu } from "@/components/navbar/UserMenu";
-import { useSearch } from "@/hooks/useSearch";
 import Sidebar, { Role } from "@/components/Menu";
 
 const HEADER_HEIGHT = 64;
 
 /**
  * Navbar component
- * Automatically hides the search bar if another search bar exists elsewhere on the page.
  */
 const Navbar = ({ onSidebarToggle, sidebarCollapsed, logoOnly = false, hideLogo = false, role = "admin" }: { onSidebarToggle: () => void; sidebarCollapsed: boolean; logoOnly?: boolean; hideLogo?: boolean; role?: Role }) => {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const [shouldShowSearchBar, setShouldShowSearchBar] = useState(true);
   const navbarRef = useRef<HTMLDivElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   // Mobile drawer state
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
 
-  const {
-    query,
-    setQuery,
-    results,
-    loading,
-    history,
-    showHistory,
-    setShowHistory,
-    clearHistory,
-    removeFromHistory,
-    navigateToResult,
-    getSuggestions
-  } = useSearch();
-
-  useEffect(() => {
-    // Wait for DOM to be ready
-    const timer = setTimeout(() => {
-      // Find all search inputs (type='search' or aria-label='Search')
-      const allSearchInputs = Array.from(document.querySelectorAll('input[type="search"], input[aria-label="Search"]'));
-      // Exclude those inside the navbar
-      const navbarNode = navbarRef.current;
-      const filtered = allSearchInputs.filter(input => {
-        let node = input.parentElement;
-        while (node) {
-          if (node === navbarNode) return false;
-          node = node.parentElement;
-        }
-        return true;
-      });
-      setShouldShowSearchBar(filtered.length === 0);
-    }, 0);
-
-    return () => clearTimeout(timer);
-  }, []);
 
   const handleQuickAccess = useCallback((type: string) => {
     switch (type) {
@@ -237,23 +199,6 @@ const Navbar = ({ onSidebarToggle, sidebarCollapsed, logoOnly = false, hideLogo 
           </div>
           {/* Right side: Controls (hidden on mobile) */}
           <div className="hidden md:flex items-center gap-2 flex-1 w-full justify-end pr-0 md:pr-16">
-            {/* Search Bar */}
-            {shouldShowSearchBar && (
-              <SearchBar
-                value={query}
-                onChange={setQuery}
-                placeholder="Search....."
-                results={results}
-                loading={loading}
-                history={history}
-                showHistory={showHistory}
-                setShowHistory={setShowHistory}
-                clearHistory={clearHistory}
-                removeFromHistory={removeFromHistory}
-                navigateToResult={navigateToResult}
-                getSuggestions={getSuggestions}
-              />
-            )}
             {/* Quick Access Buttons */}
             <Tooltip>
               <TooltipTrigger asChild>

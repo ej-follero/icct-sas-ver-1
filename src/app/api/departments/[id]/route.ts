@@ -1,10 +1,27 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { Status } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 
+async function assertAdmin(request: NextRequest) {
+  const token = request.cookies.get('token')?.value;
+  if (!token) return { ok: false, res: NextResponse.json({ error: 'Authentication required' }, { status: 401 }) };
+  try {
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = decoded.userId as number;
+    const user = await prisma.user.findUnique({ where: { userId }, select: { role: true } });
+    if (!user || (user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN')) {
+      return { ok: false, res: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
+    }
+    return { ok: true } as const;
+  } catch {
+    return { ok: false, res: NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 }) };
+  }
+}
+
 // GET a single department by ID
-export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
+export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+  const { id } = params;
   try {
     const department = await prisma.department.findUnique({
       where: { departmentId: parseInt(id) },
@@ -26,11 +43,17 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 }
 
 // PATCH (update) a department by ID
-export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
+export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+  const gate = await assertAdmin(request);
+  if (!('ok' in gate) || gate.ok !== true) return gate.res;
+  const { id } = params;
   try {
     const body = await request.json();
     const { name, code, headOfDepartment, description, status, courseOfferings, logo } = body;
+
+    // Normalize status to enum
+    const normalized = typeof status === 'string' ? status.toUpperCase() : status;
+    const statusEnum = normalized && normalized in Status ? (normalized as Status) : undefined;
 
     const department = await prisma.department.update({
       where: { departmentId: parseInt(id) },
@@ -38,7 +61,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         departmentName: name,
         departmentCode: code,
         departmentDescription: description,
-        departmentStatus: status === 'active' ? Status.ACTIVE : Status.INACTIVE,
+        departmentStatus: statusEnum ?? undefined,
         headOfDepartment: headOfDepartment ? parseInt(headOfDepartment) : null,
         departmentLogo: logo || null,
       },
@@ -96,8 +119,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 }
 
 // DELETE a department by ID
-export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
+export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+  const gate = await assertAdmin(request);
+  if (!('ok' in gate) || gate.ok !== true) return gate.res;
+  const { id } = params;
   try {
     // Optional: Check for related records before deleting
     const department = await prisma.department.findUnique({

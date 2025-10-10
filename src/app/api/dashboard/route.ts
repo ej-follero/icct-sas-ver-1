@@ -1,5 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
+import { prisma } from '@/lib/prisma';
+import {
+  UserStatus,
+  Status as GenericStatus,
+  SectionStatus,
+  SubjectStatus,
+  AttendanceStatus
+} from '@prisma/client';
 
 export async function GET(request: NextRequest) {
   try {
@@ -25,6 +32,39 @@ export async function GET(request: NextRequest) {
 
     const startDate = getDateRange(period);
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    // Quick database connectivity/health check to avoid throwing 500s upstream
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+    } catch (dbError) {
+      console.error('Dashboard API - database connection failed:', dbError);
+
+      // Graceful fallback: return a default/empty dashboard payload so UI can render
+      const fallback = {
+        statistics: {
+          users: { total: 0, active: 0, students: { total: 0, active: 0 }, instructors: { total: 0, active: 0 }, guardians: { total: 0, active: 0 } },
+          academic: { courses: { total: 0, active: 0 }, departments: { total: 0, active: 0 }, sections: { total: 0, active: 0 }, subjects: { total: 0, active: 0 } },
+          attendance: { total: 0, today: 0, period: 0, rate: 0, byStatus: [], byDepartment: [] },
+          rfid: { tags: { total: 0, active: 0 }, readers: { total: 0, active: 0 }, scans: { total: 0, today: 0, period: 0 }, successRate: 0 },
+          system: { events: { total: 0, active: 0 }, announcements: { total: 0, recent: 0 }, emails: { total: 0, unread: 0, failed: 0 }, backups: { total: 0, status: [] as Array<{ status: string; _count: { status: number } }> } },
+          security: { alerts: { total: 0, unresolved: 0 } }
+        },
+        charts: {
+          attendanceTrends: [],
+          departmentPerformance: [],
+          rfidActivity: { scanTrends: [], readerStatus: [], tagStatus: [] }
+        },
+        recentActivity: { attendance: [], rfidScans: [], systemLogs: [], announcements: [], events: [], securityLogs: [] },
+        systemHealth: { database: 'ERROR', rfidSystem: 'WARNING', emailSystem: 'WARNING', security: 'WARNING' },
+        metadata: {
+          period,
+          generatedAt: now.toISOString(),
+          dataRange: { start: startDate.toISOString(), end: now.toISOString() }
+        }
+      };
+
+      return NextResponse.json(fallback);
+    }
 
     // Fetch all dashboard data in parallel
     const [
@@ -92,23 +132,23 @@ export async function GET(request: NextRequest) {
     ] = await Promise.all([
       // User Statistics
       prisma.user.count(),
-      prisma.user.count({ where: { status: 'ACTIVE' } }),
+      prisma.user.count({ where: { status: UserStatus.ACTIVE } }),
       prisma.student.count(),
-      prisma.student.count({ where: { status: 'ACTIVE' } }),
+      prisma.student.count({ where: { status: GenericStatus.ACTIVE } }),
       prisma.instructor.count(),
-      prisma.instructor.count({ where: { status: 'ACTIVE' } }),
+      prisma.instructor.count({ where: { status: GenericStatus.ACTIVE } }),
       prisma.guardian.count(),
-      prisma.guardian.count({ where: { status: 'ACTIVE' } }),
+      prisma.guardian.count({ where: { status: GenericStatus.ACTIVE } }),
 
       // Course & Academic Statistics
       prisma.courseOffering.count(),
-      prisma.courseOffering.count({ where: { courseStatus: 'ACTIVE' } }),
+      prisma.courseOffering.count({ where: { courseStatus: GenericStatus.ACTIVE } }),
       prisma.department.count(),
-      prisma.department.count({ where: { departmentStatus: 'ACTIVE' } }),
+      prisma.department.count({ where: { departmentStatus: GenericStatus.ACTIVE } }),
       prisma.section.count(),
-      prisma.section.count({ where: { sectionStatus: 'ACTIVE' } }),
+      prisma.section.count({ where: { sectionStatus: SectionStatus.ACTIVE } }),
       prisma.subjects.count(),
-      prisma.subjects.count({ where: { status: 'ACTIVE' } }),
+      prisma.subjects.count({ where: { status: SubjectStatus.ACTIVE } }),
 
       // Attendance Statistics
       prisma.attendance.count(),
@@ -131,7 +171,7 @@ export async function GET(request: NextRequest) {
 
       // RFID Statistics
       prisma.rFIDTags.count(),
-      prisma.rFIDTags.count({ where: { status: 'ACTIVE' } }),
+      prisma.rFIDTags.count({ where: { status: GenericStatus.ACTIVE } }),
       prisma.rFIDReader.count(),
       prisma.rFIDReader.count({ where: { status: 'ACTIVE' } }),
       prisma.rFIDLogs.count(),
@@ -150,10 +190,10 @@ export async function GET(request: NextRequest) {
           status: { in: ['SCHEDULED', 'ONGOING'] }
         }
       }),
-      prisma.announcement.count({ where: { status: 'ACTIVE' } }),
+      prisma.announcement.count({ where: { status: GenericStatus.ACTIVE } }),
       prisma.announcement.count({ 
         where: { 
-          status: 'ACTIVE',
+          status: GenericStatus.ACTIVE,
           createdAt: { gte: startDate }
         }
       }),
@@ -168,9 +208,6 @@ export async function GET(request: NextRequest) {
         include: {
           student: {
             select: { firstName: true, lastName: true, studentIdNum: true }
-          },
-          instructor: {
-            select: { firstName: true, lastName: true }
           },
           user: {
             select: { userName: true, role: true }
@@ -250,7 +287,7 @@ export async function GET(request: NextRequest) {
 
     // Calculate attendance rate
     const totalPeriodAttendance = attendanceByStatus.reduce((sum, item) => sum + item._count.status, 0);
-    const presentCount = attendanceByStatus.find(item => item.status === 'PRESENT')?._count.status || 0;
+    const presentCount = attendanceByStatus.find(item => item.status === AttendanceStatus.PRESENT)?._count.status || 0;
     const attendanceRate = totalPeriodAttendance > 0 ? (presentCount / totalPeriodAttendance) * 100 : 0;
 
     // Calculate RFID scan success rate
@@ -406,13 +443,13 @@ async function getAttendanceTrends(startDate: Date, endDate: Date) {
 
 async function getDepartmentPerformance(startDate: Date) {
   const departments = await prisma.department.findMany({
-    where: { departmentStatus: 'ACTIVE' },
+    where: { departmentStatus: GenericStatus.ACTIVE },
     include: {
       Student: {
-        where: { status: 'ACTIVE' }
+        where: { status: GenericStatus.ACTIVE }
       },
       CourseOffering: {
-        where: { courseStatus: 'ACTIVE' }
+        where: { courseStatus: GenericStatus.ACTIVE }
       }
     }
   });
@@ -431,7 +468,7 @@ async function getDepartmentPerformance(startDate: Date) {
       });
 
       const totalAttendance = attendance.reduce((sum, item) => sum + item._count.status, 0);
-      const presentCount = attendance.find(item => item.status === 'PRESENT')?._count.status || 0;
+    const presentCount = attendance.find(item => item.status === AttendanceStatus.PRESENT)?._count.status || 0;
       const attendanceRate = totalAttendance > 0 ? (presentCount / totalAttendance) * 100 : 0;
 
       return {

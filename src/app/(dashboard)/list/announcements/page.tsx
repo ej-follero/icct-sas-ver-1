@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useMemo, useEffect } from "react";
-import { announcementsData, role } from "@/lib/data";
+import { announcementsData } from "@/lib/data";
 import { EmptyState } from "@/components/reusable";
 import { Announcement, AnnouncementStatus } from "@/types/announcement";
 import PageHeader from "@/components/PageHeader/PageHeader";
@@ -256,6 +256,10 @@ const AnnouncementListPage = () => {
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      // Only activate shortcuts if we're on a page with search functionality
+      const hasSearchInput = document.querySelector('input[placeholder*="Search"]');
+      if (!hasSearchInput) return;
+      
       // Ctrl/Cmd + K for search
       if ((event.ctrlKey || event.metaKey) && event.key === 'k') {
         event.preventDefault();
@@ -1435,21 +1439,10 @@ const AnnouncementListPage = () => {
         <ExportDialog
           open={exportDialogOpen}
           onOpenChange={setExportDialogOpen}
-          selectedItems={paginatedAnnouncements.filter(item => selectedItems.includes(item.id.toString()))}
+          dataCount={paginatedAnnouncements.filter(item => selectedItems.includes(item.id.toString())).length}
           entityType="announcement"
-          entityLabel="announcement"
-          exportColumns={[
-            { id: 'title', label: 'Title', default: true },
-            { id: 'class', label: 'Class', default: true },
-            { id: 'date', label: 'Date', default: true },
-            { id: 'status', label: 'Status', default: true },
-            { id: 'description', label: 'Description', default: false },
-            { id: 'createdAt', label: 'Created At', default: false },
-            { id: 'updatedAt', label: 'Updated At', default: false },
-          ]}
-          onExport={(options) => {
-            console.log('Export options:', options);
-            toast.success('Export started');
+          onExport={async (format) => {
+            toast.success(`Export started: ${format.toUpperCase()}`);
           }}
         />
 

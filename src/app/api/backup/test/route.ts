@@ -1,14 +1,31 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { backupServerService } from "@/lib/services/backup-server.service";
 
-// POST /api/backup/test - Test backup functionality
-export async function POST() {
+async function assertAdmin(request: NextRequest) {
+  const token = request.cookies.get('token')?.value;
+  if (!token) return { ok: false, res: NextResponse.json({ error: 'Authentication required' }, { status: 401 }) };
   try {
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = decoded.userId as number;
+    const user = await prisma.user.findUnique({ where: { userId }, select: { role: true } });
+    if (!user || (user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN')) {
+      return { ok: false, res: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
+    }
+    return { ok: true, userId } as const;
+  } catch {
+    return { ok: false, res: NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 }) };
+  }
+}
+
+// POST /api/backup/test - Test backup functionality
+export async function POST(request: NextRequest) {
+  try {
+    const gate = await assertAdmin(request);
+    if (!('ok' in gate) || gate.ok !== true) return gate.res;
+    const createdBy = (gate as any).userId as number;
     console.log("Testing backup functionality...");
-    
-    // Ensure database connection
-    await prisma.$connect();
     
     // Check if there are any existing backups
     const existingBackups = await prisma.systemBackup.findMany({
@@ -27,7 +44,7 @@ export async function POST() {
         location: "LOCAL",
         status: "IN_PROGRESS",
         size: "0 MB",
-        createdBy: 149647, // Use valid user ID
+        createdBy,
         isEncrypted: true,
         retentionDays: 30,
       },
@@ -51,7 +68,7 @@ export async function POST() {
         action: "CREATE",
         status: "IN_PROGRESS",
         message: "Test backup creation started",
-        createdBy: 149647,
+        createdBy,
       },
     });
 
@@ -62,7 +79,7 @@ export async function POST() {
       description: "Test backup created via API",
       type: "FULL",
       location: "LOCAL",
-      createdBy: 149647
+      createdBy
     }).then(async (result) => {
       console.log("Backup completed successfully:", result);
       
@@ -89,7 +106,7 @@ export async function POST() {
             action: "COMPLETE",
             status: "SUCCESS",
             message: `Test backup completed successfully: ${result.size}`,
-            createdBy: 149647,
+            createdBy,
           },
         });
         
@@ -123,7 +140,7 @@ export async function POST() {
             action: "FAIL",
             status: "FAILED",
             message: `Test backup failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
-            createdBy: 149647,
+            createdBy,
           },
         });
         
@@ -153,7 +170,5 @@ export async function POST() {
       },
       { status: 500 }
     );
-  } finally {
-    await prisma.$disconnect();
   }
 } 

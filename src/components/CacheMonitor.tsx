@@ -264,7 +264,7 @@ export default function CacheMonitor() {
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium text-muted-foreground">Hit Rate</p>
+                      <p className="text-sm font-medium text-blue-900">Hit Rate</p>
                       <p className="text-2xl font-bold">{cacheStatus.metrics.hitRate.toFixed(1)}%</p>
                     </div>
                     <Target className="w-8 h-8 text-green-500" />
@@ -277,7 +277,7 @@ export default function CacheMonitor() {
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium text-muted-foreground">Memory Usage</p>
+                      <p className="text-sm font-medium text-blue-900">Memory Usage</p>
                       <p className="text-2xl font-bold">{formatBytes(cacheStatus.metrics.usedMemory * 1024 * 1024)}</p>
                     </div>
                                          <Database className="w-8 h-8 text-blue-500" />
@@ -290,7 +290,7 @@ export default function CacheMonitor() {
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium text-muted-foreground">Total Keys</p>
+                      <p className="text-sm font-medium text-blue-900">Total Keys</p>
                       <p className="text-2xl font-bold">{cacheStatus.metrics.totalKeys.toLocaleString()}</p>
                     </div>
                     <Hash className="w-8 h-8 text-purple-500" />
@@ -306,7 +306,7 @@ export default function CacheMonitor() {
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium text-muted-foreground">Commands/sec</p>
+                      <p className="text-sm font-medium text-blue-900">Commands/sec</p>
                       <p className="text-2xl font-bold">{Math.floor(cacheStatus.metrics.commandsProcessed / 60).toLocaleString()}</p>
                     </div>
                     <Command className="w-8 h-8 text-orange-500" />

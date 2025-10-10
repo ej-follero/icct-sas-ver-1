@@ -294,6 +294,10 @@ export default function SystemLogsPage() {
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      // Only activate shortcuts if we're on a page with search functionality
+      const hasSearchInput = document.querySelector('input[placeholder*="Search"]');
+      if (!hasSearchInput) return;
+      
       // Ctrl/Cmd + K for search
       if ((event.ctrlKey || event.metaKey) && event.key === 'k') {
         event.preventDefault();

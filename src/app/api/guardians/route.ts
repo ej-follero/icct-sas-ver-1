@@ -1,9 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
-import { Status, GuardianType } from '@prisma/client';
+import { prisma } from '@/lib/prisma';
+import { Status, GuardianType, UserGender } from '@prisma/client';
+
+async function assertAdmin(request: NextRequest) {
+  const token = request.cookies.get('token')?.value;
+  const isDev = process.env.NODE_ENV !== 'production';
+  if (!token) return isDev ? { ok: true } as const : { ok: false, res: NextResponse.json({ error: 'Authentication required' }, { status: 401 }) };
+  try {
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const role = decoded.role as string | undefined;
+    if (!role || (role !== 'SUPER_ADMIN' && role !== 'ADMIN')) {
+      return { ok: false, res: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
+    }
+    return { ok: true } as const;
+  } catch {
+    return { ok: false, res: NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 }) };
+  }
+}
 
 export async function GET(request: NextRequest) {
   try {
+    const gate = await assertAdmin(request);
+    if (!('ok' in gate) || gate.ok !== true) return gate.res;
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
     const type = searchParams.get('type');
@@ -13,11 +32,13 @@ export async function GET(request: NextRequest) {
     const where: any = {};
     
     if (status && status !== 'all') {
-      where.status = status.toUpperCase() as Status;
+      const upper = status.toUpperCase();
+      if (upper in Status) where.status = upper as Status;
     }
     
     if (type && type !== 'all') {
-      where.guardianType = type.toUpperCase() as GuardianType;
+      const upper = type.toUpperCase();
+      if (upper in GuardianType) where.guardianType = upper as GuardianType;
     }
 
     if (search) {
@@ -113,7 +134,17 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const gate = await assertAdmin(request);
+    if (!('ok' in gate) || gate.ok !== true) return gate.res;
     const body = await request.json();
+
+    // Normalize enums
+    const statusUpper = (body.status || 'ACTIVE').toString().toUpperCase();
+    const statusEnum: Status = (statusUpper in Status ? statusUpper : 'ACTIVE') as Status;
+    const typeUpper = (body.guardianType || '').toString().toUpperCase();
+    const typeEnum: GuardianType | null = (typeUpper in GuardianType ? (typeUpper as GuardianType) : null);
+    const genderUpper = (body.gender || '').toString().toUpperCase();
+    const genderEnum: UserGender | null = (genderUpper in UserGender ? (genderUpper as UserGender) : null);
 
     // Create guardian (no user account)
     const guardian = await prisma.guardian.create({
@@ -126,9 +157,9 @@ export async function POST(request: NextRequest) {
         suffix: body.suffix,
         address: body.address,
         img: body.img,
-        gender: body.gender,
-        guardianType: body.guardianType,
-        status: body.status?.toUpperCase() || 'ACTIVE',
+        gender: genderEnum as any,
+        guardianType: typeEnum as any,
+        status: statusEnum,
         occupation: body.occupation,
         workplace: body.workplace,
         emergencyContact: body.emergencyContact,

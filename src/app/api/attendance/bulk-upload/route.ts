@@ -35,15 +35,16 @@ export async function POST(request: NextRequest) {
       const workbook = XLSX.read(buffer, { type: 'array' });
       const sheetName = workbook.SheetNames[0];
       const worksheet = workbook.Sheets[sheetName];
-      const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+      const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as unknown[];
       
       if (jsonData.length < 2) {
         return NextResponse.json({ error: 'Excel file must have at least a header row and one data row' }, { status: 400 });
       }
       
       // Convert to records format
-      const headers = jsonData[0] as string[];
-      records = jsonData.slice(1).map((row: any[]) => {
+      const headers = jsonData[0] as unknown as string[];
+      records = (jsonData.slice(1) as unknown[]).map((rowUnknown, idx) => {
+        const row = rowUnknown as any[];
         const record: any = {};
         headers.forEach((header, index) => {
           record[header] = row[index] || '';
@@ -105,44 +106,57 @@ export async function POST(request: NextRequest) {
           continue;
         }
 
-        let entityExists = false;
+        // Resolve userId for Attendance (must reference User.userId per schema)
+        let userIdForAttendance: number | null = null;
         if (entityType === 'student') {
           const student = await prisma.student.findUnique({
-            where: { studentId: entityId }
+            where: { studentId: entityId },
+            select: { userId: true }
           });
-          entityExists = !!student;
+          if (!student) {
+            results.errors.push(`Row ${rowNumber}: student with ID ${entityId} not found`);
+            continue;
+          }
+          userIdForAttendance = student.userId;
         } else {
+          // instructor: find Instructor, then map to User by email
           const instructor = await prisma.instructor.findUnique({
-            where: { instructorId: entityId }
+            where: { instructorId: entityId },
+            select: { email: true }
           });
-          entityExists = !!instructor;
-        }
-
-        if (!entityExists) {
-          results.errors.push(`Row ${rowNumber}: ${entityType} with ID ${entityId} not found`);
-          continue;
+          if (!instructor) {
+            results.errors.push(`Row ${rowNumber}: instructor with ID ${entityId} not found`);
+            continue;
+          }
+          const user = await prisma.user.findUnique({ where: { email: instructor.email }, select: { userId: true } });
+          if (!user) {
+            results.errors.push(`Row ${rowNumber}: user account for instructor email ${instructor.email} not found`);
+            continue;
+          }
+          userIdForAttendance = user.userId;
         }
 
         // Check if subject schedule exists (if provided)
-        let subjectScheduleId = null;
+        let subjectScheduleId: number | null = null;
         if (record['Subject Schedule ID']) {
-          const scheduleId = parseInt(record['Subject Schedule ID']);
-          if (!isNaN(scheduleId)) {
+          const schedId = parseInt(record['Subject Schedule ID']);
+          if (!isNaN(schedId)) {
             const schedule = await prisma.subjectSchedule.findUnique({
-              where: { scheduleId }
+              where: { subjectSchedId: schedId },
+              select: { subjectSchedId: true }
             });
             if (!schedule) {
-              results.errors.push(`Row ${rowNumber}: Subject schedule with ID ${scheduleId} not found`);
+              results.errors.push(`Row ${rowNumber}: Subject schedule with ID ${schedId} not found`);
               continue;
             }
-            subjectScheduleId = scheduleId;
+            subjectScheduleId = schedId;
           }
         }
 
         // Create attendance record
         await prisma.attendance.create({
           data: {
-            userId: entityId, // The user ID (student or instructor)
+            userId: userIdForAttendance!,
             userRole: entityType === 'student' ? 'STUDENT' : 'INSTRUCTOR',
             status: record['Status'],
             attendanceType: 'MANUAL_ENTRY',
@@ -150,7 +164,7 @@ export async function POST(request: NextRequest) {
             subjectSchedId: subjectScheduleId,
             notes: record['Notes'] || null,
             studentId: entityType === 'student' ? entityId : null,
-            instructorId: entityType === 'instructor' ? entityId : null,
+            // No instructorId field in Attendance schema; instructor linked via userId/userRole
             verification: 'PENDING'
           }
         });

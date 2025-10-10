@@ -71,7 +71,7 @@ const mockEmails: Email[] = [];
 export default function EmailPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [emails, setEmails] = useState<Email[]>(mockEmails);
+  const [emails, setEmails] = useState<Email[]>([]);
   const [searchValue, setSearchValue] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [priorityFilter, setPriorityFilter] = useState<string>("all");
@@ -122,6 +122,30 @@ export default function EmailPage() {
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
 
   const debouncedSearch = useDebounce(searchValue, 400);
+
+  // Load emails from API
+  const loadEmails = useCallback(async () => {
+    try {
+      setLoading(true);
+      const response = await fetch('/api/emails');
+      const data = await response.json();
+      
+      if (data.data) {
+        setEmails(data.data);
+        setTotal(data.pagination?.total || data.data.length);
+      }
+    } catch (error) {
+      console.error('Error loading emails:', error);
+      toast.error('Failed to load emails');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Load emails on component mount
+  useEffect(() => {
+    loadEmails();
+  }, [loadEmails]);
 
   // Simple list virtualization
   const listContainerRef = useRef<HTMLDivElement | null>(null);

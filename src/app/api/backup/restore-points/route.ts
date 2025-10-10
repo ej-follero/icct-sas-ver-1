@@ -1,17 +1,31 @@
 import { NextRequest, NextResponse } from "next/server";
 import { restoreService } from "@/lib/services/restore.service";
+import { prisma } from "@/lib/prisma";
 // Note: These imports are commented out as they may not exist in the current setup
 // import { getServerSession } from "next-auth";
 // import { authOptions } from "@/lib/auth";
 
+async function assertAdmin(request: NextRequest) {
+  const token = request.cookies.get('token')?.value;
+  if (!token) return { ok: false, res: NextResponse.json({ error: 'Authentication required' }, { status: 401 }) };
+  try {
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = decoded.userId as number;
+    const user = await prisma.user.findUnique({ where: { userId }, select: { role: true } });
+    if (!user || (user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN')) {
+      return { ok: false, res: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
+    }
+    return { ok: true, userId } as const;
+  } catch {
+    return { ok: false, res: NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 }) };
+  }
+}
+
 export async function GET(request: NextRequest) {
   try {
-    // Authentication check disabled for now
-    // TODO: Implement proper authentication
-    // const session = await getServerSession(authOptions);
-    // if (!session?.user?.id) {
-    //   return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    // }
+    const gate = await assertAdmin(request);
+    if (!('ok' in gate) || gate.ok !== true) return gate.res;
 
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
@@ -38,12 +52,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    // Authentication check disabled for now
-    // TODO: Implement proper authentication
-    // const session = await getServerSession(authOptions);
-    // if (!session?.user?.id) {
-    //   return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    // }
+    const gate = await assertAdmin(request);
+    if (!('ok' in gate) || gate.ok !== true) return gate.res;
 
     const body = await request.json();
     const { backupId, name, description } = body;
@@ -55,7 +65,7 @@ export async function POST(request: NextRequest) {
     const restorePoint = await restoreService.createRestorePoint(
       backupId,
       name,
-      1, // TODO: Get from session when authentication is implemented
+      (gate as any).userId,
       description
     );
 

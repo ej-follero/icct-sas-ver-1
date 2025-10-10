@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { PageSkeleton } from "@/components/reusable/Skeleton";
 import { 
   Calendar, 
   Plus, 
@@ -1791,25 +1792,7 @@ ${Object.entries(EVENT_CATEGORIES).map(([key, value]) =>
 
   // Show loading state
   if (loading) {
-    return (
-      <div className="flex flex-col min-h-screen p-6 bg-gray-50">
-        <PageHeader
-          title="Academic Calendar"
-          subtitle="Manage academic events, deadlines, and important dates"
-          breadcrumbs={[
-            { label: 'Home', href: '/' },
-            { label: 'Academic Management', href: '/academic-management' },
-            { label: 'Academic Calendar' }
-          ]}
-        />
-        <div className="flex items-center justify-center min-h-[400px]">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-gray-600">Loading calendar data...</p>
-          </div>
-        </div>
-      </div>
-    );
+    return <PageSkeleton />;
   }
 
   // Show error state

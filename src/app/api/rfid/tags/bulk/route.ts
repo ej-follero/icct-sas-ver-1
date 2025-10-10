@@ -1,7 +1,36 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+  try {
+    // JWT Authentication - Admin only
+    const token = request.cookies.get('token')?.value;
+    if (!token) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = Number((decoded as any)?.userId);
+    if (!Number.isFinite(userId)) {
+      return NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 });
+    }
+
+    // Check user exists and is active
+    const user = await prisma.user.findUnique({
+      where: { userId },
+      select: { status: true, role: true }
+    });
+
+    if (!user || user.status !== 'ACTIVE') {
+      return NextResponse.json({ error: 'User not found or inactive' }, { status: 401 });
+    }
+
+    // Admin-only access control
+    const adminRoles = ['SUPER_ADMIN', 'ADMIN'];
+    if (!adminRoles.includes(user.role)) {
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+    }
   try {
     const body = await request.json().catch(() => ({}));
     const records = Array.isArray(body?.records) ? body.records : [];
@@ -28,8 +57,8 @@ export async function POST(request: Request) {
         }
 
         // Validate tag type
-        const validTagTypes = ['STUDENT_CARD', 'INSTRUCTOR_CARD', 'TEMPORARY_PASS', 'VISITOR_PASS', 'MAINTENANCE', 'TEST'];
-        const tagType = rec.tagType || 'STUDENT_CARD';
+        const validTagTypes = ['STUDENT_CARD', 'TEMPORARY_PASS', 'VISITOR_PASS', 'MAINTENANCE', 'TEST'];
+        const tagType = 'STUDENT_CARD';
         if (!validTagTypes.includes(tagType)) {
           throw new Error(`Invalid tag type: ${tagType}`);
         }
@@ -74,21 +103,7 @@ export async function POST(request: Request) {
           }
         }
 
-        let instructorId = null;
-        if (rec.instructorId) {
-          const instructorIdNum = Number(rec.instructorId);
-          if (!isNaN(instructorIdNum)) {
-            // Check if the instructor exists
-            const instructor = await prisma.instructor.findUnique({
-              where: { instructorId: instructorIdNum }
-            });
-            if (instructor) {
-              instructorId = instructorIdNum;
-            } else {
-              console.warn(`Instructor ${instructorIdNum} not found, setting to null`);
-            }
-          }
-        }
+        // Instructor assignment removed
 
         // Prepare data for database
         const data: any = {
@@ -97,7 +112,6 @@ export async function POST(request: Request) {
           status,
           notes: rec.notes || null,
           studentId,
-          instructorId,
           assignedBy,
           assignmentReason: rec.assignmentReason || null,
           expiresAt: rec.expiresAt ? new Date(rec.expiresAt) : null,

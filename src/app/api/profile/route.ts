@@ -1,20 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
-import bcrypt from 'bcryptjs';
+// no bcrypt usage here
 
 const profileUpdateSchema = z.object({
   firstName: z.string().optional(),
   lastName: z.string().optional(),
   phoneNumber: z.string().optional(),
   address: z.string().optional(),
-  bio: z.string().optional(),
   preferences: z.object({
     notifications: z.boolean().optional(),
     emailAlerts: z.boolean().optional(),
-    darkMode: z.boolean().optional(),
     language: z.string().optional(),
-    timezone: z.string().optional()
+    timezone: z.string().optional(),
+    theme: z.string().optional(),
+    emailFrequency: z.string().optional(),
+    dashboardLayout: z.string().optional()
   }).optional()
 });
 
@@ -29,14 +30,37 @@ const passwordChangeSchema = z.object({
 
 export async function GET(request: NextRequest) {
   try {
-    // TODO: Get user ID from session/token
-    const userId = 1; // This should come from authentication
+    // Get user ID from JWT token in cookies
+    const token = request.cookies.get('token')?.value;
+    
+    if (!token) {
+      return NextResponse.json(
+        { error: 'Authentication required' },
+        { status: 401 }
+      );
+    }
+
+    // Verify JWT token and extract user ID
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userIdRaw = (decoded as any)?.userId;
+    const userId = Number(userIdRaw);
+    if (!Number.isFinite(userId)) {
+      return NextResponse.json(
+        { error: 'Invalid authentication token' },
+        { status: 401 }
+      );
+    }
 
     const user = await prisma.user.findUnique({
       where: { userId },
       include: {
-        Student: true,
-        Instructor: true
+        Student: {
+          include: {
+            Department: true
+          }
+        },
+        UserPreferences: true
       }
     });
 
@@ -48,14 +72,14 @@ export async function GET(request: NextRequest) {
     }
 
     // Get user activity stats
-    const totalLogins = await prisma.securityLogs.count({
+    const totalLogins = await prisma.securityLog.count({
       where: {
         userId,
-        eventType: 'LOGIN_SUCCESS'
+        action: 'LOGIN_SUCCESS'
       }
     });
 
-    const lastActivity = await prisma.securityLogs.findFirst({
+    const lastActivity = await prisma.securityLog.findFirst({
       where: { userId },
       orderBy: { timestamp: 'desc' },
       select: { timestamp: true }
@@ -70,36 +94,41 @@ export async function GET(request: NextRequest) {
       }
     });
 
+    // If user is an instructor (no direct relation in schema), match via email
+    const instructor = user ? await prisma.instructor.findFirst({ where: { email: user.email } }) : null;
+
+    const avatarUrl = user?.Student?.[0]?.img || instructor?.img || undefined;
+
     const profile = {
       userId: user.userId,
       userName: user.userName,
       email: user.email,
       role: user.role,
       status: user.status,
-      firstName: user.Student?.[0]?.firstName || user.Instructor?.[0]?.firstName,
-      lastName: user.Student?.[0]?.lastName || user.Instructor?.[0]?.lastName,
-      phoneNumber: user.Student?.[0]?.phoneNumber || user.Instructor?.[0]?.phoneNumber,
-      address: user.Student?.[0]?.address || user.Instructor?.[0]?.address,
-      avatar: user.Student?.[0]?.img || user.Instructor?.[0]?.img,
-      bio: user.Student?.[0]?.bio || user.Instructor?.[0]?.bio,
-      department: user.Student?.[0]?.Department?.departmentName || user.Instructor?.[0]?.Department?.departmentName,
+      firstName: user.Student?.[0]?.firstName,
+      lastName: user.Student?.[0]?.lastName,
+      phoneNumber: user.Student?.[0]?.phoneNumber,
+      address: user.Student?.[0]?.address,
+      avatar: avatarUrl,
+      department: user.Student?.[0]?.Department?.departmentName,
       position: user.role === 'INSTRUCTOR' ? 'Instructor' : user.role === 'STUDENT' ? 'Student' : 'Administrator',
       lastLogin: user.lastLogin?.toISOString(),
       createdAt: user.createdAt.toISOString(),
       updatedAt: user.updatedAt.toISOString(),
       preferences: {
-        notifications: true, // Default values - these would be stored in a separate preferences table
-        emailAlerts: true,
-        darkMode: false,
-        language: 'en',
-        timezone: 'Asia/Manila'
+        notifications: user.UserPreferences?.notifications ?? true,
+        emailAlerts: user.UserPreferences?.emailAlerts ?? true,
+        language: user.UserPreferences?.language ?? 'en',
+        timezone: user.UserPreferences?.timezone ?? 'Asia/Manila',
+        theme: user.UserPreferences?.theme ?? 'light',
+        emailFrequency: user.UserPreferences?.emailFrequency ?? 'daily',
+        dashboardLayout: user.UserPreferences?.dashboardLayout ?? 'default'
       },
       security: {
         twoFactorEnabled: user.twoFactorEnabled,
         lastPasswordChange: user.lastPasswordChange?.toISOString() || user.createdAt.toISOString(),
         failedLoginAttempts: user.failedLoginAttempts,
-        isEmailVerified: user.isEmailVerified,
-        isPhoneVerified: user.isPhoneVerified
+        isEmailVerified: user.isEmailVerified
       },
       activity: {
         totalLogins,
@@ -123,8 +152,27 @@ export async function PUT(request: NextRequest) {
     const body = await request.json();
     const validatedData = profileUpdateSchema.parse(body);
     
-    // TODO: Get user ID from session/token
-    const userId = 1; // This should come from authentication
+    // Get user ID from JWT token in cookies
+    const token = request.cookies.get('token')?.value;
+    
+    if (!token) {
+      return NextResponse.json(
+        { error: 'Authentication required' },
+        { status: 401 }
+      );
+    }
+
+    // Verify JWT token and extract user ID
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userIdRaw = (decoded as any)?.userId;
+    const userId = Number(userIdRaw);
+    if (!Number.isFinite(userId)) {
+      return NextResponse.json(
+        { error: 'Invalid authentication token' },
+        { status: 401 }
+      );
+    }
 
     // Update user profile
     const updatedUser = await prisma.user.update({
@@ -135,7 +183,7 @@ export async function PUT(request: NextRequest) {
     });
 
     // Update student profile if exists
-    if (validatedData.firstName || validatedData.lastName || validatedData.phoneNumber || validatedData.address || validatedData.bio) {
+    if (validatedData.firstName || validatedData.lastName || validatedData.phoneNumber || validatedData.address) {
       const student = await prisma.student.findFirst({
         where: { userId }
       });
@@ -147,33 +195,47 @@ export async function PUT(request: NextRequest) {
             firstName: validatedData.firstName,
             lastName: validatedData.lastName,
             phoneNumber: validatedData.phoneNumber,
-            address: validatedData.address,
-            bio: validatedData.bio
-          }
-        });
-      }
-
-      // Update instructor profile if exists
-      const instructor = await prisma.instructor.findFirst({
-        where: { userId }
-      });
-
-      if (instructor) {
-        await prisma.instructor.update({
-          where: { instructorId: instructor.instructorId },
-          data: {
-            firstName: validatedData.firstName,
-            lastName: validatedData.lastName,
-            phoneNumber: validatedData.phoneNumber,
-            address: validatedData.address,
-            bio: validatedData.bio
+            address: validatedData.address
           }
         });
       }
     }
 
-    // TODO: Update preferences in a separate preferences table
-    // This would require creating a UserPreferences model
+    // Update or create user preferences
+    if (validatedData.preferences) {
+      const existingPreferences = await prisma.userPreferences.findUnique({
+        where: { userId }
+      });
+
+      if (existingPreferences) {
+        await prisma.userPreferences.update({
+          where: { userId },
+          data: {
+            notifications: validatedData.preferences.notifications,
+            emailAlerts: validatedData.preferences.emailAlerts,
+            language: validatedData.preferences.language,
+            timezone: validatedData.preferences.timezone,
+            theme: validatedData.preferences.theme,
+            emailFrequency: validatedData.preferences.emailFrequency,
+            dashboardLayout: validatedData.preferences.dashboardLayout,
+            updatedAt: new Date()
+          }
+        });
+      } else {
+        await prisma.userPreferences.create({
+          data: {
+            userId,
+            notifications: validatedData.preferences.notifications ?? true,
+            emailAlerts: validatedData.preferences.emailAlerts ?? true,
+            language: validatedData.preferences.language ?? 'en',
+            timezone: validatedData.preferences.timezone ?? 'Asia/Manila',
+            theme: validatedData.preferences.theme ?? 'light',
+            emailFrequency: validatedData.preferences.emailFrequency ?? 'daily',
+            dashboardLayout: validatedData.preferences.dashboardLayout ?? 'default'
+          }
+        });
+      }
+    }
 
     return NextResponse.json({ 
       data: updatedUser,

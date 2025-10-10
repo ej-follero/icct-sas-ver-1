@@ -1,9 +1,37 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
 // GET /api/sections
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    // JWT Authentication
+    const token = request.cookies.get('token')?.value;
+    if (!token) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = Number((decoded as any)?.userId);
+    if (!Number.isFinite(userId)) {
+      return NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 });
+    }
+
+    // Check user exists and is active
+    const user = await prisma.user.findUnique({
+      where: { userId },
+      select: { status: true, role: true }
+    });
+
+    if (!user || user.status !== 'ACTIVE') {
+      return NextResponse.json({ error: 'User not found or inactive' }, { status: 401 });
+    }
+
+    // Role-based access control
+    const allowedRoles = ['SUPER_ADMIN', 'ADMIN', 'DEPARTMENT_HEAD', 'INSTRUCTOR'];
+    if (!allowedRoles.includes(user.role)) {
+      return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
+    }
     // Fetch all sections with related CourseOffering and counts
     const sections = await prisma.section.findMany({
       include: {
@@ -44,9 +72,58 @@ export async function GET() {
 }
 
 // POST /api/sections
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    // JWT Authentication - Admin only
+    const token = request.cookies.get('token')?.value;
+    if (!token) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = Number((decoded as any)?.userId);
+    if (!Number.isFinite(userId)) {
+      return NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 });
+    }
+
+    // Check user exists and is active
+    const user = await prisma.user.findUnique({
+      where: { userId },
+      select: { status: true, role: true }
+    });
+
+    if (!user || user.status !== 'ACTIVE') {
+      return NextResponse.json({ error: 'User not found or inactive' }, { status: 401 });
+    }
+
+    // Admin-only access control
+    const adminRoles = ['SUPER_ADMIN', 'ADMIN'];
+    if (!adminRoles.includes(user.role)) {
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+    }
+
     const data = await request.json();
+    
+    // Validate semesterId if provided, otherwise use default
+    let semesterId = data.semesterId;
+    if (!semesterId) {
+      // Find the current active semester as default
+      const currentSemester = await prisma.semester.findFirst({
+        where: { status: 'CURRENT' },
+        select: { semesterId: true }
+      });
+      semesterId = currentSemester?.semesterId || 1;
+    } else {
+      // Validate that the provided semesterId exists
+      const semesterExists = await prisma.semester.findUnique({
+        where: { semesterId: Number(semesterId) },
+        select: { semesterId: true }
+      });
+      if (!semesterExists) {
+        return NextResponse.json({ error: 'Invalid semester ID' }, { status: 400 });
+      }
+    }
     
     // Create the section in the database
     const created = await prisma.section.create({
@@ -61,7 +138,7 @@ export async function POST(request: Request) {
         roomAssignment: data.roomAssignment ?? null,
         scheduleNotes: data.scheduleNotes ?? null,
         courseId: Number(data.courseId),
-        semesterId: 1, // Default semester ID - you may want to make this dynamic
+        semesterId: Number(semesterId),
       },
       include: {
         Course: true,

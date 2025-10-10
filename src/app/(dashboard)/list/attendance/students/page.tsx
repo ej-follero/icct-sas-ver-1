@@ -35,7 +35,9 @@ import {
   EditStudentDialog,
   DeactivateEntityDialog,
   BulkStatusUpdateDialog,
-  ExportDialog
+  ExportDialog,
+  AssignSectionDialog,
+  AddStudentClassDialog
 } from '@/components/reusable/Dialogs';
 import { ICCT_CLASSES, getStatusColor, getAttendanceRateColor } from '@/lib/colors';
 import { 
@@ -59,6 +61,8 @@ import PageHeader from '@/components/PageHeader/PageHeader';
 import { QuickActionsPanel } from '@/components/reusable/QuickActionsPanel';
 import { ManualAttendanceDialog } from '@/components/reusable/Dialogs';
 import SearchableSelect from '@/components/reusable/Search/SearchableSelect';
+//
+import { useRouter } from 'next/navigation';
 
 
 interface Filters extends Record<string, string[]> {
@@ -185,6 +189,7 @@ export default function StudentAttendancePage() {
   const [mounted, setMounted] = useState(false);
   const [students, setStudents] = useState<StudentAttendance[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [hasFetchedOnce, setHasFetchedOnce] = useState(false);
   
   // New modal states
   const [selectedStudentForRecords, setSelectedStudentForRecords] = useState<StudentAttendance | null>(null);
@@ -198,12 +203,18 @@ export default function StudentAttendancePage() {
   const [sortBy, setSortBy] = useState<{ field: string; order: 'asc' | 'desc' }>({ field: 'studentName', order: 'asc' });
   const [expandedRowIds, setExpandedRowIds] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize, setPageSize] = useState(50);
+  const [totalFilteredCount, setTotalFilteredCount] = useState(0);
   const [showBulkActions, setShowBulkActions] = useState(false);
   const [showManualAttendance, setShowManualAttendance] = useState(false);
   const [manualStudentId, setManualStudentId] = useState<number | undefined>(undefined);
   const [showBulkStatusUpdate, setShowBulkStatusUpdate] = useState(false);
   const [showExportDialog, setShowExportDialog] = useState(false);
+  const [assigning, setAssigning] = useState(false);
+  const [assignSectionOpen, setAssignSectionOpen] = useState(false);
+  const [addClassOpen, setAddClassOpen] = useState(false);
+
+  // Quick assignment via dialogs only
   
   // State for expandable row data
   const [expandedRowData, setExpandedRowData] = useState<Record<string, any>>({});
@@ -211,6 +222,9 @@ export default function StudentAttendancePage() {
   
   // Export loading state
   const [exportLoading, setExportLoading] = useState(false);
+  const [exportStage, setExportStage] = useState<'idle' | 'collecting' | 'capturing' | 'generating' | 'done' | 'error'>('idle');
+  // Analytics filter snapshot for syncing table
+  const [analyticsFilters, setAnalyticsFilters] = useState<{ departmentId?: string; courseId?: string; sectionId?: string; yearLevel?: string; subjectId?: string; timeRange?: string; startDate?: string; endDate?: string }>({});
   
   // Subject filter state for analytics
   const [selectedSubject, setSelectedSubject] = useState<string>('all');
@@ -255,6 +269,17 @@ export default function StudentAttendancePage() {
       if (debouncedSearch) {
         params.append('search', debouncedSearch);
       }
+      // Pagination
+      params.append('page', String(page));
+      params.append('pageSize', String(pageSize));
+      // Apply synced analytics filters
+      if (analyticsFilters.departmentId) params.append('departmentId', analyticsFilters.departmentId);
+      if (analyticsFilters.courseId) params.append('courseId', analyticsFilters.courseId);
+      if (analyticsFilters.sectionId) params.append('sectionId', analyticsFilters.sectionId);
+      if (analyticsFilters.yearLevel) params.append('yearLevel', analyticsFilters.yearLevel);
+      if (analyticsFilters.subjectId) params.append('subjectId', analyticsFilters.subjectId);
+      if (analyticsFilters.startDate) params.append('startDate', analyticsFilters.startDate);
+      if (analyticsFilters.endDate) params.append('endDate', analyticsFilters.endDate);
       
       const url = `/api/attendance/students?${params.toString()}`;
       console.log('📡 Fetching from URL:', url);
@@ -295,18 +320,18 @@ export default function StudentAttendancePage() {
         throw new Error(data.details || data.error);
       }
       
-      // Validate data structure
-      if (!Array.isArray(data)) {
-        throw new Error('Invalid data format received from server');
+      // Support both legacy array and new paged object { items, total }
+      const items = Array.isArray(data) ? data : Array.isArray(data.items) ? data.items : [];
+      const total = Array.isArray(data) ? (analyticsFilters && Object.keys(analyticsFilters).length > 0 ? items.length : items.length) : (typeof data.total === 'number' ? data.total : items.length);
+
+      console.log('✅ Fetched student data:', items);
+      console.log('📈 Page size:', pageSize, 'Page:', page, 'Total:', total);
+      if (items.length > 0) {
+        console.log('👤 Sample student data:', items[0]);
       }
       
-      console.log('✅ Fetched student data:', data);
-      console.log('📈 Number of students:', data.length);
-      if (data.length > 0) {
-        console.log('👤 Sample student data:', data[0]);
-      }
-      
-      setStudents(data);
+      setStudents(items);
+      setTotalFilteredCount(total);
       console.log('✅ Students state updated');
     } catch (err) {
       console.error('❌ Error fetching student attendance:', err);
@@ -327,9 +352,10 @@ export default function StudentAttendancePage() {
       setStudents([]); // Set empty array on error
     } finally {
       setLoading(false);
+      setHasFetchedOnce(true);
       console.log('🏁 Fetch completed, loading set to false');
     }
-  }, [debouncedSearch]);
+  }, [debouncedSearch, analyticsFilters, page, pageSize]);
 
   // Fetch data on component mount and when search changes
   useEffect(() => {
@@ -677,46 +703,7 @@ export default function StudentAttendancePage() {
                           </div>
                         ) : (
                           <div className="space-y-3">
-                            {(() => {
-                              // Generate today's schedule based on student's actual schedules
-                              const todaySchedule: any[] = [];
-                              const now = new Date();
-                              const today = now.getDay(); // 0 = Sunday, 1 = Monday, etc.
-                              
-                              // Map day numbers to names
-                              const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-                              const todayName = dayNames[today];
-                              
-                              // Get student's schedules for today
-                              const studentSchedules = student.schedules || [];
-                              const todaySchedules = studentSchedules.filter((schedule: any) => 
-                                schedule.dayOfWeek === todayName || schedule.dayOfWeek === 'DAILY'
-                              );
-                              
-                              if (todaySchedules.length > 0) {
-                                todaySchedules.forEach((schedule: any, index: number) => {
-                                  const currentTime = now.getHours() * 100 + now.getMinutes();
-                                  const startTime = parseInt(schedule.startTime?.replace(':', '') || '0');
-                                  const endTime = parseInt(schedule.endTime?.replace(':', '') || '0');
-                                  
-                                  let status = 'upcoming';
-                                  if (currentTime >= startTime && currentTime <= endTime) {
-                                    status = 'in-progress';
-                                  } else if (currentTime > endTime) {
-                                    status = 'completed';
-                                  }
-                                  
-                                  todaySchedule.push({
-                                    time: schedule.startTime || 'TBD',
-                                    subject: schedule.subjectName || 'Unknown Subject',
-                                    room: schedule.roomNumber || 'TBD',
-                                    status: status
-                                  });
-                                });
-                              }
-                              
-                              return todaySchedule;
-                            })().map((entry: any, index: number) => (
+                            {(expandedRowData[student.studentId]?.todaySchedules || []).map((entry: any, index: number) => (
                               <div key={index} className="flex items-center justify-between p-3 rounded bg-slate-50/50 border border-slate-200/30 hover:shadow-sm transition-shadow">
                                 <div className="flex items-center gap-3">
                                   <div className={`w-3 h-3 rounded-full ${
@@ -742,19 +729,7 @@ export default function StudentAttendancePage() {
                               </div>
                             ))}
                             
-                            {(() => {
-                              const studentSchedules = student.schedules || [];
-                              const now = new Date();
-                              const today = now.getDay();
-                              const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-                              const todayName = dayNames[today];
-                              
-                              const todaySchedules = studentSchedules.filter((schedule: any) => 
-                                schedule.dayOfWeek === todayName || schedule.dayOfWeek === 'DAILY'
-                              );
-                              
-                              return todaySchedules.length === 0;
-                            })() && (
+                            {(!expandedRowData[student.studentId]?.todaySchedules || expandedRowData[student.studentId].todaySchedules.length === 0) && (
                               <div className="text-center py-4 text-slate-500 text-sm">
                                 No classes scheduled for today
                               </div>
@@ -1169,14 +1144,9 @@ export default function StudentAttendancePage() {
     return filtered;
   }, [students, debouncedSearch, filters, sortBy]);
 
-  // Pagination
-  const paginatedStudents = useMemo(() => {
-    const startIndex = (page - 1) * pageSize;
-    const endIndex = startIndex + pageSize;
-    return filteredStudents.slice(startIndex, endIndex);
-  }, [filteredStudents, page, pageSize]);
-
-  const totalPages = Math.ceil(filteredStudents.length / pageSize);
+  // Server-driven pagination: use current page items directly
+  const paginatedStudents = filteredStudents; // items already reflect current page
+  const totalPages = Math.max(1, Math.ceil((totalFilteredCount || filteredStudents.length) / pageSize));
 
   // Transform students data to AttendanceData format for analytics
   const transformedStudentsData = useMemo(() => {
@@ -1220,6 +1190,9 @@ export default function StudentAttendancePage() {
     console.log('📊 Transformed data length:', transformed.length);
     return transformed;
   }, [students]);
+
+  // Avoid showing analytics skeleton when other actions toggle loading after initial data load
+  const analyticsLoading = loading && (!students || students.length === 0);
 
   // Debug analytics data
   useEffect(() => {
@@ -1272,7 +1245,23 @@ export default function StudentAttendancePage() {
     try {
       console.log('🔍 Fetching real student details for:', studentId);
       
-      const response = await fetch(`/api/students/${studentId}/details`, {
+      // Ensure we pass a numeric student id to the details API
+      const numericIdRegex = /^\d+$/;
+      let detailsId: string = studentId;
+      if (!numericIdRegex.test(detailsId)) {
+        const current = students.find(s => s.studentId === studentId);
+        const fallback = (current?.studentIdNum || '').match(/\d+/)?.[0] || '';
+        if (fallback && numericIdRegex.test(fallback)) {
+          detailsId = fallback;
+        } else {
+          // No valid numeric id available; show friendly message and stop
+          console.warn('⚠️ No numeric student ID available for details fetch.', { studentId, studentIdNum: current?.studentIdNum });
+          toast.info('Student details unavailable for this ID');
+          return;
+        }
+      }
+      
+      const response = await fetch(`/api/students/${encodeURIComponent(detailsId)}/details`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -1400,6 +1389,7 @@ export default function StudentAttendancePage() {
 
   const handlePageChange = (newPage: number) => {
     setPage(newPage);
+    // Refetch occurs via dependency in fetchStudentAttendance
   };
 
   const handlePageSizeChange = (newPageSize: number) => {
@@ -1545,35 +1535,157 @@ export default function StudentAttendancePage() {
   };
 
   // Handle export with format and options
-  const handleExport = async (format: 'pdf' | 'csv' | 'excel', options: { includeCharts: boolean; includeFilters: boolean; includeSummary: boolean }) => {
+  // Build a unified snapshot of current filters + time range
+  const buildAnalyticsSnapshot = () => {
+    return {
+      timeRange: { preset: 'year' as const },
+      // Table filters (department is a human-readable string here)
+      tableFilters: { ...filters },
+    };
+  };
+
+  const handleExport = async (format: 'pdf' | 'csv' | 'excel', options: { includeCharts: boolean; includeFilters: boolean; includeSummary: boolean; includeTable?: boolean; selectedCharts?: string[]; selectedColumns?: string[] }) => {
     try {
       setExportLoading(true);
+      setExportStage('collecting');
       console.log('Exporting data:', { format, options });
       
-      // Validate data before export
-      if (!transformedStudentsData || transformedStudentsData.length === 0) {
-        throw new Error('No data available for export. Please ensure students are loaded.');
-      }
-      
-      // Prepare export data
-      const exportData = {
-        type: 'student' as const,
-        data: transformedStudentsData,
-        filters: {
-          department: filters.departments.length > 0 ? filters.departments.join(', ') : 'All',
-          course: filters.courses.length > 0 ? filters.courses.join(', ') : 'All',
-          yearLevel: filters.yearLevels.length > 0 ? filters.yearLevels.join(', ') : 'All',
-          attendanceRate: filters.attendanceRates.length > 0 ? filters.attendanceRates.join(', ') : 'All',
-          riskLevel: filters.riskLevels.length > 0 ? filters.riskLevels.join(', ') : 'All',
-          subject: filters.subjects.length > 0 ? filters.subjects.join(', ') : 'All',
-          status: filters.statuses.length > 0 ? filters.statuses.join(', ') : 'All'
-        },
-        timeRange: {
-          start: new Date('2025-04-01'),
-          end: new Date('2025-06-30'),
-          preset: 'semester'
+      // Helper: fetch all students matching current analytics filters (ignores local table page)
+      const fetchAllStudentsForExport = async (): Promise<StudentAttendance[]> => {
+        try {
+          const params = new URLSearchParams();
+          params.append('page', '1');
+          params.append('pageSize', '100'); // start small to get total
+          if (analyticsFilters.departmentId) params.append('departmentId', analyticsFilters.departmentId);
+          if (analyticsFilters.courseId) params.append('courseId', analyticsFilters.courseId);
+          if (analyticsFilters.sectionId) params.append('sectionId', analyticsFilters.sectionId);
+          if (analyticsFilters.yearLevel) params.append('yearLevel', analyticsFilters.yearLevel);
+          if (analyticsFilters.subjectId) params.append('subjectId', analyticsFilters.subjectId);
+          if (analyticsFilters.startDate) params.append('startDate', analyticsFilters.startDate);
+          if (analyticsFilters.endDate) params.append('endDate', analyticsFilters.endDate);
+
+          const headRes = await fetch(`/api/attendance/students?${params.toString()}`, { method: 'GET', headers: { 'Content-Type': 'application/json' }, cache: 'no-store' });
+          const headJson = await headRes.json().catch(() => ({}));
+          const total = typeof headJson?.total === 'number' ? headJson.total : Array.isArray(headJson) ? headJson.length : 0;
+          const pageSizeForExport = 1000; // reasonable chunk
+          const totalPages = Math.max(1, Math.ceil(total / pageSizeForExport));
+
+          const allItems: StudentAttendance[] = [] as any;
+          for (let p = 1; p <= totalPages; p++) {
+            const loopParams = new URLSearchParams(params);
+            loopParams.set('page', String(p));
+            loopParams.set('pageSize', String(pageSizeForExport));
+            const res = await fetch(`/api/attendance/students?${loopParams.toString()}`, { method: 'GET', headers: { 'Content-Type': 'application/json' }, cache: 'no-store' });
+            if (!res.ok) break;
+            const json = await res.json().catch(() => ({}));
+            const items: StudentAttendance[] = Array.isArray(json) ? json : Array.isArray(json?.items) ? json.items : [];
+            allItems.push(...items);
+          }
+          return allItems;
+        } catch (e) {
+          console.warn('Falling back to current page data for export due to fetch error', e);
+          return students;
         }
       };
+
+      // Use full dataset for export (not just current page)
+      const allStudents = await fetchAllStudentsForExport();
+
+      const transformForExport = (list: StudentAttendance[]) => {
+        const baseTransform = (student: StudentAttendance) => ({
+          id: student.studentId,
+          name: student.studentName,
+          department: student.department,
+          courseCode: (student as any).courseCode ?? (student as any).course,
+          yearLevel: student.yearLevel,
+          totalClasses: (student as any).totalScheduledClasses,
+          attendedClasses: (student as any).attendedClasses,
+          absentClasses: (student as any).absentClasses,
+          lateClasses: (student as any).lateClasses,
+          attendanceRate: (student as any).attendanceRate,
+          riskLevel: (student as any).riskLevel ?? 'NONE',
+          status: (student as any).status ?? 'ACTIVE',
+          studentNumber: (student as any).studentIdNum
+        });
+
+        // If specific columns are selected, filter the data
+        if (options.selectedColumns && options.selectedColumns.length > 0) {
+          return list.map(student => {
+            const transformed = baseTransform(student);
+            const filtered: Record<string, any> = {};
+            
+            // Map selected columns to the transformed data
+            options.selectedColumns?.forEach(col => {
+              if (col === 'studentName') filtered[col] = transformed.name;
+              else if (col === 'studentId') filtered[col] = transformed.studentNumber;
+              else if (col === 'department') filtered[col] = transformed.department;
+              else if (col === 'date') filtered[col] = new Date().toLocaleDateString(); // Default to current date
+              else if (col === 'timeIn') filtered[col] = 'N/A'; // Placeholder
+              else if (col === 'timeOut') filtered[col] = 'N/A'; // Placeholder
+              else if (col === 'status') filtered[col] = transformed.status;
+              else if (col === 'subject') filtered[col] = 'N/A'; // Placeholder
+              else if (col === 'room') filtered[col] = 'N/A'; // Placeholder
+              else if (col === 'notes') filtered[col] = ''; // Placeholder
+              else if (col === 'isManualEntry') filtered[col] = false; // Placeholder
+              else if (col === 'createdAt') filtered[col] = new Date().toISOString(); // Placeholder
+              else if (col === 'updatedAt') filtered[col] = new Date().toISOString(); // Placeholder
+              else {
+                // For any other columns, try to get from transformed data
+                filtered[col] = (transformed as any)[col] || '';
+              }
+            });
+            
+            return filtered;
+          });
+        }
+        
+        return list.map(baseTransform);
+      };
+
+      const exportRows = transformForExport(allStudents);
+
+      // 1) Fetch server analytics so export reflects current filters
+      const snapshot = buildAnalyticsSnapshot();
+      const analyticsParams = new URLSearchParams({
+        type: 'student',
+        timeRange: snapshot.timeRange.preset,
+      });
+      // Note: page-level filters are strings; server expects ids/codes depending on schema.
+      // We pass only table filters here as context metadata; server analytics remains global for now.
+      const analyticsRes = await fetch(`/api/attendance/analytics?${analyticsParams.toString()}`, { cache: 'no-store' });
+      if (!analyticsRes.ok) throw new Error(`Failed to fetch analytics for export (HTTP ${analyticsRes.status})`);
+      const analyticsJson = await analyticsRes.json();
+      if (!analyticsJson?.success) throw new Error(analyticsJson?.error || 'Analytics API returned an error');
+
+      const analyticsPayload = analyticsJson.data || {};
+
+      // 2) Prepare export data using server analytics + table snapshot
+      const exportData = {
+        type: 'student' as const,
+        // Maintain backward compatibility: keep data for services expecting a flat array
+        data: exportRows,
+        analytics: {
+          summary: analyticsPayload.summary,
+          timeBasedData: analyticsPayload.timeBasedData || [],
+          departmentStats: analyticsPayload.departmentStats || [],
+          riskLevelData: analyticsPayload.riskLevelData || [],
+          lateArrivalData: analyticsPayload.lateArrivalData || [],
+          patternData: analyticsPayload.patternData || [],
+          streakData: analyticsPayload.streakData || { data: [], stats: {} },
+        },
+        // Include current table view as a separate sheet/source
+        tableView: (format === 'pdf' && options.includeTable) ? exportRows : undefined,
+        filtersSnapshot: {
+          table: { ...filters },
+          timeRange: snapshot.timeRange,
+          generatedAt: new Date().toISOString()
+        }
+      };
+
+      setExportStage('capturing');
+      
+      // Wait a bit for charts to render
+      await new Promise(resolve => setTimeout(resolve, 1000));
 
       // Capture chart elements for export with better selectors
       const chartElements = {
@@ -1592,36 +1704,160 @@ export default function StudentAttendancePage() {
         streakAnalysis: document.querySelector('[data-chart="streak-analysis"]') as HTMLElement
       };
 
+      console.log('Chart elements found:', {
+        attendanceTrend: !!chartElements.attendanceTrend,
+        departmentStats: !!chartElements.departmentStats,
+        riskLevelChart: !!chartElements.riskLevelChart,
+        lateArrivalChart: !!chartElements.lateArrivalChart,
+        attendanceDistribution: !!chartElements.attendanceDistribution,
+        weeklyTrend: !!chartElements.weeklyTrend,
+        lateArrivalTrend: !!chartElements.lateArrivalTrend,
+        riskLevelDistribution: !!chartElements.riskLevelDistribution,
+        departmentPerformance: !!chartElements.departmentPerformance,
+        patternAnalysis: !!chartElements.patternAnalysis,
+        streakAnalysis: !!chartElements.streakAnalysis
+      });
+
       // Fallback to generic selectors if specific ones not found
-      if (!chartElements.attendanceTrend) {
-        chartElements.attendanceTrend = document.querySelector('.recharts-wrapper') as HTMLElement;
+      const allRechartsWrappers = document.querySelectorAll('.recharts-wrapper');
+      console.log('Found recharts wrappers:', allRechartsWrappers.length);
+      
+      if (!chartElements.attendanceTrend && allRechartsWrappers[0]) {
+        chartElements.attendanceTrend = allRechartsWrappers[0] as HTMLElement;
+        console.log('Using fallback for attendanceTrend');
       }
-      if (!chartElements.departmentStats) {
-        chartElements.departmentStats = document.querySelectorAll('.recharts-wrapper')[1] as HTMLElement;
+      if (!chartElements.departmentStats && allRechartsWrappers[1]) {
+        chartElements.departmentStats = allRechartsWrappers[1] as HTMLElement;
+        console.log('Using fallback for departmentStats');
       }
-      if (!chartElements.riskLevelChart) {
-        chartElements.riskLevelChart = document.querySelectorAll('.recharts-wrapper')[2] as HTMLElement;
+      if (!chartElements.riskLevelChart && allRechartsWrappers[2]) {
+        chartElements.riskLevelChart = allRechartsWrappers[2] as HTMLElement;
+        console.log('Using fallback for riskLevelChart');
       }
-      if (!chartElements.lateArrivalChart) {
-        chartElements.lateArrivalChart = document.querySelectorAll('.recharts-wrapper')[3] as HTMLElement;
+      if (!chartElements.lateArrivalChart && allRechartsWrappers[3]) {
+        chartElements.lateArrivalChart = allRechartsWrappers[3] as HTMLElement;
+        console.log('Using fallback for lateArrivalChart');
       }
+
+      setExportStage('generating');
+      // Convert charts to data URLs for PDF embeds when requested
+      let chartImages: Record<string, string> | undefined = undefined;
+      if (format === 'pdf' && options.includeCharts) {
+        try {
+          let toPng: undefined | ((node: HTMLElement, opts?: any) => Promise<string>) = undefined;
+          try {
+            // Dynamic import if available in project; otherwise we gracefully fallback
+            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+            // @ts-ignore
+            const lib = await import('html-to-image');
+            toPng = (lib as any)?.toPng;
+          } catch {}
+          const svgToPng = async (container: HTMLElement): Promise<string | undefined> => {
+            const svg = container.querySelector('svg');
+            if (!svg) return undefined;
+            const serializer = new XMLSerializer();
+            const svgStr = serializer.serializeToString(svg);
+            const svgBlob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
+            const url = URL.createObjectURL(svgBlob);
+            try {
+              const img = new Image();
+              img.crossOrigin = 'anonymous';
+              const dataUrl: string = await new Promise((resolve, reject) => {
+                img.onload = () => {
+                  const rect = svg.getBoundingClientRect();
+                  const w = Math.ceil(rect.width || 800);
+                  const h = Math.ceil(rect.height || 400);
+                  const canvas = document.createElement('canvas');
+                  canvas.width = w; canvas.height = h;
+                  const ctx = canvas.getContext('2d');
+                  if (!ctx) { reject(new Error('Canvas context unavailable')); return; }
+                  ctx.fillStyle = '#ffffff';
+                  ctx.fillRect(0, 0, w, h);
+                  ctx.drawImage(img, 0, 0, w, h);
+                  resolve(canvas.toDataURL('image/png'));
+                };
+                img.onerror = reject;
+                img.src = url;
+              });
+              return dataUrl;
+            } finally {
+              URL.revokeObjectURL(url);
+            }
+          };
+          if (toPng) {
+            const allow = new Set((options.selectedCharts || []).length ? options.selectedCharts : ['attendance-trend','department-stats','risk-level','late-arrival','attendance-distribution','weekly-trend','late-arrival-trend','risk-level-distribution','department-performance','pattern-analysis','streak-analysis']);
+            const keyMap: Record<string,string> = {
+              attendanceTrend: 'attendance-trend',
+              departmentStats: 'department-stats',
+              riskLevelChart: 'risk-level',
+              lateArrivalChart: 'late-arrival',
+              attendanceDistribution: 'attendance-distribution',
+              weeklyTrend: 'weekly-trend',
+              lateArrivalTrend: 'late-arrival-trend',
+              riskLevelDistribution: 'risk-level-distribution',
+              departmentPerformance: 'department-performance',
+              patternAnalysis: 'pattern-analysis',
+              streakAnalysis: 'streak-analysis'
+            };
+            const entries = Object.entries(chartElements).filter(([k, el]) => !!el && allow.has(keyMap[k] || k)) as Array<[string, HTMLElement]>;
+            console.log('Charts to capture:', entries.map(([k, el]) => ({ key: k, element: !!el, tagName: el?.tagName })));
+            
+            const results = await Promise.all(entries.map(async ([key, el]) => {
+              let dataUrl: string | undefined = undefined;
+              try { 
+                console.log(`Capturing chart: ${key}`);
+                dataUrl = await toPng(el, { cacheBust: true, pixelRatio: 2 }); 
+                console.log(`Successfully captured ${key}:`, !!dataUrl);
+              } catch (error) {
+                console.log(`Failed to capture ${key} with toPng:`, error);
+              }
+              if (!dataUrl) { 
+                try {
+                  dataUrl = await svgToPng(el); 
+                  console.log(`Successfully captured ${key} with svgToPng:`, !!dataUrl);
+                } catch (error) {
+                  console.log(`Failed to capture ${key} with svgToPng:`, error);
+                }
+              }
+              const mapped = keyMap[key] || key;
+              return [mapped, dataUrl] as [string, string | undefined];
+            }));
+            chartImages = Object.fromEntries(results.filter(([,v]) => !!v) as Array<[string, string]>);
+            console.log('Final chart images:', Object.keys(chartImages));
+          }
+        } catch (e) {
+          console.warn('Chart image capture unavailable; proceeding without images');
+        }
+      }
+
+      const makeSlug = (s: string) => String(s || 'All').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+      const deptSlug = makeSlug(filters.departments?.[0] || 'All');
+      const courseSlug = makeSlug(filters.courses?.[0] || 'All');
+      const dateSlug = new Date().toISOString().split('T')[0];
+      const filenameBase = `student-attendance_${deptSlug}_${courseSlug}_${dateSlug}`;
 
       const exportOptions = {
         format,
-        filename: `student-attendance-${format}-${new Date().toISOString().split('T')[0]}`,
-        includeCharts: options.includeCharts,
-        includeFilters: options.includeFilters,
-        chartElements: options.includeCharts ? chartElements : undefined
+        filename: filenameBase,
+        includeCharts: format === 'pdf' && options.includeCharts,
+        includeFilters: !!options.includeFilters,
+        includeSummary: !!options.includeSummary,
+        includeTable: !!options.includeTable,
+        selectedColumns: options.selectedColumns,
+        chartElements: options.includeCharts ? chartElements : undefined,
+        chartImages
       };
 
       await ExportService.exportAnalytics(exportData, exportOptions);
       
       // Show success toast
       toast.success(`${format.toUpperCase()} export completed successfully!`);
+      setExportStage('done');
     } catch (error) {
       console.error('Export failed:', error);
       // Show error toast
       toast.error(`Export failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      setExportStage('error');
       throw error; // Re-throw for the dialog to handle
     } finally {
       setExportLoading(false);
@@ -1729,13 +1965,89 @@ export default function StudentAttendancePage() {
           ]}
         />
 
+        {/* Quick Actions Panel - moved directly after Page Header */}
+        <div className="w-full pt-2 sm:pt-3 overflow-x-hidden">
+          <QuickActionsPanel
+            variant="premium"
+            title="Quick Actions"
+            subtitle="Essential tools and shortcuts"
+            icon={
+              <div className="w-6 h-6 text-white">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+                </svg>
+              </div>
+            }
+            actionCards={[
+              {
+                id: 'mark-attendance',
+                label: 'Manual Attendance',
+                description: 'Manually record attendance',
+                icon: <CheckCircle className="w-5 h-5 text-white" />,
+                onClick: () => setShowManualAttendance(true)
+              },
+              {
+                id: 'export-attendance',
+                label: 'Export Report',
+                description: 'Download attendance report',
+                icon: <Download className="w-5 h-5 text-white" />,
+                disabled: !transformedStudentsData || transformedStudentsData.length === 0,
+                onClick: () => setShowExportDialog(true)
+              },
+              {
+                id: 'refresh-data',
+                label: 'Refresh Data',
+                description: 'Reload attendance data',
+                icon: loading ? (
+                  <RefreshCw className="w-5 h-5 text-white animate-spin" />
+                ) : (
+                  <RefreshCw className="w-5 h-5 text-white" />
+                ),
+                onClick: handleRefresh,
+                disabled: loading,
+                loading: loading
+              },
+              {
+                id: 'schedule-management',
+                label: 'Manage Schedules',
+                description: 'View student schedules',
+                icon: <Clock className="w-5 h-5 text-white" />,
+                onClick: () => {
+                  window.location.href = '/list/schedules';
+                }
+              },
+              {
+                id: 'assign-section',
+                label: 'Assign to Section',
+                description: 'Enroll a student in a section',
+                icon: <Plus className="w-5 h-5 text-white" />,
+                onClick: () => setAssignSectionOpen(true)
+              },
+              {
+                id: 'add-class',
+                label: 'Add Class',
+                description: 'Add a specific class to a student',
+                icon: <Calendar className="w-5 h-5 text-white" />,
+                onClick: () => setAddClassOpen(true)
+              }
+            ]}
+            lastActionTime="2 minutes ago"
+            onLastActionTimeChange={() => {}}
+            collapsible={true}
+            defaultCollapsed={true}
+            onCollapseChange={(collapsed) => {
+              console.log('Quick Actions Panel collapsed:', collapsed);
+            }}
+          />
+        </div>
+
         {/* Student Attendance Management - Main Content */}
           
           {/* Analytics Dashboard */}
           <Card className="border border-blue-200 shadow-lg rounded-xl overflow-hidden p-0 w-full">
               <AttendanceAnalytics 
                 data={transformedStudentsData}
-                loading={loading}
+                loading={analyticsLoading}
                 type="student"
                 enableAdvancedFeatures={true}
                 enableRealTime={false}
@@ -1749,6 +2061,10 @@ export default function StudentAttendancePage() {
                 subjects={subjects.map(subject => {
                   return { id: subject.subjectId.toString(), name: subject.subjectCode };
                 })}
+                onFiltersChange={(snapshot) => {
+                  setAnalyticsFilters(snapshot);
+                  setPage(1); // reset to first page; effect will refetch
+                }}
 
                 onDrillDown={(filter: { type: string; value: string }) => {
                   // Handle drill down logic
@@ -1764,9 +2080,26 @@ export default function StudentAttendancePage() {
                     }
                     
                     // Prepare export data
+                    const defaultSelectedColumns = ['studentName','studentId','department','yearLevel','riskLevel','date','timeIn','timeOut','status','subject','room'] as const;
+                    const buildRowsFromAnalytics = (rows: typeof transformedStudentsData) => {
+                      return rows.map(r => ({
+                        studentName: r.name,
+                        studentId: (r as any).studentNumber || r.id,
+                        department: r.department,
+                        yearLevel: (r as any).yearLevel ? String((r as any).yearLevel).toUpperCase() : '',
+                        riskLevel: (r as any).riskLevel ? String((r as any).riskLevel).toUpperCase() : 'NONE',
+                        date: new Date().toLocaleDateString(),
+                        timeIn: 'N/A',
+                        timeOut: 'N/A',
+                        status: ((r as any).status ? String((r as any).status).toUpperCase() : 'ACTIVE'),
+                        subject: Array.isArray(r.subjects) && r.subjects.length > 0 ? r.subjects[0] : 'N/A',
+                        room: 'N/A'
+                      }));
+                    };
+                    const exportRows = (format === 'pdf') ? transformedStudentsData : buildRowsFromAnalytics(transformedStudentsData);
                     const exportData = {
                       type: 'student' as const,
-                      data: transformedStudentsData,
+                      data: exportRows,
                       filters: {
                         department: filters.departments.length > 0 ? filters.departments.join(', ') : 'All',
                         course: filters.courses.length > 0 ? filters.courses.join(', ') : 'All',
@@ -1808,9 +2141,13 @@ export default function StudentAttendancePage() {
                     const options = {
                       format,
                       filename: `student-attendance-analytics-${new Date().toISOString().split('T')[0]}`,
-                      includeCharts: true,
+                      includeCharts: format === 'pdf',
                       includeFilters: true,
-                      chartElements
+                      chartElements,
+                      // Align columns with dialog defaults for quick export (non-PDF)
+                      selectedColumns: format === 'pdf' ? undefined : [...defaultSelectedColumns],
+                      // Ensure tabular data is included for Excel/CSV
+                      includeTable: format !== 'pdf'
                     };
 
                     await ExportService.exportAnalytics(exportData, options);
@@ -1829,80 +2166,18 @@ export default function StudentAttendancePage() {
               />
           </Card>
 
-          {/* Quick Actions Panel */}
-          <div className="w-full pt-2 sm:pt-3 overflow-x-hidden">
-            <QuickActionsPanel
-              variant="premium"
-              title="Quick Actions"
-              subtitle="Essential tools and shortcuts"
-              icon={
-                <div className="w-6 h-6 text-white">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
-                  </svg>
-                </div>
-              }
-              actionCards={[
-                {
-                  id: 'mark-attendance',
-                  label: 'Manual Attendance',
-                  description: 'Manually record attendance',
-                  icon: <CheckCircle className="w-5 h-5 text-white" />,
-                  onClick: () => setShowManualAttendance(true)
-                },
-                {
-                  id: 'export-attendance',
-                  label: 'Export Report',
-                  description: 'Download attendance report',
-                  icon: <Download className="w-5 h-5 text-white" />,
-                  disabled: !transformedStudentsData || transformedStudentsData.length === 0,
-                  onClick: () => setShowExportDialog(true)
-                },
-                {
-                  id: 'refresh-data',
-                  label: 'Refresh Data',
-                  description: 'Reload attendance data',
-                  icon: loading ? (
-                    <RefreshCw className="w-5 h-5 text-white animate-spin" />
-                  ) : (
-                    <RefreshCw className="w-5 h-5 text-white" />
-                  ),
-                  onClick: handleRefresh,
-                  disabled: loading,
-                  loading: loading
-                },
-                {
-                  id: 'schedule-management',
-                  label: 'Manage Schedules',
-                  description: 'View student schedules',
-                  icon: <Clock className="w-5 h-5 text-white" />,
-                  onClick: () => {
-                    // Navigate to schedules page
-                    window.location.href = '/list/schedules';
-                  }
-                }
-              ]}
-              lastActionTime="2 minutes ago"
-              onLastActionTimeChange={() => {}}
-              collapsible={true}
-              defaultCollapsed={true}
-              onCollapseChange={(collapsed) => {
-                console.log('Quick Actions Panel collapsed:', collapsed);
-              }}
-            />
-          </div>
           
           <Card className="border border-blue-200 shadow-lg rounded-xl overflow-hidden p-0 w-full">
             <CardHeader className="p-0">
               {/* Enhanced Blue Gradient Header - matching dialog styling */}
-              <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-blue-800 p-0">
+              <div className="bg-gradient-to-r from-blue-800 via-blue-700 to-blue-600 p-0">
                 <div className="w-full px-6 py-6">
                   <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                    <div className="w-12 h-12 flex items-center justify-center flex-shrink-0">
                       <Users className="w-6 h-6 text-white" />
                       </div>
                     <div className="flex-1 min-w-0">
-                      <h3 className="text-2xl font-bold text-white mb-1">Student Attendance Records</h3>
+                      <h3 className="text-lg font-bold text-white mb-1">Student Attendance Records</h3>
                       <p className="text-blue-100 text-sm">Search, filter and manage student attendance records with comprehensive analytics</p>
                       </div>
                     <div className="flex items-center gap-2">
@@ -1911,7 +2186,7 @@ export default function StudentAttendancePage() {
                           <Button
                             size="icon"
                             variant="ghost"
-                            className="h-10 w-10 rounded-lg text-white hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/40"
+                            className="h-10 w-10 rounded text-white hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/40"
                             onClick={handleRefresh}
                             disabled={loading}
                             aria-label="Refresh data"
@@ -1950,64 +2225,6 @@ export default function StudentAttendancePage() {
 
                   {/* Quick Filter Dropdowns */}
                   <div className="flex flex-wrap gap-3 justify-end">
-                    {/* Department Filter */}
-                    <Select value={filters.departments[0] || 'all'} onValueChange={(value) => {
-                      if (value === 'all') {
-                        setFilters({ ...filters, departments: [] });
-                      } else {
-                        setFilters({ ...filters, departments: [value] });
-                      }
-                    }}>
-                      <SelectTrigger className="w-full lg:w-40 text-sm text-gray-500 min-w-0 rounded border-gray-300 bg-white hover:bg-gray-50">
-                        <SelectValue placeholder="Department" />
-                      </SelectTrigger>
-                      <SelectContent className="max-h-60 overflow-y-auto">
-                        <SelectItem value="all">All Departments</SelectItem>
-                        {departments.map(dept => (
-                          <SelectItem key={dept} value={dept}>{dept}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-
-                    {/* Course Filter (by Course Code) - Searchable */}
-                    <div className="w-full lg:w-40">
-                      <SearchableSelect
-                        value={filters.courses[0] || 'all'}
-                        onChange={(value) => {
-                          if (value === 'all') {
-                            setFilters({ ...filters, courses: [] });
-                          } else {
-                            setFilters({ ...filters, courses: [value] });
-                          }
-                        }}
-                        options={[
-                          { value: 'all', label: 'All Courses' },
-                          ...courses.map(code => ({ value: code, label: code }))
-                        ]}
-                        placeholder="Search courses..."
-                        className="w-full lg:w-40"
-                        noOptionsMessage="No courses found"
-                      />
-                    </div>
-
-                    {/* Year Level Filter */}
-                    <Select value={filters.yearLevels[0] || 'all'} onValueChange={(value) => {
-                      if (value === 'all') {
-                        setFilters({ ...filters, yearLevels: [] });
-                      } else {
-                        setFilters({ ...filters, yearLevels: [value] });
-                      }
-                    }}>
-                      <SelectTrigger className="w-full lg:w-40 text-sm text-gray-500 min-w-0 rounded border-gray-300 bg-white hover:bg-gray-50">
-                        <SelectValue placeholder="Year Level" />
-                      </SelectTrigger>
-                      <SelectContent className="max-h-60 overflow-y-auto">
-                        <SelectItem value="all">All Years</SelectItem>
-                        {yearLevels.map(level => (
-                          <SelectItem key={level} value={level}>{level.replace('_', ' ')}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
                     
                     <Select value={filters.statuses[0] || 'all'} onValueChange={(value) => {
                       if (value === 'all') {
@@ -2181,7 +2398,10 @@ export default function StudentAttendancePage() {
                             filename: `selected-students-${new Date().toISOString().split('T')[0]}`,
                             includeCharts: true,
                             includeFilters: true,
-                            chartElements
+                            chartElements,
+                            // Align columns with dialog defaults for quick export
+                            selectedColumns: ['studentName','studentId','department','yearLevel','riskLevel','date','timeIn','timeOut','status','subject','room'],
+                            includeTable: true
                           };
 
                           await ExportService.exportAnalytics(exportData, options);
@@ -2204,9 +2424,19 @@ export default function StudentAttendancePage() {
                 />
               )}
 
-
-
               {/* Content Section */}
+              {loading && !hasFetchedOnce ? (
+                <div className="flex flex-col items-center justify-center py-12 space-y-4">
+                  <div className="relative">
+                    <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+                  </div>
+                  <div className="text-center">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">Loading Attendance Records</h3>
+                    <p className="text-sm text-gray-600">Fetching student data...</p>
+                  </div>
+                </div>
+              ) : (
+                <>
               {/* Desktop table layout */}
               <div className="hidden lg:block">
                 <div className="px-3 sm:px-4 lg:px-6 pt-4 pb-3">
@@ -2214,7 +2444,7 @@ export default function StudentAttendancePage() {
                     <TableList
                       columns={studentColumns}
                       data={paginatedStudents}
-                      loading={loading}
+                          loading={loading && hasFetchedOnce}
                       emptyMessage={
                         <EmptyState
                           icon={<Users className="w-8 h-8" />}
@@ -2246,7 +2476,7 @@ export default function StudentAttendancePage() {
               {/* Mobile card layout */}
               <div className="block lg:hidden w-full">
                 <div className="px-3 sm:px-4 pt-3 pb-3">
-                  {!loading && filteredStudents.length === 0 ? (
+                      {filteredStudents.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-8 px-4">
                       <EmptyState
                         icon={<Users className="w-6 h-6 text-blue-400" />}
@@ -2294,7 +2524,7 @@ export default function StudentAttendancePage() {
                       ]}
                       disabled={(item) => false}
                       deleteTooltip={(item) => item.status === "INACTIVE" ? "Student is already inactive" : undefined}
-                      isLoading={loading}
+                          isLoading={loading && hasFetchedOnce}
                     />
                   )}
                 </div>
@@ -2303,12 +2533,14 @@ export default function StudentAttendancePage() {
               {/* Pagination */}
               <TablePagination
                 page={page}
-                totalItems={filteredStudents.length}
+                    totalItems={totalFilteredCount || filteredStudents.length}
                 pageSize={pageSize}
                 onPageChange={handlePageChange}
                 onPageSizeChange={handlePageSizeChange}
-                pageSizeOptions={[5, 10, 20, 50]}
+                    pageSizeOptions={[10, 20, 50, 100]}
               />
+                </>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -2449,6 +2681,15 @@ export default function StudentAttendancePage() {
         onExport={handleExport}
         dataCount={transformedStudentsData.length}
         entityType="student"
+      />
+
+      <AssignSectionDialog
+        open={assignSectionOpen}
+        onOpenChange={setAssignSectionOpen}
+      />
+      <AddStudentClassDialog
+        open={addClassOpen}
+        onOpenChange={setAddClassOpen}
       />
     </TooltipProvider>
   );

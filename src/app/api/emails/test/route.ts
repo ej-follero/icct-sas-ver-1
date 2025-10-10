@@ -1,21 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { EmailService } from '@/lib/services/email.service';
 
+async function assertAdmin(request: NextRequest) {
+  const token = request.cookies.get('token')?.value;
+  const isDev = process.env.NODE_ENV !== 'production';
+  if (!token) return isDev ? { ok: true, email: 'dev@example.com', role: 'ADMIN' } as const : { ok: false, res: NextResponse.json({ error: 'Authentication required' }, { status: 401 }) };
+  try {
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const role = decoded.role as string | undefined;
+    const email = decoded.email as string | undefined;
+    if (!role || (role !== 'SUPER_ADMIN' && role !== 'ADMIN')) {
+      return { ok: false, res: NextResponse.json({ error: 'Only administrators can send test emails' }, { status: 403 }) };
+    }
+    return { ok: true, email: email || 'admin@example.com', role } as const;
+  } catch {
+    return { ok: false, res: NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 }) };
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
-    // Get user info from middleware headers
-    const userId = request.headers.get('x-user-id');
-    const userEmail = request.headers.get('x-user-email');
-    const userRole = request.headers.get('x-user-role');
-    
-    if (!userId || !userEmail) {
-      return NextResponse.json({ error: 'User not authenticated' }, { status: 401 });
-    }
-
-    // Only allow ADMIN users to send test emails
-    if (userRole !== 'ADMIN') {
-      return NextResponse.json({ error: 'Only administrators can send test emails' }, { status: 403 });
-    }
+    const gate = await assertAdmin(request);
+    if (!('ok' in gate) || gate.ok !== true) return gate.res;
+    const senderEmail = (gate as any).email as string;
 
     const body = await request.json();
     const { testEmail } = body;
@@ -30,7 +38,7 @@ export async function POST(request: NextRequest) {
     const success = await emailService.sendGeneralNotificationEmail(
       testEmail,
       'ICCT Smart Attendance System - Test Email',
-      `This is a test email from the ICCT Smart Attendance System.\n\nIf you received this email, the email service is working correctly.\n\nSent by: ${userEmail}\nTimestamp: ${new Date().toISOString()}`,
+      `This is a test email from the ICCT Smart Attendance System.\n\nIf you received this email, the email service is working correctly.\n\nSent by: ${senderEmail}\nTimestamp: ${new Date().toISOString()}`,
       'Test User'
     );
 

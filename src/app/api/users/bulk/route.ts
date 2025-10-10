@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import bcrypt from 'bcryptjs';
-import { UserStatus, Role } from '@prisma/client';
+import { UserStatus, Role, Status } from '@prisma/client';
 
 // Schema for user import data (with optional role-specific fields)
 const userImportSchema = z.object({
@@ -57,6 +57,27 @@ const bulkImportSchema = z.object({
 // POST - Bulk import users
 export async function POST(request: NextRequest) {
   try {
+    // JWT Authentication - Admin only
+    const token = request.cookies.get('token')?.value;
+    if (!token) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const reqUserId = Number((decoded as any)?.userId);
+    if (!Number.isFinite(reqUserId)) {
+      return NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 });
+    }
+
+    const reqUser = await prisma.user.findUnique({ where: { userId: reqUserId }, select: { status: true, role: true } });
+    if (!reqUser || reqUser.status !== 'ACTIVE') {
+      return NextResponse.json({ error: 'User not found or inactive' }, { status: 401 });
+    }
+    const adminRoles = ['SUPER_ADMIN', 'ADMIN'];
+    if (!adminRoles.includes(reqUser.role)) {
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+    }
     const body = await request.json();
     const validatedData = bulkImportSchema.parse(body);
     
@@ -136,7 +157,7 @@ export async function POST(request: NextRequest) {
                     suffix: null,
                     gender: record.gender as any,
                     instructorType: record.instructorType as any,
-                    status: UserStatus.ACTIVE as any,
+                    status: Status.ACTIVE,
                     departmentId: record.departmentId,
                     officeLocation: record.officeLocation ?? null,
                     officeHours: record.officeHours ?? null,
@@ -187,7 +208,7 @@ export async function POST(request: NextRequest) {
                     birthDate: record.birthDate ? new Date(record.birthDate) : null,
                     nationality: record.nationality ?? null,
                     studentType: record.studentType as any,
-                    status: UserStatus.ACTIVE as any,
+                    status: Status.ACTIVE,
                     yearLevel: record.yearLevel as any,
                     courseId: record.courseId ?? null,
                     departmentId: null,

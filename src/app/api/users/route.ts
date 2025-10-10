@@ -1,11 +1,31 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { UserStatus, Role } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 
 // GET all users
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    console.log('Fetching users...');
+    // JWT Authentication (SUPER_ADMIN, ADMIN, DEPARTMENT_HEAD, INSTRUCTOR)
+    const token = request.cookies.get('token')?.value;
+    if (!token) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const reqUserId = Number((decoded as any)?.userId);
+    if (!Number.isFinite(reqUserId)) {
+      return NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 });
+    }
+
+    const reqUser = await prisma.user.findUnique({ where: { userId: reqUserId }, select: { status: true, role: true } });
+    if (!reqUser || reqUser.status !== 'ACTIVE') {
+      return NextResponse.json({ error: 'User not found or inactive' }, { status: 401 });
+    }
+    const allowedRoles = ['SUPER_ADMIN', 'ADMIN', 'DEPARTMENT_HEAD', 'INSTRUCTOR'];
+    if (!allowedRoles.includes(reqUser.role)) {
+      return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
+    }
     
     const users = await prisma.user.findMany({
       include: {
@@ -35,15 +55,6 @@ export async function GET() {
             },
           },
         },
-        Instructor: {
-          select: {
-            instructorId: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-            status: true,
-          },
-        },
         DepartmentHead: {
           select: {
             departmentId: true,
@@ -54,12 +65,9 @@ export async function GET() {
       },
     });
 
-    console.log(`Found ${users.length} users in database`);
-
     const formattedUsers = users.map(user => {
       // Get related entity info
       const studentInfo = user.Student?.[0];
-      const instructorInfo = user.Instructor?.[0];
       const departmentHeadInfo = user.DepartmentHead?.[0];
 
       // Determine user type and related info
@@ -80,14 +88,6 @@ export async function GET() {
             email: studentInfo.Guardian.email,
             status: studentInfo.Guardian.status,
           } : null,
-        };
-      } else if (instructorInfo) {
-        userType = 'Instructor';
-        fullName = `${instructorInfo.firstName} ${instructorInfo.lastName}`.trim();
-        relatedInfo = {
-          id: instructorInfo.instructorId,
-          email: instructorInfo.email,
-          status: instructorInfo.status,
         };
       } else if (departmentHeadInfo) {
         userType = 'Department Head';
@@ -114,7 +114,6 @@ export async function GET() {
         lastPasswordChange: user.lastPasswordChange,
         failedLoginAttempts: user.failedLoginAttempts,
         isEmailVerified: user.isEmailVerified,
-        isPhoneVerified: user.isPhoneVerified,
         twoFactorEnabled: user.twoFactorEnabled,
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,
@@ -129,7 +128,6 @@ export async function GET() {
       };
     });
 
-    console.log(`Formatted ${formattedUsers.length} users`);
     return NextResponse.json({ data: formattedUsers });
   } catch (error) {
     console.error('Error fetching users:', error);
@@ -141,8 +139,30 @@ export async function GET() {
 }
 
 // POST new user
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    // JWT Authentication - Admin only
+    const token = request.cookies.get('token')?.value;
+    if (!token) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const reqUserId = Number((decoded as any)?.userId);
+    if (!Number.isFinite(reqUserId)) {
+      return NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 });
+    }
+
+    const reqUser = await prisma.user.findUnique({ where: { userId: reqUserId }, select: { status: true, role: true } });
+    if (!reqUser || reqUser.status !== 'ACTIVE') {
+      return NextResponse.json({ error: 'User not found or inactive' }, { status: 401 });
+    }
+    const adminRoles = ['SUPER_ADMIN', 'ADMIN'];
+    if (!adminRoles.includes(reqUser.role)) {
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+    }
+
     const body = await request.json();
     const { userName, email, passwordHash, role, status } = body;
 

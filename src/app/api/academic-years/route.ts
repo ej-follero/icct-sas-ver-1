@@ -1,16 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { SemesterStatus } from '@prisma/client';
 
 export async function GET(request: NextRequest) {
   try {
-    // Authorization: allow ADMIN and INSTRUCTOR
-    const role = request.headers.get('x-user-role');
+    // Authorization: allow ADMIN, DEPARTMENT_HEAD, INSTRUCTOR
     const isDev = process.env.NODE_ENV !== 'production';
-    
     if (!isDev) {
-      if (!role || (role !== 'ADMIN' && role !== 'INSTRUCTOR')) {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      const token = request.cookies.get('token')?.value;
+      if (!token) {
+        return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+      }
+      try {
+        const jwt = require('jsonwebtoken');
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const userId = decoded.userId as number;
+        const user = await prisma.user.findUnique({ where: { userId }, select: { role: true } });
+        const allowed = user && (user.role === 'ADMIN' || user.role === 'DEPARTMENT_HEAD' || user.role === 'INSTRUCTOR');
+        if (!allowed) {
+          return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+        }
+      } catch {
+        return NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 });
       }
     }
 

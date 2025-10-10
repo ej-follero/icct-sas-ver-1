@@ -1,5 +1,23 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { CourseStatus, CourseType } from "@prisma/client";
+
+async function assertAdmin(request: NextRequest) {
+  const token = request.cookies.get('token')?.value;
+  if (!token) return { ok: false, res: NextResponse.json({ error: 'Authentication required' }, { status: 401 }) };
+  try {
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = decoded.userId as number;
+    const user = await prisma.user.findUnique({ where: { userId }, select: { role: true } });
+    if (!user || (user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN')) {
+      return { ok: false, res: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
+    }
+    return { ok: true } as const;
+  } catch {
+    return { ok: false, res: NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 }) };
+  }
+}
 
 // GET /api/courses - Get all courses
 export async function GET() {
@@ -108,10 +126,12 @@ export async function GET() {
 }
 
 // POST /api/courses - Create a new course
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    const gate = await assertAdmin(request);
+    if (!('ok' in gate) || gate.ok !== true) return gate.res;
     const body = await request.json();
-    const { name, code, department, description, units, status } = body;
+    const { name, code, department, description, units, status, courseType } = body;
 
     // Validate required fields
     if (!name || !code || !department || !units || !status) {
@@ -135,6 +155,17 @@ export async function POST(request: Request) {
       );
     }
 
+    // Normalize enums
+    const normalizedStatus = typeof status === 'string' ? status.toUpperCase() : undefined;
+    if (!normalizedStatus || !(normalizedStatus in CourseStatus)) {
+      return NextResponse.json(
+        { error: "Invalid or missing status" },
+        { status: 400 }
+      );
+    }
+    const normalizedType = typeof courseType === 'string' ? courseType.toUpperCase() : 'MANDATORY';
+    const typeEnum: CourseType = (normalizedType in CourseType ? normalizedType : 'MANDATORY') as CourseType;
+
     // Create new course
     const newCourse = await prisma.courseOffering.create({
       data: {
@@ -143,8 +174,8 @@ export async function POST(request: Request) {
         departmentId: parseInt(department),
         description: description || "",
         totalUnits: units,
-        courseStatus: status,
-        courseType: "MANDATORY", // Default value
+        courseStatus: normalizedStatus as CourseStatus,
+        courseType: typeEnum,
       },
     });
 

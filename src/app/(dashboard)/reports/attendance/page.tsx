@@ -33,7 +33,7 @@ interface AttendanceReportTemplate {
   title: string;
   description: string;
   icon: React.ReactNode;
-  category: 'student' | 'instructor' | 'summary' | 'compliance';
+  category: 'student' | 'summary' | 'compliance';
   data: any[];
   columns: {
     key: string;
@@ -90,36 +90,7 @@ const mockStudentAttendanceData = [
   }
 ];
 
-const mockInstructorAttendanceData = [
-  {
-    instructorId: 'INS001',
-    instructorName: 'Dr. Sarah Wilson',
-    department: 'Computer Science',
-    totalScheduledClasses: 48,
-    attendedClasses: 46,
-    absentClasses: 2,
-    lateClasses: 1,
-    attendanceRate: 95.8,
-    complianceScore: 98,
-    substituteRequired: 2,
-    lastAttendance: '2024-01-15',
-    performanceRating: 'Excellent'
-  },
-  {
-    instructorId: 'INS002',
-    instructorName: 'Prof. Mark Davis',
-    department: 'Information Technology',
-    totalScheduledClasses: 52,
-    attendedClasses: 48,
-    absentClasses: 4,
-    lateClasses: 3,
-    attendanceRate: 92.3,
-    complianceScore: 94,
-    substituteRequired: 4,
-    lastAttendance: '2024-01-14',
-    performanceRating: 'Good'
-  }
-];
+// Instructor attendance mock removed
 
 const attendanceReportTemplates: AttendanceReportTemplate[] = [
   {
@@ -146,30 +117,7 @@ const attendanceReportTemplates: AttendanceReportTemplate[] = [
     ],
     exportFormats: ['csv', 'pdf', 'excel']
   },
-  {
-    id: 'instructor-attendance-report',
-    title: 'Instructor Attendance Report',
-    description: 'Faculty attendance tracking and compliance monitoring',
-    icon: <UserCheck className="h-5 w-5" />,
-    category: 'instructor',
-    data: mockInstructorAttendanceData,
-    frequency: 'monthly',
-    columns: [
-      { key: 'instructorId', label: 'Instructor ID' },
-      { key: 'instructorName', label: 'Instructor Name' },
-      { key: 'department', label: 'Department' },
-      { key: 'totalScheduledClasses', label: 'Scheduled Classes', type: 'number' },
-      { key: 'attendedClasses', label: 'Attended', type: 'number' },
-      { key: 'absentClasses', label: 'Absent', type: 'number' },
-      { key: 'lateClasses', label: 'Late', type: 'number' },
-      { key: 'attendanceRate', label: 'Attendance Rate', type: 'percentage' },
-      { key: 'complianceScore', label: 'Compliance Score', type: 'number' },
-      { key: 'substituteRequired', label: 'Substitute Days', type: 'number' },
-      { key: 'lastAttendance', label: 'Last Attendance', type: 'date' },
-      { key: 'performanceRating', label: 'Performance', type: 'status' }
-    ],
-    exportFormats: ['csv', 'pdf', 'excel']
-  },
+  // Instructor attendance report removed
   {
     id: 'attendance-summary',
     title: 'Attendance Summary Report',
@@ -258,7 +206,6 @@ export default function AttendanceReportsPage() {
 
   const categories = [
     { id: 'student', label: 'Student Reports', icon: <Users className="h-4 w-4" /> },
-    { id: 'instructor', label: 'Instructor Reports', icon: <UserCheck className="h-4 w-4" /> },
     { id: 'summary', label: 'Summary Reports', icon: <BarChart3 className="h-4 w-4" /> },
     { id: 'compliance', label: 'Compliance Reports', icon: <CheckCircle className="h-4 w-4" /> }
   ];

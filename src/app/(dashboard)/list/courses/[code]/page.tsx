@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { PageSkeleton } from "@/components/reusable/Skeleton";
 import { School, User, Book, Users, ArrowLeft, Pencil, Trash2 } from "lucide-react";
 import FormModal from "@/components/FormModal";
 import { courseSchema } from "@/lib/validations/course";
@@ -70,7 +71,7 @@ export default function CourseViewPage() {
     }
   };
 
-  if (loading) return <div className="p-6">Loading...</div>;
+  if (loading) return <PageSkeleton />;
   if (error) return <div className="p-6 text-red-600">{error}</div>;
   if (!course) return null;
 

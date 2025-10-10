@@ -1,12 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
-import { Status } from '@prisma/client';
+import { prisma } from '@/lib/prisma';
+import { Status, GuardianType, UserGender } from '@prisma/client';
+
+async function assertAdmin(request: NextRequest) {
+  const token = request.cookies.get('token')?.value;
+  const isDev = process.env.NODE_ENV !== 'production';
+  if (!token) return isDev ? { ok: true } as const : { ok: false, res: NextResponse.json({ error: 'Authentication required' }, { status: 401 }) };
+  try {
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const role = decoded.role as string | undefined;
+    if (!role || (role !== 'SUPER_ADMIN' && role !== 'ADMIN')) {
+      return { ok: false, res: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
+    }
+    return { ok: true } as const;
+  } catch {
+    return { ok: false, res: NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 }) };
+  }
+}
 
 export async function PATCH(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
+    const gate = await assertAdmin(request);
+    if (!('ok' in gate) || gate.ok !== true) return gate.res;
     const guardianId = parseInt(params.id);
     const body = await request.json();
 
@@ -22,9 +41,9 @@ export async function PATCH(
         ...(body.phoneNumber && { phoneNumber: body.phoneNumber }),
         ...(body.address && { address: body.address }),
         ...(body.img !== undefined && { img: body.img }),
-        ...(body.gender && { gender: body.gender }),
-        ...(body.guardianType && { guardianType: body.guardianType }),
-        ...(body.status && { status: body.status.toUpperCase() as Status }),
+        ...(body.gender && body.gender.toUpperCase() in UserGender && { gender: body.gender.toUpperCase() as UserGender }),
+        ...(body.guardianType && body.guardianType.toUpperCase() in GuardianType && { guardianType: body.guardianType.toUpperCase() as GuardianType }),
+        ...(body.status && body.status.toUpperCase() in Status && { status: body.status.toUpperCase() as Status }),
         ...(body.occupation !== undefined && { occupation: body.occupation }),
         ...(body.workplace !== undefined && { workplace: body.workplace }),
         ...(body.emergencyContact !== undefined && { emergencyContact: body.emergencyContact }),

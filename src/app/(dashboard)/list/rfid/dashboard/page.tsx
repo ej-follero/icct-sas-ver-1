@@ -10,6 +10,7 @@ import { useState, useMemo, useEffect, useCallback, Fragment } from "react";
 import { useRouter } from "next/navigation";
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PageSkeleton } from "@/components/reusable/Skeleton";
 import PageHeader from '@/components/PageHeader/PageHeader';
 import SummaryCard from '@/components/SummaryCard';
 import { QuickActionsPanel } from '@/components/reusable/QuickActionsPanel';
@@ -490,31 +491,7 @@ export default function RFIDDashboardPage() {
 
   // Show loading state
   if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-[#f8fafc] via-[#ffffff] to-[#f8fafc] p-0 overflow-x-hidden">
-        <div className="w-full max-w-full px-4 sm:px-6 lg:px-8 space-y-8 sm:space-y-10">
-          <PageHeader
-            title="RFID Overview"
-            subtitle="Loading dashboard data..."
-            breadcrumbs={[
-              { label: 'Home', href: '/' },
-              { label: 'RFID Management', href: '/list/rfid' },
-              { label: 'Overview' }
-            ]}
-          />
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-            {[...Array(4)].map((_, i) => (
-              <Skeleton key={i} className="h-32 w-full" />
-            ))}
-          </div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {[...Array(4)].map((_, i) => (
-              <Skeleton key={i} className="h-80 w-full" />
-            ))}
-          </div>
-        </div>
-      </div>
-    );
+    return <PageSkeleton />;
   }
 
   // Show error state

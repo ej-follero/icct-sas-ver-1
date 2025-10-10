@@ -1,12 +1,13 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const studentId = searchParams.get('studentId');
     const departmentId = searchParams.get('departmentId');
     const courseId = searchParams.get('courseId');
+    const sectionId = searchParams.get('sectionId');
     const yearLevel = searchParams.get('yearLevel');
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
@@ -30,92 +31,99 @@ export async function GET(request: Request) {
     const pageSize = Math.min(parseInt(searchParams.get('pageSize') || '50'), 100); // hard cap at 100
     const skip = (page - 1) * pageSize;
 
-    // First, get a limited set of students with their basic information
-    const students = await prisma.student.findMany({
-      where: {
-        ...(studentId && { studentId: parseInt(studentId) }),
-        ...(departmentId && { departmentId: parseInt(departmentId) }),
-        ...(courseId && { courseId: parseInt(courseId) }),
-        ...(yearLevel && { yearLevel: yearLevel as any }),
-        ...(search && {
-          OR: [
-            { firstName: { contains: search, mode: 'insensitive' } },
-            { lastName: { contains: search, mode: 'insensitive' } },
-            { studentIdNum: { contains: search, mode: 'insensitive' } },
-            { email: { contains: search, mode: 'insensitive' } },
-            { Department: { departmentName: { contains: search, mode: 'insensitive' } } },
-            { CourseOffering: { courseName: { contains: search, mode: 'insensitive' } } }
-          ]
-        })
-      },
-      include: {
-        Department: {
-          select: {
-            departmentId: true,
-            departmentName: true,
-            departmentCode: true
-          }
-        },
-        CourseOffering: {
-          select: {
-            courseId: true,
-            courseName: true,
-            courseCode: true
-          }
-        },
-        Guardian: {
-          select: {
-            firstName: true,
-            lastName: true,
-            email: true,
-            phoneNumber: true,
-            guardianType: true
-          }
-        },
-        Attendance: {
-          where: {
-            ...(startDate && endDate && {
-              timestamp: {
-                gte: new Date(startDate),
-                lte: new Date(endDate)
-              }
-            }),
-            ...(status && { status: status as any })
+    // Build where clause supporting id OR code for dept/course
+    const where: any = {
+      ...(studentId && { studentId: parseInt(studentId) }),
+      ...(yearLevel && { yearLevel: yearLevel as any }),
+      ...(search && {
+        OR: [
+          { firstName: { contains: search, mode: 'insensitive' } },
+          { lastName: { contains: search, mode: 'insensitive' } },
+          { studentIdNum: { contains: search, mode: 'insensitive' } },
+          { email: { contains: search, mode: 'insensitive' } },
+          {
+            Department: { is: { departmentName: { contains: search, mode: 'insensitive' } } }
           },
-          include: {
-            subjectSchedule: {
-              include: {
-                subject: true,
-                room: true,
-                instructor: {
-                  select: {
-                    firstName: true,
-                    lastName: true,
-                    employeeId: true
-                  }
-                }
-              }
-            }
-          },
-          orderBy: {
-            timestamp: 'desc'
-          },
-          take: 20 // keep a small window to derive recent metrics and reduce load
+          {
+            CourseOffering: { is: { OR: [
+              { courseName: { contains: search, mode: 'insensitive' } },
+              { courseCode: { contains: search, mode: 'insensitive' } }
+            ] } }
+          }
+        ]
+      })
+    };
+    if (departmentId && departmentId !== 'all') {
+      const deptNum = Number(departmentId);
+      if (Number.isFinite(deptNum)) {
+        where.departmentId = deptNum;
+      } else {
+        where.Department = { is: { departmentCode: departmentId } };
+      }
+    }
+    if (courseId && courseId !== 'all') {
+      const cNum = Number(courseId);
+      if (Number.isFinite(cNum)) {
+        where.courseId = cNum;
+      } else {
+        where.CourseOffering = { is: { courseCode: courseId } };
+      }
+    }
+    if (sectionId && sectionId !== 'all') {
+      where.StudentSection = {
+        some: {
+          sectionId: parseInt(sectionId),
+          enrollmentStatus: 'ACTIVE'
         }
-      },
-      orderBy: {
-        firstName: 'asc'
-      },
-      skip,
-      take: pageSize
-    });
+      };
+    }
+
+    // First, get a limited set of students with their basic information
+    const [students, total] = await Promise.all([
+      prisma.student.findMany({
+      where: {
+          ...where
+        },
+        include: {
+          Department: {
+            select: { departmentId: true, departmentName: true, departmentCode: true }
+          },
+          CourseOffering: {
+            select: { courseId: true, courseName: true, courseCode: true }
+          },
+          Guardian: {
+            select: { firstName: true, lastName: true, email: true, phoneNumber: true, guardianType: true }
+          },
+          Attendance: {
+            where: {
+              ...(startDate && endDate && { timestamp: { gte: new Date(startDate), lte: new Date(endDate) } }),
+              ...(status && { status: status as any })
+            },
+            include: { subjectSchedule: { include: { subject: true, room: true } } },
+            orderBy: { timestamp: 'desc' },
+            take: 20
+          },
+          StudentSection: {
+            where: { enrollmentStatus: 'ACTIVE' },
+            include: { Section: { select: { sectionId: true, sectionName: true } } }
+          },
+          StudentSchedules: {
+            where: { status: 'ACTIVE' },
+            include: { schedule: { include: { subject: true, room: true, section: { select: { sectionId: true, sectionName: true } } } } }
+          }
+        },
+        orderBy: { firstName: 'asc' },
+        skip,
+        take: pageSize
+      }),
+      prisma.student.count({ where: { ...where } })
+    ]);
 
     console.log('Found students:', students.length);
 
-    // If no students found, return empty array instead of error
+    // If no students found, return empty page instead of error
     if (students.length === 0) {
-      console.log('No students found, returning empty array');
-      return NextResponse.json([]);
+      return NextResponse.json({ items: [], total: 0, page, pageSize });
     }
 
     // Transform student data with attendance metrics
@@ -177,10 +185,7 @@ export async function GET(request: Request) {
           status: record.status.toLowerCase(),
           time: record.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           subject: record.subjectSchedule?.subject?.subjectName || 'Unknown Subject',
-          room: record.subjectSchedule?.room?.roomNo || 'Unknown Room',
-          instructor: record.subjectSchedule?.instructor ? 
-            `${record.subjectSchedule.instructor.firstName} ${record.subjectSchedule.instructor.lastName}` : 
-            'Unknown Instructor'
+          room: record.subjectSchedule?.room?.roomNo || 'Unknown Room'
         };
       });
 
@@ -222,8 +227,45 @@ export async function GET(request: Request) {
       const guardianName = student.Guardian ? 
         `${student.Guardian.firstName} ${student.Guardian.lastName}` : 'No Guardian';
 
-      // No heavy per-student schedule expansion in summary list response
+      // Build a lightweight schedule list from active sections and overrides
+      const sectionIds = new Set<number>((student as any).StudentSection?.map((ss: any) => ss.sectionId) || []);
+      const overrideSchedules = ((student as any).StudentSchedules || []).map((ov: any) => ov.schedule);
+
+      // Fetch class schedules for active sections
       const schedules: any[] = [];
+      // We'll hydrate synchronously by projecting known relations included above, avoiding extra queries
+      // Add overrides
+      overrideSchedules.forEach((s: any) => {
+        if (!s) return;
+        schedules.push({
+          scheduleId: s.subjectSchedId,
+          subjectName: s.subject?.subjectName || '',
+          subjectCode: s.subject?.subjectCode || '',
+          dayOfWeek: s.day,
+          startTime: s.startTime,
+          endTime: s.endTime,
+          roomNumber: s.room?.roomNo || '',
+          sectionName: s.section?.sectionName || '',
+          type: 'OVERRIDE'
+        });
+      });
+
+      // Note: we cannot run async queries inside map; to keep API responsive we estimate weekly class count from attendance if no sections
+      // If there are active sections but we didn't include their schedules here, we at least mark presence for UI filters
+      sectionIds.forEach((_sid) => {
+        // Placeholder entry to indicate enrollment-derived schedules exist
+        schedules.push({
+          scheduleId: 0,
+          subjectName: 'Section Schedule',
+          subjectCode: '',
+          dayOfWeek: 'DAILY',
+          startTime: '00:00',
+          endTime: '00:00',
+          roomNumber: '',
+          sectionName: 'Section',
+          type: 'SECTION'
+        });
+      });
 
       // Keep weeklyPerformance from included window defined above
 
@@ -275,7 +317,7 @@ export async function GET(request: Request) {
 
     console.log('Transformed students:', transformedStudents.length);
 
-    return NextResponse.json(transformedStudents);
+    return NextResponse.json({ items: transformedStudents, total, page, pageSize });
   } catch (error) {
     console.error('Error fetching student attendance records:', error);
     

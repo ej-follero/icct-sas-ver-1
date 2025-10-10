@@ -1,10 +1,8 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { socketService } from '@/lib/services/socket.service';
 
 interface RealTimeConfig {
-  url: string;
-  reconnectInterval?: number;
-  maxReconnectAttempts?: number;
-  heartbeatInterval?: number;
+  url?: string;
 }
 
 interface RealTimeMessage {
@@ -30,23 +28,20 @@ export function useRealTimeData(config: RealTimeConfig) {
     lastMessage: null
   });
 
-  const wsRef = useRef<WebSocket | null>(null);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const heartbeatIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const socketRef = useRef<ReturnType<typeof socketService.connect> | null>(null);
   const messageHandlersRef = useRef<Map<string, (data: any) => void>>(new Map());
 
-  const connect = useCallback(() => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      return;
-    }
+  // Memoize config to prevent unnecessary re-renders
+  const memoizedConfig = useMemo(() => config, [config.url]);
 
+  const connect = useCallback(() => {
     setState(prev => ({ ...prev, isConnecting: true, error: null }));
 
     try {
-      const ws = new WebSocket(config.url);
-      wsRef.current = ws;
+      const socket = socketService.connect();
+      socketRef.current = socket;
 
-      ws.onopen = () => {
+      socket.on('connect', () => {
         setState(prev => ({
           ...prev,
           isConnected: true,
@@ -54,63 +49,38 @@ export function useRealTimeData(config: RealTimeConfig) {
           error: null,
           reconnectAttempts: 0
         }));
+      });
 
-        // Start heartbeat
-        if (config.heartbeatInterval) {
-          heartbeatIntervalRef.current = setInterval(() => {
-            if (ws.readyState === WebSocket.OPEN) {
-              ws.send(JSON.stringify({ type: 'heartbeat', timestamp: Date.now() }));
-            }
-          }, config.heartbeatInterval);
-        }
-      };
+      socket.on('attendance_update', (data) => {
+        const message: RealTimeMessage = { type: 'attendance_update', data, timestamp: Date.now() };
+        setState(prev => ({ ...prev, lastMessage: message }));
+        const handler = messageHandlersRef.current.get(message.type);
+        if (handler) handler(message.data);
+      });
 
-      ws.onmessage = (event) => {
-        try {
-          const message: RealTimeMessage = JSON.parse(event.data);
-          setState(prev => ({ ...prev, lastMessage: message }));
+      socket.on('status_change', (data) => {
+        const message: RealTimeMessage = { type: 'status_change', data, timestamp: Date.now() };
+        setState(prev => ({ ...prev, lastMessage: message }));
+        const handler = messageHandlersRef.current.get(message.type);
+        if (handler) handler(message.data);
+      });
 
-          // Call registered handlers
-          const handler = messageHandlersRef.current.get(message.type);
-          if (handler) {
-            handler(message.data);
-          }
-        } catch (error) {
-          console.error('Failed to parse WebSocket message:', error);
-        }
-      };
-
-      ws.onclose = (event) => {
+      socket.on('disconnect', (reason) => {
         setState(prev => ({
           ...prev,
           isConnected: false,
           isConnecting: false,
-          error: event.reason || 'Connection closed'
+          error: reason || 'Connection closed'
         }));
+      });
 
-        // Clear heartbeat
-        if (heartbeatIntervalRef.current) {
-          clearInterval(heartbeatIntervalRef.current);
-          heartbeatIntervalRef.current = null;
-        }
-
-        // Attempt reconnect if not a clean close
-        if (event.code !== 1000 && state.reconnectAttempts < (config.maxReconnectAttempts || 5)) {
-          const delay = config.reconnectInterval || 5000;
-          reconnectTimeoutRef.current = setTimeout(() => {
-            setState(prev => ({ ...prev, reconnectAttempts: prev.reconnectAttempts + 1 }));
-            connect();
-          }, delay);
-        }
-      };
-
-      ws.onerror = (error) => {
+      socket.on('connect_error', () => {
         setState(prev => ({
           ...prev,
           error: 'WebSocket error occurred',
           isConnecting: false
         }));
-      };
+      });
     } catch (error) {
       setState(prev => ({
         ...prev,
@@ -118,23 +88,10 @@ export function useRealTimeData(config: RealTimeConfig) {
         isConnecting: false
       }));
     }
-  }, [config]);
+  }, [memoizedConfig]);
 
   const disconnect = useCallback(() => {
-    if (reconnectTimeoutRef.current) {
-      clearTimeout(reconnectTimeoutRef.current);
-      reconnectTimeoutRef.current = null;
-    }
-
-    if (heartbeatIntervalRef.current) {
-      clearInterval(heartbeatIntervalRef.current);
-      heartbeatIntervalRef.current = null;
-    }
-
-    if (wsRef.current) {
-      wsRef.current.close(1000, 'User disconnected');
-      wsRef.current = null;
-    }
+    socketService.disconnect();
 
     setState(prev => ({
       ...prev,
@@ -144,10 +101,8 @@ export function useRealTimeData(config: RealTimeConfig) {
     }));
   }, []);
 
-  const sendMessage = useCallback((type: string, data: any) => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ type, data, timestamp: Date.now() }));
-    }
+  const sendMessage = useCallback((event: string, data: any) => {
+    socketService.emit(event, data);
   }, []);
 
   const subscribe = useCallback((messageType: string, handler: (data: any) => void) => {

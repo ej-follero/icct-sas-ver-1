@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import { PageSkeleton } from "@/components/reusable/Skeleton";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { TablePagination } from "@/components/reusable/Table/TablePagination";
@@ -34,7 +35,7 @@ import { EmptyState } from '@/components/reusable';
 import { BulkActionsDialog } from '@/components/reusable/Dialogs/BulkActionsDialog';
 import { ViewDialog } from '@/components/reusable/Dialogs/ViewDialog';
 import { QuickActionsPanel } from '@/components/reusable/QuickActionsPanel';
-import { SummaryCardSkeleton, PageSkeleton } from '@/components/reusable/Skeleton';
+import { SummaryCardSkeleton } from '@/components/reusable/Skeleton';
 import { VisibleColumnsDialog, ColumnOption } from '@/components/reusable/Dialogs/VisibleColumnsDialog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -168,6 +169,21 @@ export default function UsersListPage() {
     excludedUsers: User[];
     message: string;
   } | null>(null);
+  // Normalize object for Select components: replace empty strings/null with undefined
+  const normalizeForSelect = <T extends Record<string, any>>(obj: T): T => {
+    if (!obj || typeof obj !== 'object') return obj;
+    const next: Record<string, any> = Array.isArray(obj) ? [...obj] : { ...obj };
+    for (const key of Object.keys(next)) {
+      const val = next[key];
+      if (val === '') {
+        next[key] = undefined;
+      } else if (val === null) {
+        next[key] = undefined;
+      }
+    }
+    return next as T;
+  };
+
   const [bulkReactivateConfirmOpen, setBulkReactivateConfirmOpen] = useState(false);
   const [bulkReactivateData, setBulkReactivateData] = useState<{
     users: User[];
@@ -343,7 +359,6 @@ export default function UsersListPage() {
         // Prepare security and activity information
         const securityInfo = {
           emailVerified: item.isEmailVerified ? 'Verified' : 'Not Verified',
-          phoneVerified: item.isPhoneVerified ? 'Verified' : 'Not Verified',
           twoFactorAuth: item.twoFactorEnabled ? 'Enabled' : 'Disabled',
           failedAttempts: item.failedLoginAttempts,
           lastPasswordChange: item.lastPasswordChange ? new Date(item.lastPasswordChange).toLocaleDateString() : 'Never'
@@ -356,21 +371,17 @@ export default function UsersListPage() {
           rfidLogs: item.statistics.totalRFIDLogs
         } : null;
 
-        const relatedInfo = item.relatedInfo ? {
-          entityType: item.role,
-          entityDetails: item.relatedInfo
-        } : null;
+        
 
         return (
           <TableExpandedRow
             key={`expanded-${item.id}`}
             colSpan={userColumns.filter(col => visibleColumns.includes(col.key)).length + 3}
-            headers={["Security Status", "Activity Statistics", "Related Entity"]}
+            headers={["Security Status", "Activity Statistics"]}
             rows={[
               {
-                security: `${securityInfo.emailVerified} • ${securityInfo.phoneVerified} • 2FA: ${securityInfo.twoFactorAuth}`,
-                activity: activityInfo ? `${activityInfo.totalAttendance} attendance • ${activityInfo.systemLogs} system logs • ${activityInfo.reportLogs} reports • ${activityInfo.rfidLogs} RFID logs` : 'No activity data available',
-                related: relatedInfo ? `${relatedInfo.entityType} - ${JSON.stringify(relatedInfo.entityDetails).slice(0, 50)}...` : 'No related entity'
+                security: `${securityInfo.emailVerified} • 2FA: ${securityInfo.twoFactorAuth}`,
+                activity: activityInfo ? `${activityInfo.totalAttendance} attendance • ${activityInfo.systemLogs} system logs • ${activityInfo.reportLogs} reports • ${activityInfo.rfidLogs} RFID logs` : 'No activity data available'
               }
             ]}
             renderRow={(row: any) => (
@@ -393,19 +404,6 @@ export default function UsersListPage() {
                             : 'bg-red-100 text-red-700 border border-red-200'
                         }`}>
                           {securityInfo.emailVerified}
-                        </div>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <Phone className="h-3 w-3 text-gray-500" />
-                          <span className="text-xs text-gray-600">Phone</span>
-                        </div>
-                        <div className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          item.isPhoneVerified 
-                            ? 'bg-green-100 text-green-700 border border-green-200' 
-                            : 'bg-red-100 text-red-700 border border-red-200'
-                        }`}>
-                          {securityInfo.phoneVerified}
                         </div>
                       </div>
                       <div className="flex items-center justify-between">
@@ -492,38 +490,6 @@ export default function UsersListPage() {
                       <div className="text-center py-4">
                         <Clock className="h-8 w-8 text-gray-300 mx-auto mb-2" />
                         <div className="text-xs text-gray-500">No activity data available</div>
-                      </div>
-                    )}
-                  </div>
-                </TableCell>
-                <TableCell className="text-left align-top w-1/3 p-4">
-                  <div className="bg-white rounded-xl border border-blue-100 p-4 shadow-sm">
-                    <div className="flex items-center gap-2 mb-3 bg-purple-50 rounded p-2">
-                      <Building2 className="h-4 w-4 text-blue-600" />
-                      <div className="text-sm font-semibold text-blue-900">Related Entity</div>
-                    </div>
-                    {relatedInfo ? (
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <UserCheck className="h-3 w-3 text-gray-500" />
-                            <span className="text-xs text-gray-600">Role</span>
-                          </div>
-                          <div className="px-2 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700 border border-indigo-200">
-                            {relatedInfo.entityType}
-                          </div>
-                        </div>
-                        <div className="pt-2 border-t border-gray-100">
-                          <div className="text-xs text-gray-600 mb-1">Details:</div>
-                          <div className="text-xs text-gray-700 bg-gray-50 p-2 rounded border">
-                            {JSON.stringify(relatedInfo.entityDetails).slice(0, 80)}...
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="text-center py-4">
-                        <AlertTriangle className="h-8 w-8 text-gray-300 mx-auto mb-2" />
-                        <div className="text-xs text-gray-500">No related entity</div>
                       </div>
                     )}
                   </div>
@@ -989,7 +955,6 @@ export default function UsersListPage() {
         role: "STUDENT",
         status: "active",
         isEmailVerified: "false",
-        isPhoneVerified: "false",
         twoFactorEnabled: "false"
       },
       {
@@ -998,7 +963,6 @@ export default function UsersListPage() {
         role: "INSTRUCTOR",
         status: "active",
         isEmailVerified: "true",
-        isPhoneVerified: "false",
         twoFactorEnabled: "true"
       },
       {
@@ -1007,7 +971,6 @@ export default function UsersListPage() {
         role: "ADMIN",
         status: "active",
         isEmailVerified: "true",
-        isPhoneVerified: "true",
         twoFactorEnabled: "true"
       }
     ];
@@ -1018,7 +981,6 @@ export default function UsersListPage() {
       'role',
       'status',
       'isEmailVerified',
-      'isPhoneVerified',
       'twoFactorEnabled'
     ];
 
@@ -1426,21 +1388,7 @@ export default function UsersListPage() {
   };
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-[#f8fafc] via-[#ffffff] to-[#f8fafc] p-0 overflow-x-hidden">
-        <div className="w-full max-w-full px-4 sm:px-6 lg:px-8 space-y-4 sm:space-y-6">
-        <div className="animate-pulse">
-            <div className="h-8 bg-gray-200 rounded w-1/3 sm:w-1/4 mb-4"></div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">
-            {[1, 2, 3, 4].map(i => (
-                <div key={i} className="h-20 sm:h-24 bg-gray-200 rounded"></div>
-            ))}
-          </div>
-          <div className="h-64 bg-gray-200 rounded"></div>
-          </div>
-        </div>
-      </div>
-    );
+    return <PageSkeleton />;
   }
 
   return (
@@ -1956,18 +1904,24 @@ export default function UsersListPage() {
           description={userToDelete ? `Are you sure you want to deactivate the user "${userToDelete.name}"? This action can be reversed by reactivating the user.` : undefined}
         />
 
-        <UserForm
-          key={selectedUser?.id || 'new'}
-          open={editModalOpen}
-          onOpenChange={setEditModalOpen}
-          type="update"
-          data={selectedUser || undefined}
-          id={selectedUser?.id}
-          onSuccess={() => {
-            setEditModalOpen(false);
-            fetchUsers();
-          }}
-        />
+        {editModalOpen && selectedUser && (
+          <UserForm
+            key={selectedUser.id}
+            open={editModalOpen}
+            onOpenChange={setEditModalOpen}
+            type="update"
+            data={normalizeForSelect({
+              ...selectedUser,
+              role: (selectedUser.role as string) || 'STUDENT',
+              status: (selectedUser.status as any) || 'active'
+            }) as unknown as User}
+            id={selectedUser.id}
+            onSuccess={() => {
+              setEditModalOpen(false);
+              fetchUsers();
+            }}
+          />
+        )}
 
         <SortDialog
           open={sortDialogOpen}
@@ -2024,7 +1978,6 @@ export default function UsersListPage() {
               fields: [
                 { label: 'Failed Login Attempts', value: String(selectedUser.failedLoginAttempts), icon: <Key className="w-4 h-4 text-blue-600" /> },
                 { label: 'Email Verified', value: selectedUser.isEmailVerified ? 'Yes' : 'No', icon: <Mail className="w-4 h-4 text-blue-600" /> },
-                { label: 'Phone Verified', value: selectedUser.isPhoneVerified ? 'Yes' : 'No', icon: <Phone className="w-4 h-4 text-blue-600" /> },
                 { label: 'Two-Factor Auth', value: selectedUser.twoFactorEnabled ? 'Enabled' : 'Disabled', icon: <Shield className="w-4 h-4 text-blue-600" /> },
               ]
             },
@@ -2081,10 +2034,10 @@ export default function UsersListPage() {
                   <li>• File must be in CSV or Excel format</li>
                   <li>• Maximum file size: 10MB</li>
                   <li>• <b>Required columns:</b> <code className="bg-gray-100 px-1 rounded">userName</code>, <code className="bg-gray-100 px-1 rounded">email</code>, <code className="bg-gray-100 px-1 rounded">role</code></li>
-                  <li>• <b>Optional columns:</b> <code className="bg-gray-100 px-1 rounded">status</code>, <code className="bg-gray-100 px-1 rounded">isEmailVerified</code>, <code className="bg-gray-100 px-1 rounded">isPhoneVerified</code>, <code className="bg-gray-100 px-1 rounded">twoFactorEnabled</code></li>
+                  <li>• <b>Optional columns:</b> <code className="bg-gray-100 px-1 rounded">status</code>, <code className="bg-gray-100 px-1 rounded">isEmailVerified</code>, <code className="bg-gray-100 px-1 rounded">twoFactorEnabled</code></li>
                   <li>• <b>role</b> values: <code className="bg-blue-100 px-1 rounded">SUPER_ADMIN</code>, <code className="bg-blue-100 px-1 rounded">ADMIN</code>, <code className="bg-blue-100 px-1 rounded">DEPARTMENT_HEAD</code>, <code className="bg-blue-100 px-1 rounded">INSTRUCTOR</code>, <code className="bg-blue-100 px-1 rounded">STUDENT</code></li>
                   <li>• <b>status</b> values: <code className="bg-green-100 px-1 rounded">active</code>, <code className="bg-green-100 px-1 rounded">inactive</code>, <code className="bg-green-100 px-1 rounded">suspended</code>, <code className="bg-green-100 px-1 rounded">pending</code>, <code className="bg-green-100 px-1 rounded">blocked</code> (defaults to <code className="bg-green-100 px-1 rounded">active</code>)</li>
-                  <li>• <b>isEmailVerified</b>/<b>isPhoneVerified</b>/<b>twoFactorEnabled</b>: <code className="bg-yellow-100 px-1 rounded">true</code> or <code className="bg-yellow-100 px-1 rounded">false</code> (defaults to <code className="bg-yellow-100 px-1 rounded">false</code>)</li>
+                  <li>• <b>isEmailVerified</b>/<b>twoFactorEnabled</b>: <code className="bg-yellow-100 px-1 rounded">true</code> or <code className="bg-yellow-100 px-1 rounded">false</code> (defaults to <code className="bg-yellow-100 px-1 rounded">false</code>)</li>
                   <li>• <b>userName</b> must be unique and between 3-50 characters</li>
                   <li>• <b>email</b> must be valid email format and unique</li>
                   <li>• <b>Passwords will be auto-generated</b> and sent to users via email</li>
@@ -2191,7 +2144,6 @@ export default function UsersListPage() {
               title: "Verification Status",
               fields: [
                 { label: 'Email Verified', value: viewUser?.isEmailVerified ? 'Yes' : 'No', type: 'text' },
-                { label: 'Phone Verified', value: viewUser?.isPhoneVerified ? 'Yes' : 'No', type: 'text' },
                 { label: 'Two-Factor Auth', value: viewUser?.twoFactorEnabled ? 'Enabled' : 'Disabled', type: 'text' }
               ]
             },

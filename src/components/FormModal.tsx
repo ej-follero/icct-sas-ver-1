@@ -88,7 +88,7 @@ export default function FormModal({
           <DialogClose asChild>
             <button
               aria-label="Close"
-              className="rounded-md p-1 hover:bg-gray-200 dark:hover:bg-gray-700 ml-2"
+              className="rounded-md p-1 hover:bg-gray-200 ml-2"
             >
               <X className="h-5 w-5" />
             </button>

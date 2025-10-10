@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import Menu from "@/components/Menu";
 import Navbar from "@/components/Navbar";
-import { role } from "@/lib/data";
+import { useUser } from "@/hooks/useUser";
 import type { Role } from "@/components/Menu";
 
 const SIDEBAR_WIDTH = 256; // 64 * 4 = 256px (w-64)
@@ -16,6 +16,7 @@ export default function SettingsLayout({
   children: React.ReactNode;
 }>) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const { user } = useUser();
   const handleSidebarToggle = () => setSidebarCollapsed((prev) => !prev);
 
   return (
@@ -25,7 +26,7 @@ export default function SettingsLayout({
         className={`hidden md:flex flex-col fixed left-0 top-16 h-[calc(100vh-64px)] z-30 bg-[#0c2556] shadow-lg transition-all duration-300 ease-in-out ${sidebarCollapsed ? 'w-16' : 'w-64'}`}
         style={{ width: sidebarCollapsed ? 64 : 256 }}
       >
-        <Menu role={role as Role} collapsed={sidebarCollapsed} />
+        <Menu role={(user?.role as Role) || 'student'} collapsed={sidebarCollapsed} />
       </aside>
       
       {/* Logo/hamburger group fixed over sidebar - hidden on mobile, shown on desktop */}

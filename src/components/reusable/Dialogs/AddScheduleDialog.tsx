@@ -166,15 +166,40 @@ export function AddScheduleDialog({ open, onOpenChange, onScheduleCreated }: Add
     setIsSubmitting(true);
 
     try {
+      // Basic client-side validation aligned with SubjectSchedule schema
+      const numericSubjectId = Number(formData.subjectId);
+      const numericSectionId = Number(formData.sectionId);
+      const numericInstructorId = Number(formData.instructorId);
+      const numericRoomId = Number(formData.roomId);
+      const numericSemesterId = Number(formData.semesterId);
+      if (!numericSubjectId || !numericSectionId || !numericInstructorId || !numericRoomId || !numericSemesterId || !formData.day || !formData.startTime || !formData.endTime) {
+        toast.error('Please complete all required fields.');
+        setIsSubmitting(false);
+        return;
+      }
+
+      const payload = {
+        subjectId: numericSubjectId,
+        sectionId: numericSectionId,
+        instructorId: numericInstructorId,
+        roomId: numericRoomId,
+        day: formData.day,
+        startTime: formData.startTime,
+        endTime: formData.endTime,
+        scheduleType: formData.scheduleType,
+        status: formData.status,
+        semesterId: numericSemesterId,
+        academicYear: formData.academicYear,
+        maxStudents: parseInt(formData.maxStudents) || 0,
+        notes: formData.notes || undefined,
+      };
+
       const response = await fetch('/api/schedules', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          ...formData,
-          maxStudents: parseInt(formData.maxStudents) || 0,
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (response.ok) {
@@ -222,7 +247,7 @@ export function AddScheduleDialog({ open, onOpenChange, onScheduleCreated }: Add
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden bg-white/95 backdrop-blur-sm border border-blue-200 shadow-2xl rounded-2xl p-0 mx-2 my-1 sm:max-w-[600px] sm:mx-4 sm:my-1 md:max-w-[750px] md:mx-6 md:my-1 lg:max-w-[900px] lg:mx-8 lg:my-1 flex flex-col">
+      <DialogContent className="sm:max-w-3xl p-0 overflow-hidden rounded-xl border border-blue-200 flex flex-col max-h-[90vh] bg-white/95 backdrop-blur-sm">
         {/* Visually hidden DialogTitle for accessibility */}
         <DialogTitle className="sr-only">
           Add New Schedule

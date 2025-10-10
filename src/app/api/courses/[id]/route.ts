@@ -1,12 +1,30 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { CourseStatus, CourseType } from "@prisma/client";
+
+async function assertAdmin(request: NextRequest) {
+  const token = request.cookies.get('token')?.value;
+  if (!token) return { ok: false, res: NextResponse.json({ error: 'Authentication required' }, { status: 401 }) };
+  try {
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = decoded.userId as number;
+    const user = await prisma.user.findUnique({ where: { userId }, select: { role: true } });
+    if (!user || (user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN')) {
+      return { ok: false, res: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
+    }
+    return { ok: true } as const;
+  } catch {
+    return { ok: false, res: NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 }) };
+  }
+}
 
 // GET /api/courses/[id] - Get a specific course
 export async function GET(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
+  request: NextRequest,
+  { params }: { params: { id: string } }
 ) {
-  const { id } = await params;
+  const { id } = params;
   try {
     // Try to find by ID first
     let course = await prisma.courseOffering.findUnique({
@@ -94,10 +112,12 @@ export async function GET(
 
 // PUT /api/courses/[id] - Update a course
 export async function PUT(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
+  request: NextRequest,
+  { params }: { params: { id: string } }
 ) {
-  const { id } = await params;
+  const gate = await assertAdmin(request);
+  if (!('ok' in gate) || gate.ok !== true) return gate.res;
+  const { id } = params;
   try {
     const body = await request.json();
     const { name, code, department, description, units, status, courseType, major } = body;
@@ -153,6 +173,13 @@ export async function PUT(
     }
 
     // Update course
+    // Map incoming status/type to enums safely
+    const normalizedStatus = typeof status === 'string' ? status.toUpperCase() : undefined;
+    const statusEnum: CourseStatus | undefined = normalizedStatus && normalizedStatus in CourseStatus ? (normalizedStatus as CourseStatus) : undefined;
+    const typeEnum: CourseType | undefined = (typeof courseType === 'string' && courseType.toUpperCase() in CourseType)
+      ? (courseType.toUpperCase() as CourseType)
+      : undefined;
+
     const updatedCourse = await prisma.courseOffering.update({
       where: {
         courseId: existingCourse.courseId,
@@ -163,8 +190,8 @@ export async function PUT(
         departmentId: parseInt(department),
         description: description || "",
         totalUnits: units,
-        courseStatus: status.toUpperCase(),
-        courseType: courseType || existingCourse.courseType,
+        courseStatus: statusEnum ?? existingCourse.courseStatus,
+        courseType: typeEnum ?? existingCourse.courseType,
         major: major || existingCourse.major,
       },
       include: {
@@ -185,7 +212,7 @@ export async function PUT(
       department: updatedCourse.Department?.departmentName ?? '',
       description: updatedCourse.description,
       units: updatedCourse.totalUnits,
-      status: updatedCourse.courseStatus === 'ACTIVE' ? 'active' : 'inactive',
+      status: updatedCourse.courseStatus,
       totalStudents: updatedCourse._count.Student,
       totalInstructors: updatedCourse._count.Section,
       createdAt: updatedCourse.createdAt.toISOString(),
@@ -203,10 +230,12 @@ export async function PUT(
 
 // DELETE /api/courses/[id] - Soft delete (archive) a course
 export async function DELETE(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
+  request: NextRequest,
+  { params }: { params: { id: string } }
 ) {
-  const { id } = await params;
+  const gate = await assertAdmin(request);
+  if (!('ok' in gate) || gate.ok !== true) return gate.res;
+  const { id } = params;
   try {
     // Try to find by ID first
     let existingCourse = await prisma.courseOffering.findUnique({
@@ -237,7 +266,7 @@ export async function DELETE(
         courseId: existingCourse.courseId,
       },
       data: {
-        courseStatus: 'ARCHIVED',
+        courseStatus: CourseStatus.ARCHIVED,
       },
     });
 
@@ -256,16 +285,25 @@ export async function DELETE(
 
 // PATCH /api/courses/[id] - Update course status (e.g., restore from archived)
 export async function PATCH(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
+  request: NextRequest,
+  { params }: { params: { id: string } }
 ) {
-  const { id } = await params;
+  const gate = await assertAdmin(request);
+  if (!('ok' in gate) || gate.ok !== true) return gate.res;
+  const { id } = params;
   try {
     const body = await request.json();
     const { status } = body;
     if (!status) {
       return NextResponse.json(
         { error: "Missing status field" },
+        { status: 400 }
+      );
+    }
+    const normalizedStatus = typeof status === 'string' ? status.toUpperCase() : status;
+    if (!(normalizedStatus in CourseStatus)) {
+      return NextResponse.json(
+        { error: "Invalid status value" },
         { status: 400 }
       );
     }
@@ -295,7 +333,7 @@ export async function PATCH(
         courseId: existingCourse.courseId,
       },
       data: {
-        courseStatus: status,
+        courseStatus: normalizedStatus as CourseStatus,
       },
       include: {
         Department: true,

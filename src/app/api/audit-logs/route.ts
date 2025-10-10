@@ -20,7 +20,8 @@ export async function GET(request: NextRequest) {
     }
     
     if (category !== 'all') {
-      where.category = category;
+      // Map UI 'category' to SecurityLog.module field
+      where.module = category;
     }
 
     if (action !== 'all') {
@@ -30,9 +31,10 @@ export async function GET(request: NextRequest) {
     if (search) {
       where.OR = [
         { action: { contains: search, mode: 'insensitive' } },
-        { resourceType: { contains: search, mode: 'insensitive' } },
-        { user: { userName: { contains: search, mode: 'insensitive' } } },
-        { user: { email: { contains: search, mode: 'insensitive' } } }
+        { eventType: { contains: search, mode: 'insensitive' } },
+        { module: { contains: search, mode: 'insensitive' } },
+        { user: { is: { userName: { contains: search, mode: 'insensitive' } } } },
+        { user: { is: { email: { contains: search, mode: 'insensitive' } } } }
       ];
     }
 
@@ -79,8 +81,8 @@ export async function GET(request: NextRequest) {
         userId: log.userId,
         userName: log.user?.userName || 'System',
         userEmail: log.user?.email || 'system@icct.edu.ph',
-        action: log.eventType,
-        resourceType: 'Security',
+        action: log.eventType || log.action || 'UNKNOWN',
+        resourceType: log.module || 'Security',
         resourceId: log.id,
         oldValues: null,
         newValues: log.details,
@@ -88,7 +90,7 @@ export async function GET(request: NextRequest) {
         userAgent: log.userAgent || 'unknown',
         timestamp: log.timestamp.toISOString(),
         severity: log.severity,
-        category: 'Security'
+        category: log.module || 'Security'
       })),
       statistics: {
         total: total,
@@ -121,18 +123,15 @@ export async function POST(request: NextRequest) {
     const auditLog = await prisma.securityLog.create({
       data: {
         userId,
-        eventType: action,
-        severity: severity || 'LOW',
-        description: `${action} on ${resourceType}`,
+        userEmail: undefined,
+        level: (severity || 'LOW').toString(),
+        module: (category || 'AUDIT').toString(),
+        action: action?.toString() || 'UNKNOWN',
+        eventType: action?.toString() || 'UNKNOWN',
+        severity: (severity || 'LOW').toString(),
         ipAddress: ipAddress || request.headers.get('x-forwarded-for') || 'unknown',
         userAgent: userAgent || request.headers.get('user-agent') || 'unknown',
-        details: {
-          resourceType,
-          resourceId,
-          oldValues,
-          newValues,
-          category
-        }
+        details: JSON.stringify({ resourceType, resourceId, oldValues, newValues, category })
       }
     });
 

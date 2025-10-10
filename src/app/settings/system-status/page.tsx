@@ -4,6 +4,7 @@
 export const dynamic = 'force-dynamic';
 
 import { useState, useEffect } from "react";
+import { PageSkeleton } from "@/components/reusable/Skeleton";
 import { Settings, Activity, Database, Wifi, AlertTriangle, CheckCircle, Clock, Zap, TrendingUp, Server, HardDrive, Cpu, RefreshCw, Bell, Shield, Globe, Users, BarChart3, AlertCircle, Info, Search, Plus, Upload, Printer, Columns3, List, Download, Loader2, MoreHorizontal, Eye, Pencil, RotateCcw, X, Archive, Lock } from "lucide-react";
 import SystemLogViewer from '@/components/SystemLogViewer';
 import SystemStatusExportDialog from '@/components/SystemStatusExportDialog';
@@ -304,38 +305,20 @@ export default function SystemStatusPage() {
   );
 
   // Check if user can perform administrative actions
-  const canPerformAdminActions = isSuperAdmin || isAdmin;
+  const canPerformAdminActions = isSuperAdmin; // Only SUPER_ADMIN can perform admin actions
   
   // Check if user has read-only access
   const isReadOnly = isSystemAuditor;
   
   // Check if user has limited access (DEPARTMENT_HEAD)
   const hasLimitedAccess = isDepartmentHead;
+  
+  // Check if user is admin (view-only access)
+  const isAdminViewOnly = isAdmin;
 
   // Show loading state while user data is being loaded
   if (!user) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-[#f8fafc] via-[#ffffff] to-[#f8fafc] p-0 overflow-x-hidden">
-        <div className="w-full max-w-full px-4 sm:px-6 lg:px-8 space-y-8 sm:space-y-10">
-          <PageHeader
-            title="System Status"
-            subtitle="Monitor the health and performance of the ICCT Smart Attendance System"
-            breadcrumbs={[
-              { label: "Home", href: "/" },
-              { label: "Settings", href: "/settings" },
-              { label: "System Status" }
-            ]}
-          />
-          
-          <div className="flex items-center justify-center py-12">
-            <div className="flex items-center gap-3">
-              <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
-              <span className="text-blue-600">Loading user permissions...</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
+    return <PageSkeleton />;
   }
 
   // Show unauthorized access component
@@ -386,6 +369,8 @@ export default function SystemStatusPage() {
               ? "Monitor system health (Read-Only Mode)" 
               : hasLimitedAccess 
               ? "Monitor system health (Limited Access)" 
+              : isAdminViewOnly
+              ? "Monitor system health (View-Only Mode)"
               : "Monitor the health and performance of the ICCT Smart Attendance System"
           }
           breadcrumbs={[
@@ -442,7 +427,13 @@ export default function SystemStatusPage() {
           <QuickActionsPanel
             variant="premium"
             title="Quick Actions"
-            subtitle={isReadOnly ? "Read-only monitoring tools" : "Essential monitoring tools and shortcuts"}
+            subtitle={
+              isReadOnly 
+                ? "Read-only monitoring tools" 
+                : isAdminViewOnly 
+                ? "View-only monitoring tools" 
+                : "Essential monitoring tools and shortcuts"
+            }
             icon={
               <div className="w-6 h-6 text-white">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -461,7 +452,7 @@ export default function SystemStatusPage() {
                   <RefreshCw className="w-5 h-5 text-white" />
                 ),
                 onClick: () => fetchSystemHealth(true),
-                disabled: isRefreshing || isReadOnly,
+                disabled: isRefreshing || isReadOnly || isAdminViewOnly,
                 loading: isRefreshing
               },
               {
@@ -470,7 +461,7 @@ export default function SystemStatusPage() {
                 description: autoRefresh ? 'Auto-refresh ON' : 'Auto-refresh OFF',
                 icon: <Bell className="w-5 h-5 text-white" />,
                 onClick: () => setAutoRefresh(!autoRefresh),
-                disabled: isReadOnly
+                disabled: isReadOnly || isAdminViewOnly
               },
               {
                 id: 'export-report',
@@ -484,7 +475,7 @@ export default function SystemStatusPage() {
                     toast.error('You do not have permission to export reports');
                   }
                 },
-                disabled: isReadOnly || (!canPerformAdminActions && !hasLimitedAccess)
+                disabled: isReadOnly || isAdminViewOnly || (!canPerformAdminActions && !hasLimitedAccess)
               },
               {
                 id: 'print-status',
@@ -492,7 +483,7 @@ export default function SystemStatusPage() {
                 description: 'Print system status',
                 icon: <Printer className="w-5 h-5 text-white" />,
                 onClick: () => window.print(),
-                disabled: isReadOnly
+                disabled: isReadOnly || isAdminViewOnly
               },
               {
                 id: 'view-logs',
@@ -506,7 +497,7 @@ export default function SystemStatusPage() {
                     toast.error('You do not have permission to view system logs');
                   }
                 },
-                disabled: !canPerformAdminActions && !isSystemAuditor
+                disabled: (!canPerformAdminActions && !isSystemAuditor) || isAdminViewOnly
               },
               {
                 id: 'system-settings',
@@ -520,7 +511,7 @@ export default function SystemStatusPage() {
                     toast.error('You do not have permission to configure system settings');
                   }
                 },
-                disabled: !canPerformAdminActions
+                disabled: !canPerformAdminActions || isAdminViewOnly
               }
             ]}
             lastActionTime="2 minutes ago"
@@ -563,6 +554,12 @@ export default function SystemStatusPage() {
                           Limited Access
                         </Badge>
                       )}
+                      {isAdminViewOnly && (
+                        <Badge variant="secondary" className="bg-orange-100 text-orange-800 border-orange-200">
+                          <Lock className="w-3 h-3 mr-1" />
+                          View-Only Mode
+                        </Badge>
+                      )}
                       <Button
                         variant="outline"
                         size="sm"
@@ -571,21 +568,11 @@ export default function SystemStatusPage() {
                           setLastRefresh(new Date());
                           toast.success('System status refreshed');
                         }}
-                        disabled={isRefreshing || isReadOnly}
+                        disabled={isRefreshing || isReadOnly || isAdminViewOnly}
                         className="bg-white/20 hover:bg-white/30 text-white border-white/30"
                       >
                         <RefreshCw className={`w-4 h-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
                         Refresh
-                      </Button>
-                      <Button
-                        variant={autoRefresh ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => setAutoRefresh(!autoRefresh)}
-                        disabled={isReadOnly}
-                        className={autoRefresh ? "bg-white text-blue-600" : "bg-white/20 hover:bg-white/30 text-white border-white/30"}
-                      >
-                        <Bell className="w-4 h-4 mr-2" />
-                        Auto-refresh {autoRefresh ? 'ON' : 'OFF'}
                       </Button>
                     </div>
                   </div>
@@ -669,7 +656,7 @@ export default function SystemStatusPage() {
                   <div className="space-y-6">
                     {/* Overall Status */}
                     <Card className="border-blue-200">
-                      <CardHeader className="bg-gradient-to-r from-blue-50 to-blue-100">
+                      <CardHeader>
                         <div className="flex items-center justify-between">
                           <CardTitle className="text-blue-900">Overall System Status</CardTitle>
                           <Badge className={getStatusColor(systemHealth.status)}>
@@ -708,7 +695,7 @@ export default function SystemStatusPage() {
                       <CardContent>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                           {filteredServices.map((service) => (
-                            <div key={service.name} className="border rounded-lg p-4">
+                            <div key={service.name} className="border rounded p-4">
                               <div className="flex items-center justify-between mb-3">
                                 <div className="flex items-center gap-2">
                                   {service.icon}
@@ -904,7 +891,7 @@ export default function SystemStatusPage() {
 
                     {/* Recommendations */}
                     {systemHealth.recommendations && systemHealth.recommendations.length > 0 && (
-                      <Card>
+                      <Card className="mb-6 pb-6">
                         <CardHeader>
                           <CardTitle className="text-blue-900">System Recommendations</CardTitle>
                           {!canPerformAdminActions && (
@@ -933,7 +920,7 @@ export default function SystemStatusPage() {
 
                     {/* Access Level Information */}
                     {!canPerformAdminActions && (
-                      <Card className="border-blue-200">
+                      <Card className="border-blue-200 mb-6">
                         <CardHeader>
                           <CardTitle className="text-blue-900">Access Information</CardTitle>
                         </CardHeader>
@@ -947,6 +934,14 @@ export default function SystemStatusPage() {
                                 </AlertDescription>
                               </Alert>
                             )}
+                            {isAdminViewOnly && (
+                              <Alert>
+                                <Info className="h-4 w-4" />
+                                <AlertDescription>
+                                  You are viewing this system in view-only mode. You can monitor system status but cannot perform administrative actions like refreshing data, exporting reports, or accessing system logs.
+                                </AlertDescription>
+                              </Alert>
+                            )}
                             {hasLimitedAccess && (
                               <Alert>
                                 <Info className="h-4 w-4" />
@@ -955,7 +950,7 @@ export default function SystemStatusPage() {
                                 </AlertDescription>
                               </Alert>
                             )}
-                            {!isReadOnly && !hasLimitedAccess && (
+                            {!isReadOnly && !hasLimitedAccess && !isAdminViewOnly && (
                               <Alert>
                                 <Info className="h-4 w-4" />
                                 <AlertDescription>
@@ -1001,6 +996,7 @@ export default function SystemStatusPage() {
             <PerformanceMonitor />
           </div>
         )}
+
 
         {/* Log Viewer Dialog */}
         <SystemLogViewer

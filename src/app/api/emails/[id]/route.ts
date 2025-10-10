@@ -1,19 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { EmailStatus, EmailFolder, Priority, Prisma } from '@prisma/client';
+import { EmailStatus, EmailFolder, Priority } from '@prisma/client';
 
-export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+async function assertRole(request: NextRequest, allowed: Array<'SUPER_ADMIN' | 'ADMIN' | 'INSTRUCTOR'>) {
+  const token = request.cookies.get('token')?.value;
+  const isDev = process.env.NODE_ENV !== 'production';
+  if (!token) return isDev ? { ok: true, role: undefined } as const : { ok: false, res: NextResponse.json({ error: 'Authentication required' }, { status: 401 }) };
   try {
-    // Authorization: allow ADMIN and INSTRUCTOR
-    const role = _request.headers.get('x-user-role');
-    // Allow unauthenticated access in development to avoid blocking local testing
-    const isDev = process.env.NODE_ENV !== 'production';
-    if (!isDev) {
-      if (!role || (role !== 'ADMIN' && role !== 'INSTRUCTOR')) {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-      }
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const role = decoded.role as string | undefined;
+    if (!role || !allowed.includes(role as any)) {
+      return { ok: false, res: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
     }
-    const { id } = await params;
+    return { ok: true, role: role as 'SUPER_ADMIN' | 'ADMIN' | 'INSTRUCTOR' } as const;
+  } catch {
+    return { ok: false, res: NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 }) };
+  }
+}
+
+export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+  try {
+    // Authorization: SUPER_ADMIN, ADMIN, INSTRUCTOR
+    const gate = await assertRole(request, ['SUPER_ADMIN', 'ADMIN', 'INSTRUCTOR']);
+    if (!('ok' in gate) || gate.ok !== true) return gate.res;
+    const { id } = params;
     const item = await prisma.email.findUnique({ 
       where: { id }, 
       include: { 
@@ -29,18 +40,13 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   }
 }
 
-export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    // Authorization: allow ADMIN and INSTRUCTOR to update read/star/folder; restrict status
-    const role = request.headers.get('x-user-role');
-    // Allow unauthenticated access in development to avoid blocking local testing
-    const isDev = process.env.NODE_ENV !== 'production';
-    if (!isDev) {
-      if (!role || (role !== 'ADMIN' && role !== 'INSTRUCTOR')) {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-      }
-    }
-    const { id } = await params;
+    // Authorization: SUPER_ADMIN, ADMIN, INSTRUCTOR (non-admin cannot alter status/priority)
+    const gate = await assertRole(request, ['SUPER_ADMIN', 'ADMIN', 'INSTRUCTOR']);
+    if (!('ok' in gate) || gate.ok !== true) return gate.res;
+    const role = (gate as any).role as 'SUPER_ADMIN' | 'ADMIN' | 'INSTRUCTOR' | undefined;
+    const { id } = params;
     const body = await request.json();
     const data: Partial<{ status: EmailStatus; type: EmailFolder; isRead: boolean; isStarred: boolean; isImportant: boolean; priority: Priority }>
       = {};
@@ -53,7 +59,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if (typeof body.priority === 'string') data.priority = body.priority as Priority;
 
     // If non-admin, prevent modifying certain fields (e.g., status, priority)
-    if (role !== 'ADMIN') {
+    if (role !== 'ADMIN' && role !== 'SUPER_ADMIN') {
       delete (data as any).status;
       delete (data as any).priority;
     }

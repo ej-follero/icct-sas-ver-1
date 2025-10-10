@@ -1,8 +1,18 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    // Auth: admin-only (SUPER_ADMIN, ADMIN)
+    const token = request.cookies.get('token')?.value;
+    if (!token) return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = Number((decoded as any)?.userId);
+    if (!Number.isFinite(userId)) return NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 });
+    const user = await prisma.user.findUnique({ where: { userId }, select: { role: true, status: true } });
+    if (!user || user.status !== 'ACTIVE') return NextResponse.json({ error: 'User not found or inactive' }, { status: 404 });
+    if (user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN') return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
     const body = await request.json().catch(() => ({}));
     const records = Array.isArray(body?.records) ? body.records : [];
     

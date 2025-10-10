@@ -1,11 +1,10 @@
 'use client';
 
 import { useState, useCallback, useMemo, useEffect } from "react";
-import { eventsData, role } from "@/lib/data";
-import { Filter, Plus, Trash2, Search, AlertCircle, Calendar, CheckCircle, XCircle, Settings, Download, RefreshCw, Printer, Upload, List, Columns3, Eye, TrendingUp, FileText, Clock, Info, Hash, Tag, Layers, X, Loader2, Bell, Edit, MapPin, Users } from "lucide-react";
+import { eventsData } from "@/lib/data";
+import { Plus, Trash2, Search, AlertCircle, Calendar, CheckCircle, XCircle, Settings, Download, RefreshCw, Printer, Upload, List, Columns3, Eye, TrendingUp, FileText, Clock, Info, Hash, Tag, Layers, X, Loader2, Bell, Edit, MapPin, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/reusable";
 import PageHeader from "@/components/PageHeader/PageHeader";
 import SummaryCard from '@/components/SummaryCard';
@@ -20,8 +19,6 @@ import { BulkActionsDialog } from '@/components/reusable/Dialogs/BulkActionsDial
 import { CreateEventDialog } from '@/components/reusable/Dialogs/CreateEventDialog';
 import { EditEventDialog } from '@/components/reusable/Dialogs/EditEventDialog';
 import { ImportDialog } from '@/components/reusable/Dialogs/ImportDialog';
-import { PrintLayout } from '@/components/PrintLayout';
-import { useDebounce } from '@/hooks/use-debounce';
 import Fuse from "fuse.js";
 import React from "react";
 import { Badge } from "@/components/ui/badge";
@@ -30,10 +27,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuTrigger,
-  DropdownMenuSeparator,
-  DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
 import {
   Tooltip,
@@ -95,6 +89,7 @@ const EventListPage = () => {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [priorityFilter, setPriorityFilter] = useState<string>("all");
   const [dateRangeFilter, setDateRangeFilter] = useState<{start: string, end: string}>({start: '', end: ''});
+  const [tempDateRangeFilter, setTempDateRangeFilter] = useState<{start: string, end: string}>({start: '', end: ''});
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [itemsPerPage, setItemsPerPage] = useState(10);
@@ -126,7 +121,6 @@ const EventListPage = () => {
         pageSize: itemsPerPage.toString(),
         sortBy: sortField,
         sortOrder: sortOrder,
-        search: searchValue,
         ...(classFilter !== 'all' && { eventType: classFilter }),
         ...(statusFilter !== 'all' && { status: statusFilter }),
         ...(priorityFilter !== 'all' && { priority: priorityFilter }),
@@ -159,7 +153,24 @@ const EventListPage = () => {
   // Initial data fetch
   useEffect(() => {
     fetchEvents();
-  }, [currentPage, itemsPerPage, sortField, sortOrder, searchValue, classFilter, statusFilter, priorityFilter, dateRangeFilter]);
+  }, [currentPage, itemsPerPage, sortField, sortOrder, classFilter, statusFilter, priorityFilter, dateRangeFilter]);
+
+  // Debounced search effect
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      // Reset to first page when search changes
+      if (currentPage !== 1) {
+        setCurrentPage(1);
+      }
+    }, 300); // 300ms debounce
+
+    return () => clearTimeout(timeoutId);
+  }, [searchValue, currentPage]);
+
+  // Initialize temp date range filter when component mounts
+  useEffect(() => {
+    setTempDateRangeFilter(dateRangeFilter);
+  }, []);
 
   // Add Fuse.js setup for fuzzy search using real data
   const fuse = useMemo(() => new Fuse(events, {
@@ -260,6 +271,10 @@ const EventListPage = () => {
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      // Only activate shortcuts if we're on a page with search functionality
+      const hasSearchInput = document.querySelector('input[placeholder*="Search"]');
+      if (!hasSearchInput) return;
+      
       // Ctrl/Cmd + K for search
       if ((event.ctrlKey || event.metaKey) && event.key === 'k') {
         event.preventDefault();
@@ -292,6 +307,17 @@ const EventListPage = () => {
     } finally {
       setIsRefreshing(false);
     }
+  };
+
+  const handleDateFilterApply = () => {
+    setDateRangeFilter(tempDateRangeFilter);
+    setCurrentPage(1); // Reset to first page when filter changes
+  };
+
+  const handleDateFilterClear = () => {
+    setTempDateRangeFilter({ start: '', end: '' });
+    setDateRangeFilter({ start: '', end: '' });
+    setCurrentPage(1); // Reset to first page when filter changes
   };
 
   const handleBulkAction = async (action: 'delete' | 'status-update' | 'notification' | 'export') => {
@@ -739,24 +765,24 @@ const EventListPage = () => {
             sublabel="All events"
           />
           <SummaryCard
-            icon={<TrendingUp className="text-green-500 w-5 h-5" />}
+            icon={<TrendingUp className="text-blue-500 w-5 h-5" />}
             label="Upcoming"
             value={stats.upcoming}
-            valueClassName="text-green-900"
+            valueClassName="text-blue-900"
             sublabel="Future events"
           />
           <SummaryCard
-            icon={<Clock className="text-yellow-500 w-5 h-5" />}
+            icon={<Clock className="text-blue-500 w-5 h-5" />}
             label="Today"
             value={stats.today}
-            valueClassName="text-yellow-900"
+            valueClassName="text-blue-900"
             sublabel="Events today"
           />
           <SummaryCard
-            icon={<CheckCircle className="text-gray-500 w-5 h-5" />}
+            icon={<CheckCircle className="text-blue-500 w-5 h-5" />}
             label="Past"
             value={stats.past}
-            valueClassName="text-gray-900"
+            valueClassName="text-blue-900"
             sublabel="Completed events"
           />
         </div>
@@ -939,10 +965,10 @@ const EventListPage = () => {
                           </label>
                           <Input
                             type="date"
-                            value={dateRangeFilter.start}
+                            value={tempDateRangeFilter.start}
                             onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                               const startDate = e.target.value;
-                              const endDate = dateRangeFilter.end;
+                              const endDate = tempDateRangeFilter.end;
                               
                               // Validate that start date is not after end date
                               if (startDate && endDate && new Date(startDate) > new Date(endDate)) {
@@ -950,7 +976,7 @@ const EventListPage = () => {
                                 return;
                               }
                               
-                              setDateRangeFilter(prev => ({ ...prev, start: startDate }));
+                              setTempDateRangeFilter(prev => ({ ...prev, start: startDate }));
                             }}
                             className="w-full"
                           />
@@ -962,10 +988,10 @@ const EventListPage = () => {
                           </label>
                           <Input
                             type="date"
-                            value={dateRangeFilter.end}
+                            value={tempDateRangeFilter.end}
                             onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                               const endDate = e.target.value;
-                              const startDate = dateRangeFilter.start;
+                              const startDate = tempDateRangeFilter.start;
                               
                               // Validate that end date is not before start date
                               if (startDate && endDate && new Date(endDate) < new Date(startDate)) {
@@ -973,7 +999,7 @@ const EventListPage = () => {
                                 return;
                               }
                               
-                              setDateRangeFilter(prev => ({ ...prev, end: endDate }));
+                              setTempDateRangeFilter(prev => ({ ...prev, end: endDate }));
                             }}
                             className="w-full"
                           />
@@ -981,28 +1007,46 @@ const EventListPage = () => {
                       </div>
                       
                       <div className="flex items-center justify-between pt-2 border-t">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setDateRangeFilter({ start: '', end: '' })}
-                          className="text-gray-500 hover:text-gray-700"
-                        >
-                          Clear Filter
-                        </Button>
-                        <div className="text-xs text-gray-500">
-                          {dateRangeFilter.start || dateRangeFilter.end ? (
-                            <span>
-                              {dateRangeFilter.start && dateRangeFilter.end 
-                                ? `${new Date(dateRangeFilter.start).toLocaleDateString()} - ${new Date(dateRangeFilter.end).toLocaleDateString()}`
-                                : dateRangeFilter.start 
-                                  ? `From ${new Date(dateRangeFilter.start).toLocaleDateString()}`
-                                  : `Until ${new Date(dateRangeFilter.end).toLocaleDateString()}`
-                              }
-                            </span>
-                          ) : (
-                            'No date filter applied'
-                          )}
+                        <div className="flex gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={handleDateFilterClear}
+                            className="text-gray-500 hover:text-gray-700"
+                          >
+                            Clear
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setTempDateRangeFilter(dateRangeFilter)}
+                            className="text-gray-600 hover:text-gray-800"
+                          >
+                            Cancel
+                          </Button>
                         </div>
+                        <Button
+                          size="sm"
+                          onClick={handleDateFilterApply}
+                          className="bg-blue-600 hover:bg-blue-700 text-white"
+                        >
+                          OK
+                        </Button>
+                      </div>
+                      
+                      <div className="text-xs text-gray-500 text-center">
+                        {dateRangeFilter.start || dateRangeFilter.end ? (
+                          <span>
+                            Current: {dateRangeFilter.start && dateRangeFilter.end 
+                              ? `${new Date(dateRangeFilter.start).toLocaleDateString()} - ${new Date(dateRangeFilter.end).toLocaleDateString()}`
+                              : dateRangeFilter.start 
+                                ? `From ${new Date(dateRangeFilter.start).toLocaleDateString()}`
+                                : `Until ${new Date(dateRangeFilter.end).toLocaleDateString()}`
+                            }
+                          </span>
+                        ) : (
+                          'No date filter applied'
+                        )}
                       </div>
                     </div>
                   </DropdownMenuContent>
@@ -1312,36 +1356,10 @@ const EventListPage = () => {
         <ExportDialog
           open={exportDialogOpen}
           onOpenChange={setExportDialogOpen}
-          selectedItems={
-            selectedItems.length > 0 
-              ? paginatedEvents.filter(item => selectedItems.includes(item.id.toString()))
-              : filteredEvents // Export all events if none selected
-          }
+          dataCount={selectedItems.length > 0 ? selectedItems.length : filteredEvents.length}
           entityType="event"
-          entityLabel="event"
-          exportColumns={[
-            { id: 'title', label: 'Title', default: true },
-            { id: 'class', label: 'Class', default: true },
-            { id: 'date', label: 'Date', default: true },
-            { id: 'startTime', label: 'Start Time', default: true },
-            { id: 'endTime', label: 'End Time', default: true },
-            { id: 'description', label: 'Description', default: false },
-            { id: 'location', label: 'Location', default: false },
-            { id: 'status', label: 'Status', default: false },
-            { id: 'priority', label: 'Priority', default: false },
-            { id: 'eventType', label: 'Event Type', default: false },
-            { id: 'capacity', label: 'Capacity', default: false },
-            { id: 'registeredCount', label: 'Registered', default: false },
-            { id: 'isPublic', label: 'Public', default: false },
-            { id: 'requiresRegistration', label: 'Requires Registration', default: false },
-            { id: 'contactEmail', label: 'Contact Email', default: false },
-            { id: 'contactPhone', label: 'Contact Phone', default: false },
-            { id: 'createdBy', label: 'Created By', default: false },
-            { id: 'createdAt', label: 'Created At', default: false },
-            { id: 'updatedAt', label: 'Updated At', default: false },
-          ]}
-          onExport={(options) => {
-            console.log('Export options:', options);
+          onExport={async (format, options) => {
+            console.log('Export format:', format, 'Export options:', options);
             const exportCount = selectedItems.length > 0 ? selectedItems.length : filteredEvents.length;
             toast.success(`Export completed! ${exportCount} events exported successfully.`);
           }}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { PageSkeleton } from "@/components/reusable/Skeleton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -50,30 +51,23 @@ interface UserProfile {
   email: string;
   role: string;
   status: string;
-  firstName?: string;
-  lastName?: string;
-  phoneNumber?: string;
-  address?: string;
   avatar?: string;
-  bio?: string;
-  department?: string;
-  position?: string;
   lastLogin?: string;
   createdAt: string;
   updatedAt: string;
   preferences: {
     notifications: boolean;
     emailAlerts: boolean;
-    darkMode: boolean;
     language: string;
     timezone: string;
+    emailFrequency: string;
+    dashboardLayout: string;
   };
   security: {
     twoFactorEnabled: boolean;
     lastPasswordChange: string;
     failedLoginAttempts: number;
     isEmailVerified: boolean;
-    isPhoneVerified: boolean;
   };
   activity: {
     totalLogins: number;
@@ -94,6 +88,7 @@ export default function ProfilePage() {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [currentPassword, setCurrentPassword] = useState('');
+  const [activeTab, setActiveTab] = useState('personal');
 
   useEffect(() => {
     if (loading) return;
@@ -104,60 +99,47 @@ export default function ProfilePage() {
       return;
     }
     
+    // Handle URL parameters for edit mode and tab switching
+    const urlParams = new URLSearchParams(window.location.search);
+    const editParam = urlParams.get('edit');
+    const tabParam = urlParams.get('tab');
+    
+    if (editParam === 'true') {
+      setIsEditing(true);
+    }
+    
+    if (tabParam && ['personal', 'security', 'preferences', 'activity'].includes(tabParam)) {
+      setActiveTab(tabParam);
+    }
+    
     fetchUserProfile();
   }, [loading, user, router]);
 
   const fetchUserProfile = async () => {
     try {
       setIsLoading(true);
-      // TODO: Implement real API call
-      // const response = await fetch('/api/profile');
-      // const data = await response.json();
       
-      // Mock data for now
-      const mockProfile: UserProfile = {
-        userId: user?.userId || 1,
-        userName: user?.userName || 'John Admin',
-        email: user?.email || 'john.admin@icct.edu.ph',
-        role: user?.role || 'ADMIN',
-        status: 'ACTIVE',
-        firstName: 'John',
-        lastName: 'Admin',
-        phoneNumber: '+63 912 345 6789',
-        address: '123 Admin Street, Quezon City, Philippines',
-        avatar: '/api/placeholder/150/150',
-        bio: 'System Administrator with 5+ years of experience in managing educational systems.',
-        department: 'Information Technology',
-        position: 'System Administrator',
-        lastLogin: new Date().toISOString(),
-        createdAt: '2024-01-01T00:00:00Z',
-        updatedAt: new Date().toISOString(),
-        preferences: {
-          notifications: true,
-          emailAlerts: true,
-          darkMode: false,
-          language: 'en',
-          timezone: 'Asia/Manila'
-        },
-        security: {
-          twoFactorEnabled: false,
-          lastPasswordChange: '2024-01-15T00:00:00Z',
-          failedLoginAttempts: 0,
-          isEmailVerified: true,
-          isPhoneVerified: false
-        },
-        activity: {
-          totalLogins: 156,
-          lastActivity: new Date().toISOString(),
-          sessionsCount: 3
-        }
-      };
+      const response = await fetch('/api/profile', {
+        credentials: 'include'
+      });
       
-      setProfile(mockProfile);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      
+      if (data.error) {
+        throw new Error(data.error);
+      }
+      
+      setProfile(data.data);
       
     } catch (error) {
       console.error('Error fetching user profile:', error);
-      toast.error('Failed to load profile');
+      
+      toast.error('Failed to load profile data. Please try again.');
+      
     } finally {
       setIsLoading(false);
     }
@@ -166,19 +148,27 @@ export default function ProfilePage() {
   const handleSaveProfile = async () => {
     try {
       setIsSaving(true);
-      // TODO: Implement real API call
-      // await fetch('/api/profile', {
-      //   method: 'PUT',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify(profile)
-      // });
       
+      const response = await fetch('/api/profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(profile),
+        credentials: 'include'
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const result = await response.json();
+      setProfile(result.data);
       setIsEditing(false);
       toast.success('Profile updated successfully');
       
     } catch (error) {
       console.error('Error saving profile:', error);
-      toast.error('Failed to save profile');
+      toast.error(`Failed to save profile: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsSaving(false);
     }
@@ -197,12 +187,18 @@ export default function ProfilePage() {
     
     try {
       setIsSaving(true);
-      // TODO: Implement real API call
-      // await fetch('/api/profile/password', {
-      //   method: 'PUT',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify({ currentPassword, newPassword })
-      // });
+      
+      const response = await fetch('/api/profile/password', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currentPassword, newPassword, confirmPassword }),
+        credentials: 'include'
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+      }
       
       setNewPassword('');
       setConfirmPassword('');
@@ -211,7 +207,7 @@ export default function ProfilePage() {
       
     } catch (error) {
       console.error('Error changing password:', error);
-      toast.error('Failed to change password');
+      toast.error(`Failed to change password: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsSaving(false);
     }
@@ -219,71 +215,211 @@ export default function ProfilePage() {
 
   const handleUploadAvatar = async (file: File) => {
     try {
-      // TODO: Implement real file upload
-      // const formData = new FormData();
-      // formData.append('avatar', file);
-      // const response = await fetch('/api/profile/avatar', {
-      //   method: 'POST',
-      //   body: formData
-      // });
+      const formData = new FormData();
+      formData.append('avatar', file);
+      
+      const response = await fetch('/api/profile/avatar', {
+        method: 'POST',
+        body: formData,
+        credentials: 'include'
+      });
+      
+      if (!response.ok) {
+        // Try to parse JSON error; fall back to text for better diagnostics
+        let errorDetail: any = {};
+        try {
+          errorDetail = await response.json();
+        } catch {
+          try {
+            const text = await response.text();
+            errorDetail = { error: text };
+          } catch {
+            errorDetail = {};
+          }
+        }
+        console.error('Avatar upload error:', errorDetail);
+        if (response.status === 401) {
+          throw new Error('Authentication required. Please sign in again.');
+        }
+        if (response.status === 400) {
+          const msg = errorDetail?.error || 'Invalid image. Ensure it is an image and <= 5MB.';
+          throw new Error(msg);
+        }
+        throw new Error(errorDetail?.error || `HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const result = await response.json();
+      
+      // Update the profile with new avatar URL
+      if (result.data?.avatarUrl && profile) {
+        // Add cache-buster so the new image shows immediately
+        const withBuster = `${result.data.avatarUrl}?v=${Date.now()}`;
+        setProfile(prev => prev ? { ...prev, avatar: withBuster } : null);
+      }
       
       toast.success('Avatar updated successfully');
       
     } catch (error) {
       console.error('Error uploading avatar:', error);
-      toast.error('Failed to upload avatar');
+      toast.error(`Failed to upload avatar: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
+
+  const handleExportData = async () => {
+    try {
+      toast.info('Preparing your data export...');
+      
+      const response = await fetch('/api/profile/export', {
+        method: 'GET',
+        credentials: 'include'
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      // Get the filename from the Content-Disposition header
+      const contentDisposition = response.headers.get('Content-Disposition');
+      const filename = contentDisposition 
+        ? contentDisposition.split('filename=')[1]?.replace(/"/g, '') 
+        : `profile-data-${new Date().toISOString().split('T')[0]}.json`;
+      
+      // Download the file
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      toast.success('Data exported successfully!');
+    } catch (error) {
+      console.error('Failed to export data:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to export data');
+    }
+  };
+
+  const handleToggle2FA = async (enabled: boolean) => {
+    try {
+      if (enabled) {
+        // Enable 2FA - show setup dialog
+        toast.info('Setting up 2FA...');
+        
+        const response = await fetch('/api/profile/2fa', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enabled: true }),
+          credentials: 'include'
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const result = await response.json();
+        
+        // Show QR code dialog (simplified for now)
+        const confirmed = confirm(`2FA Setup:\n\nQR Code URL: ${result.data.qrCodeUrl}\n\nManual Key: ${result.data.manualEntryKey}\n\nPlease scan the QR code with your authenticator app and click OK when ready to verify.`);
+        
+        if (confirmed) {
+          const token = prompt('Enter the 6-digit code from your authenticator app:');
+          if (token) {
+            await verify2FA(token);
+          }
+        }
+      } else {
+        // Disable 2FA
+        const confirmed = confirm('Are you sure you want to disable 2FA? This will make your account less secure.');
+        if (!confirmed) return;
+        
+        const response = await fetch('/api/profile/2fa', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enabled: false }),
+          credentials: 'include'
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const result = await response.json();
+        setProfile(prev => prev ? {
+          ...prev,
+          security: { ...prev.security, twoFactorEnabled: false }
+        } : null);
+        toast.success(result.message);
+      }
+    } catch (error) {
+      console.error('Failed to toggle 2FA:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to toggle 2FA');
+    }
+  };
+
+  const verify2FA = async (token: string) => {
+    try {
+      const response = await fetch('/api/profile/2fa', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token }),
+        credentials: 'include'
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const result = await response.json();
+      setProfile(prev => prev ? {
+        ...prev,
+        security: { ...prev.security, twoFactorEnabled: true }
+      } : null);
+      toast.success(result.message);
+    } catch (error) {
+      console.error('Failed to verify 2FA:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to verify 2FA');
     }
   };
 
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'ACTIVE':
-        return <Badge variant="success" className="bg-green-100 text-green-800">Active</Badge>;
+        return <Badge variant="success" className="bg-green-100 text-green-800 hover:bg-green-100 hover:text-green-800">Active</Badge>;
       case 'INACTIVE':
-        return <Badge variant="secondary" className="bg-gray-100 text-gray-800">Inactive</Badge>;
+        return <Badge variant="secondary" className="bg-gray-100 text-gray-800 hover:bg-gray-100 hover:text-gray-800">Inactive</Badge>;
       case 'SUSPENDED':
-        return <Badge variant="destructive" className="bg-red-100 text-red-800">Suspended</Badge>;
+        return <Badge variant="destructive" className="bg-red-100 text-red-800 hover:bg-red-100 hover:text-red-800">Suspended</Badge>;
       default:
-        return <Badge variant="secondary">{status}</Badge>;
+        return <Badge variant="secondary" className="hover:bg-gray-100 hover:text-gray-800">{status}</Badge>;
     }
   };
 
   const getRoleBadge = (role: string) => {
     switch (role) {
       case 'SUPER_ADMIN':
-        return <Badge variant="default" className="bg-purple-100 text-purple-800">Super Admin</Badge>;
+        return <Badge variant="default" className="bg-purple-100 text-purple-800 hover:bg-purple-100 hover:text-purple-800">Super Admin</Badge>;
       case 'ADMIN':
-        return <Badge variant="default" className="bg-blue-100 text-blue-800">Admin</Badge>;
+        return <Badge variant="default" className="bg-blue-100 text-blue-800 hover:bg-blue-100 hover:text-blue-800">Admin</Badge>;
       case 'DEPARTMENT_HEAD':
-        return <Badge variant="secondary" className="bg-orange-100 text-orange-800">Dept Head</Badge>;
+        return <Badge variant="secondary" className="bg-orange-100 text-orange-800 hover:bg-orange-100 hover:text-orange-800">Dept Head</Badge>;
       case 'INSTRUCTOR':
-        return <Badge variant="secondary" className="bg-green-100 text-green-800">Instructor</Badge>;
+        return <Badge variant="secondary" className="bg-green-100 text-green-800 hover:bg-green-100 hover:text-green-800">Instructor</Badge>;
       case 'STUDENT':
-        return <Badge variant="outline" className="bg-gray-100 text-gray-800">Student</Badge>;
+        return <Badge variant="outline" className="bg-gray-100 text-gray-800 hover:bg-gray-100 hover:text-gray-800">Student</Badge>;
       default:
-        return <Badge variant="secondary">{role}</Badge>;
+        return <Badge variant="secondary" className="hover:bg-gray-100 hover:text-gray-800">{role}</Badge>;
     }
   };
 
   if (loading || isLoading) {
-    return (
-      <div className="min-h-screen bg-gray-50/50">
-        <div className="px-6 py-4">
-          <div className="animate-pulse">
-            <div className="h-8 bg-gray-200 rounded w-1/3 mb-4"></div>
-            <div className="h-4 bg-gray-200 rounded w-1/2 mb-8"></div>
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="lg:col-span-1">
-                <div className="h-96 bg-gray-200 rounded"></div>
-              </div>
-              <div className="lg:col-span-2">
-                <div className="h-96 bg-gray-200 rounded"></div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
+    return <PageSkeleton />;
   }
 
   if (!profile) {
@@ -326,80 +462,39 @@ export default function ProfilePage() {
             sublabel="Current status"
           />
           <SummaryCard
-            icon={<Shield className="text-green-500 w-5 h-5" />}
+            icon={<Shield className="text-blue-500 w-5 h-5" />}
             label="Security Level"
-            value={profile.security.twoFactorEnabled ? "High" : "Standard"}
-            valueClassName="text-green-900"
+            value={profile.security?.twoFactorEnabled ? "High" : "Standard"}
+            valueClassName="text-blue-900"
             sublabel="Account security"
           />
           <SummaryCard
-            icon={<Activity className="text-purple-500 w-5 h-5" />}
+            icon={<Activity className="text-blue-500 w-5 h-5" />}
             label="Total Logins"
-            value={profile.activity.totalLogins.toString()}
-            valueClassName="text-purple-900"
+            value={profile.activity?.totalLogins?.toString() || "0"}
+            valueClassName="text-blue-900"
             sublabel="Login count"
           />
           <SummaryCard
-            icon={<Clock className="text-orange-500 w-5 h-5" />}
+            icon={<Clock className="text-blue-500 w-5 h-5" />}
             label="Last Activity"
-            value={new Date(profile.activity.lastActivity).toLocaleDateString()}
-            valueClassName="text-orange-900"
+            value={profile.activity?.lastActivity ? new Date(profile.activity.lastActivity).toLocaleDateString() : "Never"}
+            valueClassName="text-blue-900"
             sublabel="Recent activity"
           />
         </div>
 
-        {/* Quick Actions */}
-        <QuickActionsPanel
-          variant="premium"
-          title="Profile Actions"
-          subtitle="Manage your account and settings"
-          icon={<User className="w-6 h-6 text-white" />}
-          actionCards={[
-            {
-              id: 'edit-profile',
-              label: 'Edit Profile',
-              description: 'Update personal information',
-              icon: <Edit className="w-5 h-5 text-white" />,
-              onClick: () => setIsEditing(!isEditing)
-            },
-            {
-              id: 'change-password',
-              label: 'Change Password',
-              description: 'Update your password',
-              icon: <Key className="w-5 h-5 text-white" />,
-              onClick: () => toast.info('Password change form available below')
-            },
-            {
-              id: 'upload-avatar',
-              label: 'Upload Avatar',
-              description: 'Change profile picture',
-              icon: <Camera className="w-5 h-5 text-white" />,
-              onClick: () => document.getElementById('avatar-upload')?.click()
-            },
-            {
-              id: 'export-data',
-              label: 'Export Data',
-              description: 'Download your data',
-              icon: <Download className="w-5 h-5 text-white" />,
-              onClick: () => toast.info('Export functionality coming soon')
-            }
-          ]}
-          lastActionTime="5 minutes ago"
-          onLastActionTimeChange={() => {}}
-          collapsible={true}
-          defaultCollapsed={true}
-        />
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Profile Overview */}
           <div className="lg:col-span-1">
-            <Card className="shadow-lg rounded-xl overflow-hidden">
-              <CardHeader className="bg-gradient-to-r from-blue-600 to-blue-700 text-white text-center">
+            <Card className="shadow-lg rounded-xl overflow-hidden p-0">
+              <CardHeader className="bg-gradient-to-r from-blue-600 to-blue-700 text-white text-center p-6">
                 <div className="relative inline-block">
                   <Avatar className="w-24 h-24 mx-auto mb-4 border-4 border-white">
                     <AvatarImage src={profile.avatar} alt={profile.userName} />
                     <AvatarFallback className="text-2xl font-bold">
-                      {profile.firstName?.[0]}{profile.lastName?.[0]}
+                      {profile.userName?.[0]?.toUpperCase() || 'U'}
                     </AvatarFallback>
                   </Avatar>
                   <Button
@@ -420,7 +515,7 @@ export default function ProfilePage() {
                     }}
                   />
                 </div>
-                <CardTitle className="text-xl">{profile.userName}</CardTitle>
+                <CardTitle className="text-xl text-white">{profile.userName}</CardTitle>
                 <p className="text-blue-100">{profile.email}</p>
                 <div className="flex justify-center gap-2 mt-2">
                   {getRoleBadge(profile.role)}
@@ -430,10 +525,6 @@ export default function ProfilePage() {
               <CardContent className="p-6">
                 <div className="space-y-4">
                   <div className="flex items-center gap-3">
-                    <MapPin className="w-4 h-4 text-gray-500" />
-                    <span className="text-sm text-gray-600">{profile.department}</span>
-                  </div>
-                  <div className="flex items-center gap-3">
                     <Calendar className="w-4 h-4 text-gray-500" />
                     <span className="text-sm text-gray-600">
                       Member since {new Date(profile.createdAt).toLocaleDateString()}
@@ -442,43 +533,39 @@ export default function ProfilePage() {
                   <div className="flex items-center gap-3">
                     <Clock className="w-4 h-4 text-gray-500" />
                     <span className="text-sm text-gray-600">
-                      Last login {new Date(profile.lastLogin || '').toLocaleDateString()}
+                      Last login {profile.lastLogin ? new Date(profile.lastLogin).toLocaleDateString() : 'Never'}
                     </span>
                   </div>
                 </div>
-                
-                {profile.bio && (
-                  <>
-                    <Separator className="my-4" />
-                    <div>
-                      <h4 className="font-semibold text-gray-900 mb-2">Bio</h4>
-                      <p className="text-sm text-gray-600">{profile.bio}</p>
-                    </div>
-                  </>
-                )}
               </CardContent>
             </Card>
           </div>
 
           {/* Profile Details */}
           <div className="lg:col-span-2">
-            <Card className="shadow-lg rounded-xl overflow-hidden">
-              <CardHeader className="bg-gradient-to-r from-gray-600 to-gray-700 text-white">
+            <Card className="shadow-lg rounded-xl overflow-hidden p-0">
+              <CardHeader className="bg-gradient-to-r from-blue-800 to-blue-500 text-white p-6">
                 <div className="flex items-center justify-between">
-                  <CardTitle>Profile Information</CardTitle>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setIsEditing(!isEditing)}
-                    className="bg-white/20 text-white border-white/30 hover:bg-white/30"
-                  >
-                    {isEditing ? <Save className="w-4 h-4 mr-2" /> : <Edit className="w-4 h-4 mr-2" />}
-                    {isEditing ? 'Save' : 'Edit'}
-                  </Button>
+                  <div className="flex items-center gap-3">
+                    <User className="w-6 h-6 text-white" />
+                    <div>
+                      <CardTitle className="text-white text-lg font-bold">Profile Information</CardTitle>
+                      <p className="text-blue-100 text-sm">Manage your personal information, security settings, and preferences</p>
+                    </div>
+                  </div>
+                  {!isEditing && (
+                    <Button
+                      onClick={() => setIsEditing(true)}
+                      className="bg-white/20 hover:bg-white/30 text-white border-white/30 rounded"
+                    >
+                      <Edit className="w-4 h-4 mr-2" />
+                      Edit Profile
+                    </Button>
+                  )}
                 </div>
               </CardHeader>
               <CardContent className="p-6">
-                <Tabs defaultValue="personal" className="w-full">
+                <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
                   <TabsList className="grid w-full grid-cols-4">
                     <TabsTrigger value="personal">Personal</TabsTrigger>
                     <TabsTrigger value="security">Security</TabsTrigger>
@@ -489,21 +576,11 @@ export default function ProfilePage() {
                   <TabsContent value="personal" className="space-y-6 mt-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div>
-                        <Label htmlFor="firstName">First Name</Label>
+                        <Label htmlFor="userName">Username</Label>
                         <Input
-                          id="firstName"
-                          value={profile.firstName || ''}
-                          onChange={(e) => setProfile(prev => prev ? { ...prev, firstName: e.target.value } : null)}
-                          disabled={!isEditing}
-                          className="mt-2"
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="lastName">Last Name</Label>
-                        <Input
-                          id="lastName"
-                          value={profile.lastName || ''}
-                          onChange={(e) => setProfile(prev => prev ? { ...prev, lastName: e.target.value } : null)}
+                          id="userName"
+                          value={profile.userName || ''}
+                          onChange={(e) => setProfile(prev => prev ? { ...prev, userName: e.target.value } : null)}
                           disabled={!isEditing}
                           className="mt-2"
                         />
@@ -519,53 +596,44 @@ export default function ProfilePage() {
                         />
                       </div>
                       <div>
-                        <Label htmlFor="phone">Phone Number</Label>
+                        <Label htmlFor="role">Role</Label>
                         <Input
-                          id="phone"
-                          value={profile.phoneNumber || ''}
-                          onChange={(e) => setProfile(prev => prev ? { ...prev, phoneNumber: e.target.value } : null)}
-                          disabled={!isEditing}
+                          id="role"
+                          value={profile.role}
+                          disabled
                           className="mt-2"
                         />
                       </div>
-                      <div className="md:col-span-2">
-                        <Label htmlFor="address">Address</Label>
-                        <Textarea
-                          id="address"
-                          value={profile.address || ''}
-                          onChange={(e) => setProfile(prev => prev ? { ...prev, address: e.target.value } : null)}
-                          disabled={!isEditing}
+                      <div>
+                        <Label htmlFor="status">Status</Label>
+                        <Input
+                          id="status"
+                          value={profile.status}
+                          disabled
                           className="mt-2"
-                          rows={3}
                         />
                       </div>
-                      <div className="md:col-span-2">
-                        <Label htmlFor="bio">Bio</Label>
-                        <Textarea
-                          id="bio"
-                          value={profile.bio || ''}
-                          onChange={(e) => setProfile(prev => prev ? { ...prev, bio: e.target.value } : null)}
-                          disabled={!isEditing}
-                          className="mt-2"
-                          rows={4}
-                        />
-                      </div>
+                    </div>
+                    
+                    <div className="p-4 bg-blue-50 rounded-lg">
+                      <h4 className="font-semibold text-blue-900 mb-2">Personal Information Note</h4>
+                      <p className="text-sm text-blue-700">
+                        Personal details like name, phone, and address are managed through your student or instructor profile. 
+                        Contact your administrator to update these details.
+                      </p>
                     </div>
                   </TabsContent>
 
                   <TabsContent value="security" className="space-y-6 mt-6">
                     <div className="space-y-6">
-                      <div className="flex items-center justify-between p-4 border rounded-lg">
+                      <div className="flex items-center justify-between p-4 border rounded">
                         <div>
                           <h4 className="font-semibold">Two-Factor Authentication</h4>
                           <p className="text-sm text-gray-600">Add an extra layer of security to your account</p>
                         </div>
                         <Switch
-                          checked={profile.security.twoFactorEnabled}
-                          onCheckedChange={(checked) => setProfile(prev => prev ? {
-                            ...prev,
-                            security: { ...prev.security, twoFactorEnabled: checked }
-                          } : null)}
+                          checked={profile.security?.twoFactorEnabled || false}
+                          onCheckedChange={handleToggle2FA}
                         />
                       </div>
 
@@ -613,7 +681,7 @@ export default function ProfilePage() {
                               className="mt-2"
                             />
                           </div>
-                          <Button onClick={handleChangePassword} disabled={isSaving}>
+                          <Button onClick={handleChangePassword} disabled={isSaving} className="rounded">
                             {isSaving ? (
                               <>
                                 <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
@@ -629,52 +697,18 @@ export default function ProfilePage() {
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="p-4 border rounded-lg">
-                          <div className="flex items-center gap-2 mb-2">
-                            <Mail className="w-4 h-4" />
-                            <span className="font-semibold">Email Verification</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {profile.security.isEmailVerified ? (
-                              <CheckCircle className="w-4 h-4 text-green-500" />
-                            ) : (
-                              <AlertCircle className="w-4 h-4 text-orange-500" />
-                            )}
-                            <span className="text-sm">
-                              {profile.security.isEmailVerified ? 'Verified' : 'Not Verified'}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="p-4 border rounded-lg">
-                          <div className="flex items-center gap-2 mb-2">
-                            <Phone className="w-4 h-4" />
-                            <span className="font-semibold">Phone Verification</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {profile.security.isPhoneVerified ? (
-                              <CheckCircle className="w-4 h-4 text-green-500" />
-                            ) : (
-                              <AlertCircle className="w-4 h-4 text-orange-500" />
-                            )}
-                            <span className="text-sm">
-                              {profile.security.isPhoneVerified ? 'Verified' : 'Not Verified'}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
                     </div>
                   </TabsContent>
 
                   <TabsContent value="preferences" className="space-y-6 mt-6">
                     <div className="space-y-6">
-                      <div className="flex items-center justify-between p-4 border rounded-lg">
+                      <div className="flex items-center justify-between p-4 border rounded">
                         <div>
                           <h4 className="font-semibold">Email Notifications</h4>
                           <p className="text-sm text-gray-600">Receive email alerts and updates</p>
                         </div>
                         <Switch
-                          checked={profile.preferences.notifications}
+                          checked={profile.preferences?.notifications || false}
                           onCheckedChange={(checked) => setProfile(prev => prev ? {
                             ...prev,
                             preferences: { ...prev.preferences, notifications: checked }
@@ -682,13 +716,13 @@ export default function ProfilePage() {
                         />
                       </div>
 
-                      <div className="flex items-center justify-between p-4 border rounded-lg">
+                      <div className="flex items-center justify-between p-4 border rounded">
                         <div>
                           <h4 className="font-semibold">Email Alerts</h4>
                           <p className="text-sm text-gray-600">Get notified about important events</p>
                         </div>
                         <Switch
-                          checked={profile.preferences.emailAlerts}
+                          checked={profile.preferences?.emailAlerts || false}
                           onCheckedChange={(checked) => setProfile(prev => prev ? {
                             ...prev,
                             preferences: { ...prev.preferences, emailAlerts: checked }
@@ -696,36 +730,23 @@ export default function ProfilePage() {
                         />
                       </div>
 
-                      <div className="flex items-center justify-between p-4 border rounded-lg">
-                        <div>
-                          <h4 className="font-semibold">Dark Mode</h4>
-                          <p className="text-sm text-gray-600">Use dark theme for the interface</p>
-                        </div>
-                        <Switch
-                          checked={profile.preferences.darkMode}
-                          onCheckedChange={(checked) => setProfile(prev => prev ? {
-                            ...prev,
-                            preferences: { ...prev.preferences, darkMode: checked }
-                          } : null)}
-                        />
-                      </div>
                     </div>
                   </TabsContent>
 
                   <TabsContent value="activity" className="space-y-6 mt-6">
                     <div className="space-y-6">
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div className="p-4 border rounded-lg text-center">
-                          <div className="text-2xl font-bold text-blue-600">{profile.activity.totalLogins}</div>
+                        <div className="p-4 border rounded text-center">
+                          <div className="text-2xl font-bold text-blue-600">{profile.activity?.totalLogins || 0}</div>
                           <div className="text-sm text-gray-600">Total Logins</div>
                         </div>
-                        <div className="p-4 border rounded-lg text-center">
-                          <div className="text-2xl font-bold text-green-600">{profile.activity.sessionsCount}</div>
+                        <div className="p-4 border rounded text-center">
+                          <div className="text-2xl font-bold text-green-600">{profile.activity?.sessionsCount || 0}</div>
                           <div className="text-sm text-gray-600">Active Sessions</div>
                         </div>
-                        <div className="p-4 border rounded-lg text-center">
+                        <div className="p-4 border rounded text-center">
                           <div className="text-2xl font-bold text-purple-600">
-                            {profile.security.failedLoginAttempts}
+                            {profile.security?.failedLoginAttempts || 0}
                           </div>
                           <div className="text-sm text-gray-600">Failed Attempts</div>
                         </div>
@@ -734,7 +755,7 @@ export default function ProfilePage() {
                       <div className="space-y-4">
                         <h4 className="font-semibold">Recent Activity</h4>
                         <div className="space-y-3">
-                          <div className="flex items-center gap-3 p-3 border rounded-lg">
+                          <div className="flex items-center gap-3 p-3 border rounded">
                             <Activity className="w-4 h-4 text-green-500" />
                             <div>
                               <div className="font-medium">Profile Updated</div>
@@ -743,7 +764,7 @@ export default function ProfilePage() {
                               </div>
                             </div>
                           </div>
-                          <div className="flex items-center gap-3 p-3 border rounded-lg">
+                          <div className="flex items-center gap-3 p-3 border rounded">
                             <LogOut className="w-4 h-4 text-blue-500" />
                             <div>
                               <div className="font-medium">Last Login</div>
@@ -752,12 +773,12 @@ export default function ProfilePage() {
                               </div>
                             </div>
                           </div>
-                          <div className="flex items-center gap-3 p-3 border rounded-lg">
+                          <div className="flex items-center gap-3 p-3 border rounded">
                             <Lock className="w-4 h-4 text-orange-500" />
                             <div>
                               <div className="font-medium">Password Changed</div>
                               <div className="text-sm text-gray-600">
-                                {new Date(profile.security.lastPasswordChange).toLocaleString()}
+                                {profile.security?.lastPasswordChange ? new Date(profile.security.lastPasswordChange).toLocaleString() : "Never"}
                               </div>
                             </div>
                           </div>
@@ -768,11 +789,11 @@ export default function ProfilePage() {
                 </Tabs>
 
                 {isEditing && (
-                  <div className="flex justify-end gap-4 mt-6 pt-6 border-t">
-                    <Button variant="outline" onClick={() => setIsEditing(false)}>
+                  <div className="flex justify-end gap-4 mt-6 pt-6 border-t rounded">
+                    <Button variant="outline" onClick={() => setIsEditing(false)} className="rounded">
                       Cancel
                     </Button>
-                    <Button onClick={handleSaveProfile} disabled={isSaving}>
+                    <Button onClick={handleSaveProfile} disabled={isSaving} className="rounded">
                       {isSaving ? (
                         <>
                           <RefreshCw className="w-4 h-4 mr-2 animate-spin" />

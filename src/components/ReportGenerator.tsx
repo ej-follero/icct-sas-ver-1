@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Progress } from "@/components/ui/progress";
 import { 
   FileText, 
   Download, 
@@ -23,9 +24,11 @@ import {
   CheckCircle,
   AlertTriangle,
   X,
-  Loader2
+  Loader2,
+  CheckCircle2
 } from "lucide-react";
 import { ICCT_CLASSES } from "@/lib/colors";
+import { useReportGeneration } from "@/hooks/useReportGeneration";
 
 interface ReportGeneratorProps {
   title: string;
@@ -64,7 +67,6 @@ const ReportGenerator: React.FC<ReportGeneratorProps> = ({
   className = ""
 }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const [isGenerating, setIsGenerating] = useState(false);
   const [config, setConfig] = useState<ReportConfig>({
     format: 'csv',
     dateRange: {
@@ -77,30 +79,59 @@ const ReportGenerator: React.FC<ReportGeneratorProps> = ({
     includeSummary: true
   });
 
+  // Use the new report generation hook
+  const {
+    isGenerating,
+    progress,
+    currentStep,
+    error,
+    result,
+    generateReport,
+    reset,
+    downloadReport
+  } = useReportGeneration();
+
   const handleGenerate = async () => {
     if (!onGenerate) {
-      // Default export functionality
+      // Use the new export service
       await handleDefaultExport();
     } else {
-      setIsGenerating(true);
       try {
         await onGenerate(config);
       } catch (error) {
         console.error('Report generation failed:', error);
       } finally {
-        setIsGenerating(false);
         setIsOpen(false);
       }
     }
   };
 
   const handleDefaultExport = async () => {
-    if (config.format === 'csv') {
-      exportToCSV();
-    } else if (config.format === 'pdf') {
-      await exportToPDF();
+    // Filter data based on selected columns
+    const filteredData = data.map(item => {
+      const filteredItem: any = {};
+      config.columns.forEach(col => {
+        filteredItem[col] = item[col];
+      });
+      return filteredItem;
+    });
+
+    // Filter columns based on selection
+    const filteredColumns = columns.filter(col => config.columns.includes(col.key));
+
+    const result = await generateReport({
+      reportType: title,
+      reportName: `${title} Report`,
+      data: filteredData,
+      columns: filteredColumns,
+      format: config.format,
+      userId: 1 // You might want to get this from user context
+    });
+
+    if (result.success && result.downloadUrl) {
+      downloadReport(result.downloadUrl);
+      setIsOpen(false);
     }
-    setIsOpen(false);
   };
 
   const exportToCSV = () => {
@@ -210,6 +241,57 @@ const ReportGenerator: React.FC<ReportGeneratorProps> = ({
             </DialogTitle>
           </DialogHeader>
 
+          {/* Generation Progress */}
+          {isGenerating && (
+            <div className="space-y-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+              <div className="flex items-center gap-2">
+                <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
+                <span className="text-sm font-medium text-blue-800">{currentStep}</span>
+              </div>
+              <Progress value={progress} className="w-full" />
+              <div className="text-xs text-blue-600">{progress}% complete</div>
+            </div>
+          )}
+
+          {/* Generation Success */}
+          {result?.success && (
+            <div className="space-y-4 p-4 bg-green-50 rounded-lg border border-green-200">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-green-600" />
+                <span className="text-sm font-medium text-green-800">Report generated successfully!</span>
+              </div>
+              <div className="text-xs text-green-600">
+                File: {result.filename} ({result.fileSize ? `${Math.round(result.fileSize / 1024)} KB` : 'Unknown size'})
+              </div>
+              <Button 
+                onClick={() => result.downloadUrl && downloadReport(result.downloadUrl)}
+                className="w-full"
+                variant="outline"
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Download Report
+              </Button>
+            </div>
+          )}
+
+          {/* Generation Error */}
+          {error && (
+            <div className="space-y-4 p-4 bg-red-50 rounded-lg border border-red-200">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-red-600" />
+                <span className="text-sm font-medium text-red-800">Generation failed</span>
+              </div>
+              <div className="text-xs text-red-600">{error}</div>
+              <Button 
+                onClick={reset}
+                className="w-full"
+                variant="outline"
+              >
+                Try Again
+              </Button>
+            </div>
+          )}
+
           <div className="space-y-6">
             {/* Format Selection */}
             <div>
@@ -314,7 +396,14 @@ const ReportGenerator: React.FC<ReportGeneratorProps> = ({
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsOpen(false)}>
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setIsOpen(false);
+                reset();
+              }}
+              disabled={isGenerating}
+            >
               Cancel
             </Button>
             <Button 

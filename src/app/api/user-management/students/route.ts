@@ -54,6 +54,27 @@ const bulkActionSchema = z.object({
 // GET - Fetch student users with filtering and pagination
 export async function GET(request: NextRequest) {
   try {
+    // JWT Authentication (SUPER_ADMIN, ADMIN, DEPARTMENT_HEAD, INSTRUCTOR)
+    const token = request.cookies.get('token')?.value;
+    if (!token) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const reqUserId = Number((decoded as any)?.userId);
+    if (!Number.isFinite(reqUserId)) {
+      return NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 });
+    }
+
+    const reqUser = await prisma.user.findUnique({ where: { userId: reqUserId }, select: { status: true, role: true } });
+    if (!reqUser || reqUser.status !== 'ACTIVE') {
+      return NextResponse.json({ error: 'User not found or inactive' }, { status: 401 });
+    }
+    const allowedRoles = ['SUPER_ADMIN', 'ADMIN', 'DEPARTMENT_HEAD', 'INSTRUCTOR'];
+    if (!allowedRoles.includes(reqUser.role)) {
+      return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
+    }
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '10');
@@ -97,45 +118,31 @@ export async function GET(request: NextRequest) {
 
     // Year level filter
     if (yearLevel && yearLevel !== 'all') {
-      where.AND.push({
-        Student: { yearLevel: yearLevel.toUpperCase() }
-      });
+      const yl = yearLevel.toUpperCase();
+      const valid = ['FIRST_YEAR','SECOND_YEAR','THIRD_YEAR','FOURTH_YEAR'];
+      if (valid.includes(yl)) {
+        where.AND.push({ Student: { some: { yearLevel: yl } } });
+      }
     }
 
     // Department filter
     if (department && department !== 'all') {
-      where.AND.push({
-        Student: { 
-          Department: { departmentName: department }
-        }
-      });
+      where.AND.push({ Student: { some: { Department: { is: { departmentName: department } } } } });
     }
 
     // Course filter
     if (course && course !== 'all') {
-      where.AND.push({
-        Student: {
-          CourseOffering: { courseName: course }
-        }
-      });
+      where.AND.push({ Student: { some: { CourseOffering: { is: { courseName: course } } } } });
     }
 
     // Verification status filter
     if (verificationStatus && verificationStatus !== 'all') {
       switch (verificationStatus) {
         case 'verified':
-          where.AND.push({ isEmailVerified: true, isPhoneVerified: true });
-          break;
-        case 'partial':
-          where.AND.push({
-            OR: [
-              { AND: [{ isEmailVerified: true }, { isPhoneVerified: false }] },
-              { AND: [{ isEmailVerified: false }, { isPhoneVerified: true }] }
-            ]
-          });
+          where.AND.push({ isEmailVerified: true });
           break;
         case 'unverified':
-          where.AND.push({ isEmailVerified: false, isPhoneVerified: false });
+          where.AND.push({ isEmailVerified: false });
           break;
       }
     }
@@ -191,11 +198,10 @@ export async function GET(request: NextRequest) {
       email: user.email,
       role: user.role as 'STUDENT',
       status: user.status as any,
-      lastLogin: user.lastLogin,
-      lastPasswordChange: user.lastPasswordChange,
+      lastLogin: user.lastLogin ?? undefined,
+      lastPasswordChange: user.lastPasswordChange ?? undefined,
       failedLoginAttempts: user.failedLoginAttempts,
       isEmailVerified: user.isEmailVerified,
-      isPhoneVerified: user.isPhoneVerified,
       twoFactorEnabled: user.twoFactorEnabled,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
@@ -205,19 +211,19 @@ export async function GET(request: NextRequest) {
       studentIdNum: user.Student?.[0]?.studentIdNum || '',
       rfidTag: user.Student?.[0]?.rfidTag || '',
       firstName: user.Student?.[0]?.firstName || '',
-      middleName: user.Student?.[0]?.middleName,
+      middleName: user.Student?.[0]?.middleName ?? undefined,
       lastName: user.Student?.[0]?.lastName || '',
-      suffix: user.Student?.[0]?.suffix,
+      suffix: user.Student?.[0]?.suffix ?? undefined,
       phoneNumber: user.Student?.[0]?.phoneNumber || '',
       address: user.Student?.[0]?.address || '',
-      img: user.Student?.[0]?.img,
+      img: user.Student?.[0]?.img ?? undefined,
       gender: user.Student?.[0]?.gender as 'MALE' | 'FEMALE',
-      birthDate: user.Student?.[0]?.birthDate,
-      nationality: user.Student?.[0]?.nationality,
+      birthDate: user.Student?.[0]?.birthDate ?? undefined,
+      nationality: user.Student?.[0]?.nationality ?? undefined,
       studentType: user.Student?.[0]?.studentType as 'REGULAR' | 'IRREGULAR',
       yearLevel: user.Student?.[0]?.yearLevel as any,
-      courseId: user.Student?.[0]?.courseId,
-      departmentId: user.Student?.[0]?.departmentId,
+      courseId: user.Student?.[0]?.courseId ?? undefined,
+      departmentId: user.Student?.[0]?.departmentId ?? undefined,
       guardianId: user.Student?.[0]?.guardianId || 0,
       
       // Related data
@@ -227,11 +233,10 @@ export async function GET(request: NextRequest) {
         `${user.Student[0].Guardian.firstName} ${user.Student[0].Guardian.lastName}` : '',
       guardianContact: user.Student?.[0]?.Guardian?.phoneNumber,
       
-      // Analytics
-      totalSubjects: user.Student?.[0]?.totalSubjects || 0,
-      totalAttendance: user.Student?.[0]?.totalAttendance || 0,
-      attendanceRate: user.Student?.[0]?.totalAttendance && user.Student?.[0]?.totalSubjects ? 
-        (user.Student[0].totalAttendance / user.Student[0].totalSubjects) * 100 : 0,
+      // Analytics (not in schema; default to 0)
+      totalSubjects: 0,
+      totalAttendance: 0,
+      attendanceRate: 0,
     }));
 
     return NextResponse.json({

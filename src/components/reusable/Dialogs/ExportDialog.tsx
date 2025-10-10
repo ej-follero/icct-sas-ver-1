@@ -15,28 +15,53 @@ interface ExportDialogProps {
   onOpenChange: (open: boolean) => void;
   onExport: (format: 'pdf' | 'csv' | 'excel', options: ExportOptions) => Promise<void>;
   dataCount: number;
-  entityType: 'student' | 'instructor';
+  entityType: string;
 }
 
 interface ExportOptions {
   includeCharts: boolean;
   includeFilters: boolean;
   includeSummary: boolean;
+  includeTable?: boolean;
+  selectedCharts?: string[]; // keys matching data-chart attributes
+  selectedColumns?: string[]; // columns to include in table export
 }
 
 export function ExportDialog({ open, onOpenChange, onExport, dataCount, entityType }: ExportDialogProps) {
   const [format, setFormat] = useState<'pdf' | 'csv' | 'excel'>('excel');
   const [options, setOptions] = useState<ExportOptions>({
-    includeCharts: true,
+    includeCharts: false,
     includeFilters: true,
-    includeSummary: true
+    includeSummary: true,
+    includeTable: true,
+    selectedCharts: ['attendance-trend','department-stats','risk-level','late-arrival'],
+    selectedColumns: ['studentName', 'studentId', 'department', 'date', 'timeIn', 'timeOut', 'status', 'subject', 'room']
   });
   const [isExporting, setIsExporting] = useState(false);
+  const hasData = dataCount > 0;
+  const availableColumnKeys = new Set(['studentName','studentId','department','yearLevel','riskLevel','date','timeIn','timeOut','status','subject','room','notes','isManualEntry','createdAt','updatedAt']);
+  const validSelectedColumns = (options.selectedColumns || []).filter(k => availableColumnKeys.has(k));
+  const requireColumnsButNoneSelected = !!options.includeTable && validSelectedColumns.length === 0;
 
   const handleExport = async () => {
     try {
+      if (!hasData) {
+        toast.error('No data available to export. Please load data first.');
+        return;
+      }
+      if (requireColumnsButNoneSelected) {
+        toast.error('Please select at least one column to include in the table.');
+        return;
+      }
       setIsExporting(true);
-      await onExport(format, options);
+      // Sanitize options before passing to caller
+      const sanitized: ExportOptions = {
+        ...options,
+        includeCharts: format === 'pdf' ? !!options.includeCharts : false,
+        selectedCharts: format === 'pdf' ? (options.selectedCharts || []) : [],
+        selectedColumns: options.includeTable ? validSelectedColumns : []
+      };
+      await onExport(format, sanitized);
       onOpenChange(false);
     } catch (error) {
       console.error('Export failed:', error);
@@ -70,24 +95,59 @@ export function ExportDialog({ open, onOpenChange, onExport, dataCount, entityTy
     }
   ];
 
+  const handleSelectFormat = (value: 'pdf' | 'csv' | 'excel') => {
+    setFormat(value);
+    setOptions(prev => ({
+      ...prev,
+      // Charts can be exported only for PDF
+      includeCharts: value === 'pdf' ? prev.includeCharts : false
+    }));
+  };
+  const chartsDisabled = format !== 'pdf';
+  const chartList = [
+    { key: 'attendance-trend', label: 'Attendance Trend' },
+    { key: 'department-stats', label: 'Department Performance' },
+    { key: 'risk-level', label: 'Risk Level' },
+    { key: 'late-arrival', label: 'Late Arrival' }
+  ];
+
+  // Available columns for table export
+  const availableColumns = [
+    { key: 'studentName', label: 'Student Name' },
+    { key: 'studentId', label: 'Student ID' },
+    { key: 'department', label: 'Department' },
+    { key: 'yearLevel', label: 'Year Level' },
+    { key: 'riskLevel', label: 'Risk Level' },
+    { key: 'date', label: 'Date' },
+    { key: 'timeIn', label: 'Time In' },
+    { key: 'timeOut', label: 'Time Out' },
+    { key: 'status', label: 'Status' },
+    { key: 'subject', label: 'Subject' },
+    { key: 'room', label: 'Room' },
+    { key: 'notes', label: 'Notes' },
+    { key: 'isManualEntry', label: 'Manual Entry' },
+    { key: 'createdAt', label: 'Created At' },
+    { key: 'updatedAt', label: 'Updated At' }
+  ];
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl p-0 overflow-hidden rounded-xl flex flex-col max-h-[90vh]">
         {/* Accessibility - Hidden DialogTitle for screen readers */}
         <VisuallyHidden>
-          <DialogTitle>Export {entityType === 'student' ? 'Student' : 'Instructor'} Data</DialogTitle>
+          <DialogTitle>Export {entityType} Data</DialogTitle>
         </VisuallyHidden>
         
         {/* Blue Header Section with Close Button */}
-        <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4 text-white rounded-t-xl relative flex-shrink-0">
+        <div className="bg-gradient-to-r from-blue-600 to-blue-700 p-6 text-white rounded-t-xl relative flex-shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
-              <BarChart3 className="w-5 h-5 text-white" />
+            <div className="w-12 h-12 bg-white/20 rounded flex items-center justify-center">
+              <BarChart3 className="w-6 h-6 text-white" />
             </div>
             <div className="flex-1">
-              <h3 className="text-lg font-semibold text-white">Export {entityType === 'student' ? 'Student' : 'Instructor'} Data</h3>
+              <h3 className="text-lg font-semibold text-white">Export {entityType} Data</h3>
               <p className="text-white/80 text-sm">
-                Export {dataCount} {entityType}s with your preferred format and options.
+                Export {dataCount} {entityType}{dataCount === 1 ? '' : 's'} with your preferred format and options.
               </p>
             </div>
           </div>
@@ -106,12 +166,6 @@ export function ExportDialog({ open, onOpenChange, onExport, dataCount, entityTy
         <div className="p-6 flex-1 overflow-y-auto">
 
         <div className="space-y-6">
-          {/* Information Bar */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-            <p className="text-blue-800 text-sm font-medium">
-              Exporting <strong>{dataCount}</strong> selected {entityType}s
-            </p>
-          </div>
 
           {/* Format Selection */}
           <div className="space-y-3">
@@ -126,7 +180,7 @@ export function ExportDialog({ open, onOpenChange, onExport, dataCount, entityTy
                       ? "bg-blue-600 hover:bg-blue-700 text-white" 
                       : "bg-white hover:bg-gray-50 text-gray-700 border-gray-300"
                   }`}
-                  onClick={() => setFormat(option.value as 'pdf' | 'csv' | 'excel')}
+                  onClick={() => handleSelectFormat(option.value as 'pdf' | 'csv' | 'excel')}
                 >
                   <div className="flex items-center gap-2">
                     {option.icon}
@@ -140,16 +194,17 @@ export function ExportDialog({ open, onOpenChange, onExport, dataCount, entityTy
           {/* Columns to Export */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <Label className="text-sm font-medium text-gray-900">Columns to Export</Label>
+              <Label className="text-sm font-medium text-gray-900">Export Options</Label>
               <Button
                 variant="ghost"
                 size="sm"
                 className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
                 onClick={() => {
-                  const allSelected = options.includeCharts && options.includeFilters && options.includeSummary;
+                  const chartsAllowed = format === 'pdf';
+                  const allSelected = (chartsAllowed ? options.includeCharts : true) && options.includeFilters && options.includeSummary;
                   setOptions(prev => ({
                     ...prev,
-                    includeCharts: !allSelected,
+                    includeCharts: chartsAllowed ? !allSelected : false,
                     includeFilters: !allSelected,
                     includeSummary: !allSelected
                   }));
@@ -158,18 +213,38 @@ export function ExportDialog({ open, onOpenChange, onExport, dataCount, entityTy
                 Select All
               </Button>
             </div>
-            <div className="border border-gray-200 rounded-lg p-3 max-h-48 overflow-y-auto">
+            <div className="border border-gray-200 rounded-lg p-3 max-h-64 overflow-y-auto">
               <div className="space-y-3">
                 <div className="flex items-center space-x-2">
                   <Checkbox
                     id="includeCharts"
                     checked={options.includeCharts}
-                    onCheckedChange={(checked) => setOptions(prev => ({ ...prev, includeCharts: !!checked }))}
+                    disabled={chartsDisabled}
+                    onCheckedChange={(checked) => setOptions(prev => ({ ...prev, includeCharts: chartsDisabled ? false : !!checked }))}
                   />
-                  <Label htmlFor="includeCharts" className="text-sm">
+                  <Label htmlFor="includeCharts" className={`text-sm ${chartsDisabled ? 'text-gray-400' : ''}`}>
                     Include charts and visualizations
                   </Label>
                 </div>
+                {/* Chart selection (PDF only) */}
+                {!chartsDisabled && options.includeCharts && (
+                  <div className="ml-6 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {chartList.map(c => (
+                      <label key={c.key} className="flex items-center space-x-2 text-sm">
+                        <Checkbox
+                          checked={options.selectedCharts?.includes(c.key) || false}
+                          onCheckedChange={(checked) => setOptions(prev => ({
+                            ...prev,
+                            selectedCharts: checked
+                              ? Array.from(new Set([...(prev.selectedCharts || []), c.key]))
+                              : (prev.selectedCharts || []).filter(k => k !== c.key)
+                          }))}
+                        />
+                        <span>{c.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
                 <div className="flex items-center space-x-2">
                   <Checkbox
                     id="includeFilters"
@@ -190,60 +265,87 @@ export function ExportDialog({ open, onOpenChange, onExport, dataCount, entityTy
                     Include summary statistics
                   </Label>
                 </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="includeTable"
+                    checked={!!options.includeTable}
+                    onCheckedChange={(checked) => setOptions(prev => ({ ...prev, includeTable: !!checked }))}
+                  />
+                  <Label htmlFor="includeTable" className="text-sm">
+                    Include attendance records table
+                  </Label>
+                </div>
+                
+                {/* Column selection (only when table is included) */}
+                {options.includeTable && (
+                  <div className="ml-6 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-sm font-medium text-gray-700">Select Columns to Include</Label>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                        onClick={() => {
+                          const allSelected = availableColumns.every(col => options.selectedColumns?.includes(col.key));
+                          setOptions(prev => ({
+                            ...prev,
+                            selectedColumns: allSelected ? [] : availableColumns.map(col => col.key)
+                          }));
+                        }}
+                      >
+                        {availableColumns.every(col => options.selectedColumns?.includes(col.key)) ? 'Deselect All' : 'Select All'}
+                      </Button>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-32 overflow-y-auto border border-gray-200 rounded p-2">
+                      {availableColumns.map(col => (
+                        <label key={col.key} className="flex items-center space-x-2 text-sm">
+                          <Checkbox
+                            checked={options.selectedColumns?.includes(col.key) || false}
+                            onCheckedChange={(checked) => setOptions(prev => ({
+                              ...prev,
+                              selectedColumns: checked
+                                ? Array.from(new Set([...(prev.selectedColumns || []), col.key]))
+                                : (prev.selectedColumns || []).filter(k => k !== col.key)
+                            }))}
+                          />
+                          <span>{col.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                    {/* Preview summary */}
+                    <div className="text-xs text-gray-600 flex flex-wrap items-center gap-2">
+                      <span className="font-medium">Preview:</span>
+                      <span>{dataCount} {entityType}{dataCount === 1 ? '' : 's'}</span>
+                      <span>•</span>
+                      <span>{validSelectedColumns.length} column{validSelectedColumns.length === 1 ? '' : 's'} selected</span>
+                    </div>
+                    {requireColumnsButNoneSelected && (
+                      <div className="text-xs text-red-600">Select at least one column to export the table.</div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </div>
 
-          {/* Export Options */}
-          <div className="space-y-3">
-            <Label className="text-sm font-medium text-gray-900">Export Options</Label>
-            <div className="space-y-3">
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="includeHeaders"
-                  checked={true}
-                  disabled
-                />
-                <Label htmlFor="includeHeaders" className="text-sm">
-                  Include column headers
-                </Label>
-              </div>
-            </div>
-          </div>
+          {/* removed: table column options */}
 
-          {/* Data Preview */}
-          <div className="bg-gray-50 p-3 rounded-lg">
-            <div className="text-sm text-gray-600">
-              <strong>Export Preview:</strong>
-            </div>
-            <div className="text-sm text-gray-500 mt-1">
-              • {dataCount} {entityType}s
-            </div>
-            <div className="text-sm text-gray-500">
-              • Format: {format.toUpperCase()}
-            </div>
-            {options.includeCharts && (
-              <div className="text-sm text-gray-500">
-                • Charts and visualizations included
-              </div>
-            )}
-          </div>
         </div>
 
         {/* Sticky Footer Section */}
-        <div className="flex-shrink-0 px-6 py-4 bg-gray-50 border-t border-gray-200 flex justify-end gap-3 rounded-b-xl shadow-lg sticky bottom-0 z-10">
+        <div className="flex-shrink-0 bg-gray-50 border-t border-gray-200 flex justify-end gap-3 sticky bottom-0 z-10 mt-6 pt-2">
           <Button 
             variant="outline" 
             onClick={() => onOpenChange(false)} 
             disabled={isExporting}
-            className="border-gray-300 text-gray-700 hover:bg-gray-50 px-6"
+            className="border-gray-300 text-gray-700 hover:bg-gray-50 rounded"
           >
             Cancel
           </Button>
           <Button 
             onClick={handleExport} 
-            disabled={isExporting} 
-            className="bg-blue-600 hover:bg-blue-700 text-white px-6"
+            disabled={isExporting || !hasData || requireColumnsButNoneSelected} 
+            className="bg-blue-600 hover:bg-blue-700 text-white rounded"
           >
             {isExporting ? (
               <>
@@ -253,7 +355,7 @@ export function ExportDialog({ open, onOpenChange, onExport, dataCount, entityTy
             ) : (
               <>
                 <Download className="w-4 h-4 mr-2" />
-                Export Data
+                {!hasData ? 'No Data to Export' : requireColumnsButNoneSelected ? 'Select Columns' : 'Export Data'}
               </>
             )}
           </Button>

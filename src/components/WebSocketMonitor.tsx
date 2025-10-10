@@ -254,12 +254,12 @@ export default function WebSocketMonitor() {
           </TabsList>
 
           <TabsContent value="overview" className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
               <Card>
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium text-muted-foreground">Active Connections</p>
+                      <p className="text-sm font-medium text-blue-900">Active Connections</p>
                       <p className="text-2xl font-bold">{websocketStatus.metrics.activeConnections}</p>
                     </div>
                     <Users className="w-8 h-8 text-blue-500" />
@@ -275,7 +275,7 @@ export default function WebSocketMonitor() {
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium text-muted-foreground">Messages/sec</p>
+                      <p className="text-sm font-medium text-blue-900">Messages/sec</p>
                       <p className="text-2xl font-bold">{websocketStatus.metrics.messagesPerSecond.toFixed(1)}</p>
                     </div>
                     <MessageSquare className="w-8 h-8 text-green-500" />
@@ -291,7 +291,7 @@ export default function WebSocketMonitor() {
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium text-muted-foreground">Avg Latency</p>
+                      <p className="text-sm font-medium text-blue-900">Avg Latency</p>
                       <p className="text-2xl font-bold">{websocketStatus.metrics.averageLatency.toFixed(1)}ms</p>
                     </div>
                     <Signal className="w-8 h-8 text-orange-500" />
@@ -307,12 +307,12 @@ export default function WebSocketMonitor() {
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium text-muted-foreground">Uptime</p>
+                      <p className="text-sm font-medium text-blue-900">Uptime</p>
                       <p className="text-2xl font-bold">{formatUptime(websocketStatus.metrics.uptime)}</p>
                     </div>
                     <Clock className="w-8 h-8 text-purple-500" />
                   </div>
-                  <p className="text-xs text-muted-foreground mt-2">Since last restart</p>
+                  <p className="text-xs text-blue-900 mt-2">Since last restart</p>
                 </CardContent>
               </Card>
             </div>

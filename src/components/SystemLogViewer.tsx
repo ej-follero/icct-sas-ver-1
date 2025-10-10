@@ -284,12 +284,24 @@ export default function SystemLogViewer({ open, onOpenChange, logType = 'system'
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <FileText className="w-5 h-5" />
-            System Log Viewer
-          </DialogTitle>
+      <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden p-0 rounded-xl">
+        <DialogHeader className="p-0">
+          {/* Blue Gradient Header */}
+          <div className="bg-gradient-to-r from-[#1e40af] to-[#3b82f6] p-0">
+            <div className="py-4 sm:py-6">
+              <div className="flex items-center justify-between px-4 sm:px-6">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 flex items-center justify-center">
+                    <FileText className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-white">System Log Viewer</h3>
+                    <p className="text-blue-100 text-sm">Monitor and analyze system logs</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </DialogHeader>
 
         <div className="flex flex-col h-full">

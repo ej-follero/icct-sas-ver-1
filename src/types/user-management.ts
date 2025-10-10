@@ -9,7 +9,6 @@ export interface BaseUser {
   lastPasswordChange?: Date;
   failedLoginAttempts: number;
   isEmailVerified: boolean;
-  isPhoneVerified: boolean;
   twoFactorEnabled: boolean;
   createdAt: Date;
   updatedAt: Date;
