@@ -63,6 +63,27 @@ export async function POST(request: NextRequest) {
         ipAddress: undefined,
         userAgent: undefined,
       } as any);
+      // Send error feedback via MQTT
+      try {
+        const mqtt = require('mqtt');
+        const client = mqtt.connect(process.env.MQTT_BROKER || 'ws://localhost:9001', {
+          username: process.env.MQTT_USERNAME,
+          password: process.env.MQTT_PASSWORD,
+          clientId: `kiosk-error-${Date.now()}`
+        });
+        
+        client.on('connect', () => {
+          client.publish('/attendance/feedback', JSON.stringify({
+            topic: '/attendance/feedback',
+            message: 'Invalid PIN',
+            value: studentIdNum
+          }));
+          client.end();
+        });
+      } catch (mqttError) {
+        console.log('MQTT feedback not available:', mqttError);
+      }
+      
       return NextResponse.json({ error: 'Invalid PIN' }, { status: 401 });
     }
 
@@ -103,6 +124,30 @@ export async function POST(request: NextRequest) {
       ipAddress: undefined,
       userAgent: undefined,
     } as any);
+
+    // Send success feedback via MQTT (if available)
+    try {
+      const mqtt = require('mqtt');
+      const client = mqtt.connect(process.env.MQTT_BROKER || 'ws://localhost:9001', {
+        username: process.env.MQTT_USERNAME,
+        password: process.env.MQTT_PASSWORD,
+        clientId: `kiosk-success-${Date.now()}`
+      });
+      
+      client.on('connect', () => {
+        client.publish('/attendance/feedback', JSON.stringify({
+          topic: '/attendance/feedback',
+          message: 'Card bound successfully',
+          value: tagNumber,
+          studentIdNum,
+          timestamp: new Date().toISOString(),
+          status: 'SUCCESS'
+        }));
+        client.end();
+      });
+    } catch (mqttError) {
+      console.log('MQTT feedback not available:', mqttError);
+    }
 
     return NextResponse.json({ ok: true });
   } catch (e: any) {

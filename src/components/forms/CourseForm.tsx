@@ -67,12 +67,12 @@ interface CourseFormProps {
   onSuccess?: () => void;
 }
 
-// Mock data for departments - replace with actual API call later
-const departments = [
-  { id: "1", name: "College of Information Technology" },
-  { id: "2", name: "College of Engineering" },
-  { id: "3", name: "College of Education" },
-];
+// Department interface
+interface Department {
+  id: string;
+  name: string;
+  code: string;
+}
 
 const defaultValues: Course = {
   name: "",
@@ -89,6 +89,11 @@ export default function CourseForm({ open, onOpenChange, type, data, id, onSucce
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // Department state
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [departmentsLoading, setDepartmentsLoading] = useState(false);
+  const [departmentsError, setDepartmentsError] = useState<string | null>(null);
 
   // Dialog-based notification state
   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
@@ -114,6 +119,14 @@ export default function CourseForm({ open, onOpenChange, type, data, id, onSucce
     defaultValues: data || defaultValues,
   });
 
+  // Reset form when data changes (for edit mode)
+  useEffect(() => {
+    if (data && type === "update") {
+      console.log("Resetting form with data:", data);
+      reset(data);
+    }
+  }, [data, type, reset]);
+
   // On mount, check for draft
   useEffect(() => {
     if (type === 'create') {
@@ -128,6 +141,38 @@ export default function CourseForm({ open, onOpenChange, type, data, id, onSucce
       }
     }
   }, [type]);
+
+  // Fetch departments from API
+  useEffect(() => {
+    const fetchDepartments = async () => {
+      setDepartmentsLoading(true);
+      setDepartmentsError(null);
+      try {
+        const response = await fetch('/api/departments');
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const data = await response.json();
+        if (data && Array.isArray(data.data)) {
+          setDepartments(data.data);
+        } else if (Array.isArray(data)) {
+          setDepartments(data);
+        } else {
+          throw new Error('Invalid data format received from server');
+        }
+      } catch (err) {
+        console.error('Error fetching departments:', err);
+        setDepartmentsError('Failed to load departments. Please try again later.');
+        toast.error('Failed to load departments. Please try again later.');
+      } finally {
+        setDepartmentsLoading(false);
+      }
+    };
+
+    if (open) {
+      fetchDepartments();
+    }
+  }, [open]);
 
   // Restore draft handler
   const handleRestoreDraft = () => {
@@ -256,16 +301,48 @@ export default function CourseForm({ open, onOpenChange, type, data, id, onSucce
   }
 
   const onSubmit = async (formData: Course) => {
+    console.log("onSubmit called with formData:", formData);
+    console.log("Form type:", type);
+    console.log("Form ID:", id);
+    
     try {
       setIsSubmitting(true);
       setError(null);
 
-      // No need to transform status case since we're using the correct case in the form
+      // Validate required fields
+      if (!formData.name || !formData.code || !formData.department || !formData.units) {
+        console.log("Validation failed - missing required fields:", {
+          name: formData.name,
+          code: formData.code,
+          department: formData.department,
+          units: formData.units
+        });
+        setErrorMessage("Please fill in all required fields");
+        setShowErrorDialog(true);
+        return;
+      }
+
+      // Validate department is a valid number
+      const departmentId = parseInt(formData.department);
+      if (isNaN(departmentId)) {
+        setErrorMessage("Please select a valid department");
+        setShowErrorDialog(true);
+        return;
+      }
+
+      // Prepare data for API
       const normalizedData = {
-        ...formData,
-        // Ensure department is sent as an ID
-        department: parseInt(formData.department),
+        name: formData.name,
+        code: formData.code,
+        department: departmentId,
+        description: formData.description || "",
+        units: formData.units,
+        status: formData.status,
+        courseType: formData.courseType,
+        major: formData.major || "",
       };
+
+      console.log("Submitting course data:", normalizedData);
 
       let response;
       if (type === "create") {
@@ -280,20 +357,35 @@ export default function CourseForm({ open, onOpenChange, type, data, id, onSucce
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(normalizedData),
         });
-      }
-
-      if (!response?.ok) {
-        const errorData = await response?.json();
-        setErrorMessage(errorData?.error || "Failed to save course");
+      } else {
+        setErrorMessage("Invalid form type or missing course ID");
         setShowErrorDialog(true);
         return;
       }
+
+      if (!response) {
+        setErrorMessage("No response received from server");
+        setShowErrorDialog(true);
+        return;
+      }
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error("API Error:", errorData);
+        setErrorMessage(errorData?.error || `Failed to save course (${response.status})`);
+        setShowErrorDialog(true);
+        return;
+      }
+
+      const result = await response.json();
+      console.log("Course saved successfully:", result);
 
       setSuccessMessage(type === "create" ? "Course created successfully" : "Course updated successfully");
       setShowSuccessDialog(true);
       // onSuccess will be called after dialog closes
     } catch (err: any) {
-      setErrorMessage(err.message);
+      console.error("Form submission error:", err);
+      setErrorMessage(err.message || "An unexpected error occurred");
       setShowErrorDialog(true);
     } finally {
       setIsSubmitting(false);
@@ -382,7 +474,7 @@ export default function CourseForm({ open, onOpenChange, type, data, id, onSucce
           </p>
         </div>
         {error && (
-          <div className="p-3 text-sm text-red-500 bg-red-50 rounded-lg">
+          <div className="p-3 text-sm text-red-500 bg-red-50 rounded">
             {error}
           </div>
         )}
@@ -391,7 +483,7 @@ export default function CourseForm({ open, onOpenChange, type, data, id, onSucce
             variant="outline"
             onClick={() => onOpenChange(false)}
             disabled={isSubmitting}
-            className="w-32 border border-blue-300 text-blue-500"
+            className="w-32 border border-blue-300 text-blue-500 rounded"
           >
             Cancel
           </Button>
@@ -399,7 +491,7 @@ export default function CourseForm({ open, onOpenChange, type, data, id, onSucce
             variant="destructive"
             onClick={handleDelete}
             disabled={isSubmitting}
-            className="w-32"
+            className="w-32 rounded"
           >
             {isSubmitting ? "Deleting..." : "Delete"}
           </Button>
@@ -495,7 +587,7 @@ export default function CourseForm({ open, onOpenChange, type, data, id, onSucce
         </DialogHeader>
         {/* The rest of the form will go here in the next step */}
         <div className="max-h-[70vh] overflow-y-auto px-4 py-6 sm:px-8 sm:py-8">
-          <Form onSubmit={handleSubmit(onSubmit)}>
+          <form onSubmit={handleSubmit(onSubmit)}>
 {/* Info Bar */}
 <div className="flex items-center gap-2 p-3 mb-4 bg-blue-50 border border-blue-100 rounded shadow-sm">
   <Info className="h-5 w-5 text-blue-600" />
@@ -581,18 +673,33 @@ export default function CourseForm({ open, onOpenChange, type, data, id, onSucce
           <FormItem>
             <FormLabel>Department <span className="text-red-500">*</span></FormLabel>
             <FormControl>
-              <Select value={field.value} onValueChange={field.onChange} required>
-                <SelectTrigger id="department" className="focus:ring-blue-300 focus:border-blue-300">
-                  <SelectValue placeholder="Select department" />
-                </SelectTrigger>
-                <SelectContent>
-                  {departments.map((dept) => (
-                    <SelectItem key={dept.id} value={dept.id}>
-                      {dept.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {departmentsLoading ? (
+                <div className="flex items-center gap-2 text-blue-600 p-2 border border-gray-300 rounded-md">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                  Loading departments...
+                </div>
+              ) : departmentsError ? (
+                <div className="text-red-600 text-sm p-2 border border-red-300 rounded-md">
+                  {departmentsError}
+                </div>
+              ) : departments.length > 0 ? (
+                <Select value={field.value} onValueChange={field.onChange} required>
+                  <SelectTrigger id="department" className="focus:ring-blue-300 focus:border-blue-300">
+                    <SelectValue placeholder="Select department" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {departments.map((dept) => (
+                      <SelectItem key={dept.id} value={dept.id}>
+                        {dept.name} ({dept.code})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <div className="text-gray-500 text-sm p-2 border border-gray-300 rounded-md">
+                  No departments available
+                </div>
+              )}
             </FormControl>
             <FormMessage />
           </FormItem>
@@ -689,7 +796,7 @@ export default function CourseForm({ open, onOpenChange, type, data, id, onSucce
     </div>
   </div>
 </div>
-          </Form>
+          </form>
         </div>
         <DialogFooter className="flex items-center justify-end pt-4 border-t border-blue-100 bg-blue-50/50 px-6 py-4 mt-2 rounded-b-2xl">
           <TooltipProvider>
@@ -730,7 +837,8 @@ export default function CourseForm({ open, onOpenChange, type, data, id, onSucce
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
-                  type="submit"
+                  type="button"
+                  onClick={handleSubmit(onSubmit)}
                   disabled={isSubmitting || isSavingDraft}
                   className="w-32 bg-blue-600 hover:bg-blue-700 text-white"
                 >

@@ -120,9 +120,13 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    console.log('Schedule POST request received');
+    
     // JWT Authentication
     const token = request.cookies.get('token')?.value;
+    console.log('Token present:', !!token);
     if (!token) {
+      console.log('No token found, returning 401');
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
 
@@ -150,6 +154,8 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
+    console.log('Schedule creation request body:', body);
+    
     const {
       subjectId,
       sectionId,
@@ -166,8 +172,8 @@ export async function POST(request: NextRequest) {
       academicYear
     } = body;
 
-    // Validate required fields
-    if (!subjectId || !sectionId || !instructorId || !roomId || !day || !startTime || !endTime) {
+    // Validate required fields (instructorId is now optional)
+    if (!subjectId || !sectionId || !roomId || !day || !startTime || !endTime) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
@@ -176,7 +182,7 @@ export async function POST(request: NextRequest) {
       data: {
         subjectId: parseInt(subjectId),
         sectionId: parseInt(sectionId),
-        instructorId: parseInt(instructorId),
+        instructorId: instructorId ? parseInt(instructorId) : null,
         roomId: parseInt(roomId),
         day: day,
         startTime: startTime,
@@ -200,6 +206,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(newSchedule, { status: 201 });
   } catch (error) {
     console.error('Error creating schedule:', error);
-    return NextResponse.json({ error: 'Failed to create schedule' }, { status: 500 });
+    console.error('Error details:', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      name: error instanceof Error ? error.name : undefined
+    });
+    return NextResponse.json({ 
+      error: 'Failed to create schedule',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    }, { status: 500 });
   }
 } 

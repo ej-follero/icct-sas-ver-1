@@ -89,7 +89,7 @@ export const subjectsApi = {
     return data;
   },
 
-  async createSubject(subject: Omit<Subject, 'subjectId' | 'createdAt' | 'updatedAt'>): Promise<Subject> {
+  async createSubject(subject: any): Promise<Subject> {
     const response = await fetchWithRetry('/api/subjects', {
       method: 'POST',
       headers: {
@@ -103,7 +103,7 @@ export const subjectsApi = {
     return data;
   },
 
-  async updateSubject(id: string, subject: Partial<Omit<Subject, 'subjectId' | 'createdAt' | 'updatedAt'>>): Promise<Subject> {
+  async updateSubject(id: string, subject: any): Promise<Subject> {
     const response = await fetchWithRetry(`/api/subjects/${id}`, {
       method: 'PUT',
       headers: {

@@ -9,10 +9,10 @@ export const runtime = 'nodejs';
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = params;
+    const { id } = await params;
     // Auth: only admins can download backups (SUPER_ADMIN or ADMIN)
     const token = req.cookies.get('token')?.value;
     if (!token) {

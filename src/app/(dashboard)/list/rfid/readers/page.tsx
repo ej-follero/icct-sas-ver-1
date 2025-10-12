@@ -2,32 +2,21 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
-import { Eye, Pencil, Trash2, RefreshCw, Info, Plus, CreditCard, Wifi, WifiOff, AlertTriangle, Search, Settings, Upload, List, Columns3, ChevronDown, ChevronUp, Download, Bell, Building2, RotateCcw, Archive, Clock, X, ChevronRight, Hash, Tag, Layers, FileText, BadgeInfo, Printer, Loader2, MoreHorizontal } from "lucide-react";
-import * as XLSX from "xlsx";
-import { jsPDF } from "jspdf";
-import autoTable from "jspdf-autotable";
+import { Eye, Pencil, Trash2, RefreshCw, Info, Plus, CreditCard, AlertTriangle, Search, Settings, Upload, List, Columns3, ChevronDown, ChevronUp, Download, Bell, Building2, RotateCcw, Archive, Clock, X, ChevronRight, Hash, Tag, Layers, FileText, BadgeInfo, Printer, Loader2, MoreHorizontal } from "lucide-react";
+// Dynamic imports for heavy libraries to prevent chunk loading issues
 import { z } from "zod";
 import { toast } from "sonner";
-import Fuse from "fuse.js";
+// Dynamic import for Fuse.js to reduce initial bundle size
 import React from "react";
 import { TableHeaderSection } from "@/components/reusable/Table/TableHeaderSection";
 import { TableCardView } from "@/components/reusable/Table/TableCardView";
-import BulkActionsBar from "@/components/reusable/BulkActionsBar";
 
-import { SortDialog } from "@/components/reusable/Dialogs/SortDialog";
-import { ExportDialog } from "@/components/reusable/Dialogs/ExportDialog";
-import { PrintLayout } from "@/components/PrintLayout";
 import { TableList, TableListColumn } from "@/components/reusable/Table/TableList";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Pagination } from "@/components/Pagination";
 import { TablePagination } from "@/components/reusable/Table/TablePagination";
-import { ViewDialog } from "@/components/reusable/Dialogs/ViewDialog";
-import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
-import RFIDReaderFormDialog from "@/components/forms/RFIDReaderFormDialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { CompactPagination } from "@/components/Pagination";
 import PageHeader from '@/components/PageHeader/PageHeader';
 import { Card, CardHeader } from "@/components/ui/card";
 import SummaryCard from '@/components/SummaryCard';
@@ -35,12 +24,27 @@ import { EmptyState } from '@/components/reusable';
 import { QuickActionsPanel } from '@/components/reusable/QuickActionsPanel';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useDebounce } from '@/hooks/use-debounce';
-import { ImportDialog } from "@/components/reusable/Dialogs/ImportDialog";
-import BulkActionsDialog from "@/components/reusable/Dialogs/BulkActionsDialog";
-import { VisibleColumnsDialog, ColumnOption } from "@/components/reusable/Dialogs/VisibleColumnsDialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Checkbox as SharedCheckbox } from '@/components/ui/checkbox';
 import { safeHighlight } from "@/lib/sanitizer";
+import { useSocket } from '@/hooks/useSocket';
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Wifi, WifiOff, Zap, CheckCircle, AlertCircle } from 'lucide-react';
+
+// Dynamic imports for heavy components to reduce initial bundle size
+import dynamic from 'next/dynamic';
+
+const SortDialog = dynamic(() => import("@/components/reusable/Dialogs/SortDialog").then(mod => ({ default: mod.SortDialog })), { ssr: false });
+const ExportDialog = dynamic(() => import("@/components/reusable/Dialogs/ExportDialog").then(mod => ({ default: mod.ExportDialog })), { ssr: false });
+// PrintLayout removed - using simple window.print() instead
+const ViewDialog = dynamic(() => import("@/components/reusable/Dialogs/ViewDialog").then(mod => ({ default: mod.ViewDialog })), { ssr: false });
+const ConfirmDeleteDialog = dynamic(() => import("@/components/ConfirmDeleteDialog").then(mod => ({ default: mod.ConfirmDeleteDialog })), { ssr: false });
+const RFIDReaderFormDialog = dynamic(() => import("@/components/forms/RFIDReaderFormDialog"), { ssr: false });
+const ImportDialog = dynamic(() => import("@/components/reusable/Dialogs/ImportDialog").then(mod => ({ default: mod.ImportDialog })), { ssr: false });
+const BulkActionsDialog = dynamic(() => import("@/components/reusable/Dialogs/BulkActionsDialog"), { ssr: false });
+const VisibleColumnsDialog = dynamic(() => import("@/components/reusable/Dialogs/VisibleColumnsDialog").then(mod => ({ default: mod.VisibleColumnsDialog })), { ssr: false });
+import type { ColumnOption } from "@/components/reusable/Dialogs/VisibleColumnsDialog";
+const BulkActionsBar = dynamic(() => import("@/components/reusable/BulkActionsBar"), { ssr: false });
 
 const readerSchema = z.object({
   readerId: z.number(),
@@ -109,6 +113,24 @@ export default function RFIDReadersPage() {
   const [error, setError] = useState<string | null>(null);
   const [isDeletingReader, setIsDeletingReader] = useState(false);
 
+  // Socket.IO integration for real-time updates
+  const {
+    socket,
+    isConnected,
+    newReaderData,
+    readerStatusUpdates,
+    readerConnections,
+    connect,
+    disconnect,
+    requestReaderUpdates,
+    stopReaderUpdates,
+    clearNewReaderData
+  } = useSocket();
+
+  // State for auto-fill functionality
+  const [autoFillData, setAutoFillData] = useState<any>(null);
+  const [showNewReaderNotification, setShowNewReaderNotification] = useState(false);
+
   const [sortDialogOpen, setSortDialogOpen] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
@@ -134,21 +156,90 @@ export default function RFIDReadersPage() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [roomFilter, setRoomFilter] = useState<string>("all");
 
-  // Add Fuse.js setup with proper types
-  const fuse = useMemo(() => new Fuse<RFIDReader>(readers, {
-    keys: ["deviceId", "deviceName", "ipAddress"],
-    threshold: 0.4,
-    includeMatches: true,
-  }), [readers]);
+  // Add Fuse.js setup with proper types - using dynamic import
+  const [fuse, setFuse] = useState<any>(null);
+  
+  useEffect(() => {
+    const initializeFuse = async () => {
+      const Fuse = (await import("fuse.js")).default;
+      setFuse(new Fuse<RFIDReader>(readers, {
+        keys: ["deviceId", "deviceName", "ipAddress"],
+        threshold: 0.4,
+        includeMatches: true,
+      }));
+    };
+    if (readers.length > 0) {
+      initializeFuse();
+    }
+  }, [readers.length]); // Only depend on readers length, not the entire array
 
   const fuzzyResults = useMemo(() => {
     if (!searchTerm) return readers.map((r: RFIDReader, i: number) => ({ item: r, refIndex: i }));
+    if (!fuse) return readers.map((r: RFIDReader, i: number) => ({ item: r, refIndex: i }));
     return fuse.search(searchTerm) as FuseResult<RFIDReader>[];
   }, [searchTerm, fuse, readers]);
 
   useEffect(() => {
     setIsClient(true);
   }, []);
+
+  // Initialize Socket.IO connection
+  useEffect(() => {
+    if (isClient && typeof window !== 'undefined') {
+      try {
+        connect();
+        requestReaderUpdates();
+      } catch (error) {
+        console.error('Socket.IO connection error:', error);
+      }
+    }
+    
+    return () => {
+      try {
+        stopReaderUpdates();
+        disconnect();
+      } catch (error) {
+        console.error('Socket.IO cleanup error:', error);
+      }
+    };
+  }, [isClient]); // Remove function dependencies to prevent infinite loop
+
+  // Handle new reader data for auto-fill
+  useEffect(() => {
+    if (newReaderData) {
+      console.log('🔄 New reader detected:', newReaderData);
+      setAutoFillData(newReaderData);
+      setShowNewReaderNotification(true);
+      
+      // Show notification
+      toast.success(`New RFID reader detected: ${newReaderData.deviceId || 'Unknown Device'}`, {
+        duration: 5000,
+        action: {
+          label: 'Add to System',
+          onClick: () => {
+            handleAutoFillForm(newReaderData);
+          }
+        }
+      });
+    }
+  }, [newReaderData]); // Keep newReaderData dependency as it's the trigger
+
+  // Auto-fill form when new reader is detected
+  const handleAutoFillForm = (readerData: any) => {
+    setFormType('create');
+    setSelectedReaderForForm({
+      readerId: 0, // Will be generated by backend
+      deviceId: readerData.deviceId || '',
+      deviceName: readerData.deviceName || `Reader ${readerData.deviceId || 'Unknown'}`,
+      roomId: null, // Leave for manual input
+      ipAddress: readerData.ipAddress || '',
+      status: 'ACTIVE' as const,
+      lastSeen: new Date().toISOString()
+    });
+    setFormDialogOpen(true);
+    setShowNewReaderNotification(false);
+    clearNewReaderData();
+  };
 
   const fetchReaders = async (refresh: boolean = false) => {
     try {
@@ -537,11 +628,16 @@ export default function RFIDReadersPage() {
 
     try {
       if (exportFormat === 'pdf') {
+        const [{ jsPDF }, autoTable] = await Promise.all([
+          import("jspdf"),
+          import("jspdf-autotable")
+        ]);
         const doc = new jsPDF();
         doc.text("RFID Readers", 14, 16);
-        autoTable(doc, { head: [headers], body: rows, startY: 20 });
+        autoTable.default(doc, { head: [headers], body: rows, startY: 20 });
         doc.save('rfid-readers.pdf');
       } else if (exportFormat === 'excel') {
+        const XLSX = await import("xlsx");
         const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "RFID Readers");
@@ -648,14 +744,16 @@ export default function RFIDReadersPage() {
   const handlePrint = () => {
     const printColumns = exportableColumns.map(col => ({ header: col.label, accessor: col.key }));
 
-    const printFunction = PrintLayout({
-      title: 'RFID Readers List',
-      data: filteredReaders,
-      columns: printColumns,
-      totalItems: filteredReaders.length,
-    });
-
-    printFunction();
+    // Create a temporary element to render the print layout
+    const printElement = document.createElement('div');
+    printElement.style.display = 'none';
+    document.body.appendChild(printElement);
+    
+    // This would need to be implemented with a proper print component
+    // For now, we'll use a simple window.print() as fallback
+    window.print();
+    
+    document.body.removeChild(printElement);
   };
 
   return (
@@ -671,6 +769,39 @@ export default function RFIDReadersPage() {
             { label: 'Readers' }
           ]}
         />
+
+        {/* Real-time Connection Status */}
+        <div className="flex items-center gap-4 mb-4">
+          <div className="flex items-center gap-2">
+            {isConnected ? (
+              <div className="flex items-center gap-2 text-green-600">
+                <Wifi className="w-4 h-4" />
+                <span className="text-sm font-medium">Live Updates Connected</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 text-red-600">
+                <WifiOff className="w-4 h-4" />
+                <span className="text-sm font-medium">Live Updates Disconnected</span>
+              </div>
+            )}
+          </div>
+          
+          {newReaderData && (
+            <Alert className="border-blue-200 bg-blue-50">
+              <Zap className="h-4 w-4 text-blue-600" />
+              <AlertDescription className="text-blue-800">
+                New RFID reader detected: <strong>{newReaderData.deviceId}</strong>
+                <Button 
+                  size="sm" 
+                  className="ml-2"
+                  onClick={() => handleAutoFillForm(newReaderData)}
+                >
+                  Add to System
+                </Button>
+              </AlertDescription>
+            </Alert>
+          )}
+        </div>
 
         {/* Error Banner */}
         {error && (
@@ -939,7 +1070,7 @@ export default function RFIDReadersPage() {
 
             {/* Table Content */}
             <div className="relative px-2 sm:px-3 lg:px-6 mt-3 sm:mt-4 lg:mt-6">
-              <div className="overflow-x-auto bg-white/70 shadow-none relative">
+              <div className="overflow-x-auto bg-white/70 shadow-none relative p-4 sm:p-6">
                 {/* Loader overlay when refreshing */}
                 {isRefreshing && (
                   <div className="absolute inset-0 bg-white/70 flex items-center justify-center z-20">
@@ -1107,12 +1238,10 @@ export default function RFIDReadersPage() {
         <ExportDialog
           open={exportDialogOpen}
           onOpenChange={setExportDialogOpen}
-          selectedItems={selectedIds.map(id => readers.find(r => r.readerId.toString() === id)).filter(Boolean) as RFIDReader[]}
+          dataCount={readers.length}
           entityType="reader"
-          entityLabel="reader"
-          exportColumns={exportableColumns.map(col => ({ id: col.key, label: col.label, default: true }))}
-          onExport={(options) => {
-            toast.success(`Exported ${options.format} with ${options.columns.length} columns`);
+          onExport={async (format, options) => {
+            toast.success(`Exported ${format} with ${options.selectedColumns?.length || 0} columns`);
           }}
         />
 
@@ -1156,9 +1285,9 @@ export default function RFIDReadersPage() {
            onActionComplete={handleBulkActionComplete}
            onCancel={handleBulkActionCancel}
            onProcessAction={handleProcessBulkAction}
-           getItemId={(item: RFIDReader) => item.readerId.toString()}
-           getItemDisplayName={(item: RFIDReader) => item.deviceName}
-           getItemStatus={(item: RFIDReader) => item.status}
+           getItemId={(item: any) => (item as RFIDReader).readerId.toString()}
+           getItemDisplayName={(item: any) => (item as RFIDReader).deviceName}
+           getItemStatus={(item: any) => (item as RFIDReader).status}
          />
       </div>
     </div>

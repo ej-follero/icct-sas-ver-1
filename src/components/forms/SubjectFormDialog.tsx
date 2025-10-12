@@ -90,6 +90,7 @@ function SubjectFormDialog({
   const [showSubmitErrorDialog, setShowSubmitErrorDialog] = useState(false);
   const [submitErrorMessage, setSubmitErrorMessage] = useState("");
   const [submitSuccessMessage, setSubmitSuccessMessage] = useState("");
+  const [currentFormData, setCurrentFormData] = useState<any>(null);
 
   // Dialog states for notifications
   const [showNotificationDialog, setShowNotificationDialog] = useState(false);
@@ -296,24 +297,121 @@ function SubjectFormDialog({
   };
 
   // Handle actual form submission
-  const handleConfirmSubmit = () => {
+  const handleConfirmSubmit = async () => {
     setShowSubmitConfirmDialog(false);
-    // In a real implementation, you'd call the form submission here
-    setSubmitSuccessMessage(
-      isEdit 
-        ? "The subject has been updated successfully."
-        : "A new subject has been created successfully."
-    );
-    setShowSubmitSuccessDialog(true);
+    setIsSubmitting(true);
     
-    // Clear draft after successful submission
-    localStorage.removeItem('subjectFormDraft');
-    
-    // Close form and call success callback after dialog closes
-    setTimeout(() => {
-      onSuccess();
-      onOpenChange(false);
-    }, 1000);
+    try {
+      if (!currentFormData) {
+        throw new Error('No form data available');
+      }
+
+      // Get the form type to determine units calculation
+      const formType = currentFormData.type || 'lecture';
+      const units = currentFormData.units || 0;
+      const lectureUnits = currentFormData.lecture_units || 0;
+      const laboratoryUnits = currentFormData.laboratory_units || 0;
+      
+      // Calculate units based on form type
+      let finalUnits = units;
+      let finalLectureUnits = lectureUnits;
+      let finalLaboratoryUnits = laboratoryUnits;
+      
+      if (formType === 'both') {
+        finalUnits = lectureUnits + laboratoryUnits;
+        finalLectureUnits = lectureUnits;
+        finalLaboratoryUnits = laboratoryUnits;
+      } else if (formType === 'lecture') {
+        finalUnits = units;
+        finalLectureUnits = units;
+        finalLaboratoryUnits = 0;
+      } else if (formType === 'laboratory') {
+        finalUnits = units;
+        finalLectureUnits = 0;
+        finalLaboratoryUnits = units;
+      }
+      
+      // Transform semester values to match API expectations
+      const semesterMap: { [key: string]: string } = {
+        '1st': 'FIRST_SEMESTER',
+        '2nd': 'SECOND_SEMESTER', 
+        '3rd': 'THIRD_SEMESTER'
+      };
+      
+      const subjectData = {
+        name: currentFormData.name || '',
+        code: currentFormData.code || '',
+        type: formType,
+        units: finalUnits,
+        lecture_units: finalLectureUnits,
+        laboratory_units: finalLaboratoryUnits,
+        semester: semesterMap[currentFormData.semester] || 'FIRST_SEMESTER',
+        year_level: currentFormData.year_level || '1st',
+        department: currentFormData.department || '',
+        description: currentFormData.description || '',
+        instructors: currentFormData.instructors || [],
+        courseId: 1,
+        academicYear: "2024-2025",
+        maxStudents: 30,
+      };
+
+      // Debug: Log the data being sent
+      console.log('Sending subject data:', subjectData);
+
+      // Call the API directly
+      const response = await fetch('/api/subjects', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include', // Include cookies for authentication
+        body: JSON.stringify(subjectData),
+      });
+
+      if (!response.ok) {
+        let errorData;
+        try {
+          errorData = await response.json();
+        } catch (parseError) {
+          console.error('Failed to parse error response:', parseError);
+          errorData = { error: `HTTP ${response.status}: ${response.statusText}` };
+        }
+        
+        console.error('API Error Response:', errorData);
+        console.error('Response Status:', response.status);
+        console.error('Response Status Text:', response.statusText);
+        console.error('Response Headers:', Object.fromEntries(response.headers.entries()));
+        
+        const errorMessage = errorData.error || `HTTP ${response.status}: ${response.statusText}`;
+        throw new Error(errorMessage);
+      }
+
+      const result = await response.json();
+      console.log('Subject created successfully:', result);
+
+      setSubmitSuccessMessage(
+        isEdit 
+          ? "The subject has been updated successfully."
+          : "A new subject has been created successfully."
+      );
+      setShowSubmitSuccessDialog(true);
+      
+      // Clear draft after successful submission
+      localStorage.removeItem('subjectFormDraft');
+      
+      // Close form and call success callback after dialog closes
+      setTimeout(() => {
+        onSuccess();
+        onOpenChange(false);
+      }, 1000);
+
+    } catch (error) {
+      console.error('Error submitting form:', error);
+      setSubmitErrorMessage(error instanceof Error ? error.message : 'Failed to submit form. Please try again.');
+      setShowSubmitErrorDialog(true);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Keyboard shortcuts
@@ -553,6 +651,7 @@ function SubjectFormDialog({
                   id={id}
                   onSuccess={onSuccess}
                   showSubmitButton={false}
+                  onFormDataChange={setCurrentFormData}
                 />
               </div>
 

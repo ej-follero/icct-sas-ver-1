@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma';
 // GET - Fetch single student by ID
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // JWT Authentication (SUPER_ADMIN, ADMIN, DEPARTMENT_HEAD, INSTRUCTOR)
@@ -28,7 +28,9 @@ export async function GET(
     if (!allowedRoles.includes(reqUser.role)) {
       return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
     }
-    const studentId = parseInt(params.id);
+    
+    const { id } = await params;
+    const studentId = parseInt(id);
     
     if (isNaN(studentId)) {
       return NextResponse.json(
@@ -102,7 +104,7 @@ export async function GET(
 // PUT - Update student
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // JWT Authentication - Admin only
@@ -126,7 +128,9 @@ export async function PUT(
     if (!adminRoles.includes(reqUser.role)) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
-    const studentId = parseInt(params.id);
+    
+    const { id } = await params;
+    const studentId = parseInt(id);
     
     if (isNaN(studentId)) {
       return NextResponse.json(
@@ -220,7 +224,7 @@ export async function PUT(
 // PATCH - Partial update (mainly for status changes)
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // JWT Authentication - Admin only
@@ -244,7 +248,9 @@ export async function PATCH(
     if (!adminRoles.includes(reqUser.role)) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
-    const studentId = parseInt(params.id);
+    
+    const { id } = await params;
+    const studentId = parseInt(id);
     
     if (isNaN(studentId)) {
       return NextResponse.json(
@@ -308,7 +314,7 @@ export async function PATCH(
 // DELETE - Delete student
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // JWT Authentication - Admin only
@@ -332,7 +338,9 @@ export async function DELETE(
     if (!adminRoles.includes(reqUser.role)) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
-    const studentId = parseInt(params.id);
+    
+    const { id } = await params;
+    const studentId = parseInt(id);
     
     if (isNaN(studentId)) {
       return NextResponse.json(

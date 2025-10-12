@@ -1294,10 +1294,10 @@ function ImportDialog({
         }
 
         const instructorId = getValue(row, 'instructorId');
-        if (!instructorId || isNaN(Number(instructorId))) {
-          errors.push('Instructor ID is required and must be a number');
-        } else {
+        if (instructorId && !isNaN(Number(instructorId))) {
           record.instructorId = Number(instructorId);
+        } else if (instructorId && isNaN(Number(instructorId))) {
+          errors.push('Instructor ID must be a valid number if provided');
         }
 
         const roomId = getValue(row, 'roomId');
@@ -3370,6 +3370,111 @@ function ImportDialog({
                                         <div className="max-w-xs truncate" title={(record as any).notes}>
                                           {(record as any).notes || '-'}
                                         </div>
+                                      </td>
+                                      <td className="px-4 py-2">
+                                        {record.errors && record.errors.length > 0 ? (
+                                          <AlertTriangle className="h-4 w-4 text-yellow-600" />
+                                        ) : (
+                                          <CheckCircle className="h-4 w-4 text-green-600" />
+                                        )}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            ) : entityName.toLowerCase() === 'rooms' ? (
+                              <table className="w-full text-sm">
+                                <thead className="bg-gray-50">
+                                  <tr>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Room Number</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Type</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Capacity</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Building</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Floor</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">RFID Reader</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Status</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Validation</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-200">
+                                  {importData.slice(0, 5).map((record, index) => (
+                                    <tr key={index} className={record.errors && record.errors.length > 0 ? 'bg-yellow-50' : 'bg-white'}>
+                                      <td className="px-4 py-2">{(record as any).roomNo}</td>
+                                      <td className="px-4 py-2">{(record as any).roomType}</td>
+                                      <td className="px-4 py-2">{(record as any).roomCapacity}</td>
+                                      <td className="px-4 py-2">{(record as any).roomBuildingLoc}</td>
+                                      <td className="px-4 py-2">{(record as any).roomFloorLoc}</td>
+                                      <td className="px-4 py-2">{(record as any).readerId || '-'}</td>
+                                      <td className="px-4 py-2">
+                                        <Badge variant={((record as any).status || 'AVAILABLE') === 'AVAILABLE' ? 'success' : ((record as any).status || 'AVAILABLE') === 'INACTIVE' ? 'destructive' : 'secondary'}>
+                                          {(record as any).status || 'AVAILABLE'}
+                                        </Badge>
+                                      </td>
+                                      <td className="px-4 py-2">
+                                        {record.errors && record.errors.length > 0 ? (
+                                          <AlertTriangle className="h-4 w-4 text-yellow-600" />
+                                        ) : (
+                                          <CheckCircle className="h-4 w-4 text-green-600" />
+                                        )}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            ) : entityName.toLowerCase() === 'schedule' || entityName.toLowerCase() === 'schedules' ? (
+                              <table className="w-full text-sm">
+                                <thead className="bg-gray-50">
+                                  <tr>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Subject</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Section</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Instructor</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Room</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Day</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Time</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Type</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Status</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Validation</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-200">
+                                  {importData.slice(0, 5).map((record, index) => (
+                                    <tr key={index} className={record.errors && record.errors.length > 0 ? 'bg-yellow-50' : 'bg-white'}>
+                                      <td className="px-4 py-2">
+                                        <div className="max-w-xs">
+                                          <div className="font-medium text-blue-900">{(record as any).subjectName || (record as any).subject}</div>
+                                          <div className="text-xs text-gray-500">{(record as any).subjectCode || (record as any).subjectCode}</div>
+                                        </div>
+                                      </td>
+                                      <td className="px-4 py-2">{(record as any).sectionName || (record as any).section}</td>
+                                      <td className="px-4 py-2">
+                                        <div className="max-w-xs">
+                                          <div className="font-medium">{(record as any).instructorName || (record as any).instructor || `${(record as any).instructorFirstName || ''} ${(record as any).instructorLastName || ''}`.trim()}</div>
+                                          <div className="text-xs text-gray-500">ID: {(record as any).instructorId || '-'}</div>
+                                        </div>
+                                      </td>
+                                      <td className="px-4 py-2">
+                                        <div className="max-w-xs">
+                                          <div className="font-medium">{(record as any).roomNo || (record as any).room}</div>
+                                          <div className="text-xs text-gray-500">Cap: {(record as any).roomCapacity || '-'}</div>
+                                        </div>
+                                      </td>
+                                      <td className="px-4 py-2">
+                                        <Badge variant="outline">{(record as any).day}</Badge>
+                                      </td>
+                                      <td className="px-4 py-2">
+                                        <div className="text-sm">
+                                          {(record as any).startTime} - {(record as any).endTime}
+                                        </div>
+                                      </td>
+                                      <td className="px-4 py-2">
+                                        <Badge variant={(record as any).scheduleType === 'Regular' ? 'default' : 'secondary'}>
+                                          {(record as any).scheduleType || (record as any).type || 'Regular'}
+                                        </Badge>
+                                      </td>
+                                      <td className="px-4 py-2">
+                                        <Badge variant={(record as any).status === 'Active' ? 'default' : 'destructive'}>
+                                          {(record as any).status || 'Active'}
+                                        </Badge>
                                       </td>
                                       <td className="px-4 py-2">
                                         {record.errors && record.errors.length > 0 ? (

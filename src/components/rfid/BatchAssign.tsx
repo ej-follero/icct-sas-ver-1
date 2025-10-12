@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useRFIDScanMonitor } from '@/hooks/useRFIDRealTime';
+import { useMQTTRFIDScan } from '@/hooks/useMQTTRFIDScan';
 import { toast } from 'sonner';
 import { X, Search } from 'lucide-react';
 
@@ -27,15 +27,29 @@ export default function BatchAssign({ isFullscreen = false, onClose, initialFilt
   const [queue, setQueue] = React.useState<QueueItem[]>([]);
   const [saving, setSaving] = React.useState(false);
 
-  useRFIDScanMonitor({
+  const { isConnected, setMode, sendFeedback } = useMQTTRFIDScan({
     enabled: true,
+    mode: 'registration',
     onNewScan: (scan) => {
-      const tag = String(scan?.tagNumber || scan?.tagId || '').trim();
-      if (!tag) return;
+      console.log('RFID Scan received in BatchAssign:', scan);
+      const tag = String(scan?.tagNumber || scan?.rfid || '').trim();
+      if (!tag) {
+        console.log('No valid tag number found in scan:', scan);
+        return;
+      }
+      console.log('Setting tag number:', tag);
       setTagNumber(tag);
-      toast.success('Card detected');
+      toast.success('Card detected via MQTT');
+      sendFeedback('Card detected', tag);
     }
   });
+
+  // Set MQTT mode to registration when component mounts
+  React.useEffect(() => {
+    if (isConnected) {
+      setMode('registration');
+    }
+  }, [isConnected, setMode]);
 
   const addToQueue = () => {
     if (!studentIdNum || !tagNumber) {
@@ -54,13 +68,40 @@ export default function BatchAssign({ isFullscreen = false, onClose, initialFilt
     }
     setSaving(true);
     try {
-      const records = queue.map((q) => ({ studentIdNum: q.studentIdNum, tagNumber: q.tagNumber, replace: q.replace }));
-      const res = await fetch('/api/rfid/assign/bulk', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ records }) });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json?.error || 'Assignment failed');
-      toast.success(`Assigned ${json?.summary?.success || 0}/${json?.summary?.total || records.length}`);
+      // Use MQTT API for individual assignments
+      let success = 0;
+      let failed = 0;
+      
+      for (const item of queue) {
+        try {
+          const res = await fetch('/api/rfid/assign/mqtt', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              studentIdNum: item.studentIdNum,
+              tagNumber: item.tagNumber,
+              replace: item.replace,
+              reason: 'BATCH_MQTT_ASSIGNMENT'
+            })
+          });
+          
+          if (res.ok) {
+            success++;
+            toast.success(`Assigned ${item.studentIdNum} → ${item.tagNumber}`);
+          } else {
+            const error = await res.json();
+            toast.error(`Failed ${item.studentIdNum}: ${error.error}`);
+            failed++;
+          }
+        } catch (e: any) {
+          toast.error(`Failed ${item.studentIdNum}: ${e.message}`);
+          failed++;
+        }
+      }
+      
+      toast.success(`Completed: ${success} success, ${failed} failed`);
       setQueue([]);
-      onAssigned?.(json?.summary || { success: 0, failed: 0, total: records.length });
+      onAssigned?.({ success, failed, total: queue.length });
     } catch (e: any) {
       toast.error(e?.message || 'Failed to assign');
     } finally {
@@ -75,7 +116,12 @@ export default function BatchAssign({ isFullscreen = false, onClose, initialFilt
           <div className="py-4 px-5 flex items-start justify-between gap-3">
             <div>
               <h3 className="text-white text-lg font-semibold">Batch-Scan Assign</h3>
-              <p className="text-blue-100 text-sm">Scan a card to auto-fill Tag Number.</p>
+              <p className="text-blue-100 text-sm">
+                Scan a card to auto-fill Tag Number. 
+                <span className={`ml-2 ${isConnected ? 'text-green-300' : 'text-red-300'}`}>
+                  MQTT: {isConnected ? 'Connected' : 'Disconnected'}
+                </span>
+              </p>
             </div>
             {onClose && (
               <Button

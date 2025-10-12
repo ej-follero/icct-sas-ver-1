@@ -25,7 +25,7 @@ SMTP_PASS="<your-16-char-app-password>"       # set locally in .env only
 SMTP_FROM="noreply@icct.edu.ph"
 ```
 
-**Important Notes:**
+Important Notes:
 - Do NOT commit real credentials. Keep them only in `.env` locally and in your secret manager in prod.
 - Replace `<your-gmail>@gmail.com` with your Gmail address.
 - Replace `<your-16-char-app-password>` with the app password from Step 1.2 (not your normal password).
@@ -43,12 +43,14 @@ The email service will now be able to send real emails through Gmail SMTP.
 ## Troubleshooting
 
 ### Common Issues:
-1. **"Invalid login"** - Make sure you're using the app password, not your regular password
-2. **"Less secure app access"** - Enable 2-Factor Authentication and use app passwords
-3. **"Connection timeout"** - Check your internet connection and firewall settings
+1. "Invalid login" - Make sure you're using the app password, not your regular password
+2. "Less secure app access" - Enable 2-Factor Authentication and use app passwords
+3. "Connection timeout" - Check your internet connection and firewall settings
 
 ### Alternative SMTP Providers:
 If Gmail doesn't work, you can use:
-- **SendGrid**: More reliable for production
-- **AWS SES**: Good for high volume
-- **Outlook/Hotmail**: Similar setup to Gmail
+- SendGrid: More reliable for production
+- AWS SES: Good for high volume
+- Outlook/Hotmail: Similar setup to Gmail
+
+

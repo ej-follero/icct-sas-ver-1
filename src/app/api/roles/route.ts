@@ -166,6 +166,31 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
+    // Validate permissions array
+    if (data.permissions.length === 0) {
+      return NextResponse.json({ 
+        error: "At least one permission is required" 
+      }, { status: 400 });
+    }
+
+    // Validate permission strings
+    const invalidPermissions = data.permissions.filter(perm => 
+      typeof perm !== 'string' || perm.trim().length === 0
+    );
+    if (invalidPermissions.length > 0) {
+      return NextResponse.json({ 
+        error: "All permissions must be non-empty strings" 
+      }, { status: 400 });
+    }
+
+    // Validate status if provided
+    const validStatuses = ['ACTIVE', 'INACTIVE', 'ARCHIVED'];
+    if (data.status && !validStatuses.includes(data.status)) {
+      return NextResponse.json({ 
+        error: "Invalid status. Must be one of: ACTIVE, INACTIVE, ARCHIVED" 
+      }, { status: 400 });
+    }
+
     // Check if role name already exists
     const existingRole = await prisma.roleManagement.findFirst({
       where: { 
@@ -186,8 +211,8 @@ export async function POST(request: NextRequest) {
       data: {
         name: data.name.trim(),
         description: data.description?.trim() || null,
-        permissions: data.permissions,
-        status: data.status || 'ACTIVE',
+        permissions: data.permissions.map(perm => perm.trim()), // Clean and validate permissions
+        status: (data.status || 'ACTIVE') as 'ACTIVE' | 'INACTIVE' | 'ARCHIVED',
       },
       include: {
         _count: {

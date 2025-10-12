@@ -21,10 +21,10 @@ async function assertAdmin(request: NextRequest) {
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = params;
+    const { id } = await params;
     const gate = await assertAdmin(request);
     if (!('ok' in gate) || gate.ok !== true) return gate.res;
 

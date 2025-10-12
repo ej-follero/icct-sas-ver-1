@@ -13,14 +13,14 @@ export interface CreateRoleData {
   name: string;
   description?: string;
   permissions: string[];
-  status?: string;
+  status?: 'ACTIVE' | 'INACTIVE' | 'ARCHIVED';
 }
 
 export interface UpdateRoleData {
   name?: string;
   description?: string;
   permissions?: string[];
-  status?: string;
+  status?: 'ACTIVE' | 'INACTIVE' | 'ARCHIVED';
 }
 
 export interface BulkImportRoleData {

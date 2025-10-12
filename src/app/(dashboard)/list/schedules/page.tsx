@@ -1809,7 +1809,7 @@ export default function ClassSchedulesPage() {
                              : "No schedules have been created yet. Get started by adding your first schedule."
                          }
                          action={
-                           <Button onClick={handleAddSchedule} className="mt-4">
+                           <Button onClick={handleAddSchedule} className="mt-4 rounded">
                              <Plus className="h-4 w-4 mr-2" />
                              Add Schedule
                            </Button>
@@ -1874,16 +1874,39 @@ export default function ClassSchedulesPage() {
         entityName="Schedule"
         onImport={async (data) => {
           try {
-            // Simulate import process
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            console.log('Import data:', data);
-            toast.success('Schedules imported successfully');
-            fetchSchedules(true);
-            return { success: data.length, failed: 0, errors: [] };
+            console.log('Importing schedule data:', data);
+            
+            // Call the schedule import API
+            const response = await fetch('/api/schedules/import', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(data),
+            });
+
+            const result = await response.json();
+
+            if (response.ok) {
+              toast.success(`Import completed: ${result.success} successful, ${result.failed} failed`);
+              fetchSchedules(true); // Refresh the data
+              return { 
+                success: result.success, 
+                failed: result.failed, 
+                errors: result.errors || [] 
+              };
+            } else {
+              throw new Error(result.error || 'Import failed');
+            }
           } catch (error) {
             console.error('Import error:', error);
-            toast.error('Failed to import schedules');
-            return { success: 0, failed: data.length, errors: ['Import failed'] };
+            const errorMessage = error instanceof Error ? error.message : 'Failed to import schedules';
+            toast.error(errorMessage);
+            return { 
+              success: 0, 
+              failed: data.length, 
+              errors: [errorMessage] 
+            };
           }
         }}
       />

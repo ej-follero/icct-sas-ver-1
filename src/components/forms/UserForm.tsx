@@ -8,13 +8,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Loader2, User, Mail, Shield, Calendar, Phone, CheckCircle, XCircle, X, Info, RotateCcw, Save, GraduationCap, School, Building2, Users, ChevronRight, ChevronLeft } from "lucide-react";
+import { Loader2, User, Mail, Shield, Calendar, Phone, CheckCircle, XCircle, X, Info, RotateCcw, Save, GraduationCap, School, Building2, Users, ChevronRight, ChevronLeft, Wifi, WifiOff } from "lucide-react";
 import { User as UserType } from "@/types/users-list";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Progress } from "@/components/ui/progress";
+import { useMQTTRFIDScan } from "@/hooks/useMQTTRFIDScan";
 import {
   Form,
   FormField,
@@ -79,7 +80,7 @@ const userSchema = z.object({
   if (data.role === "INSTRUCTOR") {
     return !!(data.instructorType && data.departmentId && data.employeeId && (data.middleName !== undefined) && (data.rfidTag && data.rfidTag.length > 0));
   }
-  // Student required: studentIdNum, studentType, yearLevel, (courseId can be null), address, email, phoneNumber, rfidTag
+  // Student required: studentIdNum, studentType, yearLevel, (courseId can be null), address, email, phoneNumber, rfidTag (guardianId is optional)
   if (data.role === "STUDENT") {
     return !!(data.studentIdNum && data.studentType && data.yearLevel && (data.address && data.address.length > 0) && (data.rfidTag && data.rfidTag.length > 0));
   }
@@ -105,19 +106,19 @@ const defaultValues: UserFormValues = {
   phoneNumber: "",
   gender: "MALE",
   address: "",
-  instructorType: undefined,
-  departmentId: undefined,
+  instructorType: "FULL_TIME",
+  departmentId: 0,
   officeLocation: "",
   officeHours: "",
   specialization: "",
   employeeId: "",
   studentIdNum: "",
-  studentType: undefined,
-  yearLevel: undefined,
-  courseId: undefined,
+  studentType: "REGULAR",
+  yearLevel: "FIRST_YEAR",
+  courseId: 0,
   birthDate: "",
   nationality: "",
-  guardianId: undefined,
+  guardianId: 0,
   rfidTag: "",
 };
 
@@ -137,16 +138,65 @@ export function UserForm({ open, onOpenChange, type, data, id, onSuccess }: User
   const [courses, setCourses] = useState<Array<{courseId: number, courseName: string}>>([]);
   const [guardians, setGuardians] = useState<Array<{guardianId: number, firstName: string, lastName: string}>>([]);
   const [rfidTags, setRfidTags] = useState<Array<{tagId: number, tagNumber: string, tagType: string, status: string}>>([]);
+  
+  // State to track scanned RFID tags
+  const [scannedTags, setScannedTags] = useState<string[]>([]);
+
+  // MQTT integration for RFID tag autofill
+  const { isConnected, setMode, sendFeedback } = useMQTTRFIDScan({
+    enabled: true,
+    mode: 'registration',
+    onNewScan: (scan) => {
+      console.log('🔍 UserForm - RFID scan detected:', scan);
+      
+      // Add scanned tag to the list if not already present
+      setScannedTags(prev => {
+        if (!prev.includes(scan.rfid)) {
+          return [...prev, scan.rfid];
+        }
+        return prev;
+      });
+      
+      // Auto-fill the RFID tag field
+      form.setValue("rfidTag", scan.rfid);
+      toast.success(`RFID tag ${scan.rfid} detected and selected`);
+      
+      // Send feedback to MQTT
+      if (sendFeedback) {
+        sendFeedback('Card detected', scan.rfid);
+      }
+    }
+  });
 
   const form = useForm<UserFormValues>({
     resolver: zodResolver(userSchema),
     defaultValues: data ? {
-      userName: data.userName,
-      email: data.email,
-      role: data.role as "SUPER_ADMIN" | "ADMIN" | "DEPARTMENT_HEAD" | "INSTRUCTOR" | "STUDENT",
+      userName: data.userName || "",
+      email: data.email || "",
+      role: (data.role === "SYSTEM_AUDITOR" ? "ADMIN" : data.role) as "SUPER_ADMIN" | "ADMIN" | "DEPARTMENT_HEAD" | "INSTRUCTOR" | "STUDENT",
       status: data.status as "active" | "inactive" | "suspended" | "pending" | "blocked",
-      isEmailVerified: data.isEmailVerified,
-      twoFactorEnabled: data.twoFactorEnabled,
+      isEmailVerified: data.isEmailVerified || false,
+      twoFactorEnabled: data.twoFactorEnabled || false,
+      firstName: data.fullName?.split(' ')[0] || "",
+      lastName: data.fullName?.split(' ').slice(-1)[0] || "",
+      middleName: data.fullName?.split(' ').slice(1, -1).join(' ') || "",
+      phoneNumber: "",
+      gender: "MALE",
+      address: "",
+      instructorType: "FULL_TIME",
+      departmentId: 0,
+      officeLocation: "",
+      officeHours: "",
+      specialization: "",
+      employeeId: "",
+      studentIdNum: "",
+      studentType: "REGULAR",
+      yearLevel: "FIRST_YEAR",
+      courseId: 0,
+      birthDate: "",
+      nationality: "",
+      guardianId: 0,
+      rfidTag: "",
     } : defaultValues,
     mode: "onTouched",
   });
@@ -156,12 +206,32 @@ export function UserForm({ open, onOpenChange, type, data, id, onSuccess }: User
     if (open && data && type === "update") {
       console.log("Resetting form with data:", data);
       form.reset({
-        userName: data.userName,
-        email: data.email,
-        role: data.role as "SUPER_ADMIN" | "ADMIN" | "DEPARTMENT_HEAD" | "INSTRUCTOR" | "STUDENT" | "SYSTEM_AUDITOR",
+        userName: data.userName || "",
+        email: data.email || "",
+        role: (data.role === "SYSTEM_AUDITOR" ? "ADMIN" : data.role) as "SUPER_ADMIN" | "ADMIN" | "DEPARTMENT_HEAD" | "INSTRUCTOR" | "STUDENT",
         status: data.status as "active" | "inactive" | "suspended" | "pending" | "blocked",
-        isEmailVerified: data.isEmailVerified,
-        twoFactorEnabled: data.twoFactorEnabled,
+        isEmailVerified: data.isEmailVerified || false,
+        twoFactorEnabled: data.twoFactorEnabled || false,
+        firstName: data.fullName?.split(' ')[0] || "",
+        lastName: data.fullName?.split(' ').slice(-1)[0] || "",
+        middleName: data.fullName?.split(' ').slice(1, -1).join(' ') || "",
+        phoneNumber: "",
+        gender: "MALE",
+        address: "",
+        instructorType: "FULL_TIME",
+        departmentId: 0,
+        officeLocation: "",
+        officeHours: "",
+        specialization: "",
+        employeeId: "",
+        studentIdNum: "",
+        studentType: "REGULAR",
+        yearLevel: "FIRST_YEAR",
+        courseId: 0,
+        birthDate: "",
+        nationality: "",
+        guardianId: 0,
+        rfidTag: "",
       });
     }
   }, [open, data, type, form]);
@@ -172,18 +242,32 @@ export function UserForm({ open, onOpenChange, type, data, id, onSuccess }: User
       if (type === "update" && data) {
         console.log("Dialog opened for edit, resetting form with:", data);
         form.reset({
-          userName: data.userName,
-          email: data.email,
-          role: data.role as "SUPER_ADMIN" | "ADMIN" | "DEPARTMENT_HEAD" | "INSTRUCTOR" | "STUDENT",
+          userName: data.userName || "",
+          email: data.email || "",
+          role: (data.role === "SYSTEM_AUDITOR" ? "ADMIN" : data.role) as "SUPER_ADMIN" | "ADMIN" | "DEPARTMENT_HEAD" | "INSTRUCTOR" | "STUDENT",
           status: data.status as "active" | "inactive" | "suspended" | "pending" | "blocked",
-          isEmailVerified: data.isEmailVerified,
-          twoFactorEnabled: data.twoFactorEnabled,
+          isEmailVerified: data.isEmailVerified || false,
+          twoFactorEnabled: data.twoFactorEnabled || false,
           firstName: data.fullName?.split(' ')[0] || "",
           lastName: data.fullName?.split(' ').slice(-1)[0] || "",
           middleName: data.fullName?.split(' ').slice(1, -1).join(' ') || "",
           phoneNumber: "",
           gender: "MALE",
           address: "",
+          instructorType: "FULL_TIME",
+          departmentId: 0,
+          officeLocation: "",
+          officeHours: "",
+          specialization: "",
+          employeeId: "",
+          studentIdNum: "",
+          studentType: "REGULAR",
+          yearLevel: "FIRST_YEAR",
+          courseId: 0,
+          birthDate: "",
+          nationality: "",
+          guardianId: 0,
+          rfidTag: "",
         });
       } else if (type === "create") {
         // Reset to step 1 for create mode
@@ -203,6 +287,13 @@ export function UserForm({ open, onOpenChange, type, data, id, onSuccess }: User
     }
   }, [open]);
 
+  // Set MQTT mode to registration when form opens
+  useEffect(() => {
+    if (open && setMode) {
+      setMode('registration');
+    }
+  }, [open, setMode]);
+
   const fetchDepartments = async () => {
     try {
       const response = await fetch('/api/departments');
@@ -220,7 +311,12 @@ export function UserForm({ open, onOpenChange, type, data, id, onSuccess }: User
       const response = await fetch('/api/courses');
       if (response.ok) {
         const data = await response.json();
-        setCourses(data.data || []);
+        // Transform the API response to match the expected format
+        const transformedCourses = data.map((course: any) => ({
+          courseId: parseInt(course.id),
+          courseName: course.name
+        }));
+        setCourses(transformedCourses);
       }
     } catch (error) {
       console.error('Failed to fetch courses:', error);
@@ -333,12 +429,32 @@ export function UserForm({ open, onOpenChange, type, data, id, onSuccess }: User
 
   const handleReset = () => {
     form.reset(data ? {
-      userName: data.userName,
-      email: data.email,
-      role: data.role as "SUPER_ADMIN" | "ADMIN" | "DEPARTMENT_HEAD" | "INSTRUCTOR" | "STUDENT" | "SYSTEM_AUDITOR",
+      userName: data.userName || "",
+      email: data.email || "",
+      role: (data.role === "SYSTEM_AUDITOR" ? "ADMIN" : data.role) as "SUPER_ADMIN" | "ADMIN" | "DEPARTMENT_HEAD" | "INSTRUCTOR" | "STUDENT",
       status: data.status as "active" | "inactive" | "suspended" | "pending" | "blocked",
-      isEmailVerified: data.isEmailVerified,
-      twoFactorEnabled: data.twoFactorEnabled,
+      isEmailVerified: data.isEmailVerified || false,
+      twoFactorEnabled: data.twoFactorEnabled || false,
+      firstName: data.fullName?.split(' ')[0] || "",
+      lastName: data.fullName?.split(' ').slice(-1)[0] || "",
+      middleName: data.fullName?.split(' ').slice(1, -1).join(' ') || "",
+      phoneNumber: "",
+      gender: "MALE",
+      address: "",
+      instructorType: "FULL_TIME",
+      departmentId: 0,
+      officeLocation: "",
+      officeHours: "",
+      specialization: "",
+      employeeId: "",
+      studentIdNum: "",
+      studentType: "REGULAR",
+      yearLevel: "FIRST_YEAR",
+      courseId: 0,
+      birthDate: "",
+      nationality: "",
+      guardianId: 0,
+      rfidTag: "",
     } : defaultValues);
   };
 
@@ -432,7 +548,7 @@ export function UserForm({ open, onOpenChange, type, data, id, onSuccess }: User
               studentType: values.studentType,
               yearLevel: values.yearLevel,
               courseId: values.courseId,
-              guardianId: values.guardianId ?? null,
+              guardianId: values.guardianId || null,
               rfidTag: values.rfidTag,
             };
             const sRes = await fetch(`/api/students/${data.id}`, {
@@ -595,7 +711,7 @@ export function UserForm({ open, onOpenChange, type, data, id, onSuccess }: User
             </div>
           </DialogHeader>
           <div className="max-h-[70vh] overflow-y-auto px-4 py-6 sm:px-8 sm:py-8">
-            <Form onSubmit={form.handleSubmit(onSubmit)}>
+            <Form {...form}>
               {/* Provide onSubmit at Form level to avoid nested forms */}
               <div className="space-y-6">
                 {/* Info Bar */}
@@ -947,25 +1063,64 @@ export function UserForm({ open, onOpenChange, type, data, id, onSuccess }: User
                               name="rfidTag"
                               render={({ field }) => (
                                 <FormItem>
-                                  <FormLabel>RFID Tag</FormLabel>
+                                  <FormLabel className="flex items-center gap-2">
+                                    RFID Tag
+                                    {isConnected && (
+                                      <TooltipProvider>
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <Wifi className="w-4 h-4 text-green-500" />
+                                          </TooltipTrigger>
+                                          <TooltipContent>
+                                            <p>MQTT connected - Tap RFID card to auto-fill</p>
+                                          </TooltipContent>
+                                        </Tooltip>
+                                      </TooltipProvider>
+                                    )}
+                                    {!isConnected && (
+                                      <TooltipProvider>
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <WifiOff className="w-4 h-4 text-gray-400" />
+                                          </TooltipTrigger>
+                                          <TooltipContent>
+                                            <p>MQTT disconnected - Manual selection only</p>
+                                          </TooltipContent>
+                                        </Tooltip>
+                                      </TooltipProvider>
+                                    )}
+                                  </FormLabel>
                                   <FormControl>
                                     <Select value={field.value || ""} onValueChange={field.onChange}>
                                       <SelectTrigger className="focus:ring-blue-300 focus:border-blue-300 rounded">
-                                        <SelectValue placeholder="Select RFID tag" />
+                                        <SelectValue placeholder={
+                                          isConnected 
+                                            ? "Select RFID tag or tap card to auto-fill" 
+                                            : "Select RFID tag"
+                                        } />
                                       </SelectTrigger>
                                       <SelectContent>
-                                        {rfidTags.length === 0 ? (
-                                          <SelectItem value="" disabled>
+                                        {rfidTags.length === 0 && scannedTags.length === 0 ? (
+                                          <SelectItem value="no-tags" disabled>
                                             No available RFID tags
                                           </SelectItem>
                                         ) : (
-                                          rfidTags
-                                            .filter((tag) => tag && typeof tag.tagId === 'number' && tag.status === 'ACTIVE')
-                                            .map((tag) => (
-                                              <SelectItem key={tag.tagId} value={tag.tagNumber}>
-                                                {tag.tagNumber} ({tag.tagType})
+                                          <>
+                                            {/* Show scanned tags first */}
+                                            {scannedTags.map((tagId) => (
+                                              <SelectItem key={`scanned-${tagId}`} value={tagId} className="bg-green-50">
+                                                {tagId}
                                               </SelectItem>
-                                            ))
+                                            ))}
+                                            {/* Show database tags */}
+                                            {rfidTags
+                                              .filter((tag) => tag && typeof tag.tagId === 'number' && tag.status === 'ACTIVE')
+                                              .map((tag) => (
+                                                <SelectItem key={tag.tagId} value={tag.tagNumber}>
+                                                  {tag.tagNumber} ({tag.tagType})
+                                                </SelectItem>
+                                              ))}
+                                          </>
                                         )}
                                       </SelectContent>
                                     </Select>
@@ -1150,25 +1305,64 @@ export function UserForm({ open, onOpenChange, type, data, id, onSuccess }: User
                               name="rfidTag"
                               render={({ field }) => (
                                 <FormItem>
-                                  <FormLabel>RFID Tag</FormLabel>
+                                  <FormLabel className="flex items-center gap-2">
+                                    RFID Tag
+                                    {isConnected && (
+                                      <TooltipProvider>
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <Wifi className="w-4 h-4 text-green-500" />
+                                          </TooltipTrigger>
+                                          <TooltipContent>
+                                            <p>MQTT connected - Tap RFID card to auto-fill</p>
+                                          </TooltipContent>
+                                        </Tooltip>
+                                      </TooltipProvider>
+                                    )}
+                                    {!isConnected && (
+                                      <TooltipProvider>
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <WifiOff className="w-4 h-4 text-gray-400" />
+                                          </TooltipTrigger>
+                                          <TooltipContent>
+                                            <p>MQTT disconnected - Manual selection only</p>
+                                          </TooltipContent>
+                                        </Tooltip>
+                                      </TooltipProvider>
+                                    )}
+                                  </FormLabel>
                                   <FormControl>
                                     <Select value={field.value || ""} onValueChange={field.onChange}>
                                       <SelectTrigger className="focus:ring-blue-300 focus:border-blue-300 rounded">
-                                        <SelectValue placeholder="Select RFID tag" />
+                                        <SelectValue placeholder={
+                                          isConnected 
+                                            ? "Select RFID tag or tap card to auto-fill" 
+                                            : "Select RFID tag"
+                                        } />
                                       </SelectTrigger>
                                       <SelectContent>
-                                        {rfidTags.length === 0 ? (
-                                          <SelectItem value="" disabled>
+                                        {rfidTags.length === 0 && scannedTags.length === 0 ? (
+                                          <SelectItem value="no-tags" disabled>
                                             No available RFID tags
                                           </SelectItem>
                                         ) : (
-                                          rfidTags
-                                            .filter((tag) => tag && typeof tag.tagId === 'number' && tag.status === 'ACTIVE')
-                                            .map((tag) => (
-                                              <SelectItem key={tag.tagId} value={tag.tagNumber}>
-                                                {tag.tagNumber} ({tag.tagType})
+                                          <>
+                                            {/* Show scanned tags first */}
+                                            {scannedTags.map((tagId) => (
+                                              <SelectItem key={`scanned-${tagId}`} value={tagId} className="bg-green-50">
+                                                {tagId}
                                               </SelectItem>
-                                            ))
+                                            ))}
+                                            {/* Show database tags */}
+                                            {rfidTags
+                                              .filter((tag) => tag && typeof tag.tagId === 'number' && tag.status === 'ACTIVE')
+                                              .map((tag) => (
+                                                <SelectItem key={tag.tagId} value={tag.tagNumber}>
+                                                  {tag.tagNumber} ({tag.tagType})
+                                                </SelectItem>
+                                              ))}
+                                          </>
                                         )}
                                       </SelectContent>
                                     </Select>
@@ -1184,11 +1378,14 @@ export function UserForm({ open, onOpenChange, type, data, id, onSuccess }: User
                                 <FormItem>
                                   <FormLabel>Guardian</FormLabel>
                                   <FormControl>
-                                    <Select value={field.value?.toString() || ""} onValueChange={(value) => field.onChange(parseInt(value))}>
+                                    <Select value={field.value?.toString() || "none"} onValueChange={(value) => field.onChange(value === "none" ? undefined : parseInt(value))}>
                                       <SelectTrigger className="focus:ring-blue-300 focus:border-blue-300 rounded">
                                         <SelectValue placeholder="Select guardian" />
                                       </SelectTrigger>
                                       <SelectContent>
+                                        <SelectItem value="none">
+                                          No Guardian Selected
+                                        </SelectItem>
                                         {guardians
                                           .filter((g) => g && typeof g.guardianId === 'number')
                                           .map((guardian) => (
@@ -1282,7 +1479,8 @@ export function UserForm({ open, onOpenChange, type, data, id, onSuccess }: User
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
-                      type="submit"
+                      type="button"
+                      onClick={form.handleSubmit(onSubmit)}
                       disabled={loading || isSavingDraft}
                       className="w-32 bg-blue-600 hover:bg-blue-700 text-white rounded"
                     >

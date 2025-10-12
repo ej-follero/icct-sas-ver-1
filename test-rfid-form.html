@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RFID Reader Form Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .test-section {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .test-item {
+            margin: 10px 0;
+            padding: 10px;
+            border-left: 4px solid #007bff;
+            background: #f8f9fa;
+        }
+        .success { border-left-color: #28a745; }
+        .error { border-left-color: #dc3545; }
+        .warning { border-left-color: #ffc107; }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background: #0056b3; }
+        .form-test {
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <h1>RFID Reader Form Test Suite</h1>
+    
+    <div class="test-section">
+        <h2>Form Validation Tests</h2>
+        
+        <div class="test-item">
+            <h3>Device ID Validation</h3>
+            <div class="form-test">
+                <label>Test Device ID: </label>
+                <input type="text" id="deviceId" placeholder="e.g., RD-001" />
+                <button onclick="testDeviceId()">Test</button>
+                <div id="deviceIdResult"></div>
+            </div>
+        </div>
+        
+        <div class="test-item">
+            <h3>IP Address Validation</h3>
+            <div class="form-test">
+                <label>Test IP Address: </label>
+                <input type="text" id="ipAddress" placeholder="e.g., 192.168.1.100" />
+                <button onclick="testIpAddress()">Test</button>
+                <div id="ipAddressResult"></div>
+            </div>
+        </div>
+        
+        <div class="test-item">
+            <h3>Room Selection Test</h3>
+            <div class="form-test">
+                <label>Test Room API: </label>
+                <button onclick="testRoomAPI()">Test Room Loading</button>
+                <div id="roomResult"></div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="test-section">
+        <h2>API Integration Tests</h2>
+        
+        <div class="test-item">
+            <h3>RFID Reader API Test</h3>
+            <div class="form-test">
+                <button onclick="testRFIDAPI()">Test RFID Reader API</button>
+                <div id="rfidApiResult"></div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="test-section">
+        <h2>Form Submission Test</h2>
+        
+        <div class="test-item">
+            <h3>Mock Form Data</h3>
+            <div class="form-test">
+                <button onclick="testFormSubmission()">Test Form Submission</button>
+                <div id="formResult"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Device ID validation test
+        function testDeviceId() {
+            const deviceId = document.getElementById('deviceId').value;
+            const result = document.getElementById('deviceIdResult');
+            
+            const regex = /^[A-Za-z0-9\-_]+$/;
+            const isValid = deviceId.length >= 1 && deviceId.length <= 50 && regex.test(deviceId);
+            
+            result.innerHTML = isValid ? 
+                '<span class="success">✅ Valid Device ID</span>' : 
+                '<span class="error">❌ Invalid Device ID - Must be 1-50 characters, letters, numbers, hyphens, and underscores only</span>';
+        }
+        
+        // IP Address validation test
+        function testIpAddress() {
+            const ipAddress = document.getElementById('ipAddress').value;
+            const result = document.getElementById('ipAddressResult');
+            
+            const ipRegex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+            const isValid = ipAddress === '' || ipRegex.test(ipAddress);
+            
+            result.innerHTML = isValid ? 
+                '<span class="success">✅ Valid IP Address</span>' : 
+                '<span class="error">❌ Invalid IP Address - Please enter a valid IPv4 address</span>';
+        }
+        
+        // Room API test
+        async function testRoomAPI() {
+            const result = document.getElementById('roomResult');
+            result.innerHTML = '<span class="warning">⏳ Testing room API...</span>';
+            
+            try {
+                const response = await fetch('/api/rooms');
+                if (response.ok) {
+                    const data = await response.json();
+                    const rooms = Array.isArray(data) ? data : (data.rooms || data.data || []);
+                    result.innerHTML = `<span class="success">✅ Room API working - Found ${rooms.length} rooms</span>`;
+                } else {
+                    result.innerHTML = `<span class="error">❌ Room API failed - Status: ${response.status}</span>`;
+                }
+            } catch (error) {
+                result.innerHTML = `<span class="error">❌ Room API error: ${error.message}</span>`;
+            }
+        }
+        
+        // RFID API test
+        async function testRFIDAPI() {
+            const result = document.getElementById('rfidApiResult');
+            result.innerHTML = '<span class="warning">⏳ Testing RFID API...</span>';
+            
+            try {
+                const response = await fetch('/api/rfid/readers');
+                if (response.ok) {
+                    const data = await response.json();
+                    result.innerHTML = `<span class="success">✅ RFID API working - Found ${data.data?.length || 0} readers</span>`;
+                } else {
+                    result.innerHTML = `<span class="error">❌ RFID API failed - Status: ${response.status}</span>`;
+                }
+            } catch (error) {
+                result.innerHTML = `<span class="error">❌ RFID API error: ${error.message}</span>`;
+            }
+        }
+        
+        // Form submission test
+        function testFormSubmission() {
+            const result = document.getElementById('formResult');
+            
+            const mockFormData = {
+                deviceId: 'TEST-001',
+                deviceName: 'Test Reader',
+                ipAddress: '192.168.1.100',
+                status: 'ACTIVE',
+                roomId: 1,
+                notes: 'Test reader for validation',
+                components: {
+                    power: 'AC',
+                    antenna: 'Omni-directional',
+                    firmware: 'v1.0.0'
+                }
+            };
+            
+            // Validate the mock data
+            const deviceIdValid = /^[A-Za-z0-9\-_]+$/.test(mockFormData.deviceId);
+            const ipValid = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/.test(mockFormData.ipAddress);
+            const roomValid = mockFormData.roomId > 0;
+            
+            if (deviceIdValid && ipValid && roomValid) {
+                result.innerHTML = `
+                    <span class="success">✅ Form data validation passed</span>
+                    <pre style="background: #f8f9fa; padding: 10px; margin: 10px 0; border-radius: 4px; font-size: 12px;">
+${JSON.stringify(mockFormData, null, 2)}
+                    </pre>
+                `;
+            } else {
+                result.innerHTML = '<span class="error">❌ Form data validation failed</span>';
+            }
+        }
+        
+        // Auto-run some tests on page load
+        window.onload = function() {
+            console.log('RFID Reader Form Test Suite loaded');
+            console.log('Available tests:');
+            console.log('- Device ID validation');
+            console.log('- IP Address validation');
+            console.log('- Room API testing');
+            console.log('- RFID API testing');
+            console.log('- Form submission testing');
+        };
+    </script>
+</body>
+</html>

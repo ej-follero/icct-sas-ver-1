@@ -172,7 +172,7 @@ export function AddScheduleDialog({ open, onOpenChange, onScheduleCreated }: Add
       const numericInstructorId = Number(formData.instructorId);
       const numericRoomId = Number(formData.roomId);
       const numericSemesterId = Number(formData.semesterId);
-      if (!numericSubjectId || !numericSectionId || !numericInstructorId || !numericRoomId || !numericSemesterId || !formData.day || !formData.startTime || !formData.endTime) {
+      if (!numericSubjectId || !numericSectionId || !numericRoomId || !numericSemesterId || !formData.day || !formData.startTime || !formData.endTime) {
         toast.error('Please complete all required fields.');
         setIsSubmitting(false);
         return;
@@ -181,7 +181,7 @@ export function AddScheduleDialog({ open, onOpenChange, onScheduleCreated }: Add
       const payload = {
         subjectId: numericSubjectId,
         sectionId: numericSectionId,
-        instructorId: numericInstructorId,
+        instructorId: formData.instructorId ? numericInstructorId : null,
         roomId: numericRoomId,
         day: formData.day,
         startTime: formData.startTime,
@@ -194,11 +194,15 @@ export function AddScheduleDialog({ open, onOpenChange, onScheduleCreated }: Add
         notes: formData.notes || undefined,
       };
 
+      console.log('Schedule creation payload:', payload);
+      console.log('Form data:', formData);
+
       const response = await fetch('/api/schedules', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include', // Include cookies for authentication
         body: JSON.stringify(payload),
       });
 
@@ -209,8 +213,27 @@ export function AddScheduleDialog({ open, onOpenChange, onScheduleCreated }: Add
         onOpenChange(false);
         resetForm();
       } else {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to create schedule');
+        let errorData;
+        let responseText = '';
+        try {
+          responseText = await response.text();
+          errorData = JSON.parse(responseText);
+        } catch (parseError) {
+          console.error("Failed to parse error response:", parseError);
+          errorData = { error: `HTTP ${response.status}: ${response.statusText}` };
+        }
+        
+        console.error("API Error Response:", {
+          status: response.status,
+          statusText: response.statusText,
+          errorData,
+          url: response.url,
+          headers: Object.fromEntries(response.headers.entries())
+        });
+        console.error("Raw response text:", responseText);
+        
+        const errorMessage = errorData.error || `Failed to create schedule: ${response.statusText}`;
+        throw new Error(errorMessage);
       }
     } catch (error) {
       console.error('Error creating schedule:', error);
@@ -449,7 +472,7 @@ export function AddScheduleDialog({ open, onOpenChange, onScheduleCreated }: Add
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="instructorId" className="text-sm text-blue-900">
-                        Instructor <span className="text-red-500">*</span>
+                        Instructor
                       </Label>
                       <Select value={formData.instructorId} onValueChange={(value) => handleInputChange('instructorId', value)}>
                         <SelectTrigger className="border-blue-200 focus:border-blue-400 focus:ring-blue-400 rounded">

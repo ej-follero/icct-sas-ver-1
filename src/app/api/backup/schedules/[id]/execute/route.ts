@@ -5,7 +5,7 @@ import { backupSchedulingService } from "@/lib/services/backup-scheduling.servic
 // POST /api/backup/schedules/[id]/execute - Execute a backup schedule
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // Admin auth (SUPER_ADMIN/ADMIN)
@@ -25,7 +25,8 @@ export async function POST(
       return NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 });
     }
 
-    const backup = await backupSchedulingService.executeScheduledBackup(params.id);
+    const { id } = await params;
+    const backup = await backupSchedulingService.executeScheduledBackup(id);
 
     return NextResponse.json({
       success: true,

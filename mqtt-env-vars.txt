@@ -1,0 +1,12 @@
+# Add these MQTT environment variables to your .env file:
+
+# MQTT Configuration for RFID Reader Auto-Detection
+NEXT_PUBLIC_MQTT_WS_BROKER="ws://localhost:9001"
+NEXT_PUBLIC_MQTT_WS_PORT="9001"
+NEXT_PUBLIC_MQTT_USERNAME=""
+NEXT_PUBLIC_MQTT_PASSWORD=""
+NEXT_PUBLIC_MQTT_CLIENT_ID="icct-attendance-web"
+NEXT_PUBLIC_MQTT_MASTER_CARD_ID="MASTER123"
+
+# Socket.IO Configuration
+NEXT_PUBLIC_SOCKET_URL="http://localhost:3000"

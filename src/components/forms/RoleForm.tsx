@@ -43,7 +43,7 @@ import { roleService, type Role as ApiRole } from "@/lib/services/role.service";
 const roleSchema = z.object({
   name: z.string().min(1, "Role name is required").max(50, "Role name must be less than 50 characters"),
   description: z.string().optional(),
-  permissions: z.array(z.string()).min(1, "At least one permission is required"),
+  permissions: z.array(z.string().min(1, "Permission cannot be empty")).min(1, "At least one permission is required"),
   status: z.enum(["ACTIVE", "INACTIVE", "ARCHIVED"]).default("ACTIVE"),
 });
 
@@ -451,7 +451,7 @@ export default function RoleForm({ open, onOpenChange, type, data, id, onSuccess
         </DialogHeader>
 
         <div className="max-h-[70vh] overflow-y-auto px-4 py-6 sm:px-8 sm:py-8">
-                    <Form onSubmit={handleSubmit(onSubmit)}>
+          <form onSubmit={handleSubmit(onSubmit)}>
             <div className="space-y-6">
               {/* Info Bar */}
               <div className="flex items-center gap-2 p-3 mb-4 bg-blue-50 border border-blue-100 rounded shadow-sm">
@@ -704,7 +704,7 @@ export default function RoleForm({ open, onOpenChange, type, data, id, onSuccess
                 )}
               </DialogFooter>
             </div>
-          </Form>
+          </form>
         </div>
 
         {/* Success Dialog */}

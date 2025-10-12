@@ -148,16 +148,22 @@ model BackupSystemLog {
   @@index([userId])
 }
 
+enum RoleStatus {
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+}
+
 model RoleManagement {
-  id          Int      @id @default(autoincrement())
-  name        String   @unique
+  id          Int        @id @default(autoincrement())
+  name        String     @unique
   description String?
-  permissions Json
-  status      String   @default("ACTIVE")
-  totalUsers  Int      @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  users       User[]   @relation("UserRoles")
+  permissions String[]   // Changed from Json to String array for better type safety
+  status      RoleStatus @default(ACTIVE)
+  totalUsers  Int        @default(0)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  users       User[]     @relation("UserRoles")
 
   @@index([status])
   @@index([name])
@@ -176,6 +182,7 @@ model User {
   isEmailVerified        Boolean              @default(false)
   twoFactorEnabled       Boolean              @default(false)
   twoFactorSecret        String?
+  avatar                 String?              // Profile image for all user types
   createdAt              DateTime             @default(now())
   updatedAt              DateTime             @updatedAt
   sessionVersion         Int                  @default(1)
@@ -256,7 +263,7 @@ model Student {
   lastLogin               DateTime?
   createdAt               DateTime                 @default(now())
   updatedAt               DateTime                 @updatedAt
-  guardianId              Int
+  guardianId              Int?
   userId                  Int
   deletedAt               DateTime?
   deletionReason          String?
@@ -265,7 +272,7 @@ model Student {
   RFIDTags                RFIDTags?
   CourseOffering          CourseOffering?          @relation(fields: [courseId], references: [courseId])
   Department              Department?              @relation(fields: [departmentId], references: [departmentId])
-  Guardian                Guardian                 @relation(fields: [guardianId], references: [guardianId])
+  Guardian                Guardian?                @relation(fields: [guardianId], references: [guardianId])
   User                    User                     @relation(fields: [userId], references: [userId])
   StudentSchedules        StudentSchedule[]
   StudentSection          StudentSection[]
@@ -511,7 +518,7 @@ model SubjectSchedule {
   subjectSchedId  Int               @id @default(autoincrement())
   subjectId       Int
   sectionId       Int
-  instructorId    Int
+  instructorId    Int?
   roomId          Int
   day             DayOfWeek
   startTime       String
@@ -530,7 +537,7 @@ model SubjectSchedule {
   updatedAt       DateTime          @updatedAt
   Attendance      Attendance[]      @relation("SubjectScheduleToAttendance")
   StudentSchedule StudentSchedule[]
-  instructor      Instructor        @relation(fields: [instructorId], references: [instructorId])
+  instructor      Instructor?       @relation(fields: [instructorId], references: [instructorId])
   room            Room              @relation(fields: [roomId], references: [roomId])
   section         Section           @relation(fields: [sectionId], references: [sectionId])
   semester        Semester          @relation(fields: [semesterId], references: [semesterId])

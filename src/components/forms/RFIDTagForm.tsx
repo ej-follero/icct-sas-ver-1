@@ -25,6 +25,9 @@ import {
 } from "@/components/ui/select";
 import { CreditCard, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import SearchableSelect from "@/components/reusable/Search/SearchableSelect";
+import { useUser } from "@/hooks/useUser";
+import { useMQTTRFIDScan } from "@/hooks/useMQTTRFIDScan";
 
 // RFID Tag form schema
 const rfidTagFormSchema = z.object({
@@ -40,6 +43,7 @@ const rfidTagFormSchema = z.object({
   assignedBy: z.number().optional(),
   assignmentReason: z.string().optional(),
   expiresAt: z.string().optional(),
+  assignedAt: z.string().optional(),
 });
 
 type RFIDTagFormValues = z.infer<typeof rfidTagFormSchema>;
@@ -53,14 +57,16 @@ interface RFIDTagFormProps {
     notes?: string;
     studentId?: number;
     
-    assignedBy?: number;
-    assignmentReason?: string;
-    expiresAt?: string;
+  assignedBy?: number;
+  assignmentReason?: string;
+  expiresAt?: string;
+  assignedAt?: string;
   };
   onSubmit: (data: RFIDTagFormValues) => Promise<void>;
   isSubmitting?: boolean;
   mode?: 'create' | 'edit';
   showFooter?: boolean;
+  onReset?: () => void;
 }
 
 export function RFIDTagForm({ 
@@ -68,9 +74,98 @@ export function RFIDTagForm({
   onSubmit, 
   isSubmitting = false, 
   mode = 'create',
-  showFooter = true
+  showFooter = true,
+  onReset
 }: RFIDTagFormProps) {
   const [isLoading, setIsLoading] = useState(false);
+  const [lastProcessedScan, setLastProcessedScan] = useState<string | null>(null);
+  const [componentMountTime] = useState(Date.now());
+  const [studentInfo, setStudentInfo] = useState<{firstName: string, lastName: string, studentIdNum: string} | null>(null);
+  const { user } = useUser();
+
+  // RFID scan monitoring via MQTT
+  const { setMode, isConnected, recentScans, sendFeedback } = useMQTTRFIDScan({
+    enabled: true,
+    mode: 'registration',
+    onNewScan: (scan) => {
+      console.log('🔍 RFID Tag Form - Scan detected:', scan);
+      console.log('🔍 MQTT Connected:', isConnected);
+      console.log('🔍 Recent scans count:', recentScans.length);
+      
+      // Validate scan data - must have valid RFID data and timestamp
+      if (!scan || !scan.rfid || !scan.timestamp) {
+        console.log('❌ Invalid scan data, ignoring');
+        return;
+      }
+      
+      // Check if this is a recent scan (within last 5 seconds) to avoid duplicates
+      const scanTime = new Date(scan.timestamp).getTime();
+      const now = Date.now();
+      const timeDiff = now - scanTime;
+      
+      if (timeDiff > 5000) { // 5 seconds
+        console.log('⏰ Scan too old, ignoring');
+        return;
+      }
+      
+      // Only process scans that occurred after this component was mounted
+      if (scanTime < componentMountTime) {
+        console.log('⏰ Scan occurred before component mount, ignoring');
+        return;
+      }
+      
+      const tag = String(scan.rfid).trim();
+      if (!tag) {
+        console.log('❌ Empty tag number, ignoring');
+        return;
+      }
+      
+      // Check if we've already processed this scan
+      const scanId = `${tag}-${scan.timestamp}`;
+      if (lastProcessedScan === scanId) {
+        console.log('🔄 Scan already processed, ignoring');
+        return;
+      }
+      
+      console.log('✅ Processing new RFID scan:', tag);
+      
+      // Auto-populate tag number field when RFID card is tapped (both create and edit modes)
+      setLastProcessedScan(scanId);
+      form.setValue('tagNumber', tag);
+      toast.success(`Card detected: ${tag}`, {
+        description: 'Tag number auto-filled'
+      });
+      
+      // Send feedback to MQTT
+      if (sendFeedback) {
+        sendFeedback('Card detected', tag);
+      }
+      
+      // Show visual feedback in the form
+      const tagNumberInput = document.querySelector('input[name="tagNumber"]') as HTMLInputElement;
+      if (tagNumberInput) {
+        tagNumberInput.style.backgroundColor = '#d4edda';
+        tagNumberInput.style.borderColor = '#28a745';
+        setTimeout(() => {
+          tagNumberInput.style.backgroundColor = '';
+          tagNumberInput.style.borderColor = '';
+        }, 2000);
+      }
+    }
+  });
+
+  // Debug MQTT connection status
+  useEffect(() => {
+    console.log('MQTT Connection Status:', isConnected);
+    console.log('Recent Scans:', recentScans.length);
+  }, [isConnected, recentScans]);
+
+  // Set MQTT mode to registration when component mounts
+  useEffect(() => {
+    if (setMode) {
+      setMode('registration');
+    }
+  }, [setMode]);
 
   const form = useForm<RFIDTagFormValues>({
     resolver: zodResolver(rfidTagFormSchema),
@@ -81,11 +176,149 @@ export function RFIDTagForm({
       notes: initialData?.notes || '',
       studentId: initialData?.studentId || undefined,
       
-      assignedBy: initialData?.assignedBy || undefined,
+      assignedBy: initialData?.assignedBy || (user?.id ? Number(user.id) : undefined),
       assignmentReason: initialData?.assignmentReason || '',
       expiresAt: initialData?.expiresAt || '',
+      assignedAt: initialData?.assignedAt || '',
     },
   });
+
+  // Auto-populate assignedBy with current user when user data is available
+  useEffect(() => {
+    if (user?.id && mode === 'create') {
+      form.setValue('assignedBy', Number(user.id));
+    }
+  }, [user, form, mode]);
+
+  // Fetch student information when in edit mode
+  useEffect(() => {
+    const fetchStudentInfo = async () => {
+      if (mode === 'edit' && initialData?.studentId) {
+        try {
+          const response = await fetch(`/api/students/${initialData.studentId}`);
+          if (response.ok) {
+            const result = await response.json();
+            const student = result.data; // API returns data wrapped in { data: student }
+            if (student) {
+              setStudentInfo({
+                firstName: student.firstName,
+                lastName: student.lastName,
+                studentIdNum: student.studentIdNum
+              });
+            }
+          }
+        } catch (error) {
+          console.error('Failed to fetch student info:', error);
+        }
+      }
+    };
+
+    fetchStudentInfo();
+  }, [mode, initialData?.studentId]);
+
+  // Fetch assigned by user information when in edit mode
+  const [assignedByUser, setAssignedByUser] = useState<{userName: string, email: string} | null>(null);
+  
+  useEffect(() => {
+    console.log('Initial data in edit mode:', initialData); // Debug log
+    console.log('AssignedAt from initialData:', initialData?.assignedAt); // Debug log
+    console.log('Form values:', form.getValues()); // Debug log
+    const fetchAssignedByUser = async () => {
+      if (mode === 'edit' && initialData?.assignedBy) {
+        try {
+          const response = await fetch(`/api/users/${initialData.assignedBy}`);
+          if (response.ok) {
+            const result = await response.json();
+            const user = result.data || result; // Handle different response formats
+            console.log('Fetched assigned by user:', user); // Debug log
+            if (user) {
+              setAssignedByUser({
+                userName: user.userName || user.fullName || user.name || 'Unknown User',
+                email: user.email || 'Unknown Email'
+              });
+            }
+          }
+        } catch (error) {
+          console.error('Failed to fetch assigned by user info:', error);
+        }
+      }
+    };
+
+    fetchAssignedByUser();
+  }, [mode, initialData?.assignedBy]);
+
+  // Reset form when initialData changes in edit mode
+  useEffect(() => {
+    if (mode === 'edit' && initialData) {
+      form.reset({
+        tagNumber: initialData.tagNumber || '',
+        tagType: initialData.tagType || 'STUDENT_CARD',
+        status: initialData.status || 'ACTIVE',
+        notes: initialData.notes || '',
+        studentId: initialData.studentId || undefined,
+        assignedBy: initialData.assignedBy || undefined,
+        assignmentReason: initialData.assignmentReason || '',
+        expiresAt: initialData.expiresAt || '',
+        assignedAt: initialData.assignedAt || '',
+      });
+    }
+  }, [mode, initialData, form]);
+
+  // Reset form when mode changes or when initialData changes
+  useEffect(() => {
+    if (mode === 'create') {
+      form.reset({
+        tagNumber: '',
+        tagType: 'STUDENT_CARD',
+        status: 'ACTIVE',
+        notes: '',
+        studentId: undefined,
+        assignedBy: user?.id ? Number(user.id) : undefined,
+        assignmentReason: '',
+        expiresAt: '',
+        assignedAt: '',
+      });
+      // Clear processed scan history when form resets
+      setLastProcessedScan(null);
+    }
+  }, [mode, form, user]);
+
+  // Clear form function
+  const clearForm = () => {
+    form.reset({
+      tagNumber: '',
+      tagType: 'STUDENT_CARD',
+      status: 'ACTIVE',
+      notes: '',
+      studentId: undefined,
+      assignedBy: user?.id ? Number(user.id) : undefined,
+      assignmentReason: '',
+      expiresAt: '',
+      assignedAt: '',
+    });
+    setLastProcessedScan(null); // Clear processed scan history
+  };
+
+  // Expose clear function to parent
+  useEffect(() => {
+    if (onReset) {
+      onReset();
+    }
+  }, [onReset]);
+
+  // Cleanup when component unmounts (form is closed)
+  useEffect(() => {
+    return () => {
+      // Clear processed scan history when form is closed
+      setLastProcessedScan(null);
+      // Clear any pending timeouts
+      const tagNumberInput = document.querySelector('input[name="tagNumber"]') as HTMLInputElement;
+      if (tagNumberInput) {
+        tagNumberInput.style.backgroundColor = '';
+        tagNumberInput.style.borderColor = '';
+      }
+    };
+  }, []);
 
   const handleSubmit = async (data: RFIDTagFormValues) => {
     try {
@@ -132,14 +365,40 @@ export function RFIDTagForm({
                   Tag Number *
                 </FormLabel>
                 <FormControl>
-                  <Input
-                    {...field}
-                    placeholder="e.g., TAG001, STUDENT123"
-                    className="w-full"
-                    disabled={isSubmitting || isLoading}
-                  />
+                  <div className="relative">
+                    <Input
+                      {...field}
+                      placeholder={isConnected ? "Tap RFID card to auto-fill..." : "e.g., TAG001, STUDENT123"}
+                      className={`w-full ${isConnected ? 'border-green-300 bg-green-50' : ''}`}
+                      disabled={isSubmitting || isLoading}
+                    />
+                    {isConnected && (
+                      <div className="absolute right-3 top-1/2 transform -translate-y-1/2 flex items-center gap-2">
+                        <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" title="RFID Scanner Ready"></div>
+                        <span className="text-xs text-green-600 font-medium">Ready</span>
+                      </div>
+                    )}
+                    {!isConnected && (
+                      <div className="absolute right-3 top-1/2 transform -translate-y-1/2 flex items-center gap-2">
+                        <div className="w-2 h-2 bg-red-500 rounded-full" title="RFID Scanner Not Connected"></div>
+                        <span className="text-xs text-red-600 font-medium">Offline</span>
+                      </div>
+                    )}
+                  </div>
                 </FormControl>
                 <FormMessage />
+                {isConnected && (
+                  <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
+                    <span className="w-1 h-1 bg-green-500 rounded-full animate-pulse inline-block"></span>
+                    RFID scanner is connected. Tap a card to auto-fill the tag number.
+                  </p>
+                )}
+                {!isConnected && (
+                  <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
+                    <span className="w-1 h-1 bg-red-500 rounded-full inline-block"></span>
+                    RFID scanner is offline. Please enter the tag number manually.
+                  </p>
+                )}
               </FormItem>
             )}
           />
@@ -229,6 +488,33 @@ export function RFIDTagForm({
               </FormItem>
             )}
           />
+
+          {/* Assigned At - Read-only display */}
+          {mode === 'edit' && (
+            <FormField
+              control={form.control}
+              name="assignedAt"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-sm font-medium text-gray-700">
+                    Assigned At
+                  </FormLabel>
+                  <FormControl>
+                    <Input
+                      {...field}
+                      type="text"
+                      placeholder="Auto-generated when assigned"
+                      className="w-full bg-gray-50"
+                      disabled={true}
+                      value={field.value ? new Date(field.value).toLocaleString() : 'Not assigned'}
+                      onChange={() => {}} // Prevent form control from interfering
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          )}
         </div>
 
         {/* Notes */}
@@ -260,7 +546,7 @@ export function RFIDTagForm({
           </h4>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Student ID */}
+            {/* Student ID - Searchable in create mode, display current assignment in edit mode */}
             <FormField
               control={form.control}
               name="studentId"
@@ -270,15 +556,40 @@ export function RFIDTagForm({
                     Student ID
                   </FormLabel>
                   <FormControl>
-                    <Input
-                      {...field}
-                      type="number"
-                      placeholder="Student ID"
-                      className="w-full"
-                      disabled={isSubmitting || isLoading}
-                      value={field.value || ''}
-                      onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : undefined)}
-                    />
+                    {mode === 'create' ? (
+                      <SearchableSelect
+                        value={field.value ? String(field.value) : ''}
+                        onChange={(value) => field.onChange(value ? Number(value) : undefined)}
+                        options={[]}
+                        placeholder="Search student by name or ID..."
+                        className="w-full"
+                        asyncSearch={async (query) => {
+                          try {
+                            const res = await fetch(`/api/search/entities?type=student&q=${encodeURIComponent(query)}&limit=10`);
+                            if (!res.ok) return [];
+                            const data = await res.json();
+                            return Array.isArray(data.items) ? data.items : [];
+                          } catch {
+                            return [];
+                          }
+                        }}
+                      />
+                    ) : (
+                      <Input
+                        {...field}
+                        type="text"
+                        placeholder="No student assigned"
+                        className="w-full bg-gray-50"
+                        disabled={true}
+                        value={
+                          field.value && studentInfo 
+                            ? `${studentInfo.firstName} ${studentInfo.lastName} (ID: ${studentInfo.studentIdNum})`
+                            : field.value 
+                              ? `Student ID: ${field.value}` 
+                              : 'No student assigned'
+                        }
+                      />
+                    )}
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -287,7 +598,7 @@ export function RFIDTagForm({
 
             
 
-            {/* Assigned By */}
+            {/* Assigned By - Auto-detected */}
             <FormField
               control={form.control}
               name="assignedBy"
@@ -299,12 +610,17 @@ export function RFIDTagForm({
                   <FormControl>
                     <Input
                       {...field}
-                      type="number"
-                      placeholder="User ID who assigned this tag"
-                      className="w-full"
-                      disabled={isSubmitting || isLoading}
-                      value={field.value || ''}
-                      onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : undefined)}
+                      type="text"
+                      placeholder="Auto-detected from current user"
+                      className="w-full bg-gray-50"
+                      disabled={true}
+                      value={
+                        mode === 'edit' && assignedByUser 
+                          ? `${assignedByUser.userName} (${assignedByUser.email})`
+                          : user 
+                            ? `${user.email} (ID: ${user.id})`
+                            : 'Loading user...'
+                      }
                     />
                   </FormControl>
                   <FormMessage />

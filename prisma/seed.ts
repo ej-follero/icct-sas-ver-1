@@ -336,6 +336,39 @@ function generateAttendanceDates(startDate: Date, endDate: Date, daysOfWeek: str
   return dates;
 }
 
+// Helper function to check if user already exists
+async function checkUserExists(userName: string, email: string): Promise<boolean> {
+  const existingUser = await prisma.user.findFirst({
+    where: {
+      OR: [
+        { userName: userName },
+        { email: email }
+      ]
+    }
+  });
+  return !!existingUser;
+}
+
+// Helper function to create user with duplicate checking
+async function createUserSafely(userData: {
+  userName: string;
+  email: string;
+  passwordHash: string;
+  role: Role;
+  status: UserStatus;
+  isEmailVerified: boolean;
+}) {
+  // Check if user already exists
+  const exists = await checkUserExists(userData.userName, userData.email);
+  if (exists) {
+    throw new Error(`User with userName '${userData.userName}' or email '${userData.email}' already exists`);
+  }
+  
+  return await prisma.user.create({
+    data: userData
+  });
+}
+
 // Helper function to generate realistic attendance status with patterns for semester
 function generateAttendanceStatus(studentId: number, date: Date, isRegularStudent: boolean): AttendanceStatus {
   const random = Math.random();
@@ -419,16 +452,19 @@ async function main() {
   console.log('👥 Creating admin users...');
   const adminUsers = [];
   for (let i = 0; i < 5; i++) {
-    adminUsers.push(await prisma.user.create({
-      data: {
+    try {
+      adminUsers.push(await createUserSafely({
         userName: `admin${i + 1}`,
         email: `admin${i + 1}@icct.edu.ph`,
         passwordHash: '$2b$10$hashedpassword',
         role: Role.ADMIN,
         status: UserStatus.ACTIVE,
         isEmailVerified: true,
-      }
-    }));
+      }));
+    } catch (error) {
+      console.error(`❌ Failed to create admin user ${i + 1}:`, error);
+      throw error;
+    }
   }
 
 
@@ -581,41 +617,65 @@ async function main() {
   console.log('👨‍🏫 Creating instructors...');
   const instructors: any[] = [];
   let instructorCounter = 0; // Global counter to ensure uniqueness across all departments
-  // FIXED: Added unique counter to prevent duplicate userName/email across departments
+  const usedInstructorNames = new Set<string>(); // Track used instructor names
+  const usedInstructorEmails = new Set<string>(); // Track used instructor emails
+  
   for (const dept of departments) {
     for (let i = 0; i < 10; i++) {
-      const firstName = faker.person.firstName();
-      const lastName = faker.person.lastName();
-      instructorCounter++; // Increment global counter
-      const user = await prisma.user.create({
-        data: {
-          userName: `${firstName.toLowerCase()}${lastName.toLowerCase()}${instructorCounter}`,
-          email: `${firstName.toLowerCase()}.${lastName.toLowerCase()}${instructorCounter}@icct.edu.ph`,
+      let firstName, lastName, userName, email;
+      let attempts = 0;
+      
+      // Ensure unique instructor names and emails
+      do {
+        firstName = faker.person.firstName();
+        lastName = faker.person.lastName();
+        instructorCounter++;
+        userName = `${firstName.toLowerCase().replace(/\s+/g, '')}${lastName.toLowerCase().replace(/\s+/g, '')}${instructorCounter}`;
+        email = `${firstName.toLowerCase().replace(/\s+/g, '')}.${lastName.toLowerCase().replace(/\s+/g, '')}${instructorCounter}@icct.edu.ph`;
+        attempts++;
+      } while ((usedInstructorNames.has(userName) || usedInstructorEmails.has(email)) && attempts < 50);
+      
+      if (attempts >= 50) {
+        // Fallback: add more unique identifiers
+        userName = `${firstName.toLowerCase().replace(/\s+/g, '')}${lastName.toLowerCase().replace(/\s+/g, '')}${instructorCounter}${dept.departmentCode}${i}`;
+        email = `${firstName.toLowerCase().replace(/\s+/g, '')}.${lastName.toLowerCase().replace(/\s+/g, '')}${instructorCounter}${dept.departmentCode}${i}@icct.edu.ph`;
+      }
+      
+      usedInstructorNames.add(userName);
+      usedInstructorEmails.add(email);
+      
+      try {
+        const user = await createUserSafely({
+          userName: userName,
+          email: email,
           passwordHash: '$2b$10$hashedpassword',
-          role: 'INSTRUCTOR',
-          status: 'ACTIVE',
+          role: Role.INSTRUCTOR,
+          status: UserStatus.ACTIVE,
           isEmailVerified: true,
-        }
-      });
-      instructors.push(await prisma.instructor.create({
-      data: {
-        instructorId: user.userId,
-        employeeId: `EMP-${user.userId}`,
-          email: user.email,
-        phoneNumber: faker.phone.number(),
-          firstName: firstName,
-        middleName: faker.person.middleName(),
-          lastName: lastName,
-          gender: faker.helpers.arrayElement([UserGender.MALE, UserGender.FEMALE]),
-          instructorType: faker.helpers.arrayElement([InstructorType.FULL_TIME, InstructorType.PART_TIME]),
-        status: Status.ACTIVE,
-          departmentId: dept.departmentId,
-          officeLocation: `${dept.departmentName} Building, Room ${faker.number.int({ min: 100, max: 300 })}`,
-          officeHours: `${faker.number.int({ min: 8, max: 10 })}:00 AM - ${faker.number.int({ min: 4, max: 6 })}:00 PM`,
-          specialization: faker.helpers.arrayElement(['Programming', 'Database', 'Networking', 'Web Development', 'Software Engineering', 'Cybersecurity']),
-          rfidTag: `INSTR${dept.departmentCode}${String(i + 1).padStart(3, '0')}`,
-        }
-      }));
+        });
+        instructors.push(await prisma.instructor.create({
+          data: {
+            instructorId: user.userId,
+            employeeId: `EMP-${user.userId}`,
+            email: user.email,
+            phoneNumber: faker.phone.number(),
+            firstName: firstName,
+            middleName: faker.person.middleName(),
+            lastName: lastName,
+            gender: faker.helpers.arrayElement([UserGender.MALE, UserGender.FEMALE]),
+            instructorType: faker.helpers.arrayElement([InstructorType.FULL_TIME, InstructorType.PART_TIME]),
+            status: Status.ACTIVE,
+            departmentId: dept.departmentId,
+            officeLocation: `${dept.departmentName} Building, Room ${faker.number.int({ min: 100, max: 300 })}`,
+            officeHours: `${faker.number.int({ min: 8, max: 10 })}:00 AM - ${faker.number.int({ min: 4, max: 6 })}:00 PM`,
+            specialization: faker.helpers.arrayElement(['Programming', 'Database', 'Networking', 'Web Development', 'Software Engineering', 'Cybersecurity']),
+            rfidTag: `INSTR${dept.departmentCode}${String(i + 1).padStart(3, '0')}`,
+          }
+        }));
+      } catch (error) {
+        console.error(`❌ Failed to create instructor ${firstName} ${lastName} in ${dept.departmentName}:`, error);
+        throw error;
+      }
     }
   }
 
@@ -665,66 +725,77 @@ async function main() {
   
   console.log(`📊 Planning to create ${totalStudents} students for ${totalSections} sections`);
   
-  // Track used names to ensure uniqueness
+  // Track used names, usernames, and emails to ensure uniqueness
   const usedNames = new Set<string>();
+  const usedUserNames = new Set<string>();
+  const usedEmails = new Set<string>();
   
   for (let i = 0; i < totalStudents; i++) {
-    let firstName, lastName, middleName;
+    let firstName, lastName, middleName, userName, email;
     let fullName;
     let attempts = 0;
     
-    // Ensure unique names
+    // Ensure unique names, usernames, and emails
     do {
       firstName = collegeData.philippineFirstNames[Math.floor(Math.random() * collegeData.philippineFirstNames.length)];
       lastName = collegeData.philippineSurnames[Math.floor(Math.random() * collegeData.philippineSurnames.length)];
       middleName = collegeData.philippineMiddleNames[Math.floor(Math.random() * collegeData.philippineMiddleNames.length)];
       fullName = `${firstName} ${middleName} ${lastName}`;
+      userName = `${firstName.toLowerCase().replace(/\s+/g, '')}${lastName.toLowerCase().replace(/\s+/g, '')}${i + 1}`;
+      email = `${firstName.toLowerCase().replace(/\s+/g, '')}.${lastName.toLowerCase().replace(/\s+/g, '')}${i + 1}@student.icct.edu.ph`;
       attempts++;
-    } while (usedNames.has(fullName) && attempts < 100);
+    } while ((usedNames.has(fullName) || usedUserNames.has(userName) || usedEmails.has(email)) && attempts < 100);
     
     if (attempts >= 100) {
-      // Fallback: add index to ensure uniqueness
+      // Fallback: add more unique identifiers
       fullName = `${firstName} ${middleName} ${lastName} ${i + 1}`;
+      userName = `${firstName.toLowerCase().replace(/\s+/g, '')}${lastName.toLowerCase().replace(/\s+/g, '')}${i + 1}${Date.now()}`;
+      email = `${firstName.toLowerCase().replace(/\s+/g, '')}.${lastName.toLowerCase().replace(/\s+/g, '')}${i + 1}${Date.now()}@student.icct.edu.ph`;
     }
     
     usedNames.add(fullName);
+    usedUserNames.add(userName);
+    usedEmails.add(email);
     
     const address = collegeData.philippineAddresses[Math.floor(Math.random() * collegeData.philippineAddresses.length)];
     const phonePrefix = collegeData.phonePrefixes[Math.floor(Math.random() * collegeData.phonePrefixes.length)];
     // Guarantee unique phone number by appending index
     const phoneNumber = `${phonePrefix}${String(i + 1).padStart(7, '0')}`;
     
-    const user = await prisma.user.create({
-      data: {
-        userName: `${firstName.toLowerCase().replace(/\s+/g, '')}${lastName.toLowerCase().replace(/\s+/g, '')}${i + 1}`,
-        email: `${firstName.toLowerCase().replace(/\s+/g, '')}.${lastName.toLowerCase().replace(/\s+/g, '')}${i + 1}@student.icct.edu.ph`,
+    try {
+      const user = await createUserSafely({
+        userName: userName,
+        email: email,
         passwordHash: '$2b$10$hashedpassword',
         role: Role.STUDENT,
         status: UserStatus.ACTIVE,
         isEmailVerified: true,
-      }
-    });
-    students.push(await prisma.student.create({
-      data: {
-        studentIdNum: `2025-${String(i + 1).padStart(5, '0')}`,
-        rfidTag: `STUD${String(i + 1).padStart(5, '0')}`,
-        firstName: firstName,
-        middleName: middleName,
-        lastName: lastName,
-        email: user.email,
-        phoneNumber: phoneNumber,
-        address: address,
-        gender: faker.helpers.arrayElement([UserGender.MALE, UserGender.FEMALE]),
-        studentType: faker.helpers.arrayElement([StudentType.REGULAR, StudentType.IRREGULAR]),
-        status: Status.ACTIVE,
-        yearLevel: faker.helpers.arrayElement([yearLevel.FIRST_YEAR, yearLevel.SECOND_YEAR, yearLevel.THIRD_YEAR, yearLevel.FOURTH_YEAR]),
-        birthDate: faker.date.between({ from: new Date('1995-01-01'), to: new Date('2007-12-31') }),
-        nationality: 'Filipino',
-        suffix: null,
-        userId: user.userId,
-        guardianId: guardians[i % guardians.length].guardianId,
-      }
-    }));
+      });
+      students.push(await prisma.student.create({
+        data: {
+          studentIdNum: `2025-${String(i + 1).padStart(5, '0')}`,
+          rfidTag: `STUD${String(i + 1).padStart(5, '0')}`,
+          firstName: firstName,
+          middleName: middleName,
+          lastName: lastName,
+          email: user.email,
+          phoneNumber: phoneNumber,
+          address: address,
+          gender: faker.helpers.arrayElement([UserGender.MALE, UserGender.FEMALE]),
+          studentType: faker.helpers.arrayElement([StudentType.REGULAR, StudentType.IRREGULAR]),
+          status: Status.ACTIVE,
+          yearLevel: faker.helpers.arrayElement([yearLevel.FIRST_YEAR, yearLevel.SECOND_YEAR, yearLevel.THIRD_YEAR, yearLevel.FOURTH_YEAR]),
+          birthDate: faker.date.between({ from: new Date('1995-01-01'), to: new Date('2007-12-31') }),
+          nationality: 'Filipino',
+          suffix: null,
+          userId: user.userId,
+          guardianId: guardians[i % guardians.length].guardianId,
+        }
+      }));
+    } catch (error) {
+      console.error(`❌ Failed to create student ${firstName} ${lastName}:`, error);
+      throw error;
+    }
   }
 
   // 8. Create Sections (5 per course offering)
@@ -1067,21 +1138,81 @@ async function main() {
 
   // 15. Create RFID Tags
   console.log('🏷️ Creating RFID tags...');
+  const createdTags = [];
   for (const student of students) {
-    await prisma.rFIDTags.create({
-      data: {
-        tagNumber: student.rfidTag,
-        tagType: TagType.STUDENT_CARD,
-        assignedAt: faker.date.past(),
-        status: RFIDStatus.ACTIVE,
-        studentId: student.studentId,
-        assignedBy: adminUsers[0].userId,
-        assignmentReason: 'Initial assignment',
-      }
-    });
+    try {
+      const tag = await prisma.rFIDTags.create({
+        data: {
+          tagNumber: student.rfidTag,
+          tagType: TagType.STUDENT_CARD,
+          assignedAt: faker.date.past(),
+          status: RFIDStatus.ACTIVE,
+          studentId: student.studentId,
+          assignedBy: adminUsers[0].userId,
+          assignmentReason: 'Initial assignment',
+        }
+      });
+      createdTags.push(tag);
+      
+      // Create assignment log entry for each tag
+      await prisma.rFIDTagAssignmentLog.create({
+        data: {
+          tagId: tag.tagId,
+          action: 'ASSIGN',
+          assignedToType: 'STUDENT',
+          assignedToId: student.studentId,
+          assignedToName: `${student.firstName} ${student.lastName}`,
+          performedBy: adminUsers[0].userId,
+          performedByName: 'System Admin',
+          timestamp: tag.assignedAt,
+          notes: `Initial RFID tag assignment for student ${student.studentIdNum}`,
+        }
+      });
+    } catch (error) {
+      console.error(`❌ Failed to create RFID tag for student ${student.studentIdNum}:`, error);
+      throw error;
+    }
   }
+  console.log(`✅ Created ${createdTags.length} RFID tags for students`);
 
-  // Instructor tag assignment removed
+  // 15.5. Create RFID Tags for Instructors
+  console.log('🏷️ Creating RFID tags for instructors...');
+  const instructorTags = [];
+  for (const instructor of instructors) {
+    try {
+      const tag = await prisma.rFIDTags.create({
+        data: {
+          tagNumber: instructor.rfidTag,
+          tagType: TagType.TEMPORARY_PASS, // Using TEMPORARY_PASS for instructors since there's no INSTRUCTOR_CARD type
+          assignedAt: faker.date.past(),
+          status: RFIDStatus.ACTIVE,
+          assignedBy: adminUsers[0].userId,
+          assignmentReason: 'Initial instructor assignment',
+          notes: `Instructor: ${instructor.firstName} ${instructor.lastName} (${instructor.employeeId})`,
+        }
+      });
+      instructorTags.push(tag);
+      
+      // Create assignment log entry for each instructor tag
+      await prisma.rFIDTagAssignmentLog.create({
+        data: {
+          tagId: tag.tagId,
+          action: 'ASSIGN',
+          assignedToType: 'INSTRUCTOR',
+          assignedToId: instructor.instructorId,
+          assignedToName: `${instructor.firstName} ${instructor.lastName}`,
+          performedBy: adminUsers[0].userId,
+          performedByName: 'System Admin',
+          timestamp: tag.assignedAt,
+          notes: `Initial RFID tag assignment for instructor ${instructor.employeeId}`,
+        }
+      });
+    } catch (error) {
+      console.error(`❌ Failed to create RFID tag for instructor ${instructor.employeeId}:`, error);
+      throw error;
+    }
+  }
+  console.log(`✅ Created ${instructorTags.length} RFID tags for instructors`);
 
   // 16. Create RFID Readers
   console.log('📡 Creating RFID readers...');
@@ -1937,24 +2068,8 @@ async function main() {
     });
   }
 
-  // 23. Populate RFIDTagAssignmentLog
-  console.log('📋 Populating RFIDTagAssignmentLog...');
-  for (const tag of allTags) {
-    if (!tag.studentId) continue;
-    await prisma.rFIDTagAssignmentLog.create({
-      data: {
-        tagId: tag.tagId,
-        action: faker.helpers.arrayElement(['ASSIGN', 'UNASSIGN']),
-        assignedToType: 'STUDENT',
-        assignedToId: tag.studentId,
-        assignedToName: (await prisma.student.findUnique({ where: { studentId: tag.studentId } }))?.firstName ?? 'Student',
-        performedBy: adminUsers[0].userId,
-        performedByName: 'Admin',
-        timestamp: faker.date.between({ from: currentTrimester.startDate, to: currentTrimester.endDate }),
-        notes: faker.lorem.sentence(),
-      }
-    });
-  }
+  // 23. RFIDTagAssignmentLog already created during RFID tag creation in section 15
+  console.log('📋 RFIDTagAssignmentLog entries already created during tag assignment');
 
   // 24. Populate AttendanceNotification
   console.log('📋 Populating AttendanceNotification...');
@@ -2107,6 +2222,7 @@ async function main() {
   console.log('✅ Database seeding completed successfully!');
   console.log(`📊 Created ${students.length} students with unique names and comprehensive semester attendance`);
   console.log(`👨‍🏫 Created ${instructors.length} instructors across ${departments.length} departments`);
+  console.log(`🏷️ Created RFID tags for all students and instructors with assignment logs`);
   console.log(`📚 Created ${subjects.length} subjects with ${subjectSchedules.length} schedules`);
   console.log(`📋 Created ${sections.length} sections across ${allCourseOfferings.length} courses`);
   console.log(`📚 Created ${studentSchedules.length} student enrollments in subject schedules`);

@@ -31,7 +31,8 @@ export async function POST(request: NextRequest) {
     if (!adminRoles.includes(user.role)) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
-  try {
+
+    try {
     const body = await request.json().catch(() => ({}));
     const records = Array.isArray(body?.records) ? body.records : [];
     const options = body?.options || {};
@@ -175,10 +176,16 @@ export async function POST(request: NextRequest) {
         errors: errors.slice(0, 10) // Limit errors to prevent huge responses
       } 
     });
-  } catch (e: any) {
-    console.error('RFID Tags bulk import error:', e);
+    } catch (e: any) {
+      console.error('RFID Tags bulk import error:', e);
+      return NextResponse.json({ 
+        error: e?.message || 'RFID Tags bulk import failed' 
+      }, { status: 500 });
+    }
+  } catch (error: any) {
+    console.error('RFID Tags bulk import error:', error);
     return NextResponse.json({ 
-      error: e?.message || 'RFID Tags bulk import failed' 
+      error: error?.message || 'RFID Tags bulk import failed' 
     }, { status: 500 });
   }
 }

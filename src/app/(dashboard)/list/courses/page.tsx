@@ -54,7 +54,8 @@ interface Course {
   id: string;
   name: string;
   code: string;
-  department: string;
+  department: string; // Now contains department ID
+  departmentName?: string; // Department name for display
   departmentCode?: string;
   units: number;
   description?: string;
@@ -612,7 +613,7 @@ export default function CourseListPage() {
             className: 'text-center align-middle min-w-[120px] max-w-[180px] whitespace-normal text-blue-900',
             sortable: col.sortable,
             render: (item: Course) => (
-              <span className="text-sm text-blue-900 text-center">{item.department || 'Not Applicable'}</span>
+              <span className="text-sm text-blue-900 text-center">{item.departmentName || 'Not Applicable'}</span>
             )
           };
         }
@@ -1539,9 +1540,9 @@ export default function CourseListPage() {
                   getItemName={(item) => item.name}
                   getItemCode={(item) => item.code}
                   getItemStatus={(item) => mapStatusToLowerCase(item.status)}
-                  getItemDescription={(item) => item.department}
+                  getItemDescription={(item) => item.departmentName}
                   getItemDetails={(item) => [
-                    { label: 'Department', value: item.department },
+                    { label: 'Department', value: String(item.departmentName || 'N/A') },
                     { label: 'Units', value: item.units.toString() },
                     { label: 'Type', value: item.courseType },
                     { label: 'Major', value: item.major || 'N/A' },

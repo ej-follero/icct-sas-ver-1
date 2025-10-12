@@ -18,9 +18,20 @@ export default function DashboardLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const { user, isInitialized } = useUser();
+  const { user, isInitialized, loading } = useUser();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const handleSidebarToggle = () => setSidebarCollapsed((prev) => !prev);
+  
+  // Get stable role for menu - only change when user actually changes
+  const [stableRole, setStableRole] = useState<Role>('student');
+  
+  // Update stable role only when user is fully loaded and role is confirmed
+  React.useEffect(() => {
+    if (isInitialized && user?.role && !loading) {
+      const mappedRole = mapRoleToMenuRole(user.role);
+      setStableRole(mappedRole);
+    }
+  }, [user?.role, isInitialized, loading]);
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
@@ -29,7 +40,7 @@ export default function DashboardLayout({
         className={`hidden md:flex flex-col fixed left-0 top-16 h-[calc(100vh-64px)] z-30 bg-[#0c2556] shadow-lg transition-all duration-300 ease-in-out ${sidebarCollapsed ? 'w-16' : 'w-64'}`}
         style={{ width: sidebarCollapsed ? 64 : 256 }}
       >
-        <Menu role={mapRoleToMenuRole(user?.role)} collapsed={sidebarCollapsed} />
+        <Menu role={stableRole} collapsed={sidebarCollapsed} />
       </aside>
       
       {/* Logo/hamburger group fixed over sidebar - hidden on mobile, shown on desktop */}
@@ -58,6 +69,8 @@ export default function DashboardLayout({
 }
 
 function mapRoleToMenuRole(role?: string): Role {
+  if (!role) return 'student'; // Default fallback
+  
   const r = (role || '').toUpperCase();
   if (r === 'SUPER_ADMIN') return 'super_admin';
   if (r === 'ADMIN') return 'admin';

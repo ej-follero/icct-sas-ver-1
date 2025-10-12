@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -7,20 +7,53 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
+import { Loader2, Search, Building, MapPin, ScanLine } from "lucide-react";
+import { useMQTTRFIDScan } from '@/hooks/useMQTTRFIDScan';
 
 const rfidReaderFormSchema = z.object({
-  deviceId: z.string().min(1, "Device ID is required").max(50, "Device ID must be less than 50 characters"),
-  deviceName: z.string().optional().or(z.literal("")),
-  ipAddress: z.string().ip({ version: "v4", message: "Invalid IP address" }).optional().or(z.literal("")),
+  deviceId: z.string()
+    .min(1, "Device ID is required")
+    .max(50, "Device ID must be less than 50 characters")
+    .regex(/^[A-Za-z0-9\-_]+$/, "Device ID can only contain letters, numbers, hyphens, and underscores"),
+  deviceName: z.string()
+    .max(100, "Device name must be less than 100 characters")
+    .optional()
+    .or(z.literal("")),
+  ipAddress: z.string()
+    .ip({ version: "v4", message: "Please enter a valid IPv4 address (e.g., 192.168.1.100)" })
+    .optional()
+    .or(z.literal("")),
+  tagNumber: z.string()
+    .max(50, "Tag number must be less than 50 characters")
+    .optional()
+    .or(z.literal("")),
   status: z.enum(["ACTIVE","INACTIVE","TESTING","CALIBRATION","REPAIR","OFFLINE","ERROR"], {
-    required_error: "Status is required"
+    required_error: "Please select a status"
   }),
-  roomId: z.number({ required_error: "Room is required" }).int().min(1, "Room ID must be a positive integer"),
-  notes: z.string().optional().or(z.literal("")),
+  roomId: z.number({ 
+    required_error: "Please select a room" 
+  }).int().min(1, "Please select a valid room"),
+  notes: z.string()
+    .max(500, "Notes must be less than 500 characters")
+    .optional()
+    .or(z.literal("")),
+  components: z.object({
+    power: z.string().max(50, "Power source must be less than 50 characters").optional(),
+    antenna: z.string().max(50, "Antenna type must be less than 50 characters").optional(),
+    firmware: z.string().max(50, "Firmware version must be less than 50 characters").optional(),
+  }).optional(),
 });
 
 type RFIDReaderFormData = z.infer<typeof rfidReaderFormSchema>;
+
+interface Room {
+  roomId: number;
+  roomNo: string;
+  roomType: string;
+  roomBuildingLoc: string;
+  roomFloorLoc: string;
+  status: string;
+}
 
 interface RFIDReaderFormProps {
   type: "create" | "update";
@@ -31,15 +64,47 @@ interface RFIDReaderFormProps {
 }
 
 const RFIDReaderForm: React.FC<RFIDReaderFormProps> = ({ type, data, id, onSuccess, showFooter = true }) => {
+  const [rooms, setRooms] = useState<Room[]>([]);
+  const [roomsLoading, setRoomsLoading] = useState(false);
+  const [roomsError, setRoomsError] = useState<string | null>(null);
+  const [showRoomDropdown, setShowRoomDropdown] = useState(false);
+  const [roomSearchValue, setRoomSearchValue] = useState("");
+
+  // MQTT RFID scanning for tag number auto-fill
+  const { isConnected, setMode, sendFeedback } = useMQTTRFIDScan({
+    enabled: true,
+    mode: 'registration',
+    onNewScan: (scan) => {
+      console.log('RFID Scan received in Reader Form:', scan);
+      const tag = String(scan?.tagNumber || scan?.rfid || '').trim();
+      if (!tag) {
+        console.log('No valid tag number found in scan:', scan);
+        return;
+      }
+      console.log('Setting tag number in form:', tag);
+      form.setValue('tagNumber', tag);
+      toast.success('Card detected - Tag number auto-filled', {
+        description: `Tag: ${tag}`
+      });
+      sendFeedback('Card detected', tag);
+    }
+  });
+
   const form = useForm<RFIDReaderFormData>({
     resolver: zodResolver(rfidReaderFormSchema),
     defaultValues: data || {
       deviceId: "",
       deviceName: undefined,
       ipAddress: undefined,
+      tagNumber: undefined,
       status: "ACTIVE",
       roomId: 0,
       notes: undefined,
+      components: {
+        power: "AC",
+        antenna: "Omni-directional",
+        firmware: "v1.0.0"
+      },
     },
   });
 
@@ -49,10 +114,46 @@ const RFIDReaderForm: React.FC<RFIDReaderFormProps> = ({ type, data, id, onSucce
     }
   }, [data, form]);
 
+  // Fetch available rooms
+  useEffect(() => {
+    const fetchRooms = async () => {
+      try {
+        setRoomsLoading(true);
+        setRoomsError(null);
+        
+        // Always try to fetch all rooms first for better reliability
+        const response = await fetch('/api/rooms');
+        if (response.ok) {
+          const data = await response.json();
+          // Handle both array and object responses
+          const roomsData = Array.isArray(data) ? data : (data.rooms || data.data || []);
+          setRooms(roomsData);
+          console.log('✅ Rooms loaded successfully:', roomsData.length);
+        } else {
+          const errorText = await response.text();
+          console.error('Failed to fetch rooms:', errorText);
+          setRoomsError('Failed to load rooms. Please refresh the page.');
+          setRooms([]);
+        }
+      } catch (error) {
+        console.error('Error fetching rooms:', error);
+        setRoomsError('Network error loading rooms. Please check your connection.');
+        setRooms([]);
+      } finally {
+        setRoomsLoading(false);
+      }
+    };
+
+    fetchRooms();
+  }, [type]);
+
   const onSubmit = async (formData: RFIDReaderFormData) => {
     try {
       const url = type === 'update' ? `/api/rfid/readers/${id}` : '/api/rfid/readers';
       const method = type === 'update' ? 'PATCH' : 'POST';
+      
+      // Show loading toast
+      const loadingToast = toast.loading(`${type === 'create' ? 'Creating' : 'Updating'} RFID reader...`);
       
       // Clean up the data before sending
       const cleanData = {
@@ -62,7 +163,14 @@ const RFIDReaderForm: React.FC<RFIDReaderFormProps> = ({ type, data, id, onSucce
         status: formData.status,
         roomId: formData.roomId,
         notes: formData.notes?.trim() || null,
+        components: formData.components || {
+          power: "AC",
+          antenna: "Omni-directional",
+          firmware: "v1.0.0"
+        },
       };
+      
+      console.log(`📤 ${type === 'create' ? 'Creating' : 'Updating'} RFID reader:`, cleanData);
       
       const response = await fetch(url, {
         method,
@@ -72,15 +180,25 @@ const RFIDReaderForm: React.FC<RFIDReaderFormProps> = ({ type, data, id, onSucce
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
+        console.error('❌ API Error:', errorData);
         throw new Error(errorData.error || errorData.message || `Failed to ${type} RFID reader`);
       }
 
       const result = await response.json();
-      toast.success(`RFID Reader ${type === 'create' ? 'created' : 'updated'} successfully!`);
+      console.log('✅ RFID Reader operation successful:', result);
+      
+      // Dismiss loading toast and show success
+      toast.dismiss(loadingToast);
+      toast.success(`RFID Reader ${type === 'create' ? 'created' : 'updated'} successfully!`, {
+        description: `Device ID: ${cleanData.deviceId}`
+      });
+      
       onSuccess(result);
     } catch (error: any) {
-      console.error(`Error ${type}ing reader:`, error);
-      toast.error(error.message || `Failed to ${type} RFID reader.`);
+      console.error(`❌ Error ${type}ing reader:`, error);
+      toast.error(error.message || `Failed to ${type} RFID reader.`, {
+        description: 'Please check your input and try again.'
+      });
     }
   };
 
@@ -129,6 +247,39 @@ const RFIDReaderForm: React.FC<RFIDReaderFormProps> = ({ type, data, id, onSucce
           />
           <FormField
             control={form.control}
+            name="tagNumber"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="flex items-center gap-2">
+                  Tag Number
+                  <div className="flex items-center gap-1 text-xs text-blue-600">
+                    <ScanLine className="w-3 h-3" />
+                    {isConnected ? (
+                      <span className="text-green-600">● Ready to scan</span>
+                    ) : (
+                      <span className="text-red-600">● MQTT disconnected</span>
+                    )}
+                  </div>
+                </FormLabel>
+                <FormControl>
+                  <Input 
+                    placeholder="Scan RFID card or enter manually..." 
+                    {...field}
+                    className="font-mono"
+                  />
+                </FormControl>
+                <FormMessage />
+                <p className="text-xs text-gray-500">
+                  {isConnected 
+                    ? "Place RFID card near reader to auto-fill" 
+                    : "MQTT connection required for auto-scan"
+                  }
+                </p>
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
             name="status"
             render={({ field }) => (
               <FormItem>
@@ -157,23 +308,209 @@ const RFIDReaderForm: React.FC<RFIDReaderFormProps> = ({ type, data, id, onSucce
             control={form.control}
             name="roomId"
             render={({ field }) => (
-              <FormItem>
+              <FormItem className="flex flex-col">
                 <FormLabel>Assigned Room *</FormLabel>
-                <FormControl>
-                  <Input 
-                    type="number"
-                    placeholder="Enter Room ID (must exist in database)" 
-                    {...field} 
-                    onChange={e => field.onChange(e.target.value === '' ? 0 : Number(e.target.value))}
-                    value={field.value || ''}
+                {roomsLoading ? (
+                  <div className="flex items-center gap-2 text-blue-600">
+                    <Loader2 className="animate-spin w-4 h-4" /> 
+                    Loading rooms...
+                  </div>
+                ) : roomsError ? (
+                  <div className="text-red-600 text-sm">{roomsError}</div>
+                ) : rooms.length > 0 ? (
+                  <div className="relative">
+                    <FormControl>
+                      <Input
+                        type="text"
+                        value={roomSearchValue}
+                        onChange={(e) => setRoomSearchValue(e.target.value)}
+                        placeholder="Search rooms..."
+                        className={`w-full text-sm px-2 py-1 border ${form.formState.errors.roomId ? 'border-red-500' : 'border-blue-200'} rounded mb-1`}
+                        autoComplete="off"
+                        onFocus={() => setShowRoomDropdown(true)}
+                        onBlur={() => setTimeout(() => setShowRoomDropdown(false), 150)}
+                        aria-invalid={!!form.formState.errors.roomId}
+                        aria-describedby={form.formState.errors.roomId ? "roomId-error" : undefined}
+                      />
+                    </FormControl>
+                    {/* Hidden input for form value */}
+                    <input
+                      {...field}
+                      type="hidden"
+                    />
+                    {/* Sync search and hidden input */}
+                    {(() => {
+                      const match = rooms.find(
+                        room =>
+                          room.roomId === field.value
+                      );
+                      if (match && roomSearchValue !== `${match.roomNo} (${match.roomBuildingLoc})`) {
+                        setRoomSearchValue(`${match.roomNo} (${match.roomBuildingLoc})`);
+                      } else if (!match && field.value !== 0) {
+                        setRoomSearchValue("");
+                      }
+                      return null;
+                    })()}
+                    {showRoomDropdown && (
+                      <div className="absolute z-50 w-full bg-white border border-blue-200 rounded shadow max-h-60 overflow-y-auto">
+                        {rooms
+                          .filter(room =>
+                            room.roomNo.toLowerCase().includes(roomSearchValue.toLowerCase()) ||
+                            room.roomBuildingLoc.toLowerCase().includes(roomSearchValue.toLowerCase()) ||
+                            room.roomFloorLoc.toLowerCase().includes(roomSearchValue.toLowerCase())
+                          )
+                          .map(room => (
+                            <div
+                              key={room.roomId}
+                              className={`px-4 py-2 cursor-pointer hover:bg-blue-50 text-sm ${field.value === room.roomId ? "bg-blue-100" : ""}`}
+                              onMouseDown={e => {
+                                e.preventDefault();
+                                field.onChange(room.roomId);
+                                setRoomSearchValue(`${room.roomNo} (${room.roomBuildingLoc})`);
+                                setShowRoomDropdown(false);
+                              }}
+                            >
+                              <div className="flex items-center gap-2">
+                                <Building className="h-4 w-4 text-blue-600" />
+                                <div className="flex flex-col">
+                                  <span className="font-medium">{room.roomNo}</span>
+                                  <span className="text-xs text-gray-500">
+                                    {room.roomBuildingLoc} - Floor {room.roomFloorLoc}
+                                  </span>
+                                  <span className="text-xs text-gray-400">{room.roomType}</span>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        {rooms.filter(room =>
+                          room.roomNo.toLowerCase().includes(roomSearchValue.toLowerCase()) ||
+                          room.roomBuildingLoc.toLowerCase().includes(roomSearchValue.toLowerCase()) ||
+                          room.roomFloorLoc.toLowerCase().includes(roomSearchValue.toLowerCase())
+                        ).length === 0 && (
+                          <div className="px-4 py-2 text-gray-500 text-sm">No rooms found</div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <Input
+                    {...field}
+                    className={`mt-1 border-blue-200 focus:border-blue-400 focus:ring-blue-400 ${form.formState.errors.roomId ? "border-red-500" : ""}`}
+                    aria-invalid={!!form.formState.errors.roomId}
+                    aria-describedby={form.formState.errors.roomId ? "roomId-error" : undefined}
+                    placeholder="Enter room ID"
                   />
-                </FormControl>
+                )}
                 <FormMessage />
-                <p className="text-xs text-gray-500">Room ID must reference an existing room in the database</p>
+                {roomsError ? (
+                  <div className="flex items-center gap-2 text-xs text-red-600">
+                    <span>{roomsError}</span>
+                    <button 
+                      onClick={() => {
+                        setRoomsError(null);
+                        // Re-trigger the fetch
+                        const fetchRooms = async () => {
+                          try {
+                            setRoomsLoading(true);
+                            const response = await fetch('/api/rooms');
+                            if (response.ok) {
+                              const data = await response.json();
+                              setRooms(data.rooms || data.data || []);
+                              setRoomsError(null);
+                            } else {
+                              setRoomsError('Failed to load rooms. Please refresh the page.');
+                            }
+                          } catch (error) {
+                            setRoomsError('Network error loading rooms.');
+                          } finally {
+                            setRoomsLoading(false);
+                          }
+                        };
+                        fetchRooms();
+                      }}
+                      className="text-blue-600 hover:underline"
+                    >
+                      Retry
+                    </button>
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-500">
+                    {type === 'create' 
+                      ? "Only rooms without assigned readers are shown" 
+                      : "Room ID must reference an existing room in the database"
+                    }
+                  </p>
+                )}
               </FormItem>
             )}
           />
         </div>
+        
+        {/* Notes Section */}
+        <FormField
+          control={form.control}
+          name="notes"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Notes</FormLabel>
+              <FormControl>
+                <textarea
+                  placeholder="Additional notes about this RFID reader..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-vertical min-h-[80px]"
+                  {...field}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        
+        {/* Components Section */}
+        <div className="space-y-4">
+          <h3 className="text-lg font-semibold text-gray-900 border-b border-gray-200 pb-2">Device Components</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <FormField
+              control={form.control}
+              name="components.power"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Power Source</FormLabel>
+                  <FormControl>
+                    <Input placeholder="e.g., AC, DC, Battery" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="components.antenna"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Antenna Type</FormLabel>
+                  <FormControl>
+                    <Input placeholder="e.g., Omni-directional, Directional" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="components.firmware"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Firmware Version</FormLabel>
+                  <FormControl>
+                    <Input placeholder="e.g., v1.0.0" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+        </div>
+        
         {showFooter && (
           <div className="flex justify-end gap-4">
             <Button type="button" variant="outline" onClick={() => form.reset()}>

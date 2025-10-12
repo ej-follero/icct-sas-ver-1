@@ -23,7 +23,7 @@ const roomFormSchema = z.object({
   roomCapacity: z.coerce.number().min(1, "Capacity must be at least 1"),
   roomBuildingLoc: z.enum(["BuildingA", "BuildingB", "BuildingC", "BuildingD", "BuildingE"]),
   roomFloorLoc: z.enum(["F1", "F2", "F3", "F4", "F5", "F6"]),
-  readerId: z.string().min(1, "RFID reader ID is required"),
+  readerId: z.string().optional(),
 });
 
 type RoomFormData = z.infer<typeof roomFormSchema>;
@@ -206,16 +206,15 @@ export default function RoomForm({ open, onOpenChange, type, data, id, onSuccess
   // Calculate form progress
   useEffect(() => {
     const values = getValues();
-    const totalFields = 6; // roomNo, roomType, roomCapacity, roomBuildingLoc, roomFloorLoc, readerId
-    const filledFields = [
+    const requiredFields = 5; // roomNo, roomType, roomCapacity, roomBuildingLoc, roomFloorLoc (readerId is optional)
+    const filledRequiredFields = [
       values.roomNo,
       values.roomType,
       values.roomCapacity,
       values.roomBuildingLoc,
       values.roomFloorLoc,
-      values.readerId,
     ].filter((v) => v !== undefined && v !== null && v !== '').length;
-    setFormProgress((filledFields / totalFields) * 100);
+    setFormProgress((filledRequiredFields / requiredFields) * 100);
   }, [watch()]);
 
   // Draft save
@@ -570,7 +569,7 @@ export default function RoomForm({ open, onOpenChange, type, data, id, onSuccess
                   </div>
                   <div>
                     <Label htmlFor="readerId" className="text-sm text-blue-900">
-                      RFID Reader <span className="text-red-500">*</span>
+                      RFID Reader
                     </Label>
                     {rfidLoading ? (
                       <div className="flex items-center gap-2 text-blue-600"><Loader2 className="animate-spin w-4 h-4" /> Loading readers...</div>
@@ -593,7 +592,7 @@ export default function RoomForm({ open, onOpenChange, type, data, id, onSuccess
                         />
                         <Input
                           id="readerId"
-                          {...register("readerId", { required: true })}
+                          {...register("readerId")}
                           value={watch("readerId") || ""}
                           type="hidden"
                         />
@@ -650,7 +649,7 @@ export default function RoomForm({ open, onOpenChange, type, data, id, onSuccess
                         className={`mt-1 border-blue-200 focus:border-blue-400 focus:ring-blue-400 ${errors.readerId ? "border-red-500" : ""}`}
                         aria-invalid={!!errors.readerId}
                         aria-describedby={errors.readerId ? "readerId-error" : undefined}
-                        placeholder="Enter RFID reader ID"
+                        placeholder="Enter RFID reader ID (optional)"
                       />
                     )}
                     {errors.readerId && (

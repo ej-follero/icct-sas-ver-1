@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { Status, Priority } from '@prisma/client';
 
-export async function GET(_request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     // Authorization via JWT cookie (allow ADMIN and INSTRUCTOR)
     const isDev = process.env.NODE_ENV !== 'production';
@@ -24,7 +24,7 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
       }
     }
 
-    const { id } = params;
+    const { id } = await params;
     const item = await prisma.announcement.findUnique({
       where: { announcementId: parseInt(id) },
       include: {
@@ -84,7 +84,7 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
   }
 }
 
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     // Authorization via JWT cookie (allow ADMIN and INSTRUCTOR)
     const isDev = process.env.NODE_ENV !== 'production';
@@ -106,7 +106,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       }
     }
 
-    const { id } = params;
+    const { id } = await params;
     const body = await request.json();
     const {
       title,
@@ -189,7 +189,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   }
 }
 
-export async function DELETE(_request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     // Authorization via JWT cookie (allow ADMIN and INSTRUCTOR)
     const isDev = process.env.NODE_ENV !== 'production';
@@ -211,7 +211,7 @@ export async function DELETE(_request: NextRequest, { params }: { params: { id: 
       }
     }
 
-    const { id } = params;
+    const { id } = await params;
     
     // Check if announcement exists
     const existingAnnouncement = await prisma.announcement.findUnique({

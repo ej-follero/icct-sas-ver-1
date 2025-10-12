@@ -8,7 +8,7 @@ import { PageSkeleton } from "@/components/reusable/Skeleton";
 import { Settings, Activity, Database, Wifi, AlertTriangle, CheckCircle, Clock, Zap, TrendingUp, Server, HardDrive, Cpu, RefreshCw, Bell, Shield, Globe, Users, BarChart3, AlertCircle, Info, Search, Plus, Upload, Printer, Columns3, List, Download, Loader2, MoreHorizontal, Eye, Pencil, RotateCcw, X, Archive, Lock } from "lucide-react";
 import SystemLogViewer from '@/components/SystemLogViewer';
 import SystemStatusExportDialog from '@/components/SystemStatusExportDialog';
-import WebSocketMonitor from '@/components/WebSocketMonitor';
+import WebSocketMonitor from '@/components/MQTTprovider';
 import CacheMonitor from '@/components/CacheMonitor';
 import SystemSettingsConfig from '@/components/SystemSettingsConfig';
 import PerformanceMonitor from '@/components/PerformanceMonitor';

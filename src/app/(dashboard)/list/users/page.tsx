@@ -77,6 +77,7 @@ const userSortFieldOptions = [
   { value: 'role', label: 'Role' },
   { value: 'status', label: 'Status' },
   { value: 'fullName', label: 'Full Name' },
+  { value: 'studentIdNum', label: 'Student ID' },
   { value: 'createdAt', label: 'Created Date' },
 ];
 
@@ -87,6 +88,7 @@ const userColumns = [
   { key: 'userName', label: 'Username', accessor: 'userName', className: 'text-blue-900 w-20', sortable: true },
   { key: 'email', label: 'Email', accessor: 'email', className: 'text-blue-900 w-24', sortable: true },
   { key: 'fullName', label: 'Full Name', accessor: 'fullName', className: 'text-blue-900 w-20', sortable: true },
+  { key: 'studentIdNum', label: 'Student ID', accessor: 'studentIdNum', className: 'text-blue-900 w-20', sortable: true },
   { key: 'role', label: 'Role', accessor: 'role', className: 'text-center text-blue-900 w-16', sortable: true },
   { key: 'status', label: 'Status', accessor: 'status', className: 'text-center w-16', sortable: true },
   { key: 'lastLogin', label: 'Last Login', accessor: 'lastLogin', className: 'text-center text-blue-900 w-20', sortable: true },
@@ -101,8 +103,8 @@ const exportableColumnsForExport: { key: string; label: string }[] = userColumns
 const COLUMN_OPTIONS: ColumnOption[] = userColumns.map(col => ({
   accessor: typeof col.accessor === 'string' ? col.accessor : col.key,
   header: col.label,
-  description: undefined,
-  category: 'User Info',
+  description: col.key === 'studentIdNum' ? 'Student identification number' : undefined,
+  category: col.key === 'studentIdNum' ? 'Student Info' : 'User Info',
   required: col.key === 'userName' || col.key === 'email', // Always show username and email
 }));
 
@@ -128,6 +130,9 @@ export default function UsersListPage() {
   const [verificationFilter, setVerificationFilter] = useState('all');
   const [twoFactorFilter, setTwoFactorFilter] = useState('all');
   const [loginActivityFilter, setLoginActivityFilter] = useState('all');
+  
+  // Debounced search input for better performance
+  const debouncedSearchInput = useDebounce(searchInput, 300);
   const [sortField, setSortField] = useState<UserSortField>('userName');
   const [sortOrder, setSortOrder] = useState<UserSortOrder>('asc');
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
@@ -169,6 +174,7 @@ export default function UsersListPage() {
     excludedUsers: User[];
     message: string;
   } | null>(null);
+  const [isSearching, setIsSearching] = useState(false);
   // Normalize object for Select components: replace empty strings/null with undefined
   const normalizeForSelect = <T extends Record<string, any>>(obj: T): T => {
     if (!obj || typeof obj !== 'object') return obj;
@@ -198,24 +204,44 @@ export default function UsersListPage() {
     let lastIndex = 0;
     matches.forEach(([start, end], i) => {
       result += text.slice(lastIndex, start);
-      result += `<mark class='bg-yellow-200 text-yellow-900 rounded px-1'>${text.slice(start, end + 1)}</mark>`;
+      result += `<mark class='bg-yellow-200 text-yellow-900 rounded px-1 font-medium'>${text.slice(start, end + 1)}</mark>`;
       lastIndex = end + 1;
     });
     result += text.slice(lastIndex);
     return result;
   };
 
-  // Add Fuse.js setup with proper types
+  // Enhanced search highlighting with case-insensitive matching
+  const highlightSearchTerm = (text: string, searchTerm: string) => {
+    if (!searchTerm.trim()) return text;
+    
+    const regex = new RegExp(`(${searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+    return text.replace(regex, '<mark class="bg-yellow-200 text-yellow-900 rounded px-1 font-medium">$1</mark>');
+  };
+
+  // Add Fuse.js setup with proper types and improved configuration
   const fuse = useMemo(() => new Fuse<User>(users, {
-    keys: ["userName", "email", "fullName", "role"],
-    threshold: 0.4,
+    keys: [
+      { name: "userName", weight: 0.25 },
+      { name: "email", weight: 0.2 },
+      { name: "fullName", weight: 0.15 },
+      { name: "role", weight: 0.1 },
+      { name: "relatedInfo.studentIdNum", weight: 0.2 }, // Student number
+      { name: "relatedInfo.guardian.name", weight: 0.1 } // Guardian name
+    ],
+    threshold: 0.6, // More lenient threshold for better search results
     includeMatches: true,
+    ignoreLocation: true, // Search anywhere in the string
+    findAllMatches: true, // Find all matches, not just the first one
+    minMatchCharLength: 1, // Allow single character matches
   }), [users]);
 
   const fuzzyResults = useMemo(() => {
-    if (!searchInput) return users.map((u: User, i: number) => ({ item: u, refIndex: i }));
-    return fuse.search(searchInput) as FuseResult<User>[];
-  }, [searchInput, fuse, users]);
+    if (!debouncedSearchInput.trim()) {
+      return users.map((u: User, i: number) => ({ item: u, refIndex: i }));
+    }
+    return fuse.search(debouncedSearchInput) as FuseResult<User>[];
+  }, [debouncedSearchInput, fuse, users]);
 
   // Update filtered users to include column filters and status filter
   const filteredUsers = useMemo(() => {
@@ -285,12 +311,19 @@ export default function UsersListPage() {
     if (sortFields.length > 0) {
       filtered.sort((a, b) => {
         for (const { field, order } of sortFields) {
-          const aValue = a[field];
-          const bValue = b[field];
+          let aValue, bValue;
+          
+          if (field === 'studentIdNum') {
+            aValue = a.relatedInfo?.studentIdNum || '';
+            bValue = b.relatedInfo?.studentIdNum || '';
+          } else {
+            aValue = a[field as keyof User];
+            bValue = b[field as keyof User];
+          }
           
           if (aValue === bValue) continue;
           
-          const comparison = aValue < bValue ? -1 : 1;
+          const comparison = (aValue || '') < (bValue || '') ? -1 : 1;
           return order === 'asc' ? comparison : -comparison;
         }
         return 0;
@@ -552,10 +585,13 @@ export default function UsersListPage() {
             render: (item: User) => {
               const fuseResult = fuzzyResults.find(r => r.item.id === item.id) as FuseResult<User> | undefined;
               const nameMatches = fuseResult?.matches?.find((m: { key: string }) => m.key === "userName")?.indices;
+              const highlightedText = nameMatches 
+                ? safeHighlight(item.userName, nameMatches)
+                : highlightSearchTerm(item.userName, debouncedSearchInput);
               return (
                 <div 
                   className="text-sm font-medium text-blue-900 text-center"
-                  dangerouslySetInnerHTML={{ __html: safeHighlight(item.userName, nameMatches) }}
+                  dangerouslySetInnerHTML={{ __html: highlightedText }}
                 />
               );
             }
@@ -570,10 +606,13 @@ export default function UsersListPage() {
             render: (item: User) => {
               const fuseResult = fuzzyResults.find(r => r.item.id === item.id) as FuseResult<User> | undefined;
               const emailMatches = fuseResult?.matches?.find((m: { key: string }) => m.key === "email")?.indices;
+              const highlightedText = emailMatches 
+                ? safeHighlight(item.email, emailMatches)
+                : highlightSearchTerm(item.email, debouncedSearchInput);
               return (
                 <div 
                   className="text-sm text-blue-900 text-center"
-                  dangerouslySetInnerHTML={{ __html: safeHighlight(item.email, emailMatches) }}
+                  dangerouslySetInnerHTML={{ __html: highlightedText }}
                 />
               );
             }
@@ -588,10 +627,35 @@ export default function UsersListPage() {
             render: (item: User) => {
               const fuseResult = fuzzyResults.find(r => r.item.id === item.id) as FuseResult<User> | undefined;
               const nameMatches = fuseResult?.matches?.find((m: { key: string }) => m.key === "fullName")?.indices;
+              const highlightedText = nameMatches 
+                ? safeHighlight(item.fullName, nameMatches)
+                : highlightSearchTerm(item.fullName, debouncedSearchInput);
               return (
                 <div 
                   className="text-sm text-blue-900 text-center"
-                  dangerouslySetInnerHTML={{ __html: safeHighlight(item.fullName, nameMatches) }}
+                  dangerouslySetInnerHTML={{ __html: highlightedText }}
+                />
+              );
+            }
+          };
+        }
+        if (col.key === 'studentIdNum') {
+          return {
+            header: col.label,
+            accessor: col.accessor,
+            className: 'text-center',
+            sortable: col.sortable,
+            render: (item: User) => {
+              const studentIdNum = item.relatedInfo?.studentIdNum || 'N/A';
+              const fuseResult = fuzzyResults.find(r => r.item.id === item.id) as FuseResult<User> | undefined;
+              const studentIdMatches = fuseResult?.matches?.find((m: { key: string }) => m.key === "relatedInfo.studentIdNum")?.indices;
+              const highlightedText = studentIdMatches 
+                ? safeHighlight(studentIdNum, studentIdMatches)
+                : highlightSearchTerm(studentIdNum, debouncedSearchInput);
+              return (
+                <div 
+                  className="text-sm text-blue-900 text-center font-mono"
+                  dangerouslySetInnerHTML={{ __html: highlightedText }}
                 />
               );
             }
@@ -795,6 +859,36 @@ export default function UsersListPage() {
   useEffect(() => {
     fetchUsers();
   }, []);
+
+  // Handle search state
+  useEffect(() => {
+    if (searchInput !== debouncedSearchInput) {
+      setIsSearching(true);
+    } else {
+      setIsSearching(false);
+    }
+  }, [searchInput, debouncedSearchInput]);
+
+  // Handle keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl/Cmd + K to focus search
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        const searchInput = document.querySelector('input[placeholder*="Search users"]') as HTMLInputElement;
+        if (searchInput) {
+          searchInput.focus();
+        }
+      }
+      // Escape to clear search
+      if (e.key === 'Escape' && searchInput) {
+        setSearchInput('');
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [searchInput]);
 
   // Export to CSV handler
   const handleExport = async () => {
@@ -1562,17 +1656,55 @@ export default function UsersListPage() {
             
             {/* Search and Filter Section */}
             <div className="border-b border-gray-200 shadow-sm p-3 sm:p-4 lg:p-6">
+              {/* Search Results Summary */}
+              {searchInput && (
+                <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Search className="w-4 h-4 text-blue-600" />
+                      <span className="text-sm font-medium text-blue-900">
+                        Search results for "{searchInput}"
+                      </span>
+                      <span className="text-xs text-blue-700 bg-blue-100 px-2 py-1 rounded-full">
+                        {filteredUsers.length} {filteredUsers.length === 1 ? 'user' : 'users'} found
+                      </span>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setSearchInput('')}
+                      className="text-blue-600 hover:text-blue-800 hover:bg-blue-100"
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+              
               <div className="flex flex-col lg:flex-row gap-3 sm:gap-4">
                 {/* Search Bar - Takes up space on larger screens */}
                 <div className="relative flex-1 min-w-0">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  {isSearching && (
+                    <Loader2 className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-blue-500 animate-spin" />
+                  )}
                   <input
                     type="text"
-                    placeholder="Search users..."
+                    placeholder="Search users by name, email, role, student ID... (Ctrl+K to focus)"
                     value={searchInput}
                     onChange={e => setSearchInput(e.target.value)}
-                    className="w-full pl-10 pr-4 h-9 sm:h-10 border border-gray-300 rounded text-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:outline-none text-sm sm:text-base"
+                    className={`w-full pl-10 pr-10 h-9 sm:h-10 border border-gray-300 rounded text-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:outline-none text-sm sm:text-base transition-all duration-200 ${
+                      searchInput ? 'border-blue-300 bg-blue-50/30' : ''
+                    }`}
                   />
+                  {searchInput && (
+                    <button
+                      onClick={() => setSearchInput('')}
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 hover:text-gray-600 transition-colors"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
                 
                 {/* Quick Filter Dropdowns - In one row on larger screens */}
@@ -1772,10 +1904,23 @@ export default function UsersListPage() {
                       <div className="flex flex-col items-center justify-center py-6 sm:py-8 px-3 sm:px-4">
                       <EmptyState
                           icon={<Users className="w-5 h-5 sm:w-6 sm:h-6 text-blue-400" />}
-                        title="No users found"
-                        description="Try adjusting your search criteria or filters to find the users you're looking for."
+                        title={searchInput ? "No users found matching your search" : "No users found"}
+                        description={searchInput ? 
+                          `No users match "${searchInput}". Try different keywords or clear the search.` : 
+                          "Try adjusting your search criteria or filters to find the users you're looking for."
+                        }
                         action={
                             <div className="flex flex-col gap-2 w-full max-w-xs">
+                            {searchInput && (
+                              <Button
+                                variant="outline"
+                                className="border-blue-300 text-blue-700 hover:bg-blue-50 rounded-xl text-sm sm:text-base"
+                                onClick={() => setSearchInput('')}
+                              >
+                                <X className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+                                Clear Search
+                              </Button>
+                            )}
                             <Button
                               variant="outline"
                                 className="border-blue-300 text-blue-700 hover:bg-blue-50 rounded-xl text-sm sm:text-base"
@@ -1819,10 +1964,23 @@ export default function UsersListPage() {
                   <div className="flex flex-col items-center justify-center py-8 px-4">
                     <EmptyState
                       icon={<Users className="w-6 h-6 text-blue-400" />}
-                      title="No users found"
-                      description="Try adjusting your search criteria or filters to find the users you're looking for."
+                      title={searchInput ? "No users found matching your search" : "No users found"}
+                      description={searchInput ? 
+                        `No users match "${searchInput}". Try different keywords or clear the search.` : 
+                        "Try adjusting your search criteria or filters to find the users you're looking for."
+                      }
                       action={
                         <div className="flex flex-col gap-2 w-full">
+                          {searchInput && (
+                            <Button
+                              variant="outline"
+                              className="border-blue-300 text-blue-700 hover:bg-blue-50 rounded-xl"
+                              onClick={() => setSearchInput('')}
+                            >
+                              <X className="w-4 h-4 mr-2" />
+                              Clear Search
+                            </Button>
+                          )}
                           <Button
                             variant="outline"
                             className="border-blue-300 text-blue-700 hover:bg-blue-50 rounded-xl"
@@ -1857,6 +2015,7 @@ export default function UsersListPage() {
                   getItemDetails={(item) => [
                     { label: 'Email', value: item.email },
                     { label: 'Role', value: item.role },
+                    { label: 'Student ID', value: item.relatedInfo?.studentIdNum || 'N/A' },
                     { label: 'Last Login', value: item.lastLogin ? new Date(item.lastLogin).toLocaleDateString() : 'Never' },
                   ]}
                     disabled={(item) => item.role === 'SUPER_ADMIN'}
@@ -1969,6 +2128,7 @@ export default function UsersListPage() {
                 { label: 'Username', value: selectedUser.userName, icon: <UserCheckIcon className="w-4 h-4 text-blue-600" /> },
                 { label: 'Email', value: selectedUser.email, icon: <Mail className="w-4 h-4 text-blue-600" /> },
                 { label: 'Full Name', value: selectedUser.fullName, icon: <UserCheckIcon className="w-4 h-4 text-blue-600" /> },
+                { label: 'Student ID', value: selectedUser.relatedInfo?.studentIdNum || 'N/A', icon: <GraduationCap className="w-4 h-4 text-blue-600" /> },
                 { label: 'Role', value: selectedUser.role, icon: <Shield className="w-4 h-4 text-blue-600" /> },
                 { label: 'Status', value: selectedUser.status, icon: <Info className="w-4 h-4 text-blue-600" /> },
               ]

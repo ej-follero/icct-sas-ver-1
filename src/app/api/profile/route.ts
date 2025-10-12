@@ -4,6 +4,15 @@ import { z } from 'zod';
 // no bcrypt usage here
 
 const profileUpdateSchema = z.object({
+  userId: z.number().optional(),
+  userName: z.string().optional(),
+  email: z.string().optional(),
+  role: z.string().optional(),
+  status: z.string().optional(),
+  avatar: z.string().optional(),
+  lastLogin: z.string().optional(),
+  createdAt: z.string().optional(),
+  updatedAt: z.string().optional(),
   firstName: z.string().optional(),
   lastName: z.string().optional(),
   phoneNumber: z.string().optional(),
@@ -16,6 +25,17 @@ const profileUpdateSchema = z.object({
     theme: z.string().optional(),
     emailFrequency: z.string().optional(),
     dashboardLayout: z.string().optional()
+  }).optional(),
+  security: z.object({
+    twoFactorEnabled: z.boolean().optional(),
+    lastPasswordChange: z.string().optional(),
+    failedLoginAttempts: z.number().optional(),
+    isEmailVerified: z.boolean().optional()
+  }).optional(),
+  activity: z.object({
+    totalLogins: z.number().optional(),
+    lastActivity: z.string().optional(),
+    sessionsCount: z.number().optional()
   }).optional()
 });
 
@@ -72,14 +92,14 @@ export async function GET(request: NextRequest) {
     }
 
     // Get user activity stats
-    const totalLogins = await prisma.securityLog.count({
+    const totalLogins = await prisma.systemLogs.count({
       where: {
         userId,
-        action: 'LOGIN_SUCCESS'
+        actionType: 'LOGIN'
       }
     });
 
-    const lastActivity = await prisma.securityLog.findFirst({
+    const lastActivity = await prisma.systemLogs.findFirst({
       where: { userId },
       orderBy: { timestamp: 'desc' },
       select: { timestamp: true }
@@ -94,10 +114,10 @@ export async function GET(request: NextRequest) {
       }
     });
 
-    // If user is an instructor (no direct relation in schema), match via email
+    // Get avatar from User model first, then fallback to Student/Instructor models
     const instructor = user ? await prisma.instructor.findFirst({ where: { email: user.email } }) : null;
-
-    const avatarUrl = user?.Student?.[0]?.img || instructor?.img || undefined;
+    
+    const avatarUrl = user?.avatar || user?.Student?.[0]?.img || instructor?.img || undefined;
 
     const profile = {
       userId: user.userId,
@@ -150,7 +170,17 @@ export async function GET(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json();
-    const validatedData = profileUpdateSchema.parse(body);
+    
+    let validatedData;
+    try {
+      validatedData = profileUpdateSchema.parse(body);
+    } catch (validationError) {
+      console.error('Validation error:', validationError);
+      return NextResponse.json(
+        { error: 'Invalid profile data', details: validationError },
+        { status: 400 }
+      );
+    }
     
     // Get user ID from JWT token in cookies
     const token = request.cookies.get('token')?.value;
@@ -167,19 +197,39 @@ export async function PUT(request: NextRequest) {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const userIdRaw = (decoded as any)?.userId;
     const userId = Number(userIdRaw);
+    
     if (!Number.isFinite(userId)) {
       return NextResponse.json(
         { error: 'Invalid authentication token' },
         { status: 401 }
       );
     }
+    
+    // Check if user exists before updating
+    const existingUser = await prisma.user.findUnique({
+      where: { userId }
+    });
+    
+    if (!existingUser) {
+      return NextResponse.json(
+        { error: 'User not found' },
+        { status: 404 }
+      );
+    }
 
-    // Update user profile
+    // Update user profile - only update allowed fields
+    const updateData: any = {
+      updatedAt: new Date()
+    };
+    
+    // Only update userName if provided and not empty
+    if (validatedData.userName && validatedData.userName.trim()) {
+      updateData.userName = validatedData.userName.trim();
+    }
+    
     const updatedUser = await prisma.user.update({
       where: { userId },
-      data: {
-        updatedAt: new Date()
-      }
+      data: updateData
     });
 
     // Update student profile if exists

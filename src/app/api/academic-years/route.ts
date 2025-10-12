@@ -90,6 +90,179 @@ export async function GET(request: NextRequest) {
   }
 }
 
+export async function POST(request: NextRequest) {
+  try {
+    // JWT Authentication (SUPER_ADMIN, ADMIN only)
+    const token = request.cookies.get('token')?.value;
+    if (!token) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = Number((decoded as any)?.userId);
+    if (!Number.isFinite(userId)) {
+      return NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { userId },
+      select: { status: true, role: true }
+    });
+    if (!user || user.status !== 'ACTIVE') {
+      return NextResponse.json({ error: 'User not found or inactive' }, { status: 401 });
+    }
+    const allowedRoles = ['SUPER_ADMIN', 'ADMIN'];
+    if (!allowedRoles.includes(user.role)) {
+      return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
+    }
+
+    const body = await request.json();
+    const {
+      year,
+      semesters,
+      notes
+    } = body;
+
+    // Validation
+    if (!year || !semesters || !Array.isArray(semesters) || semesters.length === 0) {
+      return NextResponse.json({ 
+        error: 'Missing required fields: year, semesters array' 
+      }, { status: 400 });
+    }
+
+    // Validate year
+    const academicYear = Number(year);
+    if (isNaN(academicYear) || academicYear < 2000 || academicYear > 2100) {
+      return NextResponse.json({ 
+        error: 'Invalid year. Must be between 2000 and 2100' 
+      }, { status: 400 });
+    }
+
+    // Check if academic year already exists
+    const existingYear = await prisma.semester.findFirst({
+      where: { year: academicYear }
+    });
+
+    if (existingYear) {
+      return NextResponse.json({ 
+        error: `Academic year ${academicYear}-${academicYear + 1} already exists` 
+      }, { status: 400 });
+    }
+
+    // Validate semesters data
+    const semesterTypes = new Set();
+    for (const semester of semesters) {
+      if (!semester.startDate || !semester.endDate || !semester.semesterType) {
+        return NextResponse.json({ 
+          error: 'Each semester must have startDate, endDate, and semesterType' 
+        }, { status: 400 });
+      }
+
+      if (semesterTypes.has(semester.semesterType)) {
+        return NextResponse.json({ 
+          error: `Duplicate semester type: ${semester.semesterType}` 
+        }, { status: 400 });
+      }
+      semesterTypes.add(semester.semesterType);
+
+      // Validate date ranges
+      const start = new Date(semester.startDate);
+      const end = new Date(semester.endDate);
+      if (start >= end) {
+        return NextResponse.json({ 
+          error: `Start date must be before end date for ${semester.semesterType}` 
+        }, { status: 400 });
+      }
+    }
+
+    // Check for date overlaps with existing semesters
+    for (const semester of semesters) {
+      const start = new Date(semester.startDate);
+      const end = new Date(semester.endDate);
+
+      const overlappingSemester = await prisma.semester.findFirst({
+        where: {
+          status: { not: 'CANCELLED' },
+          OR: [
+            {
+              AND: [
+                { startDate: { lte: start } },
+                { endDate: { gte: start } }
+              ]
+            },
+            {
+              AND: [
+                { startDate: { lte: end } },
+                { endDate: { gte: end } }
+              ]
+            },
+            {
+              AND: [
+                { startDate: { gte: start } },
+                { endDate: { lte: end } }
+              ]
+            }
+          ]
+        }
+      });
+
+      if (overlappingSemester) {
+        return NextResponse.json({ 
+          error: `Date range overlaps with existing semester: ${overlappingSemester.year} ${overlappingSemester.semesterType}` 
+        }, { status: 400 });
+      }
+    }
+
+    // Create all semesters for the academic year
+    const createdSemesters = [];
+    for (const semesterData of semesters) {
+      const semester = await prisma.semester.create({
+        data: {
+          startDate: new Date(semesterData.startDate),
+          endDate: new Date(semesterData.endDate),
+          year: academicYear,
+          semesterType: semesterData.semesterType,
+          status: 'UPCOMING',
+          isActive: false,
+          registrationStart: semesterData.registrationStart ? new Date(semesterData.registrationStart) : null,
+          registrationEnd: semesterData.registrationEnd ? new Date(semesterData.registrationEnd) : null,
+          enrollmentStart: semesterData.enrollmentStart ? new Date(semesterData.enrollmentStart) : null,
+          enrollmentEnd: semesterData.enrollmentEnd ? new Date(semesterData.enrollmentEnd) : null,
+          notes: semesterData.notes || notes || null
+        }
+      });
+      createdSemesters.push(semester);
+    }
+
+    // Return the created academic year structure
+    const academicYearData = {
+      id: academicYear,
+      name: `${academicYear}-${academicYear + 1}`,
+      startDate: createdSemesters[0].startDate,
+      endDate: createdSemesters[createdSemesters.length - 1].endDate,
+      isActive: false,
+      semesters: createdSemesters.map(sem => ({
+        id: sem.semesterId,
+        name: getSemesterName(sem.semesterType),
+        startDate: sem.startDate,
+        endDate: sem.endDate,
+        type: getSemesterTypeShort(sem.semesterType),
+        isActive: sem.isActive,
+        status: sem.status
+      }))
+    };
+
+    return NextResponse.json(academicYearData, { status: 201 });
+  } catch (error) {
+    console.error('Error creating academic year:', error);
+    return NextResponse.json(
+      { error: 'Failed to create academic year' },
+      { status: 500 }
+    );
+  }
+}
+
 function getSemesterName(semesterType: string): string {
   switch (semesterType) {
     case 'FIRST_SEMESTER':

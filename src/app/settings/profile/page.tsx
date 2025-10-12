@@ -77,7 +77,7 @@ interface UserProfile {
 }
 
 export default function ProfilePage() {
-  const { user, loading } = useUser();
+  const { user, loading, loadUser } = useUser();
   const router = useRouter();
   
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -164,6 +164,10 @@ export default function ProfilePage() {
       const result = await response.json();
       setProfile(result.data);
       setIsEditing(false);
+      
+      // Refresh user data to update the global user context
+      await loadUser();
+      
       toast.success('Profile updated successfully');
       
     } catch (error) {
@@ -323,15 +327,433 @@ export default function ProfilePage() {
         
         const result = await response.json();
         
-        // Show QR code dialog (simplified for now)
-        const confirmed = confirm(`2FA Setup:\n\nQR Code URL: ${result.data.qrCodeUrl}\n\nManual Key: ${result.data.manualEntryKey}\n\nPlease scan the QR code with your authenticator app and click OK when ready to verify.`);
+        // Show QR code in a proper modal
+        const qrCodeUrl = result.data.qrCodeUrl;
+        const manualKey = result.data.manualEntryKey;
         
-        if (confirmed) {
-          const token = prompt('Enter the 6-digit code from your authenticator app:');
-          if (token) {
-            await verify2FA(token);
+        // Create a modal dialog with QR code
+        const modal = document.createElement('div');
+        modal.style.cssText = `
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          background: rgba(0, 0, 0, 0.75);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 1000;
+          backdrop-filter: blur(4px);
+          animation: fadeIn 0.3s ease-out;
+        `;
+        
+        // Add CSS animation
+        const style = document.createElement('style');
+        style.textContent = `
+          @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
           }
+          @keyframes slideIn {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+          }
+          @keyframes bounce {
+            0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
+            40% { transform: translateY(-10px); }
+            60% { transform: translateY(-5px); }
+          }
+          @keyframes slideDown {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+          }
+          .modal-content {
+            animation: slideIn 0.3s ease-out;
+          }
+          .qr-code-container {
+            position: relative;
+            display: inline-block;
+            padding: 1rem;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            border: 2px solid #e5e7eb;
+          }
+          .copy-btn {
+            position: absolute;
+            top: 0.5rem;
+            right: 0.5rem;
+            background: #f3f4f6;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            padding: 0.25rem 0.5rem;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s;
+          }
+          .copy-btn:hover {
+            background: #e5e7eb;
+            border-color: #9ca3af;
+          }
+          .copy-btn.copied {
+            background: #10b981;
+            color: white;
+            border-color: #059669;
+          }
+          .manual-key-container {
+            position: relative;
+            margin-top: 1rem;
+          }
+          .key-input {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.875rem;
+            background: #f9fafb;
+            text-align: center;
+            letter-spacing: 0.05em;
+            user-select: all;
+          }
+          .step-indicator {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 1.5rem;
+          }
+          .step {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #d1d5db;
+            margin: 0 4px;
+          }
+          .step.active {
+            background: #3b82f6;
+          }
+          .step.completed {
+            background: #10b981;
+          }
+        `;
+        document.head.appendChild(style);
+        
+        modal.innerHTML = `
+          <div class="modal-content" style="
+            background: white;
+            padding: 2rem;
+            border-radius: 16px;
+            max-width: 480px;
+            width: 90%;
+            text-align: center;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            border: 1px solid #e5e7eb;
+          ">
+            <div class="step-indicator">
+              <div class="step active"></div>
+              <div class="step"></div>
+              <div class="step"></div>
+            </div>
+            
+            <div style="margin-bottom: 1.5rem;">
+              <h3 style="margin-bottom: 0.5rem; color: #111827; font-size: 1.5rem; font-weight: 600;">🔐 Two-Factor Authentication</h3>
+              <p style="color: #6b7280; font-size: 0.95rem; line-height: 1.5;">
+                Add an extra layer of security to your account
+              </p>
+            </div>
+            
+            <div style="margin-bottom: 1.5rem;">
+              <h4 style="margin-bottom: 1rem; color: #374151; font-size: 1.1rem; font-weight: 500;">
+                📱 Scan QR Code
+              </h4>
+              <p style="margin-bottom: 1rem; color: #6b7280; font-size: 0.9rem;">
+                Open your authenticator app and scan this QR code:
+              </p>
+              <div class="qr-code-container">
+                <img src="${qrCodeUrl}" alt="QR Code" style="width: 200px; height: 200px; display: block;" />
+              </div>
+            </div>
+            
+            <div class="manual-key-container">
+              <h4 style="margin-bottom: 0.75rem; color: #374151; font-size: 1.1rem; font-weight: 500;">
+                ⌨️ Manual Entry
+              </h4>
+              <p style="margin-bottom: 0.75rem; color: #6b7280; font-size: 0.9rem;">
+                Can't scan? Enter this key manually:
+              </p>
+              <div style="position: relative;">
+                <input 
+                  type="text" 
+                  value="${manualKey}" 
+                  readonly 
+                  class="key-input"
+                  id="manual-key-input"
+                />
+                <button 
+                  class="copy-btn" 
+                  id="copy-key-btn"
+                  onclick="navigator.clipboard.writeText('${manualKey}').then(() => {
+                    const btn = document.getElementById('copy-key-btn');
+                    btn.textContent = 'Copied!';
+                    btn.classList.add('copied');
+                    setTimeout(() => {
+                      btn.textContent = 'Copy';
+                      btn.classList.remove('copied');
+                    }, 2000);
+                  })"
+                >
+                  Copy
+                </button>
+              </div>
+            </div>
+            
+            <div style="margin-top: 2rem; display: flex; gap: 0.75rem; justify-content: center;">
+              <button id="verify-2fa" style="
+                background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+                color: white;
+                border: none;
+                padding: 0.75rem 1.5rem;
+                border-radius: 8px;
+                cursor: pointer;
+                font-weight: 500;
+                font-size: 0.95rem;
+                transition: all 0.2s;
+                box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.3);
+                min-width: 120px;
+              " onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 6px 8px -1px rgba(59, 130, 246, 0.4)'" 
+                 onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 6px -1px rgba(59, 130, 246, 0.3)'">
+                ✅ I've set it up
+              </button>
+              <button id="cancel-2fa" style="
+                background: #f3f4f6;
+                color: #374151;
+                border: 1px solid #d1d5db;
+                padding: 0.75rem 1.5rem;
+                border-radius: 8px;
+                cursor: pointer;
+                font-weight: 500;
+                font-size: 0.95rem;
+                transition: all 0.2s;
+                min-width: 120px;
+              " onmouseover="this.style.background='#e5e7eb'" 
+                 onmouseout="this.style.background='#f3f4f6'">
+                ❌ Cancel
+              </button>
+            </div>
+            
+            <div style="margin-top: 1.5rem; padding: 1rem; background: #f0f9ff; border-radius: 8px; border-left: 4px solid #3b82f6;">
+              <p style="margin: 0; color: #1e40af; font-size: 0.875rem; line-height: 1.4;">
+                💡 <strong>Tip:</strong> Popular authenticator apps include Google Authenticator, Authy, Microsoft Authenticator, and 1Password.
+              </p>
+            </div>
+          </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        // Handle button clicks
+        const verifyBtn = modal.querySelector('#verify-2fa');
+        const cancelBtn = modal.querySelector('#cancel-2fa');
+        
+        const cleanup = () => {
+          if (document.body.contains(modal)) {
+            document.body.removeChild(modal);
+          }
+        };
+        
+        if (verifyBtn) {
+          verifyBtn.addEventListener('click', async () => {
+            // Update step indicator
+            const steps = modal.querySelectorAll('.step');
+            if (steps[0]) steps[0].classList.remove('active');
+            if (steps[0]) steps[0].classList.add('completed');
+            if (steps[1]) steps[1].classList.add('active');
+            
+            // Show verification step
+            const modalContent = modal.querySelector('.modal-content');
+            if (modalContent) {
+              modalContent.innerHTML = `
+                <div class="modal-content" style="
+                  background: white;
+                  padding: 2rem;
+                  border-radius: 16px;
+                  max-width: 480px;
+                  width: 90%;
+                  text-align: center;
+                  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+                  border: 1px solid #e5e7eb;
+                ">
+                  <div class="step-indicator">
+                    <div class="step completed"></div>
+                    <div class="step active"></div>
+                    <div class="step"></div>
+                  </div>
+                  
+                  <div style="margin-bottom: 1.5rem;">
+                    <h3 style="margin-bottom: 0.5rem; color: #111827; font-size: 1.5rem; font-weight: 600;">🔢 Verify Setup</h3>
+                    <p style="color: #6b7280; font-size: 0.95rem; line-height: 1.5;">
+                      Enter the 6-digit code from your authenticator app
+                    </p>
+                  </div>
+                  
+                  <div style="margin-bottom: 2rem;">
+                    <input 
+                      type="text" 
+                      id="verification-code"
+                      placeholder="000000"
+                      maxlength="6"
+                      style="
+                        width: 200px;
+                        padding: 1rem;
+                        border: 2px solid #d1d5db;
+                        border-radius: 12px;
+                        font-size: 1.5rem;
+                        text-align: center;
+                        letter-spacing: 0.5rem;
+                        font-family: 'Courier New', monospace;
+                        font-weight: 600;
+                        background: #f9fafb;
+                        transition: all 0.2s;
+                      "
+                      onfocus="this.style.borderColor='#3b82f6'; this.style.boxShadow='0 0 0 3px rgba(59, 130, 246, 0.1)'"
+                      onblur="this.style.borderColor='#d1d5db'; this.style.boxShadow='none'"
+                      oninput="this.value = this.value.replace(/[^0-9]/g, ''); const errorDiv = document.getElementById('verification-error'); if(errorDiv) errorDiv.style.display = 'none';"
+                    />
+                    <div id="verification-error" style="
+                      margin-top: 0.75rem;
+                      padding: 0.5rem;
+                      background: #fef2f2;
+                      border: 1px solid #fecaca;
+                      border-radius: 6px;
+                      color: #dc2626;
+                      font-size: 0.875rem;
+                      display: none;
+                      animation: slideDown 0.3s ease-out;
+                    ">
+                      <span style="font-weight: 500;">⚠️</span> <span id="error-text"></span>
+                    </div>
+                    <p style="margin-top: 0.75rem; color: #6b7280; font-size: 0.875rem;">
+                      The code changes every 30 seconds
+                    </p>
+                  </div>
+                  
+                  <div style="display: flex; gap: 0.75rem; justify-content: center;">
+                    <button id="verify-code-btn" style="
+                      background: linear-gradient(135deg, #10b981, #059669);
+                      color: white;
+                      border: none;
+                      padding: 0.75rem 1.5rem;
+                      border-radius: 8px;
+                      cursor: pointer;
+                      font-weight: 500;
+                      font-size: 0.95rem;
+                      transition: all 0.2s;
+                      box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.3);
+                      min-width: 120px;
+                    " onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 6px 8px -1px rgba(16, 185, 129, 0.4)'" 
+                       onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 6px -1px rgba(16, 185, 129, 0.3)'">
+                      ✅ Verify Code
+                    </button>
+                    <button id="back-to-setup" style="
+                      background: #f3f4f6;
+                      color: #374151;
+                      border: 1px solid #d1d5db;
+                      padding: 0.75rem 1.5rem;
+                      border-radius: 8px;
+                      cursor: pointer;
+                      font-weight: 500;
+                      font-size: 0.95rem;
+                      transition: all 0.2s;
+                      min-width: 120px;
+                    " onmouseover="this.style.background='#e5e7eb'" 
+                       onmouseout="this.style.background='#f3f4f6'">
+                      ← Back
+                    </button>
+                  </div>
+                  
+                  <div style="margin-top: 1.5rem; padding: 1rem; background: #fef3c7; border-radius: 8px; border-left: 4px solid #f59e0b;">
+                    <p style="margin: 0; color: #92400e; font-size: 0.875rem; line-height: 1.4;">
+                      ⚠️ <strong>Important:</strong> Make sure your device's time is synchronized for the code to work correctly.
+                    </p>
+                  </div>
+                </div>
+              `;
+              
+              // Handle verification
+              const verifyCodeBtn = modal.querySelector('#verify-code-btn');
+              const backBtn = modal.querySelector('#back-to-setup');
+              const codeInput = modal.querySelector('#verification-code');
+              
+              if (verifyCodeBtn) {
+                verifyCodeBtn.addEventListener('click', async () => {
+                  const code = (codeInput as HTMLInputElement)?.value;
+                  const errorDiv = modal.querySelector('#verification-error') as HTMLElement;
+                  const errorText = modal.querySelector('#error-text') as HTMLElement;
+                  
+                  // Hide any previous errors
+                  if (errorDiv) {
+                    errorDiv.style.display = 'none';
+                  }
+                  
+                  if (code && code.length === 6) {
+                    // Show loading state
+                    const originalText = verifyCodeBtn.textContent;
+                    verifyCodeBtn.textContent = '⏳ Verifying...';
+                    (verifyCodeBtn as HTMLButtonElement).disabled = true;
+                    (verifyCodeBtn as HTMLButtonElement).style.opacity = '0.7';
+                    
+                    try {
+                      await verify2FA(code);
+                      cleanup();
+                    } catch (error) {
+                      // Show error in modal instead of alert
+                      if (errorDiv && errorText) {
+                        errorText.textContent = error instanceof Error ? error.message : 'Verification failed. Please try again.';
+                        errorDiv.style.display = 'block';
+                      }
+                      
+                      // Reset button state
+                      verifyCodeBtn.textContent = originalText;
+                      (verifyCodeBtn as HTMLButtonElement).disabled = false;
+                      (verifyCodeBtn as HTMLButtonElement).style.opacity = '1';
+                    }
+                  } else {
+                    // Show validation error in modal
+                    if (errorDiv && errorText) {
+                      errorText.textContent = 'Please enter a valid 6-digit code';
+                      errorDiv.style.display = 'block';
+                    }
+                  }
+                });
+              }
+              
+              if (backBtn) {
+                backBtn.addEventListener('click', () => {
+                  // Reload the original modal content
+                  location.reload();
+                });
+              }
+              
+              // Auto-focus the input
+              if (codeInput) {
+                (codeInput as HTMLInputElement).focus();
+              }
+            }
+          });
         }
+        
+        if (cancelBtn) {
+          cancelBtn.addEventListener('click', () => {
+            cleanup();
+          });
+        }
+        
+        // Close on background click
+        modal.addEventListener('click', (e) => {
+          if (e.target === modal) {
+            cleanup();
+          }
+        });
       } else {
         // Disable 2FA
         const confirmed = confirm('Are you sure you want to disable 2FA? This will make your account less secure.');
@@ -381,7 +803,93 @@ export default function ProfilePage() {
         ...prev,
         security: { ...prev.security, twoFactorEnabled: true }
       } : null);
-      toast.success(result.message);
+      
+      // Show success modal
+      const successModal = document.createElement('div');
+      successModal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.75);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1001;
+        backdrop-filter: blur(4px);
+        animation: fadeIn 0.3s ease-out;
+      `;
+      
+      successModal.innerHTML = `
+        <div style="
+          background: white;
+          padding: 2rem;
+          border-radius: 16px;
+          max-width: 400px;
+          width: 90%;
+          text-align: center;
+          box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+          border: 1px solid #e5e7eb;
+          animation: slideIn 0.3s ease-out;
+        ">
+          <div style="margin-bottom: 1.5rem;">
+            <div style="
+              width: 64px;
+              height: 64px;
+              background: linear-gradient(135deg, #10b981, #059669);
+              border-radius: 50%;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              margin: 0 auto 1rem;
+              animation: bounce 0.6s ease-out;
+            ">
+              <span style="font-size: 2rem;">✅</span>
+            </div>
+            <h3 style="margin-bottom: 0.5rem; color: #111827; font-size: 1.5rem; font-weight: 600;">
+              🎉 2FA Enabled Successfully!
+            </h3>
+            <p style="color: #6b7280; font-size: 0.95rem; line-height: 1.5;">
+              Your account is now protected with two-factor authentication
+            </p>
+          </div>
+          
+          <div style="margin-bottom: 2rem; padding: 1rem; background: #f0fdf4; border-radius: 8px; border-left: 4px solid #10b981;">
+            <p style="margin: 0; color: #166534; font-size: 0.875rem; line-height: 1.4;">
+              🔒 <strong>Security Enhanced:</strong> You'll now need your authenticator app to sign in from new devices.
+            </p>
+          </div>
+          
+          <button onclick="this.closest('.success-modal').remove()" style="
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+            border: none;
+            padding: 0.75rem 2rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            font-size: 0.95rem;
+            transition: all 0.2s;
+            box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.3);
+          " onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 6px 8px -1px rgba(16, 185, 129, 0.4)'" 
+             onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 6px -1px rgba(16, 185, 129, 0.3)'">
+            🚀 Continue
+          </button>
+        </div>
+      `;
+      
+      successModal.className = 'success-modal';
+      document.body.appendChild(successModal);
+      
+      // Auto-close after 5 seconds
+      setTimeout(() => {
+        if (document.body.contains(successModal)) {
+          document.body.removeChild(successModal);
+        }
+      }, 5000);
+      
+      toast.success('🎉 2FA has been enabled successfully!');
     } catch (error) {
       console.error('Failed to verify 2FA:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to verify 2FA');

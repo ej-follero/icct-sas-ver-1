@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import Logo from "@/components/Logo";
@@ -320,6 +320,7 @@ const menuConfig: MenuConfig = {
           subItems: [
             { icon: <CalendarRange className="w-5 h-5" />, label: "Schedules", href: "/list/schedules", description: "Class schedules" },
             { icon: <Calendar className="w-5 h-5" />, label: "Calendar", href: "/list/academic-calendar", description: "Academic calendar" },
+            { icon: <GraduationCap className="w-5 h-5" />, label: "Academic Years", href: "/list/academic-years", description: "Manage academic years and semesters" },
           ]
         },
         {
@@ -450,6 +451,7 @@ const menuConfig: MenuConfig = {
           subItems: [
             { icon: <CalendarRange className="w-5 h-5" />, label: "Schedules", href: "/list/schedules", description: "Class schedules" },
             { icon: <Calendar className="w-5 h-5" />, label: "Calendar", href: "/list/academic-calendar", description: "Academic calendar" },
+            { icon: <GraduationCap className="w-5 h-5" />, label: "Academic Years", href: "/list/academic-years", description: "Manage academic years and semesters" },
           ]
         },
         {
@@ -693,6 +695,13 @@ export default function Sidebar({ role, collapsed = false }: { role: Role; colla
     
     return initial;
   });
+  
+  // Memoize the menu sections to prevent unnecessary re-renders
+  const menuSections = React.useMemo(() => {
+    if (!role) return [];
+    const normalizedRole = role?.toLowerCase() as Role;
+    return menuConfig[normalizedRole] || [];
+  }, [role]);
 
   // Hover state for hover-expandable sidebar
   const [hovered, setHovered] = useState(false);
@@ -735,12 +744,8 @@ export default function Sidebar({ role, collapsed = false }: { role: Role; colla
               );
             }
             
-            // Map role to menu config key, handling both uppercase and lowercase roles
-            const normalizedRole = role?.toLowerCase() as Role;
-            const menuSections = menuConfig[normalizedRole];
-            
-            if (!menuSections) {
-              console.error('Menu: Invalid role provided:', role, 'Normalized:', normalizedRole);
+            if (!menuSections || menuSections.length === 0) {
+              console.error('Menu: Invalid role provided:', role);
               console.error('Available roles:', Object.keys(menuConfig));
               return (
                 <div className="text-center text-red-400 p-4">

@@ -1,164 +1,214 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
+// GET /api/rfid/readers
+// Returns list of active RFID readers with room information
 export async function GET(request: NextRequest) {
   try {
-    // JWT Authentication
-    const token = request.cookies.get('token')?.value;
-    if (!token) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
-    }
-
-    const jwt = require('jsonwebtoken');
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const userId = Number((decoded as any)?.userId);
-    if (!Number.isFinite(userId)) {
-      return NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 });
-    }
-
-    // Check user exists and is active
-    const user = await prisma.user.findUnique({
-      where: { userId },
-      select: { status: true, role: true }
-    });
-
-    if (!user || user.status !== 'ACTIVE') {
-      return NextResponse.json({ error: 'User not found or inactive' }, { status: 401 });
-    }
-
-    // Role-based access control
-    const allowedRoles = ['SUPER_ADMIN', 'ADMIN', 'DEPARTMENT_HEAD', 'INSTRUCTOR'];
-    if (!allowedRoles.includes(user.role)) {
-      return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
-    }
-    // Query params and filters
+    console.log('🔍 [RFID READERS] Starting fetch request');
     const { searchParams } = new URL(request.url);
-    const page = parseInt(searchParams.get("page") || "1", 10);
-    const pageSize = parseInt(searchParams.get("pageSize") || "10", 10);
-    const search = searchParams.get("search") || "";
-    const status = searchParams.get("status") || "";
-    const room = searchParams.get("room") || "";
-    const sortBy = searchParams.get("sortBy") || "deviceId";
-    const sortDir = searchParams.get("sortDir") === "desc" ? "desc" : "asc";
+    const includeInactive = searchParams.get('includeInactive') === 'true';
 
-    // Build where clause
-    const where: any = {
-      ...(search && {
-        OR: [
-          { deviceId: { contains: search, mode: "insensitive" as const } },
-          { deviceName: { contains: search, mode: "insensitive" as const } },
-        ],
-      }),
-      ...(status && status !== "all" && { status }),
-      ...(room && room !== "all" && { roomId: Number(room) }),
-    };
+    const whereClause: any = {};
+    if (!includeInactive) {
+      whereClause.status = 'ACTIVE';
+    }
 
-    // Get total count
-    const total = await prisma.rFIDReader.count({ where });
+    console.log('🔍 [RFID READERS] Where clause:', whereClause);
 
-    // Get paginated data
-    const data = await prisma.rFIDReader.findMany({
-      where,
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-      orderBy: { [sortBy]: sortDir },
+    // First, let's try a simple query without room include
+    const readers = await prisma.rFIDReader.findMany({
+      where: whereClause,
+      orderBy: [
+        { deviceId: 'asc' }
+      ]
+    });
+    
+    console.log('✅ [RFID READERS] Basic query successful, found', readers.length, 'readers');
+    
+    // Now try to include room data
+    const readersWithRooms = await prisma.rFIDReader.findMany({
+      where: whereClause,
+      include: {
+        room: {
+          select: {
+            roomId: true,
+            roomNo: true,
+            roomType: true,
+            roomBuildingLoc: true,
+            roomFloorLoc: true,
+            status: true
+          }
+        }
+      },
+      orderBy: [
+        { deviceId: 'asc' }
+      ]
+    });
+    
+    console.log('✅ [RFID READERS] Query with rooms successful, found', readersWithRooms.length, 'readers');
+
+    // Group readers by building for better organization
+    const readersByBuilding = readersWithRooms.reduce((acc, reader) => {
+      const building = reader.room?.roomBuildingLoc || 'Unassigned';
+      if (!acc[building]) {
+        acc[building] = [];
+      }
+      acc[building].push({
+        readerId: reader.readerId,
+        deviceId: reader.deviceId,
+        deviceName: reader.deviceName,
+        status: reader.status,
+        lastSeen: reader.lastSeen,
+        room: reader.room
+      });
+      return acc;
+    }, {} as Record<string, any[]>);
+
+    // Get building statistics
+    const buildingStats = await prisma.rFIDReader.groupBy({
+      by: ['status'],
+      _count: {
+        readerId: true
+      }
     });
 
-    return NextResponse.json({ data, total });
-  } catch (error) {
-    return NextResponse.json({ error: "Failed to fetch RFID readers" }, { status: 500 });
+    return NextResponse.json({
+      success: true,
+      data: readersWithRooms,
+      total: readersWithRooms.length,
+      readersByBuilding,
+      buildingStats: buildingStats.reduce((acc, stat) => {
+        acc[stat.status] = stat._count.readerId;
+        return acc;
+      }, {} as Record<string, number>)
+    });
+
+  } catch (e: any) {
+    console.error('RFID readers fetch error:', e);
+    return NextResponse.json({ 
+      error: e?.message || 'Failed to fetch RFID readers' 
+    }, { status: 500 });
   }
 }
 
+// POST /api/rfid/readers
+// Creates a new RFID reader
 export async function POST(request: NextRequest) {
   try {
-    // JWT Authentication
+    console.log('🔍 [RFID READERS] Starting create request');
+    
+    // Auth: admin-only
     const token = request.cookies.get('token')?.value;
-    if (!token) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
-    }
-
+    if (!token) return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     const jwt = require('jsonwebtoken');
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const userId = Number((decoded as any)?.userId);
-    if (!Number.isFinite(userId)) {
-      return NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 });
-    }
+    if (!Number.isFinite(userId)) return NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 });
+    const user = await prisma.user.findUnique({ where: { userId }, select: { role: true, status: true } });
+    if (!user || user.status !== 'ACTIVE') return NextResponse.json({ error: 'User not found or inactive' }, { status: 404 });
+    if (user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN') return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
 
-    // Check user exists and is active
-    const user = await prisma.user.findUnique({
-      where: { userId },
-      select: { status: true, role: true }
-    });
+    const body = await request.json();
+    console.log('📝 [RFID READERS] Request body:', body);
 
-    if (!user || user.status !== 'ACTIVE') {
-      return NextResponse.json({ error: 'User not found or inactive' }, { status: 401 });
-    }
-
-    // Admin-only access control
-    const adminRoles = ['SUPER_ADMIN', 'ADMIN'];
-    if (!adminRoles.includes(user.role)) {
-      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
-    }
-
-    const data = await request.json();
-    
     // Validate required fields
-    if (!data.deviceId || !data.roomId || !data.status) {
+    if (!body.deviceId || !body.roomId) {
       return NextResponse.json({ 
-        error: "Missing required fields: deviceId, roomId, and status are required" 
+        error: 'Device ID and Room ID are required' 
       }, { status: 400 });
     }
 
     // Validate room exists
     const room = await prisma.room.findUnique({
-      where: { roomId: data.roomId }
+      where: { roomId: Number(body.roomId) }
     });
     if (!room) {
       return NextResponse.json({ 
-        error: `Room with ID ${data.roomId} not found` 
+        error: `Room with ID ${body.roomId} not found` 
       }, { status: 400 });
     }
 
-    // Validate status enum
-    const validStatuses = ["ACTIVE", "INACTIVE", "TESTING", "CALIBRATION", "REPAIR", "OFFLINE", "ERROR"];
-    if (!validStatuses.includes(data.status)) {
+    // Check if device ID already exists
+    const existingReader = await prisma.rFIDReader.findUnique({
+      where: { deviceId: body.deviceId.trim() }
+    });
+    if (existingReader) {
       return NextResponse.json({ 
-        error: `Invalid status. Must be one of: ${validStatuses.join(", ")}` 
+        error: 'Device ID already exists. Please use a unique device ID.' 
       }, { status: 400 });
     }
 
-    const reader = await prisma.rFIDReader.create({
+    // Validate status if provided
+    if (body.status) {
+      const validStatuses = ["ACTIVE", "INACTIVE", "TESTING", "CALIBRATION", "REPAIR", "OFFLINE", "ERROR"];
+      if (!validStatuses.includes(body.status)) {
+        return NextResponse.json({ 
+          error: `Invalid status. Must be one of: ${validStatuses.join(", ")}` 
+        }, { status: 400 });
+      }
+    }
+
+    // Create the reader
+    const newReader = await prisma.rFIDReader.create({
       data: {
-        deviceId: data.deviceId.trim(),
-        deviceName: data.deviceName?.trim() || null,
-        roomId: data.roomId,
-        ipAddress: data.ipAddress?.trim() || null,
-        status: data.status,
-        notes: data.notes?.trim() || null,
-        components: {},
-        assemblyDate: new Date(),
+        deviceId: body.deviceId.trim(),
+        deviceName: body.deviceName?.trim() || null,
+        ipAddress: body.ipAddress?.trim() || null,
+        status: body.status || 'ACTIVE',
+        roomId: Number(body.roomId),
+        notes: body.notes?.trim() || null,
+        components: body.components || {},
         lastSeen: new Date(),
       },
+      include: {
+        room: {
+          select: {
+            roomId: true,
+            roomNo: true,
+            roomType: true,
+            roomBuildingLoc: true,
+            roomFloorLoc: true,
+            status: true
+          }
+        }
+      }
     });
-    return NextResponse.json(reader);
-  } catch (error: any) {
-    console.error('Error creating RFID reader:', error);
+
+    console.log('✅ [RFID READERS] Reader created successfully:', newReader.readerId);
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        readerId: newReader.readerId,
+        deviceId: newReader.deviceId,
+        deviceName: newReader.deviceName,
+        status: newReader.status,
+        ipAddress: newReader.ipAddress,
+        lastSeen: newReader.lastSeen,
+        roomId: newReader.roomId,
+        notes: newReader.notes,
+        room: newReader.room
+      }
+    });
+
+  } catch (e: any) {
+    console.error('RFID reader creation error:', e);
     
     // Handle specific Prisma errors
-    if (error.code === 'P2002') {
+    if (e.code === 'P2002') {
       return NextResponse.json({ 
         error: "Device ID already exists. Please use a unique device ID." 
       }, { status: 400 });
     }
-    if (error.code === 'P2003') {
+    if (e.code === 'P2003') {
       return NextResponse.json({ 
         error: "Invalid room reference. Please ensure the room exists." 
       }, { status: 400 });
     }
     
     return NextResponse.json({ 
-      error: error.message || "Failed to create RFID reader" 
+      error: e?.message || 'Failed to create RFID reader' 
     }, { status: 500 });
   }
-} 
+}

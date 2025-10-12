@@ -4,10 +4,11 @@ import { backupSchedulingService } from "@/lib/services/backup-scheduling.servic
 // PUT /api/backup/schedules/[id]/toggle - Toggle schedule active status
 export async function PUT(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const schedule = await backupSchedulingService.toggleScheduleStatus(params.id);
+    const { id } = await params;
+    const schedule = await backupSchedulingService.toggleScheduleStatus(id);
 
     return NextResponse.json({
       success: true,

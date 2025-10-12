@@ -31,7 +31,8 @@ export async function GET(request: NextRequest) {
     if (!allowedRoles.includes(user.role)) {
       return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
     }
-  try {
+
+    try {
     // Create CSV template for RFID tags
     const headers = [
       'tagNumber',
@@ -74,6 +75,13 @@ export async function GET(request: NextRequest) {
         'Content-Disposition': 'attachment; filename="rfid-tags-template.csv"',
       },
     });
+    } catch (error) {
+      console.error('Error generating RFID tags template:', error);
+      return NextResponse.json(
+        { error: 'Failed to generate template' },
+        { status: 500 }
+      );
+    }
   } catch (error) {
     console.error('Error generating RFID tags template:', error);
     return NextResponse.json(

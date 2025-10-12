@@ -30,11 +30,11 @@ import { VisibleColumnsDialog, ColumnOption } from '@/components/reusable/Dialog
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import BatchAssign from '@/components/rfid/BatchAssign';
-import { useRFIDScanMonitor } from '@/hooks/useRFIDRealTime';
 import { Label } from "@/components/ui/label";
 import { Checkbox as SharedCheckbox } from '@/components/ui/checkbox';
 import { RFIDTagFormDialog } from "@/components/forms/RFIDTagFormDialog";
 import { safeHighlight } from "@/lib/sanitizer";
+import { MQTTDebugInfo } from "@/components/MQTTDebugInfo";
 
 type TagStatus = "active" | "inactive" | "lost" | "damaged";
 type SortField = 'tagId' | 'studentName' | 'status' | 'lastSeen' | 'location' | 'scanCount' | 'assignedAt';
@@ -133,12 +133,44 @@ export default function RFIDTagsPage() {
   const [searchInput, setSearchInput] = useState("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [selectedTag, setSelectedTag] = useState<RFIDTag | null>(null);
+  const [assignedByUser, setAssignedByUser] = useState<{userName: string, email: string} | null>(null);
+  
+  // Fetch assigned by user information when selectedTag changes
+  useEffect(() => {
+    const fetchAssignedByUser = async () => {
+      if (selectedTag?.assignedBy) {
+        try {
+          const response = await fetch(`/api/users/${selectedTag.assignedBy}`);
+          if (response.ok) {
+            const result = await response.json();
+            const user = result.data || result;
+            if (user) {
+              setAssignedByUser({
+                userName: user.userName || user.fullName || user.name || 'Unknown User',
+                email: user.email || 'Unknown Email'
+              });
+            }
+          }
+        } catch (error) {
+          console.error('Failed to fetch assigned by user info:', error);
+          setAssignedByUser(null);
+        }
+      } else {
+        setAssignedByUser(null);
+      }
+    };
+
+    fetchAssignedByUser();
+  }, [selectedTag?.assignedBy]);
+
   const [columnFilters, setColumnFilters] = useState<ColumnFilter[]>([]);
   const [showColumnFilters, setShowColumnFilters] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [filterDialogOpen, setFilterDialogOpen] = useState(false);
   const [sortDialogOpen, setSortDialogOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [assignmentFilter, setAssignmentFilter] = useState<string>("all");
+  const [tagTypeFilter, setTagTypeFilter] = useState<string>("all");
   const [sortField, setSortField] = useState<TagSortField>('tagId');
   const [sortOrder, setSortOrder] = useState<TagSortOrder>('asc');
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
@@ -163,11 +195,6 @@ export default function RFIDTagsPage() {
   const [lastUpdated, setLastUpdated] = useState(new Date());
   const [createForm, setCreateForm] = useState<{ tagNumber: string; tagType: RFIDTag['tagType']; status: RFIDTag['status']; notes?: string }>({ tagNumber: '', tagType: 'STUDENT_CARD', status: 'ACTIVE', notes: '' });
   const [batchAssignOpen, setBatchAssignOpen] = useState(false);
-  const [batchQueue, setBatchQueue] = useState<Array<{ studentIdNum: string; tagNumber: string; replace: boolean }>>([]);
-  const [batchReplace, setBatchReplace] = useState(false);
-  const [batchStudentIdNum, setBatchStudentIdNum] = useState('');
-  const [batchTagNumber, setBatchTagNumber] = useState('');
-  const [savingBatch, setSavingBatch] = useState(false);
 
   const fetchTags = async () => {
     try {
@@ -178,6 +205,8 @@ export default function RFIDTagsPage() {
         throw new Error('Failed to fetch RFID tags');
       }
       const data = await response.json();
+      console.log('API Response:', data); // Debug log
+      
       const normalized: RFIDTag[] = Array.isArray(data)
         ? data
         : Array.isArray(data?.data)
@@ -189,6 +218,8 @@ export default function RFIDTagsPage() {
               : Array.isArray(data?.results)
                 ? data.results
                 : [];
+      
+      console.log('Normalized tags:', normalized.length); // Debug log
       setTags(normalized);
       setLastUpdated(new Date());
     } catch (err) {
@@ -204,15 +235,6 @@ export default function RFIDTagsPage() {
     fetchTags();
   }, []);
 
-  useRFIDScanMonitor({
-    enabled: batchAssignOpen,
-    onNewScan: (scan) => {
-      const tag = String(scan?.tagNumber || scan?.tagId || '').trim();
-      if (!tag) return;
-      if (batchAssignOpen) setBatchTagNumber(tag);
-      toast.success('Card detected');
-    }
-  });
 
 
   // Add Fuse.js setup with proper types
@@ -234,6 +256,20 @@ export default function RFIDTagsPage() {
     // Apply status filter
     if (statusFilter !== "all") {
       filtered = filtered.filter(tag => tag.status === statusFilter.toUpperCase());
+    }
+
+    // Apply assignment filter
+    if (assignmentFilter !== "all") {
+      if (assignmentFilter === "assigned") {
+        filtered = filtered.filter(tag => tag.student !== null && tag.student !== undefined);
+      } else if (assignmentFilter === "unassigned") {
+        filtered = filtered.filter(tag => tag.student === null || tag.student === undefined);
+      }
+    }
+
+    // Apply tag type filter
+    if (tagTypeFilter !== "all") {
+      filtered = filtered.filter(tag => tag.tagType === tagTypeFilter);
     }
 
     // Apply multi-sort
@@ -287,7 +323,7 @@ export default function RFIDTagsPage() {
     }
 
     return filtered;
-  }, [fuzzyResults, statusFilter, sortFields]);
+  }, [fuzzyResults, statusFilter, assignmentFilter, tagTypeFilter, sortFields]);
 
   const paginatedTags = useMemo(() => {
     const startIndex = (currentPage - 1) * itemsPerPage;
@@ -938,24 +974,24 @@ export default function RFIDTagsPage() {
           />
           <SummaryCard
             icon={<UserCheck className="text-blue-500 w-5 h-5" />}
-            label="Active Tags"
-            value={tags.filter(t => t.status === 'ACTIVE').length}
+            label="Assigned Tags"
+            value={tags.filter(t => t.student !== null && t.student !== undefined).length}
             valueClassName="text-blue-900"
-            sublabel="Currently active"
+            sublabel="Tags assigned to students"
           />
           <SummaryCard
             icon={<UserX className="text-blue-500 w-5 h-5" />}
-            label="Inactive Tags"
-            value={tags.filter(t => t.status === 'INACTIVE').length}
+            label="Unassigned Tags"
+            value={tags.filter(t => t.student === null || t.student === undefined).length}
             valueClassName="text-blue-900"
-            sublabel="Inactive or damaged"
+            sublabel="Tags not yet assigned"
           />
           <SummaryCard
             icon={<AlertTriangle className="text-blue-500 w-5 h-5" />}
-            label="Lost Tags"
-            value={tags.filter(t => t.status === 'LOST').length}
+            label="Student Cards"
+            value={tags.filter(t => t.tagType === 'STUDENT_CARD').length}
             valueClassName="text-blue-900"
-            sublabel="Lost or missing"
+            sublabel="Student card type tags"
           />
         </div>
 
@@ -1103,6 +1139,59 @@ export default function RFIDTagsPage() {
                       <SelectItem value="DAMAGED">
                         <span className="flex items-center gap-2">
                           <span className="text-red-600"><AlertTriangle className="w-4 h-4" /></span> Damaged
+                        </span>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  <Select value={assignmentFilter} onValueChange={setAssignmentFilter}>
+                    <SelectTrigger className="w-full sm:w-32 lg:w-36 xl:w-32 text-gray-700 rounded">
+                      <SelectValue placeholder="Assignment" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Assignment</SelectItem>
+                      <SelectItem value="assigned">
+                        <span className="flex items-center gap-2">
+                          <span className="text-green-600"><UserCheck className="w-4 h-4" /></span> Assigned
+                        </span>
+                      </SelectItem>
+                      <SelectItem value="unassigned">
+                        <span className="flex items-center gap-2">
+                          <span className="text-gray-500"><UserX className="w-4 h-4" /></span> Unassigned
+                        </span>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  <Select value={tagTypeFilter} onValueChange={setTagTypeFilter}>
+                    <SelectTrigger className="w-full sm:w-32 lg:w-36 xl:w-32 text-gray-700 rounded">
+                      <SelectValue placeholder="Tag Type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Types</SelectItem>
+                      <SelectItem value="STUDENT_CARD">
+                        <span className="flex items-center gap-2">
+                          <span className="text-blue-600"><CreditCard className="w-4 h-4" /></span> Student Card
+                        </span>
+                      </SelectItem>
+                      <SelectItem value="TEMPORARY_PASS">
+                        <span className="flex items-center gap-2">
+                          <span className="text-yellow-600"><Clock className="w-4 h-4" /></span> Temporary Pass
+                        </span>
+                      </SelectItem>
+                      <SelectItem value="VISITOR_PASS">
+                        <span className="flex items-center gap-2">
+                          <span className="text-purple-600"><UserCheck className="w-4 h-4" /></span> Visitor Pass
+                        </span>
+                      </SelectItem>
+                      <SelectItem value="MAINTENANCE">
+                        <span className="flex items-center gap-2">
+                          <span className="text-orange-600"><Settings className="w-4 h-4" /></span> Maintenance
+                        </span>
+                      </SelectItem>
+                      <SelectItem value="TEST">
+                        <span className="flex items-center gap-2">
+                          <span className="text-gray-600"><ScanLine className="w-4 h-4" /></span> Test
                         </span>
                       </SelectItem>
                     </SelectContent>
@@ -1321,7 +1410,7 @@ export default function RFIDTagsPage() {
                 title: "Assignment",
                 fields: [
                   { label: 'Student', value: selectedTag.student ? `${selectedTag.student.firstName} ${selectedTag.student.lastName} (${selectedTag.student.studentIdNum})` : '—' },
-                  { label: 'Assigned By', value: selectedTag.assignedBy ? String(selectedTag.assignedBy) : '—' },
+                  { label: 'Assigned By', value: assignedByUser ? `${assignedByUser.userName} (${assignedByUser.email})` : selectedTag.assignedBy ? `User ID: ${selectedTag.assignedBy}` : '—' },
                   { label: 'Reason', value: selectedTag.assignmentReason || '—' },
                 ]
               },
@@ -1346,7 +1435,7 @@ export default function RFIDTagsPage() {
             onSubmit={async (data) => {
               try {
                 const res = await fetch(`/api/rfid/tags/${selectedTag.tagId}`, {
-                  method: 'PATCH',
+                  method: 'PUT',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify(data)
                 });
@@ -1448,6 +1537,9 @@ export default function RFIDTagsPage() {
           getItemStatus={(item: RFIDTag) => item.status}
         />
       </div>
+      
+      {/* MQTT Debug Info - Remove in production */}
+      <MQTTDebugInfo />
     </div>
   );
 } 

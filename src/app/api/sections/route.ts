@@ -56,7 +56,6 @@ export async function GET(request: NextRequest) {
       academicYear: section.academicYear || '',
       semester: section.semester || '',
       currentEnrollment: section.currentEnrollment,
-      roomAssignment: section.roomAssignment || '',
       createdAt: section.createdAt.toISOString(),
       updatedAt: section.updatedAt.toISOString(),
     }));
@@ -104,6 +103,14 @@ export async function POST(request: NextRequest) {
     }
 
     const data = await request.json();
+    console.log("Creating section with data:", data);
+    
+    // Validate required fields
+    if (!data.sectionName || !data.courseId) {
+      return NextResponse.json({ 
+        error: 'Missing required fields: sectionName and courseId are required' 
+      }, { status: 400 });
+    }
     
     // Validate semesterId if provided, otherwise use default
     let semesterId = data.semesterId;
@@ -113,7 +120,24 @@ export async function POST(request: NextRequest) {
         where: { status: 'CURRENT' },
         select: { semesterId: true }
       });
-      semesterId = currentSemester?.semesterId || 1;
+      
+      if (!currentSemester) {
+        // If no current semester, find the most recent semester or create a default
+        const latestSemester = await prisma.semester.findFirst({
+          orderBy: { createdAt: 'desc' },
+          select: { semesterId: true }
+        });
+        
+        if (!latestSemester) {
+          return NextResponse.json({ 
+            error: 'No semester found. Please create a semester first.' 
+          }, { status: 400 });
+        }
+        
+        semesterId = latestSemester.semesterId;
+      } else {
+        semesterId = currentSemester.semesterId;
+      }
     } else {
       // Validate that the provided semesterId exists
       const semesterExists = await prisma.semester.findUnique({
@@ -126,6 +150,7 @@ export async function POST(request: NextRequest) {
     }
     
     // Create the section in the database
+    console.log("Creating section with semesterId:", semesterId);
     const created = await prisma.section.create({
       data: {
         sectionName: data.sectionName,
@@ -135,7 +160,6 @@ export async function POST(request: NextRequest) {
         academicYear: data.academicYear,
         semester: data.semester,
         currentEnrollment: data.currentEnrollment ?? 0,
-        roomAssignment: data.roomAssignment ?? null,
         scheduleNotes: data.scheduleNotes ?? null,
         courseId: Number(data.courseId),
         semesterId: Number(semesterId),
@@ -146,6 +170,7 @@ export async function POST(request: NextRequest) {
         SubjectSchedule: true,
       },
     });
+    console.log("Section created successfully:", created.sectionId);
     
     // Map to backend keys for frontend compatibility
     const mapped = {
@@ -162,7 +187,6 @@ export async function POST(request: NextRequest) {
       academicYear: created.academicYear || '',
       semester: created.semester || '',
       currentEnrollment: created.currentEnrollment,
-      roomAssignment: created.roomAssignment || '',
       createdAt: created.createdAt.toISOString(),
       updatedAt: created.updatedAt.toISOString(),
     };
@@ -170,7 +194,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("Error creating section:", error);
     return NextResponse.json(
-      { error: "Failed to create section" },
+      { error: "Failed to create section", details: error instanceof Error ? error.message : "Unknown error" },
       { status: 500 }
     );
   }

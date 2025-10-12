@@ -203,7 +203,7 @@ export default function LogoutPage() {
                   <p className="text-gray-600 text-base">You have been securely logged out.</p>
                   <Button
                     onClick={() => router.replace("/login")}
-                    className="w-full flex items-center justify-center gap-2"
+                    className="w-full flex items-center justify-center gap-2 rounded"
                   >
                     <ArrowLeft className="w-5 h-5" />
                     Back to Login

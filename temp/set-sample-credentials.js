@@ -6,8 +6,8 @@ async function main() {
   try {
     // Get one student with linked user
     const student = await prisma.student.findFirst({ include: { User: true } });
-    // Get one instructor with linked user
-    const instructor = await prisma.instructor.findFirst({ include: { User: true } });
+    // Get one instructor and its corresponding user via instructorId
+    const instructor = await prisma.instructor.findFirst();
 
     const studentPass = 'Student123!';
     const instructorPass = 'Instructor123!';
@@ -28,15 +28,15 @@ async function main() {
       console.log(JSON.stringify({ type: 'student', error: 'No student found' }));
     }
 
-    if (instructor?.User?.email) {
+    if (instructor?.instructorId) {
       const iHash = await bcrypt.hash(instructorPass, 12);
-      await prisma.user.update({
-        where: { userId: instructor.User.userId },
+      const instructorUser = await prisma.user.update({
+        where: { userId: instructor.instructorId },
         data: { passwordHash: iHash, failedLoginAttempts: 0 },
       });
       console.log(JSON.stringify({
         type: 'instructor',
-        email: instructor.User.email,
+        email: instructorUser.email,
         employeeId: String(instructor.instructorId),
         password: instructorPass,
       }));

@@ -43,10 +43,18 @@ export async function GET(req: NextRequest) {
     if (type === 'student') {
       const items = await prisma.student.findMany({
         where: {
-          OR: [
-            { firstName: { contains: q, mode: 'insensitive' } },
-            { lastName: { contains: q, mode: 'insensitive' } },
-            { studentIdNum: { contains: q, mode: 'insensitive' } },
+          AND: [
+            {
+              OR: [
+                { firstName: { contains: q, mode: 'insensitive' } },
+                { lastName: { contains: q, mode: 'insensitive' } },
+                { studentIdNum: { contains: q, mode: 'insensitive' } },
+              ],
+            },
+            // Only show students who don't have RFID tags yet
+            {
+              RFIDTags: null
+            }
           ],
         },
         select: { studentId: true, firstName: true, lastName: true, studentIdNum: true },

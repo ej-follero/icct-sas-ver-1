@@ -2320,84 +2320,192 @@ export default function DepartmentListPage() {
               </div>
             )}
             
-            {/* Table layout for large screens - Enhanced responsive */}
-            <div className="hidden xl:block">
-              <div className="px-3 sm:px-4 md:px-5 lg:px-6 pt-4 sm:pt-5 md:pt-6 pb-4 sm:pb-5 md:pb-6">
-                <div className="overflow-x-auto bg-white/70 shadow-none relative">
-                  <TableList
-                    columns={columns}
-                    data={paginatedDepartments}
-                    loading={pageState.loading}
-                    selectedIds={selectedIds}
-                    emptyMessage={null}
-                    onSelectRow={handleSelectRow}
-                    onSelectAll={handleSelectAll}
-                    isAllSelected={isAllSelected}
-                    isIndeterminate={isIndeterminate}
-                    getItemId={(item) => item.id}
-                    expandedRowIds={expandedRowIds}
-                    onToggleExpand={(itemId) => {
-                      setExpandedRowIds(current =>
-                        current.includes(itemId)
-                          ? current.filter(id => id !== itemId)
-                          : [...current, itemId]
-                      );
-                    }}
-                    editingCell={editingCell}
-                    onCellClick={(item, columnAccessor) => {
-                      if (["name", "code", "headOfDepartment"].includes(columnAccessor)) {
-                        setEditingCell({ rowId: item.id, columnAccessor });
+            {/* Global Empty State - when no departments exist at all */}
+            {!pageState.loading && departments.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 px-4">
+                <EmptyState
+                  icon={<Users className="w-16 h-16 text-blue-400" />}
+                  title="No departments yet"
+                  description="Get started by creating your first department. Departments help organize your academic structure and manage courses and instructors."
+                  action={
+                    <div className="flex flex-col sm:flex-row gap-3 w-full max-w-md">
+                      <Button
+                        variant="default"
+                        className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl"
+                        onClick={() => { 
+                          setModalDepartment(undefined); 
+                          setModalOpen(true); 
+                        }}
+                      >
+                        <Plus className="w-4 h-4 mr-2" />
+                        Create First Department
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="border-blue-300 text-blue-700 hover:bg-blue-50 rounded-xl"
+                        onClick={() => setImportDialogOpen(true)}
+                      >
+                        <Upload className="w-4 h-4 mr-2" />
+                        Import Departments
+                      </Button>
+                    </div>
+                  }
+                />
+              </div>
+            ) : (
+              <>
+                {/* Table layout for large screens - Enhanced responsive */}
+                <div className="hidden xl:block">
+                  <div className="px-3 sm:px-4 md:px-5 lg:px-6 pt-4 sm:pt-5 md:pt-6 pb-4 sm:pb-5 md:pb-6">
+                    {!pageState.loading && filteredDepartments.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 px-4">
+                    <EmptyState
+                      icon={<Users className="w-12 h-12 text-blue-400" />}
+                      title="No departments found"
+                      description="No departments match your current search criteria or filters. Try adjusting your search terms or clearing filters to see all departments."
+                      action={
+                        <div className="flex flex-col sm:flex-row gap-3 w-full max-w-md">
+                          <Button
+                            variant="outline"
+                            className="border-blue-300 text-blue-700 hover:bg-blue-50 rounded-xl"
+                            onClick={() => {
+                              setSearch("");
+                              setStatusFilter("all");
+                              setHeadFilter("all");
+                            }}
+                          >
+                            <RefreshCw className="w-4 h-4 mr-2" />
+                            Clear Filters
+                          </Button>
+                          <Button
+                            variant="default"
+                            className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl"
+                            onClick={() => { 
+                              setModalDepartment(undefined); 
+                              setModalOpen(true); 
+                            }}
+                          >
+                            <Plus className="w-4 h-4 mr-2" />
+                            Add Department
+                          </Button>
+                        </div>
                       }
-                    }}
-                    onCellChange={async (rowId, columnAccessor, value) => {
-                      setEditingCell(null);
-                      // Handle cell change logic here
-                    }}
-                    sortState={{ field: sortState.field, order: sortState.order }}
-                    onSort={handleSort}
-                    className="border-0 shadow-none max-w-full"
-                  />
-                </div>
+                    />
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto bg-white/70 shadow-none relative">
+                    <TableList
+                      columns={columns}
+                      data={paginatedDepartments}
+                      loading={pageState.loading}
+                      selectedIds={selectedIds}
+                      emptyMessage={null}
+                      onSelectRow={handleSelectRow}
+                      onSelectAll={handleSelectAll}
+                      isAllSelected={isAllSelected}
+                      isIndeterminate={isIndeterminate}
+                      getItemId={(item) => item.id}
+                      expandedRowIds={expandedRowIds}
+                      onToggleExpand={(itemId) => {
+                        setExpandedRowIds(current =>
+                          current.includes(itemId)
+                            ? current.filter(id => id !== itemId)
+                            : [...current, itemId]
+                        );
+                      }}
+                      editingCell={editingCell}
+                      onCellClick={(item, columnAccessor) => {
+                        if (["name", "code", "headOfDepartment"].includes(columnAccessor)) {
+                          setEditingCell({ rowId: item.id, columnAccessor });
+                        }
+                      }}
+                      onCellChange={async (rowId, columnAccessor, value) => {
+                        setEditingCell(null);
+                        // Handle cell change logic here
+                      }}
+                      sortState={{ field: sortState.field, order: sortState.order }}
+                      onSort={handleSort}
+                      className="border-0 shadow-none max-w-full"
+                    />
+                  </div>
+                )}
               </div>
             </div>
             
             {/* Medium screen table layout */}
             <div className="hidden lg:block xl:hidden">
               <div className="px-3 sm:px-4 md:px-5 lg:px-6 pt-4 sm:pt-5 md:pt-6 pb-4 sm:pb-5 md:pb-6">
-                <div className="overflow-x-auto bg-white/70 shadow-none relative">
-                  <TableList
-                    columns={columns.filter(col => !['description', 'logo'].includes(col.accessor))}
-                    data={paginatedDepartments}
-                    loading={pageState.loading}
-                    selectedIds={selectedIds}
-                    emptyMessage={null}
-                    onSelectRow={handleSelectRow}
-                    onSelectAll={handleSelectAll}
-                    isAllSelected={isAllSelected}
-                    isIndeterminate={isIndeterminate}
-                    getItemId={(item) => item.id}
-                    expandedRowIds={expandedRowIds}
-                    onToggleExpand={(itemId) => {
-                      setExpandedRowIds(current =>
-                        current.includes(itemId)
-                          ? current.filter(id => id !== itemId)
-                          : [...current, itemId]
-                      );
-                    }}
-                    editingCell={editingCell}
-                    onCellClick={(item, columnAccessor) => {
-                      if (["name", "code", "headOfDepartment"].includes(columnAccessor)) {
-                        setEditingCell({ rowId: item.id, columnAccessor });
+                {!pageState.loading && filteredDepartments.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 px-4">
+                    <EmptyState
+                      icon={<Users className="w-12 h-12 text-blue-400" />}
+                      title="No departments found"
+                      description="No departments match your current search criteria or filters. Try adjusting your search terms or clearing filters to see all departments."
+                      action={
+                        <div className="flex flex-col sm:flex-row gap-3 w-full max-w-md">
+                          <Button
+                            variant="outline"
+                            className="border-blue-300 text-blue-700 hover:bg-blue-50 rounded-xl"
+                            onClick={() => {
+                              setSearch("");
+                              setStatusFilter("all");
+                              setHeadFilter("all");
+                            }}
+                          >
+                            <RefreshCw className="w-4 h-4 mr-2" />
+                            Clear Filters
+                          </Button>
+                          <Button
+                            variant="default"
+                            className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl"
+                            onClick={() => { 
+                              setModalDepartment(undefined); 
+                              setModalOpen(true); 
+                            }}
+                          >
+                            <Plus className="w-4 h-4 mr-2" />
+                            Add Department
+                          </Button>
+                        </div>
                       }
-                    }}
-                    onCellChange={async (rowId, columnAccessor, value) => {
-                      setEditingCell(null);
-                    }}
-                    sortState={{ field: sortState.field, order: sortState.order }}
-                    onSort={handleSort}
-                    className="border-0 shadow-none max-w-full"
-                  />
-                </div>
+                    />
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto bg-white/70 shadow-none relative">
+                    <TableList
+                      columns={columns.filter(col => !['description', 'logo'].includes(col.accessor))}
+                      data={paginatedDepartments}
+                      loading={pageState.loading}
+                      selectedIds={selectedIds}
+                      emptyMessage={null}
+                      onSelectRow={handleSelectRow}
+                      onSelectAll={handleSelectAll}
+                      isAllSelected={isAllSelected}
+                      isIndeterminate={isIndeterminate}
+                      getItemId={(item) => item.id}
+                      expandedRowIds={expandedRowIds}
+                      onToggleExpand={(itemId) => {
+                        setExpandedRowIds(current =>
+                          current.includes(itemId)
+                            ? current.filter(id => id !== itemId)
+                            : [...current, itemId]
+                        );
+                      }}
+                      editingCell={editingCell}
+                      onCellClick={(item, columnAccessor) => {
+                        if (["name", "code", "headOfDepartment"].includes(columnAccessor)) {
+                          setEditingCell({ rowId: item.id, columnAccessor });
+                        }
+                      }}
+                      onCellChange={async (rowId, columnAccessor, value) => {
+                        setEditingCell(null);
+                      }}
+                      sortState={{ field: sortState.field, order: sortState.order }}
+                      onSort={handleSort}
+                      className="border-0 shadow-none max-w-full"
+                    />
+                  </div>
+                )}
               </div>
             </div>
             
@@ -2407,14 +2515,37 @@ export default function DepartmentListPage() {
                 {!pageState.loading && filteredDepartments.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-8 sm:py-12 px-3 sm:px-4">
                     <EmptyState
-                      icon={<Users className="w-6 h-6 sm:w-8 sm:h-8 text-blue-400" />}
+                      icon={<Users className="w-8 h-8 sm:w-12 sm:h-12 text-blue-400" />}
                       title="No departments found"
-                      description="Try adjusting your search criteria or filters to find the departments you're looking for."
+                      description="No departments match your current search criteria or filters. Try adjusting your search terms or clearing filters to see all departments."
                       action={
-                        <div className="flex flex-col gap-2 w-full max-w-sm">
+                        <div className="flex flex-col gap-3 w-full max-w-sm">
                           <Button
                             variant="outline"
                             className="border-blue-300 text-blue-700 hover:bg-blue-50 rounded-xl text-sm"
+                            onClick={() => {
+                              setSearch("");
+                              setStatusFilter("all");
+                              setHeadFilter("all");
+                            }}
+                          >
+                            <RefreshCw className="w-4 h-4 mr-2" />
+                            Clear Filters
+                          </Button>
+                          <Button
+                            variant="default"
+                            className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm"
+                            onClick={() => { 
+                              setModalDepartment(undefined); 
+                              setModalOpen(true); 
+                            }}
+                          >
+                            <Plus className="w-4 h-4 mr-2" />
+                            Add Department
+                          </Button>
+                          <Button
+                            variant="outline"
+                            className="border-gray-300 text-gray-700 hover:bg-gray-50 rounded-xl text-sm"
                             onClick={refreshDepartments}
                           >
                             <RefreshCw className="w-4 h-4 mr-2" />
@@ -2467,6 +2598,8 @@ export default function DepartmentListPage() {
                 loading={pageState.loading}
               />
             </div>
+              </>
+            )}
           </Card>
         </div>
       </div>

@@ -74,7 +74,7 @@ const departmentFormSchema = z.object({
     .min(2, "Code must be at least 2 characters")
     .max(10, "Code must be less than 10 characters")
     .regex(/^[A-Z0-9]+$/, "Code must contain only uppercase letters and numbers"),
-  headOfDepartment: z.string().min(1, "Head of Department is required"),
+  headOfDepartment: z.string().optional(),
   description: z.string().optional(),
   courseOfferings: z.array(z.object({
     id: z.string(),
@@ -1452,7 +1452,7 @@ export function DepartmentForm({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel className="text-sm text-blue-900">
-                      Head of Department <span className="text-red-500">*</span>
+                      Head of Department
                     </FormLabel>
                     <FormControl>
                       <Select 

@@ -46,8 +46,9 @@ export const useUser = () => {
     setLoading(true);
     setError(null);
     
-    const MAX_TIMEOUT_MS = 15000;
-    const RETRY_DELAY_MS = 600;
+    const MAX_TIMEOUT_MS = 10000; // Reduced from 15s to 10s
+    const RETRY_DELAY_MS = 1000; // Increased retry delay
+    const RETRY_TIMEOUT_MS = 15000; // Longer timeout for retry
 
     const attempt = async (timeoutMs: number): Promise<Response> => {
       const controller = new AbortController();
@@ -62,8 +63,18 @@ export const useUser = () => {
           }
         }
       }, timeoutMs);
+      
       try {
-        const res = await fetch('/api/auth/me', { cache: 'no-store', signal: controller.signal });
+        console.log(`🔄 [useUser] Attempting to fetch user data (timeout: ${timeoutMs}ms)`);
+        const res = await fetch('/api/auth/me', { 
+          cache: 'no-store', 
+          signal: controller.signal,
+          headers: {
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache'
+          }
+        });
+        console.log(`✅ [useUser] Response received: ${res.status} ${res.statusText}`);
         return res;
       } finally {
         settled = true;
@@ -73,12 +84,24 @@ export const useUser = () => {
 
     try {
       let response = await attempt(MAX_TIMEOUT_MS);
+      
       if (!response.ok) {
-        throw new Error('Unauthorized');
+        const errorText = await response.text();
+        console.error(`❌ [useUser] API error: ${response.status} - ${errorText}`);
+        
+        if (response.status === 503) {
+          throw new Error('Database connection failed. Please check your database configuration.');
+        } else if (response.status === 401) {
+          throw new Error('Authentication failed. Please log in again.');
+        } else {
+          throw new Error(`Server error: ${response.status}`);
+        }
       }
 
       // If we got here, parse and set user
       const data = await response.json();
+      console.log('✅ [useUser] User data received:', { id: data.id, email: data.email, role: data.role });
+      
       const normalizedRole = String(data.role).toUpperCase();
       setUser({
         id: data.id,
@@ -96,15 +119,28 @@ export const useUser = () => {
       });
       setIsInitialized(true);
     } catch (err: any) {
+      console.log('⚠️ [useUser] Initial attempt failed:', err.message);
+      
       // One silent retry for abort/network cases
       const isAbort = err && (err.name === 'AbortError' || err.code === 'ABORT_ERR');
-      const isNetwork = err && (err.message?.includes('Failed to fetch'));
+      const isNetwork = err && (err.message?.includes('Failed to fetch') || err.message?.includes('NetworkError'));
+      const isTimeout = err && err.message?.includes('timeout');
+      
       try {
-        if (isAbort || isNetwork) {
+        if (isAbort || isNetwork || isTimeout) {
+          console.log(`🔄 [useUser] Retrying after ${RETRY_DELAY_MS}ms delay...`);
           await new Promise(r => setTimeout(r, RETRY_DELAY_MS));
-          const retryRes = await attempt(MAX_TIMEOUT_MS + 5000);
-          if (!retryRes.ok) throw new Error('Unauthorized');
+          const retryRes = await attempt(RETRY_TIMEOUT_MS);
+          
+          if (!retryRes.ok) {
+            const errorText = await retryRes.text();
+            console.error(`❌ [useUser] Retry failed: ${retryRes.status} - ${errorText}`);
+            throw new Error('Authentication failed after retry');
+          }
+          
           const data = await retryRes.json();
+          console.log('✅ [useUser] Retry successful:', { id: data.id, email: data.email, role: data.role });
+          
           const normalizedRole = String(data.role).toUpperCase();
           setUser({
             id: data.id,
@@ -126,12 +162,28 @@ export const useUser = () => {
         throw err; // non-retryable, fall through to catch below
       } catch (finalErr: any) {
         const isAbortFinal = finalErr && (finalErr.name === 'AbortError' || finalErr.code === 'ABORT_ERR');
-        const message = isAbortFinal ? (finalErr?.message || 'User loading timeout') : (finalErr instanceof Error ? finalErr.message : 'Failed to load user');
-        setError(message);
-        // Avoid noisy logs for abort timeouts; still log others
-        if (!isAbortFinal) {
-          console.error('Failed to load user:', finalErr);
+        const isTimeoutFinal = finalErr && finalErr.message?.includes('timeout');
+        
+        let message = 'Failed to load user';
+        if (isAbortFinal || isTimeoutFinal) {
+          message = 'User loading timeout. Please check your internet connection and try again.';
+        } else if (finalErr.message?.includes('Database connection failed')) {
+          message = 'Database connection failed. Please contact support.';
+        } else if (finalErr.message?.includes('Authentication failed')) {
+          message = 'Authentication failed. Please log in again.';
+        } else if (finalErr instanceof Error) {
+          message = finalErr.message;
         }
+        
+        setError(message);
+        
+        // Log errors for debugging (except timeout/abort which are expected)
+        if (!isAbortFinal && !isTimeoutFinal) {
+          console.error('❌ [useUser] Final error:', finalErr);
+        } else {
+          console.log('⏰ [useUser] Request timed out or was aborted');
+        }
+        
         setUser(null);
         setProfile(null);
         setIsInitialized(true);

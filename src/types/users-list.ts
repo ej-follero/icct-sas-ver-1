@@ -16,7 +16,12 @@ export interface User {
   createdAt: string;
   updatedAt: string;
   sessionVersion: number;
-  relatedInfo?: any;
+  relatedInfo?: {
+    studentIdNum?: string;
+    guardian?: {
+      name: string;
+    };
+  };
   statistics?: {
     totalAttendance: number;
     totalSystemLogs: number;
@@ -25,7 +30,7 @@ export interface User {
   };
 }
 
-export type SortField = 'userName' | 'email' | 'role' | 'status' | 'fullName' | 'createdAt';
+export type SortField = 'userName' | 'email' | 'role' | 'status' | 'fullName' | 'studentIdNum' | 'createdAt';
 export type SortOrder = 'asc' | 'desc';
-export type UserSortField = 'userName' | 'email' | 'role' | 'status' | 'fullName' | 'createdAt';
+export type UserSortField = 'userName' | 'email' | 'role' | 'status' | 'fullName' | 'studentIdNum' | 'createdAt';
 export type UserSortOrder = 'asc' | 'desc'; 

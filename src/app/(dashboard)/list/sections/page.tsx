@@ -97,7 +97,6 @@ interface Section {
   academicYear?: string;
   semester?: string;
   currentEnrollment?: number;
-  roomAssignment?: string;
   createdAt?: string; // Added to match backend and fix linter errors
   updatedAt?: string; // Added to match backend and fix linter errors
   deletedAt?: string; // Added for soft delete functionality
@@ -121,7 +120,6 @@ const validateSection = (section: any): section is Section => {
     (section.scheduleNotes === undefined || typeof section.scheduleNotes === 'string') &&
     (section.academicYear === undefined || typeof section.academicYear === 'string') &&
     (section.semester === undefined || typeof section.semester === 'string') &&
-    (section.roomAssignment === undefined || typeof section.roomAssignment === 'string') &&
     (section.createdAt === undefined || typeof section.createdAt === 'string') &&
     (section.updatedAt === undefined || typeof section.updatedAt === 'string')
   );
@@ -418,6 +416,7 @@ export default function SectionsPage() {
   const [itemsPerPage, setItemsPerPage] = useState(10);
   // Add state for courses
   const [courses, setCourses] = useState<{ id: string; code: string; name: string }[]>([]);
+  const [coursesLoading, setCoursesLoading] = useState(true);
   // Add error state for database connectivity
   const [databaseError, setDatabaseError] = useState<string | null>(null);
   // Add enhanced error handling state
@@ -482,14 +481,31 @@ export default function SectionsPage() {
 
   // Fetch courses on mount
   useEffect(() => {
-    fetch('/api/courses')
-      .then(res => res.json())
-      .then(data => {
-        if (Array.isArray(data)) {
-          setCourses(data.map((c: any) => ({ id: c.id, code: c.code, name: c.name })));
+    const fetchCourses = async () => {
+      setCoursesLoading(true);
+      try {
+        const response = await fetch('/api/courses');
+        if (response.ok) {
+          const data = await response.json();
+          console.log('Fetched courses data:', data);
+          if (Array.isArray(data)) {
+            const mappedCourses = data.map((c: any) => ({ id: c.id, code: c.code, name: c.name }));
+            console.log('Mapped courses:', mappedCourses);
+            setCourses(mappedCourses);
+          }
+        } else {
+          console.error('Failed to fetch courses:', response.statusText);
+          setCourses([]);
         }
-      })
-      .catch(() => setCourses([]));
+      } catch (error) {
+        console.error('Error fetching courses:', error);
+        setCourses([]);
+      } finally {
+        setCoursesLoading(false);
+      }
+    };
+    
+    fetchCourses();
   }, []);
 
   // Enhanced data loading with retry capability
@@ -1227,7 +1243,6 @@ export default function SectionsPage() {
   const getItemDetails = (item: any) => [
     { label: 'Capacity', value: item.sectionCapacity },
     { label: 'Enrolled', value: item.currentEnrollment },
-    { label: 'Room', value: item.roomAssignment },
   ];
 
   // Helper to get selected sections
@@ -1640,30 +1655,10 @@ export default function SectionsPage() {
           onOpenChange={setAddDialogOpen}
           type="create"
           onSuccess={async (newSection: Section) => {
-            try {
-              // Make actual API call to create section
-              const response = await fetch('/api/sections', {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(newSection),
-              });
-
-              if (!response.ok) {
-                throw new Error(`Failed to create section: ${response.statusText}`);
-              }
-
-              const createdSection = await response.json();
-              
-              // Add to local state
-              setSections((prev) => [createdSection, ...prev]);
+            // SectionForm already handled the API call, just update local state
+            setSections((prev) => [newSection, ...prev]);
             setAddDialogOpen(false);
             toast.success("Section added successfully");
-            } catch (error) {
-              console.error('Error creating section:', error);
-              toast.error(`Failed to create section: ${(error as Error).message}`);
-            }
           }}
         />
 
@@ -1672,42 +1667,13 @@ export default function SectionsPage() {
           onOpenChange={setEditDialogOpen}
           type="update"
           data={editSection}
-          onSuccess={async (updatedSection: SectionFormData) => {
-            if (!editSection) return;
-            
-            try {
-              // Make actual API call to update section
-              const response = await fetch(`/api/sections/${editSection.sectionId}`, {
-                method: 'PUT',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                  ...editSection,
-                  sectionName: updatedSection.sectionName,
-                  sectionCapacity: updatedSection.sectionCapacity,
-                  sectionStatus: updatedSection.sectionStatus,
-                  yearLevel: Number(updatedSection.yearLevel),
-                  courseId: Number(updatedSection.courseId),
-                }),
-              });
-
-              if (!response.ok) {
-                throw new Error(`Failed to update section: ${response.statusText}`);
-              }
-
-              const updatedSectionData = await response.json();
-              
-              // Update local state
+          onSuccess={async (updatedSection: Section) => {
+            // SectionForm already handled the API call, just update local state
             setSections((prev) => prev.map(s =>
-                s.sectionId === editSection.sectionId ? updatedSectionData : s
+              s.sectionId === updatedSection.sectionId ? updatedSection : s
             ));
             setEditDialogOpen(false);
             toast.success("Section updated successfully");
-            } catch (error) {
-              console.error('Error updating section:', error);
-              toast.error(`Failed to update section: ${(error as Error).message}`);
-            }
           }}
         />
 
@@ -1741,9 +1707,8 @@ export default function SectionsPage() {
               columns: 2,
             },
             {
-              title: 'Schedule & Room',
+              title: 'Schedule Information',
               fields: [
-                { label: 'Room Assignment', value: viewSection.roomAssignment ?? '-' },
                 { label: 'Schedule Notes', value: viewSection.scheduleNotes ?? '-' },
               ],
               columns: 2,
@@ -1971,7 +1936,6 @@ export default function SectionsPage() {
                         },
                         body: JSON.stringify({
                           ...section,
-                          roomAssignment: config.roomAssignment || section.roomAssignment,
                           scheduleNotes: config.scheduleNotes || section.scheduleNotes,
                         }),
                       });
@@ -2044,7 +2008,6 @@ export default function SectionsPage() {
                     courseName: section.courseName,
                     currentEnrollment: section.currentEnrollment,
                     totalSubjects: section.totalSubjects,
-                    roomAssignment: section.roomAssignment,
                     scheduleNotes: section.scheduleNotes,
                   }));
 
@@ -2175,24 +2138,37 @@ export default function SectionsPage() {
           maxFileSize={5}
           fileRequirements={
             <>
+              {coursesLoading && (
+                <li className="text-blue-600 font-semibold">• Loading courses... Please wait before importing.</li>
+              )}
               <li>• File must be in CSV or Excel format</li>
               <li>• Maximum file size: 5MB</li>
               <li>• Required columns: <b>sectionName</b>, <b>sectionCapacity</b>, <b>yearLevel</b>, <b>courseId</b>, <b>academicYear</b>, <b>semester</b></li>
-              <li>• Optional columns: <b>sectionStatus</b>, <b>currentEnrollment</b>, <b>roomAssignment</b>, <b>scheduleNotes</b></li>
+              <li>• Optional columns: <b>sectionStatus</b>, <b>currentEnrollment</b>, <b>scheduleNotes</b></li>
               <li>• <b>sectionName</b>: Must be unique (e.g., "CS-1A", "IT-2B")</li>
               <li>• <b>sectionCapacity</b>: Must be positive number (e.g., 30, 50)</li>
               <li>• <b>yearLevel</b>: Must be 1, 2, 3, or 4</li>
-              <li>• <b>courseId</b>: Must match existing course ID</li>
+              <li>• <b>courseId</b>: Must match existing course ID {courses.length > 0 && `(Available: ${courses.map(c => c.id).join(', ')})`}</li>
               <li>• <b>academicYear</b>: Format "YYYY-YYYY" (e.g., "2024-2025")</li>
               <li>• <b>semester</b>: "FIRST_SEMESTER", "SECOND_SEMESTER", or "THIRD_SEMESTER"</li>
               <li>• <b>sectionStatus</b>: "ACTIVE" or "INACTIVE" (defaults to "ACTIVE")</li>
               <li>• <b>currentEnrollment</b>: Number of currently enrolled students (defaults to 0)</li>
-              <li>• <b>roomAssignment</b>: Room number or location (optional)</li>
               <li>• <b>scheduleNotes</b>: Additional schedule information (optional)</li>
             </>
           }
           onImport={async (data) => {
             try {
+              // Ensure courses are loaded before validation
+              if (coursesLoading) {
+                toast.error('Courses are still loading. Please wait and try again.');
+                return { success: 0, failed: data.length, errors: ['Courses still loading'] };
+              }
+              
+              if (courses.length === 0) {
+                toast.error('No courses found. Please ensure courses are available in the system.');
+                return { success: 0, failed: data.length, errors: ['No courses available'] };
+              }
+
               // Validate imported data
               const validatedSections = [];
               const errors = [];
@@ -2226,10 +2202,14 @@ export default function SectionsPage() {
                     continue;
                   }
 
-                  // Check if course exists
-                  const courseExists = courses.some(c => c.id === courseId.toString());
+                  // Check if course exists - ensure both are strings for comparison
+                  const courseExists = courses.some(c => c.id === String(courseId));
                   if (!courseExists) {
-                    errors.push(`Row ${i + 1}: Course ID ${courseId} not found`);
+                    // Debug: Log available courses and the course ID being checked
+                    console.log('Available courses:', courses);
+                    console.log('Looking for course ID:', courseId, 'as string:', String(courseId));
+                    console.log('Course ID type:', typeof courseId);
+                    errors.push(`Row ${i + 1}: Course ID ${courseId} not found. Available courses: ${courses.map(c => `${c.id}(${c.code})`).join(', ')}`);
                     continue;
                   }
 
@@ -2250,7 +2230,6 @@ export default function SectionsPage() {
                     academicYear: row.academicYear?.trim() || '',
                     semester: row.semester?.trim() || '',
                     currentEnrollment: parseInt((row as any).currentEnrollment as string) || 0,
-                    roomAssignment: row.roomAssignment?.trim() || '',
                     scheduleNotes: row.scheduleNotes?.trim() || '',
                   });
                 } catch (error) {
@@ -2272,6 +2251,7 @@ export default function SectionsPage() {
                     headers: {
                       'Content-Type': 'application/json',
                     },
+                    credentials: 'include', // Include cookies for authentication
                     body: JSON.stringify(sectionData),
                   });
 

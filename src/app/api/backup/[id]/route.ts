@@ -4,10 +4,10 @@ import { prisma } from "@/lib/prisma";
 // PUT /api/backup/[id] - Update backup status
 export async function PUT(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = params;
+    const { id } = await params;
     // AuthN/AuthZ: only SUPER_ADMIN or ADMIN can update backups
     const token = (request as any).cookies?.get?.('token')?.value || (request as any).headers?.get?.('cookie');
     const cookieToken = token && typeof token === 'string' && token.includes('token=')
@@ -93,10 +93,10 @@ export async function PUT(
 // DELETE /api/backup/[id] - Delete backup
 export async function DELETE(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = params;
+    const { id } = await params;
 
     // AuthN/AuthZ: only SUPER_ADMIN or ADMIN can delete backups
     const token = (request as any).cookies?.get?.('token')?.value || (request as any).headers?.get?.('cookie');

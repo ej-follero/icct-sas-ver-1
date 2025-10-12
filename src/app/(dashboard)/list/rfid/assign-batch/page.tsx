@@ -1,8 +1,11 @@
 "use client";
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import BatchAssign from '@/components/rfid/BatchAssign';
 import { Card, CardHeader } from '@/components/ui/card';
 import { Search } from 'lucide-react';
+import { useMQTTClient } from '@/components/MQTTprovider';
+import { Student, User } from '@prisma/client';
+import { TableHead, TableHeader, TableRow, Table, TableBody, TableCell } from '@/components/ui/table';
 
 type StudentRow = {
   studentId: number;
@@ -11,9 +14,14 @@ type StudentRow = {
   currentTag?: string | null;
 };
 
+
 export default function AssignBatchRFIDPage() {
+
+ 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#f8fafc] via-[#ffffff] to-[#f8fafc] p-0 overflow-x-hidden">
+      
+
       <div className="w-full max-w-full px-4 sm:px-6 lg:px-8 space-y-8 sm:space-y-10">
         <Card className="shadow-lg rounded-xl overflow-hidden p-0 w-full max-w-full">
           <CardHeader className="p-0">
@@ -36,6 +44,9 @@ export default function AssignBatchRFIDPage() {
           </div>
         </Card>
       </div>
+
+
+
     </div>
   );
 }

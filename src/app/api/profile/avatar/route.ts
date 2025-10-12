@@ -80,8 +80,11 @@ export async function POST(request: NextRequest) {
     // Update user avatar in database
     const avatarUrl = `/uploads/avatars/${fileName}`;
 
-    // Note: User model has no avatar field.
-    // Student is linked via userId; Instructor is linked by email (schema has no userId on Instructor).
+    // Update User model avatar field (primary)
+    await prisma.user.update({
+      where: { userId },
+      data: { avatar: avatarUrl }
+    });
 
     // Fetch the user to get email for instructor linkage
     const user = await prisma.user.findUnique({ where: { userId } });

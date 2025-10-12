@@ -79,8 +79,8 @@ export default function BackupLogsDialog({
   const [loading, setLoading] = useState(false);
   const [filters, setFilters] = useState({
     search: '',
-    action: '',
-    status: '',
+    action: 'all',
+    status: 'all',
     startDate: '',
     endDate: ''
   });
@@ -136,8 +136,8 @@ export default function BackupLogsDialog({
   const handleClearFilters = () => {
     setFilters({
       search: '',
-      action: '',
-      status: '',
+      action: 'all',
+      status: 'all',
       startDate: '',
       endDate: ''
     });
@@ -272,7 +272,7 @@ export default function BackupLogsDialog({
                   <SelectValue placeholder="All Actions" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Actions</SelectItem>
+                  <SelectItem value="all">All Actions</SelectItem>
                   <SelectItem value="CREATE">Create</SelectItem>
                   <SelectItem value="UPLOAD">Upload</SelectItem>
                   <SelectItem value="DOWNLOAD">Download</SelectItem>
@@ -288,7 +288,7 @@ export default function BackupLogsDialog({
                   <SelectValue placeholder="All Status" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Status</SelectItem>
+                  <SelectItem value="all">All Status</SelectItem>
                   <SelectItem value="SUCCESS">Success</SelectItem>
                   <SelectItem value="ERROR">Error</SelectItem>
                   <SelectItem value="IN_PROGRESS">In Progress</SelectItem>

@@ -206,10 +206,12 @@ export function EditScheduleDialog({ open, onOpenChange, schedule, onScheduleUpd
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include', // Include cookies for authentication
         body: JSON.stringify({
           ...formData,
           maxStudents: parseInt(formData.maxStudents) || 0,
           semesterId: parseInt(formData.semesterId) || 0,
+          instructorId: formData.instructorId || null,
         }),
       });
 
@@ -407,7 +409,7 @@ export function EditScheduleDialog({ open, onOpenChange, schedule, onScheduleUpd
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="instructorId" className="text-sm text-blue-900">
-                        Instructor <span className="text-red-500">*</span>
+                        Instructor
                       </Label>
                       <Select value={formData.instructorId} onValueChange={(value) => handleInputChange('instructorId', value)}>
                         <SelectTrigger className="border-blue-200 focus:border-blue-400 focus:ring-blue-400 rounded">

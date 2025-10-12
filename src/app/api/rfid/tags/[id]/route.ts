@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // JWT Authentication
@@ -34,20 +34,25 @@ export async function GET(
     if (!allowedRoles.includes(user.role)) {
       return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
     }
-  try {
-    const tag = await prisma.rFIDTags.findUnique({
-      where: { tagId: parseInt(params.id) },
-    });
-    if (!tag) return NextResponse.json({ error: "Not found" }, { status: 404 });
-    return NextResponse.json(tag);
+
+    try {
+      const { id } = await params;
+      const tag = await prisma.rFIDTags.findUnique({
+        where: { tagId: parseInt(id) },
+      });
+      if (!tag) return NextResponse.json({ error: "Not found" }, { status: 404 });
+      return NextResponse.json(tag);
+    } catch (error) {
+      return NextResponse.json({ error: "Failed to fetch RFID tag" }, { status: 500 });
+    }
   } catch (error) {
-    return NextResponse.json({ error: "Failed to fetch RFID tag" }, { status: 500 });
+    return NextResponse.json({ error: "Authentication failed" }, { status: 401 });
   }
 }
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // JWT Authentication - Admin only
@@ -78,91 +83,95 @@ export async function PUT(
     if (!adminRoles.includes(user.role)) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
-  try {
-    const data = await request.json();
-    
-    // Validate required fields
-    if (!data.tagNumber) {
-      return NextResponse.json({ error: "Tag number is required" }, { status: 400 });
-    }
-    
-    if (!data.tagType) {
-      return NextResponse.json({ error: "Tag type is required" }, { status: 400 });
-    }
-    
-    if (!data.status) {
-      return NextResponse.json({ error: "Status is required" }, { status: 400 });
-    }
 
-    // Validate foreign key references if provided
-    let studentId = null;
-    if (data.studentId) {
-      const student = await prisma.student.findUnique({
-        where: { studentId: data.studentId }
-      });
-      if (!student) {
-        return NextResponse.json({ error: `Student with ID ${data.studentId} not found` }, { status: 400 });
+    try {
+      const data = await request.json();
+      
+      // Validate required fields
+      if (!data.tagNumber) {
+        return NextResponse.json({ error: "Tag number is required" }, { status: 400 });
       }
-      studentId = data.studentId;
-    }
-
-    // Instructor assignment removed
-
-    let assignedBy = null;
-    if (data.assignedBy) {
-      const user = await prisma.user.findUnique({
-        where: { userId: data.assignedBy }
-      });
-      if (!user) {
-        return NextResponse.json({ error: `User with ID ${data.assignedBy} not found` }, { status: 400 });
+      
+      if (!data.tagType) {
+        return NextResponse.json({ error: "Tag type is required" }, { status: 400 });
       }
-      assignedBy = data.assignedBy;
-    }
+      
+      if (!data.status) {
+        return NextResponse.json({ error: "Status is required" }, { status: 400 });
+      }
 
-    const tag = await prisma.rFIDTags.update({
-      where: { tagId: parseInt(params.id) },
-      data: {
-        tagNumber: data.tagNumber,
-        tagType: data.tagType,
-        status: data.status,
-        notes: data.notes || null,
-        studentId,
-        assignedBy,
-        assignmentReason: data.assignmentReason || null,
-        expiresAt: data.expiresAt ? new Date(data.expiresAt) : null,
-      },
-      include: {
-        student: {
-          select: {
-            studentId: true,
-            firstName: true,
-            lastName: true,
-            studentIdNum: true,
+      // Validate foreign key references if provided
+      let studentId = null;
+      if (data.studentId) {
+        const student = await prisma.student.findUnique({
+          where: { studentId: data.studentId }
+        });
+        if (!student) {
+          return NextResponse.json({ error: `Student with ID ${data.studentId} not found` }, { status: 400 });
+        }
+        studentId = data.studentId;
+      }
+
+      let assignedBy = null;
+      if (data.assignedBy) {
+        const user = await prisma.user.findUnique({
+          where: { userId: data.assignedBy }
+        });
+        if (!user) {
+          return NextResponse.json({ error: `User with ID ${data.assignedBy} not found` }, { status: 400 });
+        }
+        assignedBy = data.assignedBy;
+      }
+
+      const { id } = await params;
+      const tag = await prisma.rFIDTags.update({
+        where: { tagId: parseInt(id) },
+        data: {
+          tagNumber: data.tagNumber,
+          tagType: data.tagType,
+          status: data.status,
+          notes: data.notes || null,
+          studentId,
+          assignedBy,
+          assignmentReason: data.assignmentReason || null,
+          expiresAt: data.expiresAt ? new Date(data.expiresAt) : null,
+          assignedAt: new Date(), // Update assigned date to current date
+        },
+        include: {
+          student: {
+            select: {
+              studentId: true,
+              firstName: true,
+              lastName: true,
+              studentIdNum: true,
+            },
           },
         },
-      },
-    });
-    
-    return NextResponse.json(tag);
-  } catch (error: any) {
-    console.error('Error updating RFID tag:', error);
-    
-    // Handle specific database errors
-    if (error.code === 'P2002') {
-      return NextResponse.json({ error: "Tag number already exists" }, { status: 400 });
+      });
+      
+      return NextResponse.json(tag);
+    } catch (error: any) {
+      console.error('Error updating RFID tag:', error);
+      
+      // Handle specific database errors
+      if (error.code === 'P2002') {
+        return NextResponse.json({ error: "Tag number already exists" }, { status: 400 });
+      }
+      
+      if (error.code === 'P2003') {
+        return NextResponse.json({ error: "Foreign key constraint violation" }, { status: 400 });
+      }
+      
+      return NextResponse.json({ error: "Failed to update RFID tag" }, { status: 500 });
     }
-    
-    if (error.code === 'P2003') {
-      return NextResponse.json({ error: "Foreign key constraint violation" }, { status: 400 });
-    }
-    
-    return NextResponse.json({ error: "Failed to update RFID tag" }, { status: 500 });
+  } catch (error) {
+    return NextResponse.json({ error: "Authentication failed" }, { status: 401 });
   }
 }
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // JWT Authentication - Admin only
@@ -193,19 +202,24 @@ export async function DELETE(
     if (!adminRoles.includes(user.role)) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
-  try {
-    await prisma.rFIDTags.delete({
-      where: { tagId: parseInt(params.id) },
-    });
-    return NextResponse.json({ success: true });
+
+    try {
+      const { id } = await params;
+      await prisma.rFIDTags.delete({
+        where: { tagId: parseInt(id) },
+      });
+      return NextResponse.json({ success: true });
+    } catch (error) {
+      return NextResponse.json({ error: "Failed to delete RFID tag" }, { status: 500 });
+    }
   } catch (error) {
-    return NextResponse.json({ error: "Failed to delete RFID tag" }, { status: 500 });
+    return NextResponse.json({ error: "Authentication failed" }, { status: 401 });
   }
 }
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // JWT Authentication - Admin only
@@ -236,32 +250,40 @@ export async function PATCH(
     if (!adminRoles.includes(user.role)) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
-  try {
-    const data = await request.json();
-    let updateData: any = {};
-    if (data.unassign) {
-      updateData.studentId = null;
-    } else if (data.studentId) {
-      updateData.studentId = data.studentId;
-    } else {
-      return NextResponse.json({ error: "Missing assignment data" }, { status: 400 });
-    }
-    const tag = await prisma.rFIDTags.update({
-      where: { tagId: parseInt(params.id) },
-      data: updateData,
-      include: {
-        student: {
-          select: {
-            studentId: true,
-            firstName: true,
-            lastName: true,
-            studentIdNum: true,
+
+    try {
+      const data = await request.json();
+      let updateData: any = {};
+      if (data.unassign) {
+        updateData.studentId = null;
+        updateData.assignedAt = null; // Clear assigned date when unassigning
+      } else if (data.studentId) {
+        updateData.studentId = data.studentId;
+        updateData.assignedAt = new Date(); // Set assigned date when assigning
+      } else {
+        return NextResponse.json({ error: "Missing assignment data" }, { status: 400 });
+      }
+      
+      const { id } = await params;
+      const tag = await prisma.rFIDTags.update({
+        where: { tagId: parseInt(id) },
+        data: updateData,
+        include: {
+          student: {
+            select: {
+              studentId: true,
+              firstName: true,
+              lastName: true,
+              studentIdNum: true,
+            },
           },
         },
-      },
-    });
-    return NextResponse.json(tag);
+      });
+      return NextResponse.json(tag);
+    } catch (error) {
+      return NextResponse.json({ error: "Failed to update assignment" }, { status: 500 });
+    }
   } catch (error) {
-    return NextResponse.json({ error: "Failed to update assignment" }, { status: 500 });
+    return NextResponse.json({ error: "Authentication failed" }, { status: 401 });
   }
-} 
+}

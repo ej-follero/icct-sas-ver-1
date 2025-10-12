@@ -180,9 +180,10 @@ type Props = {
   id?: string;
   onSuccess?: () => void;
   showSubmitButton?: boolean;
+  onFormDataChange?: (data: any) => void;
 };
 
-export default function SubjectForm({ type, data, id, onSuccess, showSubmitButton = true }: Props) {
+export default function SubjectForm({ type, data, id, onSuccess, showSubmitButton = true, onFormDataChange }: Props) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [departments, setDepartments] = useState<{ id: string; name: string; code: string }[]>([]);
@@ -211,11 +212,23 @@ export default function SubjectForm({ type, data, id, onSuccess, showSubmitButto
     setValue,
     watch,
     reset,
+    getValues,
     formState: { errors, isDirty },
   } = useForm<SubjectFormData>({
     resolver: zodResolver(schema),
     defaultValues: transformSubjectToFormData(data) || defaultValues,
   });
+
+  // Watch form changes and notify parent
+  useEffect(() => {
+    if (onFormDataChange) {
+      const subscription = watch((data) => {
+        onFormDataChange(data);
+      });
+      return () => subscription.unsubscribe();
+    }
+  }, [onFormDataChange]);
+
 
   // Reset form when data changes (for edit mode)
   useEffect(() => {
@@ -284,23 +297,21 @@ export default function SubjectForm({ type, data, id, onSuccess, showSubmitButto
       setIsSubmitting(true);
       setError(null);
 
-      // Transform form data to match the Subject interface
-      const subjectData: SubjectApiData = {
-        subjectName: formData.name,
-        subjectCode: formData.code,
-        subjectType: formData.type === 'both' ? 'HYBRID' : formData.type.toUpperCase() as 'LECTURE' | 'LABORATORY',
-        status: formData.status.toUpperCase() as 'ACTIVE' | 'INACTIVE',
+      // Transform form data to match the API schema
+      const subjectData = {
+        name: formData.name,
+        code: formData.code,
+        type: formData.type,
+        units: formData.units || 0,
+        lecture_units: formData.type === 'both' ? (formData.lecture_units || 0) : (formData.units || 0),
+        laboratory_units: formData.type === 'both' ? (formData.laboratory_units || 0) : 0,
+        semester: formData.semester,
+        year_level: formData.year_level,
+        department: formData.department,
         description: formData.description,
-        lectureUnits: formData.type === 'both' ? (formData.lecture_units || 0) : (formData.units || 0),
-        labUnits: formData.type === 'both' ? (formData.laboratory_units || 0) : 0,
-        creditedUnits: formData.units || 0,
-        totalHours: (formData.units || 0) * 18, // Assuming 18 hours per unit
-        prerequisites: formData.prerequisites.join(', '),
+        instructors: formData.instructors,
         courseId: 1, // Default course ID - should be selected from form
-        departmentId: parseInt(formData.department),
         academicYear: "2024-2025", // Should be selected from form
-        semester: formData.semester === '1st' ? 'FIRST_SEMESTER' : 
-                 formData.semester === '2nd' ? 'SECOND_SEMESTER' : 'THIRD_SEMESTER',
         maxStudents: 30, // Default value
       };
 
@@ -458,7 +469,6 @@ export default function SubjectForm({ type, data, id, onSuccess, showSubmitButto
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
               <h3 className="text-md font-semibold text-blue-900">Assigned Instructors</h3>
-              <span className="text-red-500">*</span>
             </div>
           </div>
           <div className="h-px bg-blue-100 w-full mb-4"></div>
@@ -861,13 +871,12 @@ export default function SubjectForm({ type, data, id, onSuccess, showSubmitButto
       </div>
 
       {/* Instructors Section */}
-      <div>
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
-            <h3 className="text-md font-semibold text-blue-900">Assigned Instructors</h3>
-            <span className="text-red-500">*</span>
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <h3 className="text-md font-semibold text-blue-900">Assigned Instructors</h3>
+            </div>
           </div>
-        </div>
         <div className="h-px bg-blue-100 w-full mb-4"></div>
         <div className="space-y-2">
           {instructors.length > 0 ? (

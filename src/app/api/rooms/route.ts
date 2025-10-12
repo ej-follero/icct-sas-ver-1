@@ -9,7 +9,7 @@ const roomSchema = z.object({
   roomCapacity: z.number().min(1, "Room capacity must be at least 1"),
   roomBuildingLoc: z.enum(["BuildingA", "BuildingB", "BuildingC", "BuildingD", "BuildingE"]),
   roomFloorLoc: z.enum(["F1", "F2", "F3", "F4", "F5", "F6"]),
-  readerId: z.string().min(1, "RFID reader ID is required"),
+  readerId: z.string().optional(),
   status: z.enum(["AVAILABLE", "OCCUPIED", "MAINTENANCE", "RESERVED", "INACTIVE"]).optional(),
   isActive: z.boolean().optional(),
 });

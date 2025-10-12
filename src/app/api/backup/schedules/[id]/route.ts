@@ -22,12 +22,13 @@ async function assertAdmin(request: NextRequest) {
 // GET /api/backup/schedules/[id] - Get a specific backup schedule
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const gate = await assertAdmin(request);
     if (!('ok' in gate) || gate.ok !== true) return gate.res;
-    const schedule = await backupSchedulingService.getSchedule(params.id);
+    const { id } = await params;
+    const schedule = await backupSchedulingService.getSchedule(id);
     
     if (!schedule) {
       return NextResponse.json(
@@ -56,11 +57,12 @@ export async function GET(
 // PUT /api/backup/schedules/[id] - Update a backup schedule
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const gate = await assertAdmin(request);
     if (!('ok' in gate) || gate.ok !== true) return gate.res;
+    const { id } = await params;
     const body = await request.json();
     const {
       name,
@@ -76,7 +78,7 @@ export async function PUT(
       retentionDays
     } = body;
 
-    const schedule = await backupSchedulingService.updateSchedule(params.id, {
+    const schedule = await backupSchedulingService.updateSchedule(id, {
       name,
       description,
       frequency,
@@ -110,12 +112,13 @@ export async function PUT(
 // DELETE /api/backup/schedules/[id] - Delete a backup schedule
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const gate = await assertAdmin(request);
     if (!('ok' in gate) || gate.ok !== true) return gate.res;
-    await backupSchedulingService.deleteSchedule(params.id);
+    const { id } = await params;
+    await backupSchedulingService.deleteSchedule(id);
 
     return NextResponse.json({
       success: true,

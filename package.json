@@ -95,6 +95,7 @@
     "jspdf": "^3.0.3",
     "jspdf-autotable": "^5.0.2",
     "lucide-react": "^0.330.0",
+    "mqtt": "^5.14.1",
     "next": "^15.5.3",
     "node-fetch": "^3.3.2",
     "nodemailer": "^6.10.1",

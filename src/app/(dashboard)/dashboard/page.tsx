@@ -567,24 +567,24 @@ export default function AdminDashboardPage() {
             sublabel={`${statistics.users.active} active`}
           />
           <SummaryCard
-            icon={<CalendarCheck className="text-green-500 w-5 h-5" />}
+            icon={<CalendarCheck className="text-blue-500 w-5 h-5" />}
             label="Attendance Rate"
             value={`${statistics.attendance.rate.toFixed(1)}%`}
-            valueClassName="text-green-900"
+            valueClassName="text-blue-900"
             sublabel={`${statistics.attendance.today} today`}
           />
           <SummaryCard
-            icon={<Wifi className="text-purple-500 w-5 h-5" />}
+            icon={<Wifi className="text-blue-500 w-5 h-5" />}
             label="RFID Scans"
             value={statistics.rfid.scans.today}
-            valueClassName="text-purple-900"
+            valueClassName="text-blue-900"
             sublabel={`${statistics.rfid.successRate.toFixed(1)}% success rate`}
           />
           <SummaryCard
-            icon={<BookOpen className="text-orange-500 w-5 h-5" />}
+            icon={<BookOpen className="text-blue-500 w-5 h-5" />}
             label="Active Courses"
             value={statistics.academic.courses.active}
-            valueClassName="text-orange-900"
+            valueClassName="text-blue-900"
             sublabel={`${statistics.academic.courses.total} total`}
           />
         </div>
@@ -599,24 +599,24 @@ export default function AdminDashboardPage() {
             sublabel={`${statistics.users.students.total} total`}
           />
           <SummaryCard
-            icon={<GraduationCap className="text-green-500 w-5 h-5" />}
+            icon={<GraduationCap className="text-blue-500 w-5 h-5" />}
             label="Instructors"
             value={statistics.users.instructors.active}
-            valueClassName="text-green-900"
+            valueClassName="text-blue-900"
             sublabel={`${statistics.users.instructors.total} total`}
           />
           <SummaryCard
-            icon={<Building2 className="text-purple-500 w-5 h-5" />}
+            icon={<Building2 className="text-blue-500 w-5 h-5" />}
             label="Departments"
             value={statistics.academic.departments.active}
-            valueClassName="text-purple-900"
+            valueClassName="text-blue-900"
             sublabel={`${statistics.academic.departments.total} total`}
           />
           <SummaryCard
-            icon={<AlertTriangle className="text-red-500 w-5 h-5" />}
+            icon={<AlertTriangle className="text-blue-500 w-5 h-5" />}
             label="Security Alerts"
             value={statistics.security.alerts.unresolved}
-            valueClassName="text-red-900"
+            valueClassName="text-blue-900"
             sublabel={`${statistics.security.alerts.total} total`}
           />
         </div>
