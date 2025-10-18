@@ -14,7 +14,6 @@ import {
   DropdownMenuSeparator
 } from "@radix-ui/react-dropdown-menu";
 
-// Types
 interface InstructorAttendance {
   id: string;
   instructorName: string;

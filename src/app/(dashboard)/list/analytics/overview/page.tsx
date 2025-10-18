@@ -1,258 +1,394 @@
-"use client";
-import { useEffect, useState } from "react";
-import { RotateCcw, Users, UserCheck, UserX, Clock, Shield } from "lucide-react";
+'use client';
 
-type OverviewRow = {
+import React, { useEffect, useMemo, useState } from 'react';
+import { Calendar, RefreshCw, TrendingUp, Users, UserCheck, UserX, Clock, FileText, ChevronLeft, ChevronRight, AlertCircle, BarChart3 } from 'lucide-react';
+
+type CourseRow = {
+  scheduleId: number;
   code: string;
   name: string;
+  present: number;
+  absent: number;
+  late: number;
+  excused: number;
+  total: number;
+  attendanceRate: number;
+};
+
+type ApiResponse = {
   total: number;
   present: number;
   absent: number;
   late: number;
   excused: number;
+  courses: CourseRow[];
 };
 
 export default function AttendanceOverviewPage() {
-  const [items, setItems] = useState<OverviewRow[]>([]);
-  const [loading, setLoading] = useState(false);
-  const instructorId = 2; // demo
+  const instructorId = 7;
 
-  // Mock data for demonstration
-  const mockData = [
-    { code: "CS101", name: "Introduction to Computer Science", total: 120, present: 95, absent: 15, late: 8, excused: 2 },
-    { code: "MATH201", name: "Calculus II", total: 80, present: 68, absent: 8, late: 3, excused: 1 },
-    { code: "ENG150", name: "Academic Writing", total: 95, present: 82, absent: 10, late: 2, excused: 1 },
-    { code: "PHYS110", name: "General Physics", total: 110, present: 88, absent: 18, late: 3, excused: 1 },
-  ];
+  const [date, setDate] = useState<string>('');
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState('');
+  const [data, setData] = useState<ApiResponse>({
+    total: 0, present: 0, absent: 0, late: 0, excused: 0, courses: [],
+  });
+
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
 
   async function load() {
-    setLoading(true);
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    setItems(mockData);
-    setLoading(false);
+    try {
+      setLoading(true);
+      setErr('');
+      const p = new URLSearchParams();
+      p.set('instructorId', String(instructorId));
+      if (date) p.set('date', date);
+
+      const res = await fetch(`/api/analytics/overview?${p.toString()}`, { cache: 'no-store' });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j?.error || 'Failed to load overview');
+      setData(j);
+      setPage(1);
+    } catch (e: any) {
+      setErr(e?.message || 'Failed to load overview');
+      setData({ total: 0, present: 0, absent: 0, late: 0, excused: 0, courses: [] });
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
     load();
-  }, []);
+  }, [date]);
 
-  const totals = items.reduce(
-    (s, it) => ({
-      total: s.total + it.total,
-      present: s.present + it.present,
-      absent: s.absent + it.absent,
-      late: s.late + it.late,
-      excused: s.excused + it.excused,
-    }),
-    { total: 0, present: 0, absent: 0, late: 0, excused: 0 }
-  );
+  const totalRate = useMemo(() => {
+    return data.total ? Math.round((data.present / data.total) * 100) : 0;
+  }, [data]);
 
-  const getAttendanceRate = (present: number, total: number) => {
-    return total > 0 ? ((present / total) * 100).toFixed(1) : '0.0';
-  };
+  const totalPages = useMemo(() => {
+    return Math.max(1, Math.ceil(data.courses.length / pageSize));
+  }, [data.courses.length]);
 
-  const getStatusColor = (rate: number) => {
-    if (rate >= 90) return 'text-green-600 bg-green-50';
-    if (rate >= 75) return 'text-yellow-600 bg-yellow-50';
-    return 'text-red-600 bg-red-50';
+  const pageRows = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return data.courses.slice(start, start + pageSize);
+  }, [data.courses, page]);
+
+  const getAttendanceColor = (rate: number) => {
+    if (rate >= 90) return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+    if (rate >= 75) return 'bg-blue-100 text-blue-700 border-blue-200';
+    if (rate >= 60) return 'bg-amber-100 text-amber-700 border-amber-200';
+    return 'bg-rose-100 text-rose-700 border-rose-200';
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
-      <div className="max-w-7xl mx-auto p-6 space-y-8">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+      <div className="mx-auto max-w-7xl p-6 space-y-6">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Attendance Overview</h1>
-            <p className="text-gray-600 mt-1">Track student attendance across all your courses</p>
-          </div>
-          <button 
-            onClick={load} 
-            disabled={loading}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white rounded-lg font-medium transition-colors shadow-sm"
-          >
-            <RotateCcw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            {loading ? 'Refreshing...' : 'Refresh'}
-          </button>
-        </div>
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div className="space-y-1">
+              <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+                Attendance Overview
+              </h1>
+              <p className="text-sm text-gray-500 flex items-center gap-2">
+                <BarChart3 className="w-4 h-4" />
+                Track attendance across all your classes
+              </p>
+            </div>
 
-        {/* Summary Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-          <StatCard 
-            icon={<Users className="w-5 h-5" />}
-            label="Total Records" 
-            value={totals.total.toLocaleString()} 
-            color="bg-blue-500"
-          />
-          <StatCard 
-            icon={<UserCheck className="w-5 h-5" />}
-            label="Present" 
-            value={totals.present.toLocaleString()} 
-            color="bg-green-500"
-            subtitle={`${getAttendanceRate(totals.present, totals.total)}%`}
-          />
-          <StatCard 
-            icon={<UserX className="w-5 h-5" />}
-            label="Absent" 
-            value={totals.absent.toLocaleString()} 
-            color="bg-red-500"
-          />
-          <StatCard 
-            icon={<Clock className="w-5 h-5" />}
-            label="Late" 
-            value={totals.late.toLocaleString()} 
-            color="bg-yellow-500"
-          />
-          <StatCard 
-            icon={<Shield className="w-5 h-5" />}
-            label="Excused" 
-            value={totals.excused.toLocaleString()} 
-            color="bg-purple-500"
-          />
-        </div>
-
-        {/* Table */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
-            <h2 className="text-lg font-semibold text-gray-900">Course Breakdown</h2>
-          </div>
-          
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Course</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Attendance Rate</th>
-                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Present</th>
-                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Absent</th>
-                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Late</th>
-                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Excused</th>
-                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {loading ? (
-                  <tr>
-                    <td colSpan={7} className="px-6 py-12 text-center">
-                      <div className="flex flex-col items-center gap-3">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
-                        <span className="text-gray-500">Loading attendance data...</span>
-                      </div>
-                    </td>
-                  </tr>
-                ) : items.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="px-6 py-12 text-center">
-                      <div className="flex flex-col items-center gap-3">
-                        <Users className="w-12 h-12 text-gray-300" />
-                        <span className="text-gray-500">No attendance data available</span>
-                        <p className="text-sm text-gray-400">Start taking attendance to see your overview here</p>
-                      </div>
-                    </td>
-                  </tr>
-                ) : (
-                  items.map((it, index) => {
-                    const rate = parseFloat(getAttendanceRate(it.present, it.total));
-                    return (
-                      <tr key={it.code} className={`hover:bg-gray-50 transition-colors ${index % 2 === 0 ? 'bg-white' : 'bg-gray-25'}`}>
-                        <td className="px-6 py-4">
-                          <div>
-                            <div className="font-medium text-gray-900">{it.code}</div>
-                            <div className="text-sm text-gray-500 truncate max-w-xs">{it.name}</div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-2">
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(rate)}`}>
-                              {rate}%
-                            </span>
-                            <div className="w-16 bg-gray-200 rounded-full h-2">
-                              <div 
-                                className={`h-2 rounded-full transition-all duration-300 ${rate >= 90 ? 'bg-green-500' : rate >= 75 ? 'bg-yellow-500' : 'bg-red-500'}`}
-                                style={{ width: `${Math.min(rate, 100)}%` }}
-                              />
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 text-center">
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium text-green-800 bg-green-100">
-                            {it.present}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-center">
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium text-red-800 bg-red-100">
-                            {it.absent}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-center">
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium text-yellow-800 bg-yellow-100">
-                            {it.late}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-center">
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium text-purple-800 bg-purple-100">
-                            {it.excused}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-center font-medium text-gray-900">
-                          {it.total}
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Footer Stats */}
-        {items.length > 0 && (
-          <div className="bg-white rounded-lg p-6 border border-gray-200 shadow-sm">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900">Overall Summary</h3>
-                <p className="text-gray-600">Attendance across {items.length} course{items.length !== 1 ? 's' : ''}</p>
+            <div className="flex items-center gap-3">
+              <div className="relative">
+                <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                <input
+                  type="date"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  className="pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                />
               </div>
-              <div className="text-right">
-                <div className="text-2xl font-bold text-gray-900">{getAttendanceRate(totals.present, totals.total)}%</div>
-                <div className="text-sm text-gray-500">Overall attendance rate</div>
-              </div>
+              <button
+                onClick={load}
+                disabled={loading}
+                className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-2.5 text-white shadow-md hover:shadow-lg hover:from-blue-700 hover:to-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                Refresh
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Error */}
+        {err && (
+          <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-700 shadow-sm">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+              <p className="text-sm">{err}</p>
             </div>
           </div>
         )}
-      </div>
-    </div>
-  );
-}
 
-function StatCard({ 
-  icon, 
-  label, 
-  value, 
-  color, 
-  subtitle 
-}: { 
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-  color: string;
-  subtitle?: string;
-}) {
-  return (
-    <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
-      <div className="flex items-center justify-between">
-        <div className="flex-1">
-          <div className="flex items-center gap-3 mb-2">
-            <div className={`p-2 rounded-lg ${color} text-white`}>
-              {icon}
+        {/* KPI Cards */}
+        <div className="grid gap-4 md:grid-cols-5">
+          {/* Total */}
+          <div className="group bg-white rounded-2xl border border-gray-100 p-5 shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5">
+            <div className="flex items-start justify-between mb-3">
+              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center">
+                <Users className="w-5 h-5 text-gray-600" />
+              </div>
+            </div>
+            <div className="text-sm font-medium text-gray-500 mb-1">Total Records</div>
+            <div className="text-3xl font-bold text-gray-900">{data.total.toLocaleString()}</div>
+          </div>
+
+          {/* Present */}
+          <div className="group bg-white rounded-2xl border border-emerald-100 p-5 shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5">
+            <div className="flex items-start justify-between mb-3">
+              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-emerald-100 to-emerald-200 flex items-center justify-center">
+                <UserCheck className="w-5 h-5 text-emerald-600" />
+              </div>
+              <div className="text-xs font-semibold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg">
+                {data.total ? Math.round((data.present / data.total) * 100) : 0}%
+              </div>
+            </div>
+            <div className="text-sm font-medium text-gray-500 mb-1">Present</div>
+            <div className="text-3xl font-bold text-emerald-700">{data.present.toLocaleString()}</div>
+          </div>
+
+          {/* Absent */}
+          <div className="group bg-white rounded-2xl border border-rose-100 p-5 shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5">
+            <div className="flex items-start justify-between mb-3">
+              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-rose-100 to-rose-200 flex items-center justify-center">
+                <UserX className="w-5 h-5 text-rose-600" />
+              </div>
+              <div className="text-xs font-semibold text-rose-600 bg-rose-50 px-2 py-1 rounded-lg">
+                {data.total ? Math.round((data.absent / data.total) * 100) : 0}%
+              </div>
+            </div>
+            <div className="text-sm font-medium text-gray-500 mb-1">Absent</div>
+            <div className="text-3xl font-bold text-rose-700">{data.absent.toLocaleString()}</div>
+          </div>
+
+          {/* Late */}
+          <div className="group bg-white rounded-2xl border border-amber-100 p-5 shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5">
+            <div className="flex items-start justify-between mb-3">
+              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-amber-100 to-amber-200 flex items-center justify-center">
+                <Clock className="w-5 h-5 text-amber-600" />
+              </div>
+              <div className="text-xs font-semibold text-amber-600 bg-amber-50 px-2 py-1 rounded-lg">
+                {data.total ? Math.round((data.late / data.total) * 100) : 0}%
+              </div>
+            </div>
+            <div className="text-sm font-medium text-gray-500 mb-1">Late</div>
+            <div className="text-3xl font-bold text-amber-700">{data.late.toLocaleString()}</div>
+          </div>
+
+          {/* Excused */}
+          <div className="group bg-white rounded-2xl border border-blue-100 p-5 shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5">
+            <div className="flex items-start justify-between mb-3">
+              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center">
+                <FileText className="w-5 h-5 text-blue-600" />
+              </div>
+              <div className="text-xs font-semibold text-blue-600 bg-blue-50 px-2 py-1 rounded-lg">
+                {data.total ? Math.round((data.excused / data.total) * 100) : 0}%
+              </div>
+            </div>
+            <div className="text-sm font-medium text-gray-500 mb-1">Excused</div>
+            <div className="text-3xl font-bold text-blue-700">{data.excused.toLocaleString()}</div>
+          </div>
+        </div>
+
+        {/* Overall Rate Card */}
+        <div className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
+          <div className="flex items-start justify-between mb-4">
+            <div>
+              <div className="text-sm font-medium text-gray-500 mb-1">Overall Attendance Rate</div>
+              <div className="flex items-center gap-3">
+                <div className="text-4xl font-bold text-gray-900">{totalRate}%</div>
+                <div className="flex items-center gap-1 text-sm">
+                  <TrendingUp className={`w-4 h-4 ${totalRate >= 75 ? 'text-emerald-600' : 'text-amber-600'}`} />
+                  <span className={`font-semibold ${totalRate >= 75 ? 'text-emerald-600' : 'text-amber-600'}`}>
+                    {totalRate >= 90 ? 'Excellent' : totalRate >= 75 ? 'Good' : totalRate >= 60 ? 'Fair' : 'Needs Attention'}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div className={`px-4 py-2 rounded-xl text-sm font-semibold ${getAttendanceColor(totalRate)}`}>
+              {data.present} / {data.total}
             </div>
           </div>
-          <div className="text-sm font-medium text-gray-600 mb-1">{label}</div>
-          <div className="text-2xl font-bold text-gray-900">{value}</div>
-          {subtitle && (
-            <div className="text-sm text-gray-500 mt-1">{subtitle}</div>
+          
+          <div className="relative h-3 w-full rounded-full bg-gray-100 overflow-hidden">
+            <div
+              className="absolute h-full rounded-full bg-gradient-to-r from-blue-500 to-indigo-500 transition-all duration-500"
+              style={{ width: `${Math.min(100, totalRate)}%` }}
+            />
+          </div>
+        </div>
+
+        {/* Courses Table */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-100">
+            <h2 className="text-lg font-semibold text-gray-900">Course Breakdown</h2>
+            <p className="text-sm text-gray-500 mt-0.5">{data.courses.length} courses</p>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-gray-200">
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">Course Code</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">Subject Name</th>
+                  <th className="px-6 py-4 text-right text-sm font-semibold text-gray-700">Present</th>
+                  <th className="px-6 py-4 text-right text-sm font-semibold text-gray-700">Absent</th>
+                  <th className="px-6 py-4 text-right text-sm font-semibold text-gray-700">Late</th>
+                  <th className="px-6 py-4 text-right text-sm font-semibold text-gray-700">Excused</th>
+                  <th className="px-6 py-4 text-right text-sm font-semibold text-gray-700">Total</th>
+                  <th className="px-6 py-4 text-right text-sm font-semibold text-gray-700">Rate</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {loading && (
+                  <>
+                    {Array.from({ length: pageSize }).map((_, i) => (
+                      <tr key={`sk-${i}`} className="animate-pulse">
+                        <td className="px-6 py-4">
+                          <div className="h-4 w-20 rounded-lg bg-gray-200" />
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="h-4 w-48 rounded-lg bg-gray-200" />
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="h-4 w-12 rounded-lg bg-gray-200 ml-auto" />
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="h-4 w-12 rounded-lg bg-gray-200 ml-auto" />
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="h-4 w-12 rounded-lg bg-gray-200 ml-auto" />
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="h-4 w-12 rounded-lg bg-gray-200 ml-auto" />
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="h-4 w-12 rounded-lg bg-gray-200 ml-auto" />
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="h-6 w-16 rounded-full bg-gray-200 ml-auto" />
+                        </td>
+                      </tr>
+                    ))}
+                  </>
+                )}
+
+                {!loading && pageRows.length === 0 && (
+                  <tr>
+                    <td colSpan={8} className="px-6 py-16 text-center">
+                      <div className="flex flex-col items-center gap-3">
+                        <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center">
+                          <BarChart3 className="w-8 h-8 text-gray-400" />
+                        </div>
+                        <div>
+                          <h3 className="text-lg font-semibold text-gray-900 mb-1">No data available</h3>
+                          <p className="text-sm text-gray-500">
+                            {date ? 'No attendance records for the selected date' : 'Select a date or refresh to view data'}
+                          </p>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+
+                {!loading &&
+                  pageRows.map((r) => (
+                    <tr key={r.scheduleId} className="hover:bg-gradient-to-r hover:from-blue-50/50 hover:to-indigo-50/50 transition-colors">
+                      <td className="px-6 py-4">
+                        <span className="inline-flex items-center px-3 py-1.5 rounded-lg bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-700 text-sm font-semibold">
+                          {r.code}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 font-medium text-gray-900">{r.name}</td>
+                      <td className="px-6 py-4 text-right">
+                        <span className="text-emerald-700 font-semibold">{r.present}</span>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <span className="text-rose-700 font-semibold">{r.absent}</span>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <span className="text-amber-700 font-semibold">{r.late}</span>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <span className="text-blue-700 font-semibold">{r.excused}</span>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <span className="text-gray-900 font-semibold">{r.total}</span>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold border ${getAttendanceColor(r.attendanceRate)}`}>
+                          {r.attendanceRate}%
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination */}
+          {!loading && data.courses.length > 0 && (
+            <div className="flex flex-col md:flex-row items-center justify-between gap-4 border-t border-gray-200 p-4 bg-gray-50">
+              <div className="text-sm text-gray-600">
+                Showing{' '}
+                <span className="font-semibold text-gray-900">
+                  {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, data.courses.length)}
+                </span>{' '}
+                of <span className="font-semibold text-gray-900">{data.courses.length}</span> courses
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                  className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  Previous
+                </button>
+
+                <div className="flex items-center gap-1">
+                  {totalPages <= 7 ? (
+                    [...Array(totalPages)].map((_, i) => (
+                      <button
+                        key={i}
+                        onClick={() => setPage(i + 1)}
+                        className={`w-9 h-9 rounded-lg text-sm font-medium transition-all ${
+                          page === i + 1
+                            ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md'
+                            : 'text-gray-600 hover:bg-gray-100'
+                        }`}
+                      >
+                        {i + 1}
+                      </button>
+                    ))
+                  ) : (
+                    <span className="px-3 text-sm text-gray-600">
+                      Page <span className="font-semibold text-gray-900">{page}</span> of {totalPages}
+                    </span>
+                  )}
+                </div>
+
+                <button
+                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                  disabled={page === totalPages}
+                  className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                >
+                  Next
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
           )}
         </div>
       </div>

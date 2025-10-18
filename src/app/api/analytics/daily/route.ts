@@ -1,104 +1,147 @@
-export const dynamic = "force-dynamic";
-import { NextRequest, NextResponse } from "next/server";
-import { PrismaClient, AttendanceStatus, ScheduleStatus } from "@prisma/client";
+import { NextRequest, NextResponse } from 'next/server';
+import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-function dayBounds(iso?: string) {
-  const d = iso ? new Date(iso) : new Date();
-  const start = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 0, 0, 0));
-  const end = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 23, 59, 59, 999));
+// helper: normalize a YYYY-MM-DD into [start, end) UTC
+function dayRange(dateStr: string) {
+  // keep it simple: treat given date as local day and make an inclusive range
+  const d = new Date(dateStr + 'T00:00:00');
+  const start = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0);
+  const end = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1, 0, 0, 0);
   return { start, end };
 }
 
 export async function GET(req: NextRequest) {
+  const { searchParams } = new URL(req.url);
+  const instructorId = Number(searchParams.get('instructorId'));
+  const date = searchParams.get('date') || new Date().toISOString().slice(0, 10);
+  const debug = searchParams.get('debug') === '1';
+
+  if (!instructorId || Number.isNaN(instructorId)) {
+    return NextResponse.json({ error: 'instructorId is required' }, { status: 400 });
+  }
+
   try {
-    const url = new URL(req.url);
-    const instructorId = Number(url.searchParams.get("instructorId"));
-    const dateStr = url.searchParams.get("date") || undefined;
+    const { start, end } = dayRange(date);
 
-    if (!instructorId || Number.isNaN(instructorId)) {
-      return NextResponse.json({ error: "instructorId is required" }, { status: 400 });
-    }
-
-    const { start, end } = dayBounds(dateStr);
-
-    const schedules = await prisma.subjectSchedule.findMany({
-      where: { instructorId, status: ScheduleStatus.ACTIVE },
-      select: {
-        subjectSchedId: true,
-        academicYear: true,
-        semester: true,
-        subject: { select: { subjectCode: true, subjectName: true } },
-        section: { select: { sectionName: true } },
-        room: { select: { roomNo: true } },
+    // 1) Count by schedule & status for this instructor and day
+    const grouped = await prisma.attendance.groupBy({
+      by: ['subjectSchedId', 'status'],
+      where: {
+        instructorId,
+        timestamp: { gte: start, lt: end },
       },
-      orderBy: [{ subjectId: "asc" }, { sectionId: "asc" }],
+      _count: { _all: true },
     });
 
-    const items = [];
-    let grandPresent = 0;
-    let grandAbsent = 0;
-    let grandLate = 0;
-    let grandExcused = 0;
-
-    for (const s of schedules) {
-      const buckets = await prisma.attendance.groupBy({
-        by: ["status"],
-        where: {
-          scheduleId: s.subjectSchedId,
-          timestamp: { gte: start, lte: end },
-        },
-        _count: { _all: true },
-      });
-
-      const present = buckets.find(b => b.status === AttendanceStatus.PRESENT)?._count._all ?? 0;
-      const absent = buckets.find(b => b.status === AttendanceStatus.ABSENT)?._count._all ?? 0;
-      const late = buckets.find(b => b.status === AttendanceStatus.LATE)?._count._all ?? 0;
-      const excused = buckets.find(b => b.status === AttendanceStatus.EXCUSED)?._count._all ?? 0;
-
-      const total = present + absent + late + excused;
-      const rate = total === 0 ? 0 : Math.round((present / total) * 100);
-
-      grandPresent += present;
-      grandAbsent += absent;
-      grandLate += late;
-      grandExcused += excused;
-
-      items.push({
-        scheduleId: s.subjectSchedId,
-        code: s.subject.subjectCode,
-        subject: s.subject.subjectName,
-        section: s.section.sectionName,
-        room: s.room.roomNo,
-        present,
-        absent,
-        late,
-        excused,
-        total,
-        rate,
-        academicYear: s.academicYear ?? "",
-        semester: s.semester ?? "",
+    // Nothing today? Return zeros
+    if (grouped.length === 0) {
+      return NextResponse.json({
+        date,
+        totals: { present: 0, absent: 0, late: 0, excused: 0, total: 0, rate: 0 },
+        items: [],
       });
     }
 
-    const grandTotal = grandPresent + grandAbsent + grandLate + grandExcused;
-    const overallRate = grandTotal === 0 ? 0 : Math.round((grandPresent / grandTotal) * 100);
+    // 2) Fold into per-schedule totals
+    type Count = { present: number; absent: number; late: number; excused: number; total: number };
+    const perSched = new Map<number, Count>();
+
+    for (const g of grouped) {
+      const sid = g.subjectSchedId;
+      if (!sid) continue;
+      const c = perSched.get(sid) ?? { present: 0, absent: 0, late: 0, excused: 0, total: 0 };
+      switch (g.status) {
+        case 'PRESENT':
+          c.present += g._count._all; break;
+        case 'ABSENT':
+          c.absent += g._count._all; break;
+        case 'LATE':
+          c.late += g._count._all; break;
+        case 'EXCUSED':
+          c.excused += g._count._all; break;
+        default:
+          // ignore other statuses if any
+          break;
+      }
+      c.total += g._count._all;
+      perSched.set(sid, c);
+    }
+
+    // 3) Fetch schedules metadata for those subjectSchedIds
+    const scheduleIds = Array.from(perSched.keys());
+    const schedules = await prisma.subjectSchedule.findMany({
+      where: { subjectSchedId: { in: scheduleIds } },
+      select: {
+        subjectSchedId: true,
+        day: true,
+        startTime: true,
+        endTime: true,
+        subject: { select: { subjectCode: true, subjectName: true } },      // Subjects model
+        section: { select: { sectionName: true } },
+        room: { select: { roomBuildingLoc: true, roomFloorLoc: true } },
+      },
+    });
+
+    // map schedules by id for faster access
+    const schedMap = new Map<number, (typeof schedules)[number]>();
+    for (const s of schedules) schedMap.set(s.subjectSchedId, s);
+
+    // 4) Compose items
+    const items = scheduleIds.map((sid) => {
+      const c = perSched.get(sid)!;
+      const meta = schedMap.get(sid);
+      const present = c.present;
+      const total = c.total;
+      const rate = total > 0 ? Math.round((present / total) * 100) : 0;
+
+      return {
+        scheduleId: sid,
+        code: meta?.subject?.subjectCode ?? '',
+        subject: meta?.subject?.subjectName ?? 'Unknown Subject',
+        section: meta?.section?.sectionName ?? '',
+        room:
+          meta?.room?.roomBuildingLoc && meta?.room?.roomFloorLoc
+            ? `${meta.room.roomBuildingLoc} ${meta.room.roomFloorLoc}`
+            : meta?.room?.roomBuildingLoc ?? '',
+        day: meta?.day ?? '',
+        time: meta?.startTime && meta?.endTime ? `${meta.startTime} - ${meta.endTime}` : '',
+        present: c.present,
+        absent: c.absent,
+        late: c.late,
+        excused: c.excused,
+        total,
+        rate,
+      };
+    });
+
+    // 5) Overall totals
+    const totals = items.reduce(
+      (acc, it) => {
+        acc.present += it.present;
+        acc.absent += it.absent;
+        acc.late += it.late;
+        acc.excused += it.excused;
+        acc.total += it.total;
+        return acc;
+      },
+      { present: 0, absent: 0, late: 0, excused: 0, total: 0 }
+    );
+    const overallRate = totals.total > 0 ? Math.round((totals.present / totals.total) * 100) : 0;
 
     return NextResponse.json({
-      date: start.toISOString().slice(0, 10),
-      totals: {
-        present: grandPresent,
-        absent: grandAbsent,
-        late: grandLate,
-        excused: grandExcused,
-        total: grandTotal,
-        rate: overallRate,
-      },
+      date,
+      totals: { ...totals, rate: overallRate },
       items,
     });
   } catch (e: any) {
-    return NextResponse.json({ error: e?.message ?? "Failed to fetch daily" }, { status: 500 });
+    console.error('GET /api/analytics/daily error:', e);
+    if (searchParams.get('debug') === '1') {
+      // Optional debug surface
+      return NextResponse.json({ error: String(e?.message || e) }, { status: 500 });
+    }
+    return NextResponse.json({ error: 'Failed to load daily summary' }, { status: 500 });
   } finally {
     await prisma.$disconnect();
   }

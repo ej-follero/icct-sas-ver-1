@@ -1,35 +1,28 @@
-export const dynamic = "force-dynamic";
-import { NextRequest, NextResponse } from "next/server";
-import { PrismaClient, AttendanceStatus } from "@prisma/client";
+import { NextRequest, NextResponse } from 'next/server';
+import { PrismaClient, AttendanceStatus } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-function startOfDay(d: Date) {
-  const x = new Date(d);
-  x.setHours(0, 0, 0, 0);
-  return x;
-}
-function endOfDay(d: Date) {
-  const x = new Date(d);
-  x.setHours(23, 59, 59, 999);
-  return x;
-}
-
 export async function GET(req: NextRequest) {
+  const url = new URL(req.url);
+  const instructorId = Number(url.searchParams.get('instructorId'));
+  const scheduleId = url.searchParams.get('scheduleId')
+    ? Number(url.searchParams.get('scheduleId'))
+    : undefined;
+
+  if (!instructorId)
+    return NextResponse.json({ error: 'instructorId is required' }, { status: 400 });
+
+  // optional date filters
+  const start = url.searchParams.get('start')
+    ? new Date(url.searchParams.get('start') as string)
+    : undefined;
+  const end = url.searchParams.get('end')
+    ? new Date(url.searchParams.get('end') as string)
+    : undefined;
+
   try {
-    const url = new URL(req.url);
-    const instructorId = Number(url.searchParams.get("instructorId"));
-    const days = Number(url.searchParams.get("days") || 30);
-    const subjectCode = url.searchParams.get("subject") || "";
-
-    if (!instructorId || Number.isNaN(instructorId)) {
-      return NextResponse.json({ error: "instructorId required" }, { status: 400 });
-    }
-
-    const today = startOfDay(new Date());
-    const from = startOfDay(new Date(today.getTime() - (days - 1) * 24 * 60 * 60 * 1000));
-    const to = endOfDay(today);
-
+    // get schedules for instructor
     const schedules = await prisma.subjectSchedule.findMany({
       where: { instructorId },
       select: {
@@ -38,61 +31,91 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    const subjectSet = new Map<string, string>();
-    for (const s of schedules) {
-      subjectSet.set(s.subject.subjectCode, s.subject.subjectName);
-    }
+    const schedIds = schedules.map(s => s.subjectSchedId);
+    if (schedIds.length === 0) return NextResponse.json({ trends: [] });
 
-    const filteredSchedIds = schedules
-      .filter(s => (subjectCode ? s.subject.subjectCode === subjectCode : true))
-      .map(s => s.subjectSchedId);
+    // optional filter
+    const ids = scheduleId ? [scheduleId] : schedIds;
 
-    if (filteredSchedIds.length === 0) {
-      return NextResponse.json({
-        days: [],
-        subjects: Array.from(subjectSet, ([code, name]) => ({ code, name })),
-      });
-    }
-
-    const rows = await prisma.attendance.findMany({
+    // pull all attendance rows in range
+    const records = await prisma.attendance.findMany({
       where: {
-        scheduleId: { in: filteredSchedIds },
-        timestamp: { gte: from, lte: to },
+        subjectSchedId: { in: ids },
+        ...(start && end ? { timestamp: { gte: start, lt: end } } : {}),
       },
-      select: { status: true, timestamp: true },
-      orderBy: { timestamp: "asc" },
+      select: {
+        subjectSchedId: true,
+        timestamp: true,
+        status: true,
+      },
     });
 
-    const dayMap = new Map<
+    // group by schedule + date (yyyy-mm-dd)
+    const buckets: Record<
       string,
-      { date: string; present: number; absent: number; late: number; excused: number; total: number }
-    >();
+      {
+        code: string;
+        name: string;
+        date: string;
+        present: number;
+        absent: number;
+        late: number;
+        excused: number;
+      }
+    > = {};
 
-    for (let i = 0; i < days; i++) {
-      const d = new Date(from.getTime() + i * 24 * 60 * 60 * 1000);
-      const key = d.toISOString().slice(0, 10);
-      dayMap.set(key, { date: key, present: 0, absent: 0, late: 0, excused: 0, total: 0 });
+    const meta = new Map<number, { code: string; name: string }>();
+    schedules.forEach(s =>
+      meta.set(s.subjectSchedId, {
+        code: s.subject?.subjectCode ?? `sched-${s.subjectSchedId}`,
+        name: s.subject?.subjectName ?? 'Unknown',
+      })
+    );
+
+    for (const r of records) {
+      const d = new Date(r.timestamp);
+      const keyDate = d.toISOString().slice(0, 10);
+      const key = `${r.subjectSchedId}-${keyDate}`;
+      if (!buckets[key]) {
+        const m = meta.get(r.subjectSchedId)!;
+        buckets[key] = {
+          code: m.code,
+          name: m.name,
+          date: keyDate,
+          present: 0,
+          absent: 0,
+          late: 0,
+          excused: 0,
+        };
+      }
+      switch (r.status as AttendanceStatus) {
+        case 'PRESENT':
+          buckets[key].present++;
+          break;
+        case 'ABSENT':
+          buckets[key].absent++;
+          break;
+        case 'LATE':
+          buckets[key].late++;
+          break;
+        case 'EXCUSED':
+          buckets[key].excused++;
+          break;
+      }
     }
 
-    for (const r of rows) {
-      const key = new Date(r.timestamp).toISOString().slice(0, 10);
-      const bucket = dayMap.get(key);
-      if (!bucket) continue;
-      bucket.total += 1;
-      if (r.status === AttendanceStatus.PRESENT) bucket.present += 1;
-      else if (r.status === AttendanceStatus.ABSENT) bucket.absent += 1;
-      else if (r.status === AttendanceStatus.LATE) bucket.late += 1;
-      else if (r.status === AttendanceStatus.EXCUSED) bucket.excused += 1;
-    }
+    // sort
+    const trends = Object.values(buckets).sort((a, b) =>
+      a.date.localeCompare(b.date)
+    );
 
-    const daysArr = Array.from(dayMap.values());
-
-    return NextResponse.json({
-      days: daysArr,
-      subjects: Array.from(subjectSet, ([code, name]) => ({ code, name })),
-    });
+    return NextResponse.json({ trends });
   } catch (e: any) {
-    return NextResponse.json({ error: e?.message ?? "Failed to fetch trends" }, { status: 500 });
+    console.error('GET /api/analytics/trends error:', e);
+    return NextResponse.json(
+      { error: e?.message ?? 'Failed to load trends' },
+      { status: 500 }
+    );
   } finally {
     await prisma.$disconnect();
   }

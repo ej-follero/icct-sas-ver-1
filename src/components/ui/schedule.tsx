@@ -42,7 +42,7 @@ export interface SubjectSchedule {
   semester:  RelSemester;
 }
 
-interface Props { instructorId?: number } // optional: will also accept ?instructorId= in URL
+interface Props { instructorId?: number } 
 
 const WEEK_ENUM: DayEnum[] = ['MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY'];
 const WEEK_LABEL           = ['Monday','Tuesday','Wednesday','Thursday','Friday'];
@@ -91,7 +91,7 @@ export default function Schedule({ instructorId }: Props) {
   useEffect(() => {
     if (effectiveId) load();
     else { setError('Instructor ID is required'); setLoading(false); }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, [effectiveId]);
 
   const timeSlots = useMemo(() => {

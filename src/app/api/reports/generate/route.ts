@@ -1,189 +1,297 @@
-export const dynamic = "force-dynamic";
-
+// src/app/api/reports/generate/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { PrismaClient, AttendanceStatus, ScheduleStatus } from "@prisma/client";
+import {
+  PrismaClient,
+  AttendanceStatus,
+  ReportStatus,
+  ReportType,
+} from "@prisma/client";
+import fs from "node:fs/promises";
+import path from "node:path";
 
 const prisma = new PrismaClient();
 
-/* ---------------- helpers ---------------- */
-
-type RangeKey = "7d" | "30d" | "90d" | "all" | "custom";
-
-function normalize(v: string | null): string | undefined {
-  return v ?? undefined;
-}
-
-function resolveRange(
-  now: Date,
-  range: RangeKey,
-  start?: string,
-  end?: string
-): { from?: Date; to?: Date } {
-  if (range === "all") return {};
-  if (range === "custom") {
-    if (!start || !end) return {};
-    return { from: new Date(start), to: new Date(end) };
-  }
-  const to = now;
-  const from = new Date(now);
-  if (range === "7d") from.setDate(from.getDate() - 7);
-  else if (range === "30d") from.setDate(from.getDate() - 30);
-  else if (range === "90d") from.setDate(from.getDate() - 90);
-  return { from, to };
-}
-
-function pct(n: number, d: number) {
-  if (!d) return 0;
-  return Math.round((n / d) * 1000) / 10;
-}
-
-/* --------------- GET: build the table data --------------- */
-
-export async function GET(req: NextRequest) {
-  try {
-    const url = new URL(req.url);
-
-    const instructorId = Number(url.searchParams.get("instructorId"));
-    if (!instructorId || Number.isNaN(instructorId)) {
-      return NextResponse.json(
-        { error: "instructorId is required" },
-        { status: 400 }
-      );
-    }
-
-    const subjectId = url.searchParams.get("subjectId")
-      ? Number(url.searchParams.get("subjectId"))
-      : undefined;
-
-    const rangeParam = (url.searchParams.get("range") ?? "30d") as RangeKey;
-    const start = normalize(url.searchParams.get("start"));
-    const end = normalize(url.searchParams.get("end"));
-    const now = new Date();
-    const { from, to } = resolveRange(now, rangeParam, start, end);
-
-    // 1) Instructor's ACTIVE schedules (optionally filter by subject)
-    const schedules = await prisma.subjectSchedule.findMany({
-      where: {
-        instructorId,
-        status: ScheduleStatus.ACTIVE,
-        ...(subjectId ? { subjectId } : {}),
-      },
-      select: {
-        subjectSchedId: true, // might be nullable in your schema
-        subject: { select: { subjectCode: true, subjectName: true } },
-        section: { select: { sectionName: true } },
-        // add room if you actually have it (else remove)
-        // room: true,
-      },
-      orderBy: [{ subjectId: "asc" }, { sectionId: "asc" }],
-    });
-
-    // SAFETY: filter out null schedule IDs before using them as numbers
-    const scheduleIds = schedules
-      .map((s) => s.subjectSchedId)
-      .filter((id): id is number => typeof id === "number");
-
-    if (scheduleIds.length === 0) {
-      return NextResponse.json({
-        summary: { total: 0, present: 0, absent: 0, late: 0, excused: 0 },
-        items: [],
-      });
-    }
-
-    // Map scheduleId -> meta
-    const scheduleMeta = new Map<
-      number,
-      { subjCode: string; subjName: string; section: string; room: string | null }
-    >();
-    for (const s of schedules) {
-      if (s.subjectSchedId == null) continue; // <-- fix: skip null
-      scheduleMeta.set(s.subjectSchedId, {
-        subjCode: s.subject.subjectCode,
-        subjName: s.subject.subjectName,
-        section: s.section.sectionName,
-        room: null, // replace if you select a real room field
-      });
-    }
-
-    // 2) Pull attendance rows under those schedules & date range
-    const where: any = {
-      scheduleId: { in: scheduleIds },
-    };
-    if (from || to) {
-      where.timestamp = {};
-      if (from) where.timestamp.gte = from;
-      if (to) where.timestamp.lte = to;
-    }
-
-    const logs = await prisma.attendance.findMany({
-      where,
-      select: {
-        attendanceId: true,
-        scheduleId: true,
-        timestamp: true,
-        status: true,
-        Student: {
-          select: {
-            studentId: true,
-            studentIdNum: true,
-            firstName: true,
-            middleName: true,
-            lastName: true,
-          },
+/* ---------------------------------------
+   Helper: aggregate attendance per student
+----------------------------------------*/
+async function aggregateAttendance(
+  instructorId: number,
+  startDate: Date,
+  endDate: Date
+) {
+  const logs = await prisma.attendance.findMany({
+    where: {
+      instructorId,
+      timestamp: { gte: startDate, lte: endDate },
+      studentId: { not: null },
+    },
+    select: {
+      status: true,
+      timestamp: true,
+      student: {
+        select: {
+          studentId: true,
+          studentIdNum: true,
+          firstName: true,
+          lastName: true,
         },
       },
-      orderBy: [{ timestamp: "asc" }],
-    });
+      subjectSchedule: {
+        select: {
+          subjectSchedId: true,
+          subject: { select: { subjectName: true, subjectCode: true } },
+          section: { select: { sectionName: true } },
+        },
+      },
+    },
+    orderBy: { timestamp: "asc" },
+  });
 
-    // 3) Transform to the simple "Generate Report" table items
-    type Row = {
-      date: string;
-      subject: string;
-      section: string;
-      status: AttendanceStatus;
-      studentIds: string[];
-    };
+  type Row = {
+    studentId: number;
+    idNumber: string;
+    name: string;
+    section: string;
+    subject: string;
+    present: number;
+    absent: number;
+    late: number;
+    excused: number;
+    lastSeen: string | null;
+  };
 
-    const rows: Row[] = logs.map((log) => {
-      const meta = log.scheduleId ? scheduleMeta.get(log.scheduleId) : undefined;
-      const date = new Date(log.timestamp);
-      const dateStr = date.toISOString().slice(0, 10);
-      const subj = meta ? `${meta.subjCode} — ${meta.subjName}` : "—";
-      const sect = meta ? meta.section : "—";
+  const byStudent = new Map<number, Row>();
 
-      const studentIds =
-        log.Student?.map((s) => s.studentIdNum).filter(Boolean) ?? [];
+  for (const log of logs) {
+    const s = log.student!;
+    const ss = log.subjectSchedule;
 
-      return {
-        date: dateStr,
-        subject: subj,
-        section: sect,
-        status: log.status,
-        studentIds,
-      };
-    });
+    const key = s.studentId;
+    if (!byStudent.has(key)) {
+      byStudent.set(key, {
+        studentId: s.studentId,
+        idNumber: s.studentIdNum,
+        name: `${s.lastName}, ${s.firstName}`,
+        section: ss?.section?.sectionName ?? "-",
+        subject: ss?.subject?.subjectName ?? "-",
+        present: 0,
+        absent: 0,
+        late: 0,
+        excused: 0,
+        lastSeen: null,
+      });
+    }
 
-    // 4) Compute summary cards
-    const total = rows.length;
-    const present = rows.filter((r) => r.status === AttendanceStatus.PRESENT).length;
-    const absent = rows.filter((r) => r.status === AttendanceStatus.ABSENT).length;
-    const late = rows.filter((r) => r.status === AttendanceStatus.LATE).length;
-    const excused = rows.filter((r) => r.status === AttendanceStatus.EXCUSED).length;
+    const row = byStudent.get(key)!;
+    switch (log.status) {
+      case AttendanceStatus.PRESENT:
+        row.present += 1;
+        break;
+      case AttendanceStatus.ABSENT:
+        row.absent += 1;
+        break;
+      case AttendanceStatus.LATE:
+        row.late += 1;
+        break;
+      case AttendanceStatus.EXCUSED:
+        row.excused += 1;
+        break;
+    }
+    if (!row.lastSeen || new Date(row.lastSeen) < log.timestamp) {
+      row.lastSeen = log.timestamp.toISOString();
+    }
+  }
+
+  const items = Array.from(byStudent.values()).sort((a, b) => {
+    const totA = a.present + a.absent + a.late + a.excused || 1;
+    const totB = b.present + b.absent + b.late + b.excused || 1;
+    const arA = a.absent / totA;
+    const arB = b.absent / totB;
+    if (arB !== arA) return arB - arA;
+    if (b.absent !== a.absent) return b.absent - a.absent;
+    return a.name.localeCompare(b.name);
+  });
+
+  const totals = items.reduce(
+    (acc, r) => {
+      acc.present += r.present;
+      acc.absent += r.absent;
+      acc.late += r.late;
+      acc.excused += r.excused;
+      return acc;
+    },
+    { present: 0, absent: 0, late: 0, excused: 0 }
+  );
+
+  const total = totals.present + totals.absent + totals.late + totals.excused;
+  const attendanceRate = total
+    ? Math.round(((total - totals.absent) / total) * 100)
+    : 0;
+
+  return { items, totals: { ...totals, total }, attendanceRate };
+}
+
+/* -------------------------
+   GET (your original logic)
+--------------------------*/
+export async function GET(req: NextRequest) {
+  const url = new URL(req.url);
+  const instructorId = Number(url.searchParams.get("instructorId"));
+  const start = url.searchParams.get("start");
+  const end = url.searchParams.get("end");
+
+  if (!instructorId || !start || !end) {
+    return NextResponse.json(
+      { error: "Missing required parameters: instructorId, start, end" },
+      { status: 400 }
+    );
+  }
+
+  try {
+    const startDate = new Date(start);
+    const endDate = new Date(end);
+    endDate.setHours(23, 59, 59, 999);
+
+    const { items, totals, attendanceRate } = await aggregateAttendance(
+      instructorId,
+      startDate,
+      endDate
+    );
 
     return NextResponse.json({
-      summary: { total, present, absent, late, excused, rate: pct(present, total) },
-      items: rows.map((r) => ({
-        date: r.date,
-        subject: r.subject,
-        section: r.section,
-        status: r.status,
-        studentIds: r.studentIds.join(", "),
-      })),
+      meta: {
+        instructorId,
+        start: startDate.toISOString(),
+        end: endDate.toISOString(),
+        totalRecords: items.length,
+        attendanceRate,
+      },
+      items,
+      totals,
     });
   } catch (e: any) {
-    console.error("[reports.generate] error", e);
+    console.error("GET /api/reports/generate error:", e);
     return NextResponse.json(
-      { error: e?.message ?? "Failed to generate report" },
+      { error: "Failed to fetch report" },
+      { status: 500 }
+    );
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
+/* ------------------------------------
+   POST — create a ReportLog row (View)
+-------------------------------------*/
+export async function POST(req: NextRequest) {
+  const body = await req.json().catch(() => ({}));
+
+  const instructorId = Number(body.instructorId);
+  const reportName = (body.reportName || "Attendance Summary").toString();
+  const reportType =
+    (ReportType as any)?.[
+      (body.reportType || "ATTENDANCE_SUMMARY").toUpperCase()
+    ] ?? ReportType.CUSTOM;
+
+  if (!instructorId) {
+    return NextResponse.json(
+      { message: "instructorId required" },
+      { status: 400 }
+    );
+  }
+
+  try {
+    const now = new Date();
+    const startDate = body.start
+      ? new Date(body.start)
+      : new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const endDate = body.end ? new Date(body.end) : now;
+    endDate.setHours(23, 59, 59, 999);
+
+    // 1) create ReportLog as GENERATING
+    const log = await prisma.reportLog.create({
+      data: {
+        generatedBy: instructorId, // ← your schema: equals User.userId
+        reportName,
+        reportType,
+        description: body.description ?? null,
+        startDate,
+        endDate,
+        status: ReportStatus.GENERATING,
+        parameters: { instructorId, startDate, endDate },
+        fileFormat: "CSV",
+      },
+    });
+
+    // 2) aggregate data (same as GET)
+    const { items } = await aggregateAttendance(
+      instructorId,
+      startDate,
+      endDate
+    );
+
+    // 3) optional: write CSV file if requested
+    let filepath: string | null = null;
+    let fileSize: number | null = null;
+
+    if (body.saveFile) {
+      const header =
+        "Student ID,ID Number,Name,Section,Subject,Present,Absent,Late,Excused,Last Seen\n";
+      const csvBody = items
+        .map((r) =>
+          [
+            r.studentId,
+            r.idNumber,
+            `"${r.name}"`,
+            `"${r.section}"`,
+            `"${r.subject}"`,
+            r.present,
+            r.absent,
+            r.late,
+            r.excused,
+            r.lastSeen ?? "",
+          ].join(",")
+        )
+        .join("\n");
+      const csv = header + csvBody;
+
+      const filename = `attendance_${log.reportId}.csv`;
+      const outDir = path.join(process.cwd(), "public", "reports");
+      await fs.mkdir(outDir, { recursive: true });
+      await fs.writeFile(path.join(outDir, filename), csv, "utf8");
+
+      filepath = `/reports/${filename}`;
+      fileSize = Buffer.byteLength(csv, "utf8");
+    }
+
+    // 4) mark COMPLETED and attach file info (if any)
+    const updated = await prisma.reportLog.update({
+      where: { reportId: log.reportId },
+      data: {
+        status: ReportStatus.COMPLETED,
+        filepath,
+        fileFormat: filepath ? "CSV" : null,
+        fileSize,
+      },
+      select: {
+        reportId: true,
+        reportName: true,
+        reportType: true,
+        startDate: true,
+        endDate: true,
+        status: true,
+        createdAt: true,
+        filepath: true,
+        fileFormat: true,
+        fileSize: true,
+      },
+    });
+
+    return NextResponse.json({ item: updated }, { status: 201 });
+  } catch (e: any) {
+    console.error("POST /api/reports/generate error:", e);
+    return NextResponse.json(
+      { message: "failed", detail: e?.message },
       { status: 500 }
     );
   } finally {

@@ -1,227 +1,183 @@
-export const dynamic = "force-dynamic";
-
-import { NextRequest, NextResponse } from "next/server";
-import { PrismaClient, AttendanceStatus, ScheduleStatus } from "@prisma/client";
+// src/app/api/analytics/absentees/route.ts
+import { NextRequest, NextResponse } from 'next/server';
+import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-/* ---------- helpers ---------- */
-
-type RangeKey = "7d" | "30d" | "all" | "custom";
-
-function normalizeStr(v: string | null): string | undefined {
-  return v ?? undefined;
-}
-
-function resolveRange(
-  now: Date,
-  range: RangeKey,
-  start?: string | undefined,
-  end?: string | undefined
-) {
-  if (range === "all") return { start: undefined, end: undefined };
-
-  if (range === "custom") {
-    if (!start || !end) {
-      const to = now;
-      const from = new Date(now);
-      from.setDate(from.getDate() - 30);
-      return { start: from, end: to };
-    }
-    const from = new Date(start);
-    const to = new Date(end);
-    return { start: from, end: to };
-  }
-
-  const to = now;
-  const from = new Date(now);
-  if (range === "7d") from.setDate(from.getDate() - 7);
-  else if (range === "30d") from.setDate(from.getDate() - 30);
-  return { start: from, end: to };
-}
-
-function pct(numer: number, denom: number) {
-  if (!denom) return 0;
-  return Math.round((numer / denom) * 1000) / 10; // 1 decimal
-}
-
-/* ---------- GET ---------- */
-
+/**
+ * GET /api/analytics/absentees?instructorId=7&start=2025-09-28&end=2025-10-04&q=&limit=20
+ */
 export async function GET(req: NextRequest) {
+  let url: URL | null = null;
   try {
-    const url = new URL(req.url);
+    url = new URL(req.url);
+    const instructorId = Number(url.searchParams.get('instructorId') || 0);
+    const start = url.searchParams.get('start') || '';
+    const end = url.searchParams.get('end') || '';
+    const q = (url.searchParams.get('q') || '').trim().toLowerCase();
+    const limit = Math.max(1, Math.min(100, Number(url.searchParams.get('limit') || 20)));
 
-    const instructorId = Number(url.searchParams.get("instructorId"));
-    if (!instructorId || Number.isNaN(instructorId)) {
-      return NextResponse.json(
-        { error: "instructorId is required" },
-        { status: 400 }
-      );
+    if (!instructorId) {
+      return NextResponse.json({ error: 'instructorId is required' }, { status: 400 });
+    }
+    if (!start || !end) {
+      return NextResponse.json({ error: 'start and end are required (YYYY-MM-DD)' }, { status: 400 });
     }
 
-    const subjectId = url.searchParams.get("subjectId")
-      ? Number(url.searchParams.get("subjectId"))
-      : undefined;
-
-    const topN = url.searchParams.get("top")
-      ? Math.max(1, Math.min(50, Number(url.searchParams.get("top")) || 5))
-      : 5;
-
-    const search = url.searchParams.get("q")?.trim().toLowerCase() || "";
-
-    const rangeParam = (url.searchParams.get("range") ?? "30d") as RangeKey;
-    const start = normalizeStr(url.searchParams.get("start"));
-    const end = normalizeStr(url.searchParams.get("end"));
-
-    const now = new Date();
-    const { start: from, end: to } = resolveRange(now, rangeParam, start, end);
-
-    /* 1) Instructor’s ACTIVE schedules (+ optional subject filter) */
+    // Collect the instructor's schedules (classes) first
     const schedules = await prisma.subjectSchedule.findMany({
+      where: { instructorId },
+      select: { subjectSchedId: true },
+    });
+
+    const schedIds = schedules.map((s) => s.subjectSchedId);
+    if (schedIds.length === 0) {
+      return NextResponse.json({
+        items: [],
+        meta: {
+          uniqueStudents: 0,
+          absenceRate: 0,
+          start,
+          end,
+        },
+      });
+    }
+
+    // Pull all attendance rows inside the date range for those schedules
+    // NOTE: adjust field names if your model differs (timestamp/createdAt)
+    const startDate = new Date(`${start}T00:00:00.000Z`);
+    const endDate = new Date(`${end}T23:59:59.999Z`);
+
+    const rows = await prisma.attendance.findMany({
       where: {
-        instructorId,
-        status: ScheduleStatus.ACTIVE,
-        ...(subjectId ? { subjectId } : {}),
+        subjectSchedId: { in: schedIds },
+        timestamp: { gte: startDate, lte: endDate },
       },
       select: {
         subjectSchedId: true,
-        sectionId: true,
-      },
-    });
-
-    if (schedules.length === 0) {
-      return NextResponse.json({
-        range: { start: from?.toISOString(), end: to?.toISOString() },
-        count: 0,
-        items: [],
-      });
-    }
-
-    const scheduleIds = schedules.map((s) => s.subjectSchedId);
-    const sectionIds = Array.from(new Set(schedules.map((s) => s.sectionId)));
-
-    /* 2) Students under those sections
-          IMPORTANT: use capitalized relation names (Section, Student) */
-    const studentSections = await prisma.studentSection.findMany({
-      where: {
-        sectionId: { in: sectionIds },
-      },
-      select: {
         studentId: true,
-        Section: { select: { sectionName: true } }, // ← fixed
-        Student: {                                   // ← fixed
-          select: {
-            studentId: true,
-            studentIdNum: true,
-            firstName: true,
-            middleName: true,
-            lastName: true,
-            gender: true,
-            status: true,
-          },
-        },
+        status: true, // 'PRESENT' | 'ABSENT' | 'LATE' | 'EXCUSED'
+        timestamp: true,
       },
+      orderBy: { timestamp: 'desc' },
     });
 
-    // de-duplicate to latest section per student
-    const byStudent = new Map<
-      number,
-      {
-        studentId: number;
-        studentNumber: string;
-        firstName: string;
-        lastName: string;
-        middleName: string | null;
-        sectionName: string | null;
-        gender: string;
-        status: string;
-      }
-    >();
-
-    for (const ss of studentSections) {
-      const s = ss.Student; // ← fixed
-      byStudent.set(s.studentId, {
-        studentId: s.studentId,
-        studentNumber: s.studentIdNum,
-        firstName: s.firstName,
-        lastName: s.lastName,
-        middleName: s.middleName ?? null,
-        sectionName: ss.Section?.sectionName ?? null, // ← fixed
-        gender: s.gender,
-        status: s.status,
-      });
-    }
-
-    const students = Array.from(byStudent.values());
-    if (students.length === 0) {
+    if (rows.length === 0) {
       return NextResponse.json({
-        range: { start: from?.toISOString(), end: to?.toISOString() },
-        count: 0,
         items: [],
+        meta: {
+          uniqueStudents: 0,
+          absenceRate: 0,
+          start,
+          end,
+        },
       });
     }
 
-    /* 3) Count ABSENT and TOTAL for each student (scoped to instructor schedules + date range) */
-    const items = await Promise.all(
-      students.map(async (s) => {
-        const baseWhere: any = {
-          scheduleId: { in: scheduleIds },
-          Student: { some: { studentId: s.studentId } },
-        };
-        if (from) baseWhere.timestamp = { ...(baseWhere.timestamp || {}), gte: from };
-        if (to) baseWhere.timestamp = { ...(baseWhere.timestamp || {}), lte: to };
+    // Aggregate per studentId
+    type Acc = {
+      studentId: number;
+      present: number;
+      absent: number;
+      late: number;
+      excused: number;
+      total: number;
+      lastSeen: Date;
+    };
 
-        const [absences, total] = await Promise.all([
-          prisma.attendance.count({
-            where: { ...baseWhere, status: AttendanceStatus.ABSENT },
-          }),
-          prisma.attendance.count({ where: baseWhere }),
-        ]);
+    const byStudent = new Map<number, Acc>();
 
-        const rate = pct(absences, total);
-        return {
-          studentId: s.studentId,
-          studentNumber: s.studentNumber,
-          name: `${s.lastName}, ${s.firstName}${s.middleName ? " " + s.middleName : ""}`,
-          section: s.sectionName ?? "",
-          gender: s.gender,
-          status: s.status,
-          absences,
-          total,
-          rate,
-        };
-      })
-    );
-
-    /* 4) Optional search */
-    const filtered = !search
-      ? items
-      : items.filter((it) => {
-          const hay = `${it.studentNumber} ${it.name} ${it.section}`.toLowerCase();
-          return hay.includes(search);
+    for (const r of rows) {
+      const sId = Number(r.studentId);
+      if (!byStudent.has(sId)) {
+        byStudent.set(sId, {
+          studentId: sId,
+          present: 0,
+          absent: 0,
+          late: 0,
+          excused: 0,
+          total: 0,
+          lastSeen: r.timestamp,
         });
+      }
+      const acc = byStudent.get(sId)!;
+      acc.total += 1;
+      if (r.status === 'ABSENT') acc.absent += 1;
+      else if (r.status === 'PRESENT') acc.present += 1;
+      else if (r.status === 'LATE') acc.late += 1;
+      else if (r.status === 'EXCUSED') acc.excused += 1;
+      if (r.timestamp > acc.lastSeen) acc.lastSeen = r.timestamp;
+    }
 
-    /* 5) Rank & cap */
-    const top = filtered
-      .sort((a, b) => {
-        if (b.absences !== a.absences) return b.absences - a.absences;
-        if (b.rate !== a.rate) return b.rate - a.rate;
-        return a.name.localeCompare(b.name);
-      })
-      .slice(0, topN);
+    // Grab student details (name/idNum)
+    const studentIds = Array.from(byStudent.keys());
+    const students = await prisma.student.findMany({
+      where: { studentId: { in: studentIds } },
+      select: { studentId: true, studentIdNum: true, firstName: true, lastName: true },
+    });
+    const studentMap = new Map(students.map((s) => [s.studentId, s]));
+
+    // Prepare list, filter by q if provided (name/id matches)
+    let items = Array.from(byStudent.values()).map((acc) => {
+      const st = studentMap.get(acc.studentId);
+      const idNum = st?.studentIdNum || '';
+      const firstName = st?.firstName || '';
+      const lastName = st?.lastName || '';
+      const name = `${firstName} ${lastName}`.trim();
+      const absencePct = acc.total > 0 ? Math.round((acc.absent / acc.total) * 100) : 0;
+
+      return {
+        studentId: acc.studentId,
+        idNumber: idNum,
+        firstName,
+        lastName,
+        name,
+        absent: acc.absent,
+        present: acc.present,
+        late: acc.late,
+        excused: acc.excused,
+        total: acc.total,
+        absencePct,
+        lastSeen: acc.lastSeen,
+      };
+    });
+
+    if (q) {
+      items = items.filter((it) => {
+        const hay = `${it.idNumber} ${it.name}`.toLowerCase();
+        return hay.includes(q);
+      });
+    }
+
+    // Sort: most ABSENT first, then total desc, then name
+    items.sort((a, b) => {
+      if (b.absent !== a.absent) return b.absent - a.absent;
+      if (b.total !== a.total) return b.total - a.total;
+      return a.name.localeCompare(b.name);
+    });
+
+    const uniqueStudents = items.length;
+    const totalAbsences = items.reduce((n, it) => n + it.absent, 0);
+    const overallEvents = items.reduce((n, it) => n + it.total, 0);
+    const absenceRate = overallEvents > 0 ? Math.round((totalAbsences / overallEvents) * 100) : 0;
+
+    // Cap result size by limit
+    const limited = items.slice(0, limit);
 
     return NextResponse.json({
-      range: { start: from?.toISOString(), end: to?.toISOString() },
-      count: top.length,
-      items: top,
+      items: limited,
+      meta: {
+        uniqueStudents,
+        absenceRate,
+        start,
+        end,
+      },
     });
   } catch (e: any) {
-    console.error("[absentees] error", e);
-    return NextResponse.json(
-      { error: e?.message ?? "Failed to fetch top absentees" },
-      { status: 500 }
-    );
+    console.error('GET /api/analytics/absentees error:', e);
+    return NextResponse.json({ error: 'Failed to load top absentees' }, { status: 500 });
   } finally {
-    await prisma.$disconnect();
+    // keep prisma connected for lambda pooling; if you want to hard close:
+    // await prisma.$disconnect();
   }
 }

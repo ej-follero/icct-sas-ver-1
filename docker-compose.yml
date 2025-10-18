@@ -4,13 +4,39 @@ services:
     image: postgres:latest
     container_name: blissful_jepsen
     environment:
-      POSTGRES_USER: scheduleparent
-      POSTGRES_PASSWORD: parent123
-      POSTGRES_DB: schedule
+      POSTGRES_USER: ${POSTGRES_USER:-scheduleparent}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-parent123}
+      POSTGRES_DB: ${POSTGRES_DB:-schedule}
+      
+      # Performance optimizations
+      POSTGRES_MAX_CONNECTIONS: 100
+      POSTGRES_SHARED_BUFFERS: 256MB
+      POSTGRES_EFFECTIVE_CACHE_SIZE: 1GB
+      POSTGRES_WORK_MEM: 4MB
+      POSTGRES_MAINTENANCE_WORK_MEM: 64MB
+      # Connection pooling settings
+      POSTGRES_POOL_SIZE: 20
+      POSTGRES_POOL_TIMEOUT: 30
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    # Add resource limits for better performance
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.5'
+    # Health check
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
 volumes:
   postgres_data: 

@@ -1,276 +1,236 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { BookOpen, Users, Calendar, RefreshCw, GraduationCap, Building2 } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Search, Plus, BookOpen, Edit2, Loader2, AlertCircle, X } from 'lucide-react';
 
-type SubjectRow = {
+type Subject = {
   subjectId: number;
-  code: string;
-  name: string;
-  department: string;
-  course: string;
-  academicYear: string;
-  semester: string;
-  status: string;
-  sections: number;
-  students: number;
+  subjectCode: string;
+  subjectName: string;
 };
 
-export default function Page() {
-  const [items, setItems] = useState<SubjectRow[]>([]);
+export default function SubjectsPage() {
+  const [subjects, setSubjects] = useState<Subject[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [search, setSearch] = useState('');
 
-  // Demo: read ?instructorId from URL or default to 2
-  const search = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : undefined;
-  const instructorId = Number(search?.get('instructorId') || 2);
+  // add form
+  const [newCode, setNewCode] = useState('');
+  const [newName, setNewName] = useState('');
+  const [showAddForm, setShowAddForm] = useState(false);
 
-  async function load() {
-    setLoading(true);
+  async function fetchSubjects() {
     try {
-      const r = await fetch(`/api/subjects?instructorId=${instructorId}`, { cache: 'no-store' });
-      const j = await r.json();
-      setItems(j.items ?? []);
+      setLoading(true);
+      setError('');
+      const res = await fetch(`/api/subjects?q=${encodeURIComponent(search)}`, { cache: 'no-store' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'Failed to fetch subjects');
+      setSubjects(data);
+    } catch (e: any) {
+      setError(e?.message || 'Failed to fetch subjects');
+      setSubjects([]);
     } finally {
       setLoading(false);
     }
   }
 
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [instructorId]);
+  async function addSubject() {
+    if (!newCode.trim() || !newName.trim()) return alert('Please fill both fields');
+    try {
+      setLoading(true);
+      const res = await fetch('/api/subjects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          subjectCode: newCode.trim(),
+          subjectName: newName.trim(),
+          // You can pass optional advanced fields here if you like.
+          // The API already fills safe defaults (departmentId/courseId, etc.).
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'Failed to add subject');
+      setNewCode('');
+      setNewName('');
+      setShowAddForm(false);
+      fetchSubjects();
+    } catch (e: any) {
+      alert(e?.message || 'Failed to add subject');
+    } finally {
+      setLoading(false);
+    }
+  }
 
-  const totalSections = items.reduce((s, it) => s + it.sections, 0);
-  const totalStudents = items.reduce((s, it) => s + it.students, 0);
+  useEffect(() => { fetchSubjects(); }, [search]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
-      <div className="p-6 space-y-8 max-w-7xl mx-auto">
+      <div className="max-w-7xl mx-auto p-6 space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl shadow-lg">
-              <GraduationCap className="w-8 h-8 text-white" />
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div className="space-y-1">
+              <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+                Subjects
+              </h1>
+              <p className="text-sm text-gray-500 flex items-center gap-2">
+                <BookOpen className="w-4 h-4" />
+                Manage all subjects in the system
+              </p>
             </div>
-            <div>
-              <div className="flex items-center gap-3">
-                <h1 className="text-3xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent">
-                  My Subjects
-                </h1>
-                <span className="px-3 py-1 text-xs font-semibold rounded-full bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg">
-                  v2
-                </span>
+
+            <button
+              onClick={() => setShowAddForm(!showAddForm)}
+              className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 px-5 py-2.5 text-white shadow-md hover:shadow-lg hover:from-purple-700 hover:to-pink-700 transition-all"
+            >
+              {showAddForm ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+              {showAddForm ? 'Cancel' : 'Add Subject'}
+            </button>
+          </div>
+        </div>
+
+        {/* Add Subject Form */}
+        {showAddForm && (
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 animate-in slide-in-from-top duration-200">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Add New Subject</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Subject Code</label>
+                <input
+                  type="text"
+                  placeholder="e.g., CS101"
+                  value={newCode}
+                  onChange={(e) => setNewCode(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition"
+                />
               </div>
-              <p className="text-gray-500 mt-1">Academic Year 2024-2025</p>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Subject Name</label>
+                <input
+                  type="text"
+                  placeholder="e.g., Introduction to Computer Science"
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end mt-4">
+              <button
+                onClick={addSubject}
+                disabled={loading || !newCode.trim() || !newName.trim()}
+                className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white px-6 py-2.5 rounded-xl hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg"
+              >
+                {loading ? (<><Loader2 className="w-4 h-4 animate-spin" />Adding...</>) : (<><Plus className="w-4 h-4" />Add Subject</>)}
+              </button>
             </div>
           </div>
-          <button
-            onClick={load}
-            disabled={loading}
-            className="group flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-medium shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 disabled:opacity-70 disabled:cursor-not-allowed disabled:transform-none"
-          >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : 'group-hover:rotate-180 transition-transform duration-300'}`} />
-            Refresh
-          </button>
+        )}
+
+        {/* Search */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
+          <div className="relative max-w-md ml-auto">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
+            <input
+              type="text"
+              placeholder="Search by code or name..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-11 pr-4 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition"
+            />
+          </div>
         </div>
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-          <StatCard
-            icon={<BookOpen className="w-6 h-6" />}
-            label="Total Subjects"
-            value={items.length}
-            color="from-emerald-500 to-teal-600"
-            bgColor="from-emerald-50 to-teal-50"
-          />
-          <StatCard
-            icon={<Building2 className="w-6 h-6" />}
-            label="Total Sections"
-            value={totalSections}
-            color="from-blue-500 to-cyan-600"
-            bgColor="from-blue-50 to-cyan-50"
-          />
-          <StatCard
-            icon={<Users className="w-6 h-6" />}
-            label="Total Students"
-            value={totalStudents}
-            color="from-violet-500 to-purple-600"
-            bgColor="from-violet-50 to-purple-50"
-          />
-        </div>
+        {/* Error */}
+        {error && (
+          <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-700 shadow-sm">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+              <p className="text-sm">{error}</p>
+            </div>
+          </div>
+        )}
 
         {/* Table */}
-        <div className="bg-white/70 backdrop-blur-sm rounded-2xl border border-white/20 shadow-xl overflow-hidden">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
-                <tr>
-                  <th className="px-6 py-4 text-left font-semibold text-gray-700 uppercase text-xs tracking-wider">
-                    Subject Code
-                  </th>
-                  <th className="px-6 py-4 text-left font-semibold text-gray-700 uppercase text-xs tracking-wider">
-                    Subject Name
-                  </th>
-                  <th className="px-6 py-4 text-left font-semibold text-gray-700 uppercase text-xs tracking-wider">
-                    Course
-                  </th>
-                  <th className="px-6 py-4 text-left font-semibold text-gray-700 uppercase text-xs tracking-wider">
-                    Department
-                  </th>
-                  <th className="px-6 py-4 text-left font-semibold text-gray-700 uppercase text-xs tracking-wider">
-                    <div className="flex items-center gap-1">
-                      <Calendar className="w-4 h-4" />
-                      AY / Semester
-                    </div>
-                  </th>
-                  <th className="px-6 py-4 text-center font-semibold text-gray-700 uppercase text-xs tracking-wider">
-                    Sections
-                  </th>
-                  <th className="px-6 py-4 text-center font-semibold text-gray-700 uppercase text-xs tracking-wider">
-                    Students
-                  </th>
-                  <th className="px-6 py-4 text-center font-semibold text-gray-700 uppercase text-xs tracking-wider">
-                    Status
-                  </th>
+            <table className="min-w-full">
+              <thead>
+                <tr className="bg-gradient-to-r from-purple-50 to-pink-50 border-b border-gray-200">
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">Subject Code</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">Subject Name</th>
+                  <th className="px-6 py-4 text-right text-sm font-semibold text-gray-700">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {loading ? (
+                {loading && (
                   <tr>
-                    <td colSpan={8} className="py-16 text-center">
+                    <td colSpan={3} className="px-6 py-12 text-center">
                       <div className="flex flex-col items-center gap-3">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                        <span className="text-gray-500 font-medium">Loading subjects...</span>
+                        <Loader2 className="w-8 h-8 text-purple-600 animate-spin" />
+                        <p className="text-sm text-gray-500">Loading subjects...</p>
                       </div>
                     </td>
                   </tr>
-                ) : items.length === 0 ? (
+                )}
+
+                {!loading && subjects.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="py-16 text-center">
+                    <td colSpan={3} className="px-6 py-12 text-center">
                       <div className="flex flex-col items-center gap-3">
-                        <div className="p-4 bg-gray-100 rounded-full">
+                        <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center">
                           <BookOpen className="w-8 h-8 text-gray-400" />
                         </div>
                         <div>
-                          <p className="text-gray-500 font-medium">No subjects found</p>
-                          <p className="text-gray-400 text-sm mt-1">Try refreshing or contact admin</p>
+                          <h3 className="text-lg font-semibold text-gray-900 mb-1">No subjects found</h3>
+                          <p className="text-sm text-gray-500">
+                            {search ? 'Try adjusting your search query' : 'Get started by adding your first subject'}
+                          </p>
                         </div>
                       </div>
                     </td>
                   </tr>
-                ) : (
-                  items.map((it, index) => (
-                    <tr 
-                      key={it.subjectId} 
-                      className="hover:bg-blue-50/50 transition-all duration-200 group"
-                      style={{
-                        animationDelay: `${index * 50}ms`,
-                        animation: 'fadeInUp 0.5s ease-out forwards'
-                      }}
-                    >
-                      <td className="px-6 py-4">
-                        <div className="font-bold text-gray-900 group-hover:text-blue-700 transition-colors">
-                          {it.code}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="font-medium text-gray-800">{it.name}</div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-xs font-medium">
-                          {it.course}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="flex items-center gap-2 text-gray-600">
-                          <Building2 className="w-4 h-4" />
-                          {it.department}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="text-gray-600 font-medium">
-                          {it.academicYear}
-                        </div>
-                        <div className="text-xs text-gray-500">{it.semester}</div>
-                      </td>
-                      <td className="px-6 py-4 text-center">
-                        <div className="inline-flex items-center justify-center w-8 h-8 bg-blue-100 text-blue-700 rounded-full font-bold text-sm">
-                          {it.sections}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-center">
-                        <div className="inline-flex items-center justify-center min-w-[2rem] h-8 bg-purple-100 text-purple-700 rounded-full font-bold text-sm px-3">
-                          {it.students}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-center">
-                        <span
-                          className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold shadow-sm ${
-                            it.status === 'ACTIVE'
-                              ? 'bg-gradient-to-r from-green-400 to-emerald-500 text-white'
-                              : 'bg-gradient-to-r from-red-400 to-rose-500 text-white'
-                          }`}
-                        >
-                          <div className={`w-2 h-2 rounded-full ${
-                            it.status === 'ACTIVE' ? 'bg-white' : 'bg-white'
-                          }`}></div>
-                          {it.status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))
                 )}
+
+                {!loading && subjects.map((s) => (
+                  <tr key={s.subjectId} className="hover:bg-gradient-to-r hover:from-purple-50/50 hover:to-pink-50/50 transition-colors">
+                    <td className="px-6 py-4">
+                      <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gradient-to-r from-purple-100 to-pink-100 text-purple-700 text-sm font-semibold">
+                        {s.subjectCode}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="text-gray-900 font-medium">{s.subjectName}</span>
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <a
+                        href={`/list/subjects/${s.subjectId}`}
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white border border-gray-200 text-gray-700 hover:border-purple-300 hover:bg-purple-50 hover:text-purple-700 transition-all text-sm font-medium shadow-sm hover:shadow"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                        Edit
+                      </a>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
         </div>
-      </div>
 
-      <style jsx>{`
-        @keyframes fadeInUp {
-          from {
-            opacity: 0;
-            transform: translateY(20px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-      `}</style>
-    </div>
-  );
-}
-
-function StatCard({ 
-  icon, 
-  label, 
-  value, 
-  color, 
-  bgColor 
-}: { 
-  icon: React.ReactNode; 
-  label: string; 
-  value: number | string; 
-  color: string;
-  bgColor: string;
-}) {
-  return (
-    <div className={`relative rounded-2xl border border-white/20 shadow-lg overflow-hidden bg-gradient-to-br ${bgColor} backdrop-blur-sm hover:shadow-xl transition-all duration-300 transform hover:scale-105`}>
-      <div className="p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="text-sm font-medium text-gray-600 mb-2">{label}</div>
-            <div className="text-3xl font-bold text-gray-800">{value}</div>
+        {/* Footer count */}
+        {!loading && subjects.length > 0 && (
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
+            <p className="text-sm text-gray-600 text-center">
+              Showing <span className="font-semibold text-gray-900">{subjects.length}</span>{' '}
+              {subjects.length === 1 ? 'subject' : 'subjects'}
+              {search && <> matching "<span className="font-medium text-purple-600">{search}</span>"</>}
+            </p>
           </div>
-          <div className={`p-3 rounded-xl bg-gradient-to-r ${color} shadow-lg`}>
-            <div className="text-white">
-              {icon}
-            </div>
-          </div>
-        </div>
+        )}
       </div>
-      <div className={`absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r ${color}`}></div>
     </div>
   );
 }

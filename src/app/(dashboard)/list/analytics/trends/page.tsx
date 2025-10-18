@@ -1,481 +1,482 @@
-"use client";
+'use client';
 
-import { useEffect, useMemo, useState } from "react";
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-  CartesianGrid,
-  AreaChart,
-  Area,
-} from "recharts";
-import { 
-  TrendingUp, 
-  Calendar, 
-  Filter, 
-  RotateCcw, 
-  Users, 
-  UserCheck, 
-  UserX, 
-  Clock, 
-  Shield,
-  BarChart3
-} from "lucide-react";
+import React, { useEffect, useMemo, useState } from 'react';
+import { Calendar, RefreshCw, TrendingUp, Filter, ChevronLeft, ChevronRight, AlertCircle, BarChart3, LineChart } from 'lucide-react';
 
-type DayRow = {
+type TrendRow = {
+  code: string;
+  name: string;
   date: string;
   present: number;
   absent: number;
   late: number;
   excused: number;
-  total: number;
 };
 
-type SubjectMeta = { 
-  code: string; 
-  name: string; 
-};
+type ApiResponse = { trends: TrendRow[] };
 
-export default function ClassAttendanceTrendsPage() {
-  const instructorId = 2; // demo
-  const [days, setDays] = useState<DayRow[]>([]);
-  const [subjects, setSubjects] = useState<SubjectMeta[]>([]);
+export default function AttendanceTrendsPage() {
+  const instructorId = 7;
+
+  const [data, setData] = useState<TrendRow[]>([]);
+  const [err, setErr] = useState('');
   const [loading, setLoading] = useState(false);
-  const [range, setRange] = useState("30");
-  const [subject, setSubject] = useState("");
-  const [chartType, setChartType] = useState<'line' | 'area'>('line');
+  const [start, setStart] = useState('');
+  const [end, setEnd] = useState('');
+  const [selected, setSelected] = useState('');
+  const [activeTab, setActiveTab] = useState<'present' | 'absent' | 'late' | 'excused'>('present');
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
 
   async function load() {
-    setLoading(true);
-    const p = new URLSearchParams();
-    p.set("instructorId", String(instructorId));
-    p.set("days", range);
-    if (subject) p.set("subject", subject);
-    const r = await fetch(`/api/analytics/trends?${p.toString()}`);
-    const j = await r.json();
-    setDays(j.days ?? []);
-    setSubjects(j.subjects ?? []);
-    setLoading(false);
+    try {
+      setLoading(true);
+      setErr('');
+      const p = new URLSearchParams();
+      p.set('instructorId', String(instructorId));
+      if (start) p.set('start', start);
+      if (end) p.set('end', end);
+      if (selected) p.set('scheduleId', selected);
+      const res = await fetch(`/api/analytics/trends?${p.toString()}`, {
+        cache: 'no-store',
+      });
+      const j: ApiResponse = await res.json();
+      if (!res.ok) throw new Error((j as any)?.error || 'Failed to load trends');
+      setData(j.trends);
+      setPage(1);
+    } catch (e: any) {
+      setErr(e?.message || 'Failed to load trends');
+      setData([]);
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
     load();
-  }, [range, subject]);
+  }, []);
 
-  const aggregates = useMemo(() => {
-    return days.reduce(
-      (s, it) => ({
-        total: s.total + it.total,
-        present: s.present + it.present,
-        absent: s.absent + it.absent,
-        late: s.late + it.late,
-        excused: s.excused + it.excused,
-      }),
-      { total: 0, present: 0, absent: 0, late: 0, excused: 0 }
-    );
-  }, [days]);
+  const classOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    data.forEach(d => {
+      if (!map.has(d.code)) map.set(d.code, d.name);
+    });
+    return Array.from(map.entries());
+  }, [data]);
 
-  const getAttendanceRate = () => {
-    return aggregates.total > 0 ? ((aggregates.present / aggregates.total) * 100).toFixed(1) : '0.0';
+  const filtered = useMemo(() => {
+    if (!selected) return data;
+    return data.filter(d => d.code === selected);
+  }, [selected, data]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const pageRows = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return filtered.slice(start, start + pageSize);
+  }, [filtered, page]);
+
+  const chartData = useMemo(() => {
+    if (filtered.length === 0) return { points: '', circles: [] };
+    
+    const values = filtered.map(r => r[activeTab]);
+    const maxValue = Math.max(...values, 1);
+    const width = 600;
+    const height = 180;
+    const padding = 20;
+    
+    const points = filtered.map((r, i) => {
+      const x = padding + (i / Math.max(1, filtered.length - 1)) * (width - padding * 2);
+      const y = height - padding - (r[activeTab] / maxValue) * (height - padding * 2);
+      return { x, y, value: r[activeTab], date: r.date };
+    });
+    
+    return {
+      points: points.map(p => `${p.x},${p.y}`).join(' '),
+      circles: points,
+      maxValue,
+    };
+  }, [filtered, activeTab]);
+
+  const getTabColor = (tab: typeof activeTab) => {
+    const colors = {
+      present: 'emerald',
+      absent: 'rose',
+      late: 'amber',
+      excused: 'blue',
+    };
+    return colors[tab];
   };
 
-  const getTrendData = () => {
-    return days.map(day => ({
-      ...day,
-      attendanceRate: day.total > 0 ? ((day.present / day.total) * 100) : 0,
-      formattedDate: new Date(day.date).toLocaleDateString('en-US', { 
-        month: 'short', 
-        day: 'numeric' 
-      })
-    }));
-  };
-
-  const CustomTooltip = ({ active, payload, label }: any) => {
-    if (active && payload && payload.length) {
-      return (
-        <div className="bg-white p-4 rounded-lg shadow-lg border border-gray-200">
-          <p className="font-semibold text-gray-900 mb-2">{label}</p>
-          {payload.map((entry: any, index: number) => (
-            <p key={index} style={{ color: entry.color }} className="text-sm">
-              {`${entry.name}: ${entry.value}`}
-            </p>
-          ))}
-          {payload[0] && (
-            <p className="text-sm text-gray-600 mt-1 pt-1 border-t">
-              Total: {payload.reduce((sum: number, entry: any) => sum + entry.value, 0)}
-            </p>
-          )}
-        </div>
-      );
-    }
-    return null;
+  const getLineColor = () => {
+    const colors = {
+      present: '#10b981',
+      absent: '#f43f5e',
+      late: '#f59e0b',
+      excused: '#3b82f6',
+    };
+    return colors[activeTab];
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
-      <div className="max-w-7xl mx-auto p-6 space-y-8">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+      <div className="mx-auto max-w-7xl p-6 space-y-6">
         {/* Header */}
-        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-indigo-100 rounded-lg">
-              <TrendingUp className="w-6 h-6 text-indigo-600" />
-            </div>
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">Attendance Trends</h1>
-              <p className="text-gray-600">Track attendance patterns over time</p>
-            </div>
-          </div>
-          
-          <div className="flex items-center gap-3 flex-wrap">
-            <div className="flex items-center gap-2">
-              <Filter className="w-4 h-4 text-gray-500" />
-              <select
-                className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                value={subject}
-                onChange={(e) => setSubject(e.target.value)}
-              >
-                <option value="">All subjects</option>
-                {subjects.map((s) => (
-                  <option key={s.code} value={s.code}>
-                    {s.code} — {s.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            
-            <div className="flex items-center gap-2">
-              <Calendar className="w-4 h-4 text-gray-500" />
-              <select
-                className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                value={range}
-                onChange={(e) => setRange(e.target.value)}
-              >
-                <option value="7">Last 7 days</option>
-                <option value="14">Last 14 days</option>
-                <option value="30">Last 30 days</option>
-                <option value="60">Last 60 days</option>
-                <option value="90">Last 90 days</option>
-              </select>
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div className="space-y-1">
+              <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+                Attendance Trends
+              </h1>
+              <p className="text-sm text-gray-500 flex items-center gap-2">
+                <TrendingUp className="w-4 h-4" />
+                View daily attendance patterns per class
+              </p>
             </div>
 
-            <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
-              <button
-                onClick={() => setChartType('line')}
-                className={`p-2 rounded-md transition-colors ${
-                  chartType === 'line' 
-                    ? 'bg-white shadow-sm text-indigo-600' 
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                <TrendingUp className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => setChartType('area')}
-                className={`p-2 rounded-md transition-colors ${
-                  chartType === 'area' 
-                    ? 'bg-white shadow-sm text-indigo-600' 
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                <BarChart3 className="w-4 h-4" />
-              </button>
-            </div>
-            
             <button
               onClick={load}
               disabled={loading}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white rounded-lg font-medium transition-colors shadow-sm"
+              className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-2.5 text-white shadow-md hover:shadow-lg hover:from-blue-700 hover:to-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <RotateCcw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-              {loading ? 'Loading...' : 'Refresh'}
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              Refresh
             </button>
           </div>
         </div>
 
-        {/* Summary Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-          <StatCard 
-            icon={<Users className="w-5 h-5" />}
-            label="Total Records" 
-            value={aggregates.total.toLocaleString()} 
-            color="bg-blue-500"
-          />
-          <StatCard 
-            icon={<UserCheck className="w-5 h-5" />}
-            label="Present" 
-            value={aggregates.present.toLocaleString()} 
-            color="bg-green-500"
-          />
-          <StatCard 
-            icon={<UserX className="w-5 h-5" />}
-            label="Absent" 
-            value={aggregates.absent.toLocaleString()} 
-            color="bg-red-500"
-          />
-          <StatCard 
-            icon={<Clock className="w-5 h-5" />}
-            label="Late" 
-            value={aggregates.late.toLocaleString()} 
-            color="bg-yellow-500"
-          />
-          <StatCard 
-            icon={<Shield className="w-5 h-5" />}
-            label="Excused" 
-            value={aggregates.excused.toLocaleString()} 
-            color="bg-purple-500"
-          />
-          <StatCard 
-            icon={<TrendingUp className="w-5 h-5" />}
-            label="Attendance Rate" 
-            value={`${getAttendanceRate()}%`} 
-            color="bg-indigo-500"
-          />
+        {/* Filters */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
+          <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-center">
+            <div className="flex items-center gap-2 flex-1">
+              <Filter className="w-4 h-4 text-gray-400" />
+              <span className="text-sm font-medium text-gray-600">Filters:</span>
+            </div>
+            
+            <div className="flex flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-gray-400" />
+                <input
+                  type="date"
+                  value={start}
+                  onChange={e => setStart(e.target.value)}
+                  className="rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Start date"
+                />
+                <span className="text-gray-400">to</span>
+                <input
+                  type="date"
+                  value={end}
+                  onChange={e => setEnd(e.target.value)}
+                  className="rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="End date"
+                />
+              </div>
+              
+              <select
+                className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={selected}
+                onChange={e => setSelected(e.target.value)}
+              >
+                <option value="">All Classes</option>
+                {classOptions.map(([code, name]) => (
+                  <option key={code} value={code}>
+                    {code} — {name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
         </div>
 
-        {/* Chart */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
-            <h2 className="text-lg font-semibold text-gray-900">Attendance Trends</h2>
-            <p className="text-sm text-gray-600 mt-1">
-              {subject ? `Showing data for ${subject}` : 'Showing data for all subjects'} 
-              {' '}over the last {range} days
+        {/* Error */}
+        {err && (
+          <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-700 shadow-sm">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+              <p className="text-sm">{err}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Chart Card */}
+        {!loading && filtered.length > 0 && (
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">Trend Visualization</h2>
+                <p className="text-sm text-gray-500">{filtered.length} data points</p>
+              </div>
+              <LineChart className="w-5 h-5 text-gray-400" />
+            </div>
+
+            {/* Tabs */}
+            <div className="flex gap-2 mb-6 border-b border-gray-200">
+              {(['present', 'absent', 'late', 'excused'] as const).map((tab) => {
+                const color = getTabColor(tab);
+                const isActive = activeTab === tab;
+                return (
+                  <button
+                    key={tab}
+                    onClick={() => setActiveTab(tab)}
+                    className={`px-4 py-2 text-sm font-medium capitalize transition-all relative ${
+                      isActive
+                        ? `text-${color}-700`
+                        : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    {tab}
+                    {isActive && (
+                      <div className={`absolute bottom-0 left-0 right-0 h-0.5 bg-${color}-500`} 
+                           style={{ backgroundColor: getLineColor() }} />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Chart */}
+            <div className="relative">
+              <svg viewBox="0 0 600 200" className="w-full h-64 bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl">
+                {/* Grid lines */}
+                {[0, 25, 50, 75, 100].map((percent) => {
+                  const y = 180 - (percent / 100) * 160 + 20;
+                  return (
+                    <g key={percent}>
+                      <line
+                        x1="20"
+                        y1={y}
+                        x2="580"
+                        y2={y}
+                        stroke="#e5e7eb"
+                        strokeWidth="1"
+                        strokeDasharray="4,4"
+                      />
+                      <text x="5" y={y + 4} fontSize="10" fill="#9ca3af">
+                        {Math.round((percent / 100) * chartData.maxValue)}
+                      </text>
+                    </g>
+                  );
+                })}
+
+                {/* Area fill */}
+                {chartData.points && (
+                  <polygon
+                    points={`20,180 ${chartData.points} ${580},180`}
+                    fill={getLineColor()}
+                    fillOpacity="0.1"
+                  />
+                )}
+
+                {/* Line */}
+                {chartData.points && (
+                  <polyline
+                    fill="none"
+                    stroke={getLineColor()}
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    points={chartData.points}
+                  />
+                )}
+
+                {/* Points */}
+                {chartData.circles.map((p, i) => (
+                  <g key={i}>
+                    <circle
+                      cx={p.x}
+                      cy={p.y}
+                      r={5}
+                      fill="white"
+                      stroke={getLineColor()}
+                      strokeWidth="2"
+                      className="hover:r-7 transition-all cursor-pointer"
+                    />
+                    <title>{`${p.date}: ${p.value}`}</title>
+                  </g>
+                ))}
+              </svg>
+            </div>
+
+            {/* Legend */}
+            <div className="mt-4 flex items-center justify-center gap-6 text-sm">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: getLineColor() }} />
+                <span className="text-gray-600 capitalize">{activeTab}</span>
+              </div>
+              <div className="text-gray-500">
+                Max: <span className="font-semibold text-gray-900">{chartData.maxValue}</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Empty Chart State */}
+        {!loading && filtered.length === 0 && (
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center">
+            <div className="flex flex-col items-center gap-3">
+              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center">
+                <BarChart3 className="w-8 h-8 text-gray-400" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-1">No trend data available</h3>
+                <p className="text-sm text-gray-500">
+                  Adjust your filters or select a date range to view trends
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Table */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-100">
+            <h2 className="text-lg font-semibold text-gray-900">Detailed Records</h2>
+            <p className="text-sm text-gray-500 mt-0.5">
+              {filtered.length} total records {selected && `for ${selected}`}
             </p>
           </div>
-          
-          <div className="p-6">
-            {loading ? (
-              <div className="py-16 flex flex-col items-center gap-3">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
-                <span className="text-gray-500">Loading trend data...</span>
-              </div>
-            ) : days.length === 0 ? (
-              <div className="py-16 flex flex-col items-center gap-3">
-                <TrendingUp className="w-12 h-12 text-gray-300" />
-                <span className="text-gray-500">No trend data available</span>
-                <p className="text-sm text-gray-400">Try adjusting your filters or date range</p>
-              </div>
-            ) : (
-              <div className="h-96">
-                <ResponsiveContainer width="100%" height="100%">
-                  {chartType === 'line' ? (
-                    <LineChart data={getTrendData()}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                      <XAxis 
-                        dataKey="formattedDate" 
-                        fontSize={12}
-                        tick={{ fill: '#6b7280' }}
-                        axisLine={{ stroke: '#e5e7eb' }}
-                      />
-                      <YAxis 
-                        allowDecimals={false} 
-                        fontSize={12}
-                        tick={{ fill: '#6b7280' }}
-                        axisLine={{ stroke: '#e5e7eb' }}
-                      />
-                      <Tooltip content={<CustomTooltip />} />
-                      <Legend />
-                      <Line 
-                        type="monotone" 
-                        dataKey="present" 
-                        stroke="#10b981" 
-                        strokeWidth={3} 
-                        dot={{ fill: '#10b981', r: 4 }}
-                        name="Present"
-                      />
-                      <Line 
-                        type="monotone" 
-                        dataKey="absent" 
-                        stroke="#ef4444" 
-                        strokeWidth={3} 
-                        dot={{ fill: '#ef4444', r: 4 }}
-                        name="Absent"
-                      />
-                      <Line 
-                        type="monotone" 
-                        dataKey="late" 
-                        stroke="#f59e0b" 
-                        strokeWidth={3} 
-                        dot={{ fill: '#f59e0b', r: 4 }}
-                        name="Late"
-                      />
-                      <Line 
-                        type="monotone" 
-                        dataKey="excused" 
-                        stroke="#8b5cf6" 
-                        strokeWidth={3} 
-                        dot={{ fill: '#8b5cf6', r: 4 }}
-                        name="Excused"
-                      />
-                    </LineChart>
-                  ) : (
-                    <AreaChart data={getTrendData()}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                      <XAxis 
-                        dataKey="formattedDate" 
-                        fontSize={12}
-                        tick={{ fill: '#6b7280' }}
-                        axisLine={{ stroke: '#e5e7eb' }}
-                      />
-                      <YAxis 
-                        allowDecimals={false} 
-                        fontSize={12}
-                        tick={{ fill: '#6b7280' }}
-                        axisLine={{ stroke: '#e5e7eb' }}
-                      />
-                      <Tooltip content={<CustomTooltip />} />
-                      <Legend />
-                      <Area
-                        type="monotone"
-                        dataKey="present"
-                        stackId="1"
-                        stroke="#10b981"
-                        fill="#10b981"
-                        fillOpacity={0.7}
-                        name="Present"
-                      />
-                      <Area
-                        type="monotone"
-                        dataKey="late"
-                        stackId="1"
-                        stroke="#f59e0b"
-                        fill="#f59e0b"
-                        fillOpacity={0.7}
-                        name="Late"
-                      />
-                      <Area
-                        type="monotone"
-                        dataKey="excused"
-                        stackId="1"
-                        stroke="#8b5cf6"
-                        fill="#8b5cf6"
-                        fillOpacity={0.7}
-                        name="Excused"
-                      />
-                      <Area
-                        type="monotone"
-                        dataKey="absent"
-                        stackId="1"
-                        stroke="#ef4444"
-                        fill="#ef4444"
-                        fillOpacity={0.7}
-                        name="Absent"
-                      />
-                    </AreaChart>
-                  )}
-                </ResponsiveContainer>
-              </div>
-            )}
-          </div>
-        </div>
 
-        {/* Data Table */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
-            <h2 className="text-lg font-semibold text-gray-900">Daily Breakdown</h2>
-          </div>
-          
           <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Present</th>
-                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Absent</th>
-                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Late</th>
-                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Excused</th>
-                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
-                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Rate</th>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-gray-200">
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">Date</th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">Course Code</th>
+                  <th className="px-6 py-4 text-right text-sm font-semibold text-gray-700">Present</th>
+                  <th className="px-6 py-4 text-right text-sm font-semibold text-gray-700">Absent</th>
+                  <th className="px-6 py-4 text-right text-sm font-semibold text-gray-700">Late</th>
+                  <th className="px-6 py-4 text-right text-sm font-semibold text-gray-700">Excused</th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {days.length === 0 && !loading ? (
-                  <tr>
-                    <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
-                      No data available for the selected period
-                    </td>
-                  </tr>
-                ) : (
-                  days.map((d, index) => {
-                    const rate = d.total > 0 ? ((d.present / d.total) * 100) : 0;
-                    const formattedDate = new Date(d.date).toLocaleDateString('en-US', { 
-                      weekday: 'short',
-                      month: 'short',
-                      day: 'numeric',
-                      year: 'numeric'
-                    });
-                    
-                    return (
-                      <tr key={d.date} className={`hover:bg-gray-50 transition-colors ${index % 2 === 0 ? 'bg-white' : 'bg-gray-25'}`}>
-                        <td className="px-6 py-4 font-medium text-gray-900">{formattedDate}</td>
-                        <td className="px-6 py-4 text-center">
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium text-green-800 bg-green-100">
-                            {d.present}
-                          </span>
+              <tbody className="divide-y divide-gray-100">
+                {loading && (
+                  <>
+                    {Array.from({ length: pageSize }).map((_, i) => (
+                      <tr key={`sk-${i}`} className="animate-pulse">
+                        <td className="px-6 py-4">
+                          <div className="h-4 w-24 rounded-lg bg-gray-200" />
                         </td>
-                        <td className="px-6 py-4 text-center">
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium text-red-800 bg-red-100">
-                            {d.absent}
-                          </span>
+                        <td className="px-6 py-4">
+                          <div className="h-4 w-20 rounded-lg bg-gray-200" />
                         </td>
-                        <td className="px-6 py-4 text-center">
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium text-yellow-800 bg-yellow-100">
-                            {d.late}
-                          </span>
+                        <td className="px-6 py-4">
+                          <div className="h-4 w-12 rounded-lg bg-gray-200 ml-auto" />
                         </td>
-                        <td className="px-6 py-4 text-center">
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium text-purple-800 bg-purple-100">
-                            {d.excused}
-                          </span>
+                        <td className="px-6 py-4">
+                          <div className="h-4 w-12 rounded-lg bg-gray-200 ml-auto" />
                         </td>
-                        <td className="px-6 py-4 text-center font-medium text-gray-900">
-                          {d.total}
+                        <td className="px-6 py-4">
+                          <div className="h-4 w-12 rounded-lg bg-gray-200 ml-auto" />
                         </td>
-                        <td className="px-6 py-4 text-center">
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            rate >= 90 ? 'text-green-800 bg-green-100' :
-                            rate >= 75 ? 'text-yellow-800 bg-yellow-100' :
-                            'text-red-800 bg-red-100'
-                          }`}>
-                            {rate.toFixed(1)}%
-                          </span>
+                        <td className="px-6 py-4">
+                          <div className="h-4 w-12 rounded-lg bg-gray-200 ml-auto" />
                         </td>
                       </tr>
-                    );
-                  })
+                    ))}
+                  </>
                 )}
+
+                {!loading && pageRows.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="px-6 py-16 text-center">
+                      <div className="flex flex-col items-center gap-3">
+                        <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center">
+                          <BarChart3 className="w-8 h-8 text-gray-400" />
+                        </div>
+                        <div>
+                          <h3 className="text-lg font-semibold text-gray-900 mb-1">No records found</h3>
+                          <p className="text-sm text-gray-500">Try adjusting your filters</p>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+
+                {!loading &&
+                  pageRows.map((r, idx) => (
+                    <tr key={idx} className="hover:bg-gradient-to-r hover:from-blue-50/50 hover:to-indigo-50/50 transition-colors">
+                      <td className="px-6 py-4">
+                        <span className="text-gray-900 font-medium">{r.date}</span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="inline-flex items-center px-3 py-1.5 rounded-lg bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-700 text-sm font-semibold">
+                          {r.code}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <span className="text-emerald-700 font-semibold">{r.present}</span>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <span className="text-rose-700 font-semibold">{r.absent}</span>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <span className="text-amber-700 font-semibold">{r.late}</span>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <span className="text-blue-700 font-semibold">{r.excused}</span>
+                      </td>
+                    </tr>
+                  ))}
               </tbody>
             </table>
           </div>
-        </div>
-      </div>
-    </div>
-  );
-}
 
-function StatCard({ 
-  icon, 
-  label, 
-  value, 
-  color 
-}: { 
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-  color: string;
-}) {
-  return (
-    <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
-      <div className="flex items-center gap-3 mb-2">
-        <div className={`p-2 rounded-lg ${color} text-white`}>
-          {icon}
+          {/* Pagination */}
+          {!loading && filtered.length > pageSize && (
+            <div className="flex flex-col md:flex-row items-center justify-between gap-4 border-t border-gray-200 p-4 bg-gray-50">
+              <div className="text-sm text-gray-600">
+                Showing{' '}
+                <span className="font-semibold text-gray-900">
+                  {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, filtered.length)}
+                </span>{' '}
+                of <span className="font-semibold text-gray-900">{filtered.length}</span> records
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                  className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  Previous
+                </button>
+
+                <div className="flex items-center gap-1">
+                  {totalPages <= 7 ? (
+                    [...Array(totalPages)].map((_, i) => (
+                      <button
+                        key={i}
+                        onClick={() => setPage(i + 1)}
+                        className={`w-9 h-9 rounded-lg text-sm font-medium transition-all ${
+                          page === i + 1
+                            ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md'
+                            : 'text-gray-600 hover:bg-gray-100'
+                        }`}
+                      >
+                        {i + 1}
+                      </button>
+                    ))
+                  ) : (
+                    <span className="px-3 text-sm text-gray-600">
+                      Page <span className="font-semibold text-gray-900">{page}</span> of {totalPages}
+                    </span>
+                  )}
+                </div>
+
+                <button
+                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                  disabled={page === totalPages}
+                  className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                >
+                  Next
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
-      <div className="text-sm font-medium text-gray-600 mb-1">{label}</div>
-      <div className="text-2xl font-bold text-gray-900">{value}</div>
     </div>
   );
 }

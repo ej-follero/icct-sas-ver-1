@@ -189,20 +189,21 @@ export default function RecordAttendancePage() {
 
     try {
       setSaving(true);
-      const r = await fetch("/api/attendance/bulk", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          date,
-          instructorId,
-          scheduleId: selectedScheduleId,
-          entries: students.map((s) => ({
-            studentId: s.studentId,
-            userId: s.userId,
-            status: s.status,
-          })),
-        }),
-      });
+const r = await fetch('/api/attendance/bulk', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    date,
+    instructorId,
+    subjectSchedId: selectedScheduleId,    // <-- FIX
+    entries: students.map(s => ({
+      studentId: s.studentId,
+      userId: s.userId,
+      status: s.status,
+    })),
+  }),
+});
+
       if (!r.ok) {
         const j = await r.json().catch(() => ({}));
         throw new Error(j?.error || "Failed to save attendance");

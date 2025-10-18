@@ -1,247 +1,365 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Users, UserCheck, RefreshCw, User, School } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Loader2, Search, ChevronLeft, ChevronRight, ArrowUpDown, Download, Users, Filter, SortAsc, SortDesc } from 'lucide-react';
 
 type StudentRow = {
-  studentId: number;
-  number: string;
-  name: string;
-  gender: string;
-  status: string;
-  section: string;
+  id: number;
+  studentIdNum: string;
+  firstName: string;
+  lastName: string;
+  fullName: string;
 };
 
-export default function Page() {
-  const [items, setItems] = useState<StudentRow[]>([]);
-  const [loading, setLoading] = useState(false);
+type ApiResp = {
+  items: StudentRow[];
+  total: number;
+  page: number;
+  pageSize: number;
+  error?: string;
+};
 
-  const search = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : undefined;
-  const instructorId = Number(search?.get('instructorId') || 2);
+const PAGE_SIZES = [10, 25, 50, 100] as const;
+
+export default function StudentsPage() {
+  const [items, setItems] = useState<StudentRow[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<typeof PAGE_SIZES[number]>(10);
+  const [q, setQ] = useState('');
+  const [qDebounced, setQDebounced] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [sort, setSort] = useState<'name' | 'studentIdNum'>('name');
+  const [order, setOrder] = useState<'asc' | 'desc'>('asc');
+  const [error, setError] = useState('');
+
+  // Debounce search input
+  useEffect(() => {
+    const t = setTimeout(() => setQDebounced(q), 350);
+    return () => clearTimeout(t);
+  }, [q]);
 
   async function load() {
     setLoading(true);
+    setError('');
     try {
-      const r = await fetch(`/api/students?instructorId=${instructorId}`, { cache: 'no-store' });
-      const j = await r.json();
-      setItems(j.items ?? []);
+      const params = new URLSearchParams({
+        page: String(page),
+        pageSize: String(pageSize),
+        q: qDebounced,
+        sort,
+        order,
+      });
+
+      const res = await fetch(`/api/students?${params.toString()}`, { cache: 'no-store' });
+      const data: ApiResp = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'Failed to load students');
+
+      setItems(data.items);
+      setTotal(data.total);
+    } catch (e: any) {
+      setError(e.message || 'Failed to load students');
+      setItems([]);
+      setTotal(0);
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [instructorId]);
+    setPage(1);
+  }, [qDebounced, pageSize, sort, order]);
 
-  const maleCount = items.filter(it => it.gender?.toUpperCase() === 'MALE').length;
-  const femaleCount = items.filter(it => it.gender?.toUpperCase() === 'FEMALE').length;
+  useEffect(() => {
+    load();
+  }, [page, pageSize, qDebounced, sort, order]);
+
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+  function toggleSort(nextBy: 'name' | 'studentIdNum') {
+    if (sort !== nextBy) {
+      setSort(nextBy);
+      setOrder('asc');
+      return;
+    }
+    setOrder((o) => (o === 'asc' ? 'desc' : 'asc'));
+  }
+
+  function exportCSV() {
+    const headers = ['ID Number', 'Student ID', 'Last Name', 'First Name', 'Full Name'];
+    const rows = items.map((r) => [
+      r.studentIdNum,
+      r.id,
+      r.lastName,
+      r.firstName,
+      r.fullName,
+    ]);
+    const csv = [headers, ...rows].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `students-page${page}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  const getColorForInitials = (initials: string) => {
+    const colors = [
+      'bg-blue-100 text-blue-700 border-blue-200',
+      'bg-purple-100 text-purple-700 border-purple-200',
+      'bg-green-100 text-green-700 border-green-200',
+      'bg-orange-100 text-orange-700 border-orange-200',
+      'bg-pink-100 text-pink-700 border-pink-200',
+      'bg-cyan-100 text-cyan-700 border-cyan-200',
+      'bg-indigo-100 text-indigo-700 border-indigo-200',
+    ];
+    const index = initials.charCodeAt(0) % colors.length;
+    return colors[index];
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
-      <div className="p-6 space-y-8 max-w-7xl mx-auto">
+      <div className="mx-auto max-w-7xl p-6 space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl shadow-lg">
-              <Users className="w-8 h-8 text-white" />
-            </div>
-            <div>
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent">
-                Student List
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div className="space-y-1">
+              <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+                Students
               </h1>
-              <p className="text-gray-500 mt-1">Manage your enrolled students</p>
+              <p className="text-sm text-gray-500 flex items-center gap-2">
+                <Users className="w-4 h-4" />
+                {total.toLocaleString()} total students in the system
+              </p>
+            </div>
+
+            <button
+              onClick={exportCSV}
+              disabled={items.length === 0}
+              className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-2.5 text-white shadow-md hover:shadow-lg hover:from-blue-700 hover:to-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Download className="h-4 w-4" />
+              Export CSV
+            </button>
+          </div>
+        </div>
+
+        {/* Search & Filter Bar */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
+          <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-center">
+            <div className="relative flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
+              <input
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Search by name or ID number..."
+                className="w-full rounded-xl border border-gray-200 py-2.5 pl-11 pr-4 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+              />
+            </div>
+
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 bg-white">
+                <Filter className="w-4 h-4 text-gray-400" />
+                <span className="text-xs font-medium text-gray-600">Sort:</span>
+                <span className="text-xs font-semibold text-gray-900">
+                  {sort === 'name' ? 'Name' : 'ID'}
+                </span>
+                {order === 'asc' ? (
+                  <SortAsc className="w-4 h-4 text-blue-600" />
+                ) : (
+                  <SortDesc className="w-4 h-4 text-blue-600" />
+                )}
+              </div>
+
+              <select
+                value={pageSize}
+                onChange={(e) => setPageSize(Number(e.target.value) as typeof PAGE_SIZES[number])}
+                className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                {PAGE_SIZES.map((n) => (
+                  <option key={n} value={n}>
+                    {n} per page
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
-          <button
-            onClick={load}
-            disabled={loading}
-            className="group flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-medium shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 disabled:opacity-70 disabled:cursor-not-allowed disabled:transform-none"
-          >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : 'group-hover:rotate-180 transition-transform duration-300'}`} />
-            Refresh
-          </button>
         </div>
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-          <StatCard
-            icon={<Users className="w-6 h-6" />}
-            label="Total Students"
-            value={items.length}
-            color="from-blue-500 to-cyan-600"
-            bgColor="from-blue-50 to-cyan-50"
-          />
-          <StatCard
-            icon={<User className="w-6 h-6" />}
-            label="Male Students"
-            value={maleCount}
-            color="from-indigo-500 to-purple-600"
-            bgColor="from-indigo-50 to-purple-50"
-          />
-          <StatCard
-            icon={<UserCheck className="w-6 h-6" />}
-            label="Female Students"
-            value={femaleCount}
-            color="from-pink-500 to-rose-600"
-            bgColor="from-pink-50 to-rose-50"
-          />
-        </div>
-
-        {/* Table */}
-        <div className="bg-white/70 backdrop-blur-sm rounded-2xl border border-white/20 shadow-xl overflow-hidden">
+        {/* Students Grid */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
-                <tr>
-                  <th className="px-6 py-4 text-left font-semibold text-gray-700 uppercase text-xs tracking-wider">
-                    Student Number
+            <table className="min-w-full">
+              <thead>
+                <tr className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-gray-200">
+                  <th className="px-6 py-4 text-left">
+                    <button
+                      onClick={() => toggleSort('studentIdNum')}
+                      className="flex items-center gap-2 text-sm font-semibold text-gray-700 hover:text-blue-600 transition-colors group"
+                    >
+                      ID Number
+                      <ArrowUpDown className="h-4 w-4 opacity-50 group-hover:opacity-100" />
+                    </button>
                   </th>
-                  <th className="px-6 py-4 text-left font-semibold text-gray-700 uppercase text-xs tracking-wider">
-                    Student Name
+                  <th className="px-6 py-4 text-left">
+                    <button
+                      onClick={() => toggleSort('name')}
+                      className="flex items-center gap-2 text-sm font-semibold text-gray-700 hover:text-blue-600 transition-colors group"
+                    >
+                      Student Name
+                      <ArrowUpDown className="h-4 w-4 opacity-50 group-hover:opacity-100" />
+                    </button>
                   </th>
-                  <th className="px-6 py-4 text-left font-semibold text-gray-700 uppercase text-xs tracking-wider">
-                    <div className="flex items-center gap-1">
-                      <School className="w-4 h-4" />
-                      Section
-                    </div>
-                  </th>
-                  <th className="px-6 py-4 text-center font-semibold text-gray-700 uppercase text-xs tracking-wider">
-                    Gender
-                  </th>
-                  <th className="px-6 py-4 text-center font-semibold text-gray-700 uppercase text-xs tracking-wider">
-                    Status
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">
+                    System ID
                   </th>
                 </tr>
               </thead>
+
               <tbody className="divide-y divide-gray-100">
-                {loading ? (
+                {loading && (
+                  <>
+                    {Array.from({ length: pageSize }).map((_, i) => (
+                      <tr key={`sk-${i}`} className="animate-pulse">
+                        <td className="px-6 py-4">
+                          <div className="h-4 w-32 rounded-lg bg-gray-200" />
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="h-10 w-10 rounded-full bg-gray-200" />
+                            <div className="space-y-2">
+                              <div className="h-4 w-48 rounded-lg bg-gray-200" />
+                              <div className="h-3 w-32 rounded-lg bg-gray-200" />
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="h-4 w-16 rounded-lg bg-gray-200" />
+                        </td>
+                      </tr>
+                    ))}
+                  </>
+                )}
+
+                {!loading && items.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="py-16 text-center">
+                    <td colSpan={3} className="px-6 py-16 text-center">
                       <div className="flex flex-col items-center gap-3">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                        <span className="text-gray-500 font-medium">Loading students...</span>
-                      </div>
-                    </td>
-                  </tr>
-                ) : items.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="py-16 text-center">
-                      <div className="flex flex-col items-center gap-3">
-                        <div className="p-4 bg-gray-100 rounded-full">
+                        <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center">
                           <Users className="w-8 h-8 text-gray-400" />
                         </div>
                         <div>
-                          <p className="text-gray-500 font-medium">No students found</p>
-                          <p className="text-gray-400 text-sm mt-1">Try refreshing or contact admin</p>
+                          <h3 className="text-lg font-semibold text-gray-900 mb-1">
+                            {error ? 'Error loading students' : 'No students found'}
+                          </h3>
+                          <p className="text-sm text-gray-500">
+                            {error || (q ? 'Try adjusting your search query' : 'No students in the system yet')}
+                          </p>
                         </div>
                       </div>
                     </td>
                   </tr>
-                ) : (
-                  items.map((it, index) => (
-                    <tr 
-                      key={it.studentId} 
-                      className="hover:bg-blue-50/50 transition-all duration-200 group"
-                      style={{
-                        animationDelay: `${index * 30}ms`,
-                        animation: 'fadeInUp 0.5s ease-out forwards'
-                      }}
-                    >
-                      <td className="px-6 py-4">
-                        <div className="font-bold text-gray-900 group-hover:text-blue-700 transition-colors">
-                          {it.number}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 bg-gradient-to-br from-gray-200 to-gray-300 rounded-full flex items-center justify-center">
-                            <User className="w-4 h-4 text-gray-600" />
-                          </div>
-                          <div className="font-medium text-gray-800">{it.name}</div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="px-3 py-1 bg-gradient-to-r from-slate-100 to-slate-200 text-slate-700 rounded-full text-xs font-medium border border-slate-200">
-                          {it.section}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-center">
-                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                          it.gender?.toUpperCase() === 'MALE'
-                            ? 'bg-blue-100 text-blue-700 border border-blue-200'
-                            : 'bg-pink-100 text-pink-700 border border-pink-200'
-                        }`}>
-                          {it.gender}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-center">
-                        <span
-                          className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold shadow-sm ${
-                            it.status === 'ACTIVE'
-                              ? 'bg-gradient-to-r from-green-400 to-emerald-500 text-white'
-                              : 'bg-gradient-to-r from-red-400 to-rose-500 text-white'
-                          }`}
-                        >
-                          <div className={`w-2 h-2 rounded-full bg-white`}></div>
-                          {it.status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))
                 )}
+
+                {!loading &&
+                  items.map((s) => {
+                    const initials = `${(s.firstName || '').charAt(0) || ''}${(s.lastName || '').charAt(0) || ''}`.toUpperCase();
+                    const colorClass = getColorForInitials(initials);
+                    return (
+                      <tr key={s.id} className="hover:bg-gradient-to-r hover:from-blue-50/50 hover:to-indigo-50/50 transition-colors">
+                        <td className="px-6 py-4">
+                          <span className="inline-flex items-center px-3 py-1.5 rounded-lg bg-gray-100 text-gray-700 text-sm font-mono font-medium">
+                            {s.studentIdNum}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className={`flex h-10 w-10 items-center justify-center rounded-full border-2 text-sm font-bold ${colorClass}`}>
+                              {initials || '—'}
+                            </div>
+                            <div>
+                              <div className="text-gray-900 font-semibold">{s.fullName}</div>
+                              <div className="text-xs text-gray-500">
+                                {s.firstName} {s.lastName}
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className="text-gray-600 font-medium">#{s.id}</span>
+                        </td>
+                      </tr>
+                    );
+                  })}
               </tbody>
             </table>
           </div>
-        </div>
-      </div>
 
-      <style jsx>{`
-        @keyframes fadeInUp {
-          from {
-            opacity: 0;
-            transform: translateY(20px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-      `}</style>
-    </div>
-  );
-}
+          {/* Pagination Footer */}
+          {!loading && items.length > 0 && (
+            <div className="flex flex-col md:flex-row items-center justify-between gap-4 border-t border-gray-200 p-4 bg-gray-50">
+              <div className="text-sm text-gray-600">
+                Showing{' '}
+                <span className="font-semibold text-gray-900">
+                  {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, total)}
+                </span>{' '}
+                of <span className="font-semibold text-gray-900">{total.toLocaleString()}</span> students
+              </div>
 
-function StatCard({ 
-  icon, 
-  label, 
-  value, 
-  color, 
-  bgColor 
-}: { 
-  icon: React.ReactNode; 
-  label: string; 
-  value: number | string; 
-  color: string;
-  bgColor: string;
-}) {
-  return (
-    <div className={`relative rounded-2xl border border-white/20 shadow-lg overflow-hidden bg-gradient-to-br ${bgColor} backdrop-blur-sm hover:shadow-xl transition-all duration-300 transform hover:scale-105`}>
-      <div className="p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="text-sm font-medium text-gray-600 mb-2">{label}</div>
-            <div className="text-3xl font-bold text-gray-800">{value}</div>
-          </div>
-          <div className={`p-3 rounded-xl bg-gradient-to-r ${color} shadow-lg`}>
-            <div className="text-white">
-              {icon}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page <= 1}
+                  className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  Previous
+                </button>
+
+                <div className="flex items-center gap-1">
+                  {totalPages <= 7 ? (
+                    [...Array(totalPages)].map((_, i) => (
+                      <button
+                        key={i}
+                        onClick={() => setPage(i + 1)}
+                        className={`w-9 h-9 rounded-lg text-sm font-medium transition-all ${
+                          page === i + 1
+                            ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md'
+                            : 'text-gray-600 hover:bg-gray-100'
+                        }`}
+                      >
+                        {i + 1}
+                      </button>
+                    ))
+                  ) : (
+                    <span className="px-3 text-sm text-gray-600">
+                      Page <span className="font-semibold text-gray-900">{page}</span> of {totalPages}
+                    </span>
+                  )}
+                </div>
+
+                <button
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={page >= totalPages}
+                  className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                >
+                  Next
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
             </div>
-          </div>
+          )}
         </div>
+
+        {/* Loading Indicator */}
+        {loading && (
+          <div className="flex items-center justify-center gap-2 text-sm text-gray-500 py-2">
+            <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
+            <span>Loading students...</span>
+          </div>
+        )}
       </div>
-      <div className={`absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r ${color}`}></div>
     </div>
   );
 }

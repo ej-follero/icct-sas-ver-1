@@ -1,124 +1,108 @@
-// src/app/api/subjects/route.ts
-export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient, ScheduleStatus } from '@prisma/client';
+import { PrismaClient, SemesterType, SubjectStatus, SubjectType } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-type GroupedRow = {
-  subjectId: number;
-  code: string;
-  name: string;
-  department: string | null;
-  course: string | null;
-  academicYear: string | null;
-  semester: string | null; // e.g., 'FIRST_SEMESTER'
-  status: string;
-  sections: Set<number>;
-};
+/**
+ * Try to find valid foreign keys so we don't 500 on POST.
+ * - department: prefer id = 1, otherwise the first available
+ * - course:     pick the first available CourseOffering (uses its courseId)
+ */
+async function getDefaultFKs() {
+  // Department
+  const dept1 = await prisma.department.findUnique({ where: { departmentId: 1 } });
+  const dept   = dept1 ?? (await prisma.department.findFirst({ orderBy: { departmentId: 'asc' } }));
+  if (!dept) throw new Error('No Department found. Create one first.');
 
+  // CourseOffering holds courseId; we only need a valid courseId that exists there.
+  const anyCourseOffering = await prisma.courseOffering.findFirst({ orderBy: { courseId: 'asc' } });
+  if (!anyCourseOffering) throw new Error('No CourseOffering found. Create one first.');
+
+  return { departmentId: dept.departmentId, courseId: anyCourseOffering.courseId };
+}
+
+/** GET /api/subjects?q=... */
 export async function GET(req: NextRequest) {
   try {
     const url = new URL(req.url);
-    const instructorId = Number(url.searchParams.get('instructorId'));
+    const q = url.searchParams.get('q')?.trim() ?? '';
 
-    if (!instructorId || Number.isNaN(instructorId)) {
-      return NextResponse.json({ error: 'instructorId is required' }, { status: 400 });
-    }
+    const where = q
+      ? {
+          OR: [
+            { subjectName: { contains: q, mode: 'insensitive' } },
+            { subjectCode: { contains: q, mode: 'insensitive' } },
+          ],
+        }
+      : undefined;
 
-    // Pull everything we need with precise selects so Prisma types line up
-    const schedules = await prisma.subjectSchedule.findMany({
-      where: {
-        instructorId,
-        status: ScheduleStatus.ACTIVE,
-      },
-      select: {
-        subjectSchedId: true,
-        subjectId: true,
-        sectionId: true,
-        academicYear: true,
-        // This is a RELATION in your schema – get the enum inside it:
-        semester: { select: { semesterType: true } },
-        subject: {
-          select: {
-            subjectId: true,
-            subjectCode: true,
-            subjectName: true,
-            status: true,
-            CourseOffering: {
-              select: {
-                courseCode: true,
-                courseName: true,
-                academicYear: true,
-                semester: true, // this one IS an enum on CourseOffering
-              },
-            },
-            Department: { select: { departmentName: true } },
-          },
-        },
-        section: { select: { sectionId: true } },
-      },
-      orderBy: [{ subjectId: 'asc' }, { sectionId: 'asc' }],
+    const subjects = await prisma.subjects.findMany({
+      where,
+      orderBy: [{ subjectCode: 'asc' }],
+      select: { subjectId: true, subjectCode: true, subjectName: true },
     });
 
-    // Group by subject with strong typing to avoid 'unknown'
-    const grouped = new Map<number, GroupedRow>();
+    return NextResponse.json(subjects);
+  } catch (e: any) {
+    console.error('GET /api/subjects error:', e);
+    return NextResponse.json({ error: e?.message ?? 'Failed to fetch subjects' }, { status: 500 });
+  } finally {
+    await prisma.$disconnect();
+  }
+}
 
-    for (const s of schedules) {
-      const key = s.subjectId;
-      if (!grouped.has(key)) {
-        const subj = s.subject;
-        const co = subj.CourseOffering;
+/** POST /api/subjects  (body: { subjectCode, subjectName, ...optional }) */
+export async function POST(req: NextRequest) {
+  try {
+    const body = await req.json().catch(() => ({}));
+    const subjectCode = String(body.subjectCode ?? '').trim();
+    const subjectName = String(body.subjectName ?? '').trim();
 
-        grouped.set(key, {
-          subjectId: key,
-          code: subj.subjectCode,
-          name: subj.subjectName,
-          department: subj.Department?.departmentName ?? null,
-          course: co ? `${co.courseCode} — ${co.courseName}` : null,
-          // Prefer schedule's AY/semester; fall back to subject's course offering
-          academicYear: s.academicYear ?? co?.academicYear ?? null,
-          semester: s.semester?.semesterType ?? co?.semester ?? null,
-          status: subj.status,
-          sections: new Set<number>(),
-        });
-      }
-      grouped.get(key)!.sections.add(s.sectionId);
+    if (!subjectCode || !subjectName) {
+      return NextResponse.json({ error: 'subjectCode and subjectName are required' }, { status: 400 });
     }
 
-    // Count students across sections per subject
-    const items = await Promise.all(
-      Array.from(grouped.values()).map(async (row) => {
-        const sectionIds = Array.from(row.sections) as number[];
-        const students =
-          sectionIds.length === 0
-            ? 0
-            : await prisma.studentSection.count({
-                where: { sectionId: { in: sectionIds } },
-              });
+    // Unique code guard
+    const exists = await prisma.subjects.findUnique({ where: { subjectCode } });
+    if (exists) {
+      return NextResponse.json({ error: 'Subject code already exists' }, { status: 409 });
+    }
 
-        return {
-          subjectId: row.subjectId,
-          code: row.code,
-          name: row.name,
-          department: row.department,
-          course: row.course,
-          academicYear: row.academicYear,
-          semester: row.semester,
-          status: row.status,
-          sections: sectionIds.length,
-          students,
-        };
-      })
-    );
+    // Find safe defaults for required FKs
+    const { departmentId, courseId } = await getDefaultFKs();
 
-    return NextResponse.json({ items });
+    // Optional inputs with safe fallbacks (your schema requires these)
+    const academicYear = String(body.academicYear ?? '2024-2025');
+    const semester     = (body.semester as SemesterType) ?? 'FIRST_SEMESTER';
+    const totalHours   = Number.isFinite(Number(body.totalHours)) ? Number(body.totalHours) : 54;
+    const lectureUnits = Number.isFinite(Number(body.lectureUnits)) ? Number(body.lectureUnits) : 3;
+    const labUnits     = Number.isFinite(Number(body.labUnits)) ? Number(body.labUnits) : 2;
+
+    const created = await prisma.subjects.create({
+      data: {
+        subjectCode,
+        subjectName,
+        subjectType: SubjectType.LECTURE,
+        status: SubjectStatus.ACTIVE,
+        description: body.description ?? null,
+        lectureUnits,
+        labUnits,
+        creditedUnits: 0,
+        totalHours,
+        prerequisites: body.prerequisites ?? null,
+        courseId,
+        departmentId,
+        academicYear,
+        semester,
+        maxStudents: 30,
+      },
+      select: { subjectId: true, subjectCode: true, subjectName: true },
+    });
+
+    return NextResponse.json(created, { status: 201 });
   } catch (e: any) {
-    console.error('[subjects] error', e);
-    return NextResponse.json(
-      { error: e?.message ?? 'Failed to fetch subjects' },
-      { status: 500 }
-    );
+    console.error('POST /api/subjects error:', e);
+    return NextResponse.json({ error: e?.message ?? 'Failed to create subject' }, { status: 500 });
   } finally {
     await prisma.$disconnect();
   }
