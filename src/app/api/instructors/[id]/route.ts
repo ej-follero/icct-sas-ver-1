@@ -3,48 +3,68 @@ import { prisma } from '@/lib/prisma';
 
 // PATCH /api/instructors/[id] - update instructor
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+  const gate = await assertAdmin(request);
+  if (!('ok' in gate) || gate.ok !== true) return gate.res;
+  
   try {
     const instructorId = parseInt(params.id);
     if (isNaN(instructorId)) {
-      return NextResponse.json({ error: 'Invalid instructor id' }, { status: 400 });
-    }
-
-    // Auth
-    const token = request.cookies.get('token')?.value;
-    if (!token) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
-    }
-    const jwt = require('jsonwebtoken');
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const reqUserId = Number((decoded as any)?.userId);
-    if (!Number.isFinite(reqUserId)) {
-      return NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 });
+      return NextResponse.json({ error: 'Invalid instructor ID' }, { status: 400 });
     }
 
     const body = await request.json();
 
-    const updated = await prisma.instructor.update({
-      where: { instructorId },
-      data: {
-        email: body.email,
-        phoneNumber: body.phoneNumber,
-        firstName: body.firstName,
-        middleName: body.middleName,
-        lastName: body.lastName,
-        suffix: body.suffix ?? null,
-        gender: body.gender,
-        instructorType: body.instructorType,
-        departmentId: body.departmentId,
-        officeLocation: body.officeLocation ?? null,
-        officeHours: body.officeHours ?? null,
-        specialization: body.specialization ?? null,
-        employeeId: body.employeeId,
-        rfidTag: body.rfidTag ?? undefined,
+    // Check if this is a status update (only status field provided)
+    if (body.status && Object.keys(body).length === 1) {
+      // Status update only
+      const existing = await prisma.instructor.findUnique({ where: { instructorId } });
+      if (!existing) {
+        return NextResponse.json({ error: 'Instructor not found' }, { status: 404 });
       }
-    });
 
-    return NextResponse.json({ data: updated, message: 'Instructor updated successfully' });
-  } catch (error) {
+      const updated = await prisma.instructor.update({
+        where: { instructorId },
+        data: { status: body.status as Status },
+        include: {
+          Department: {
+            select: {
+              departmentId: true,
+              departmentName: true,
+              departmentCode: true,
+            }
+          }
+        }
+      });
+
+      return NextResponse.json({
+        data: updated,
+        message: 'Instructor status updated successfully',
+      });
+    } else {
+      // Full instructor update
+      const updated = await prisma.instructor.update({
+        where: { instructorId },
+        data: {
+          email: body.email,
+          phoneNumber: body.phoneNumber,
+          firstName: body.firstName,
+          middleName: body.middleName,
+          lastName: body.lastName,
+          suffix: body.suffix ?? null,
+          gender: body.gender,
+          instructorType: body.instructorType,
+          departmentId: body.departmentId,
+          officeLocation: body.officeLocation ?? null,
+          officeHours: body.officeHours ?? null,
+          specialization: body.specialization ?? null,
+          employeeId: body.employeeId,
+          rfidTag: body.rfidTag ?? undefined,
+        }
+      });
+
+      return NextResponse.json({ data: updated, message: 'Instructor updated successfully' });
+    }
+  } catch (error: any) {
     console.error('Error updating instructor:', error);
     return NextResponse.json({ error: 'Failed to update instructor' }, { status: 500 });
   }
@@ -287,55 +307,6 @@ export async function PUT(
       const target = Array.isArray(error.meta?.target) ? error.meta.target.join(',') : error.meta?.target;
       return NextResponse.json({ error: 'Unique constraint failed', target }, { status: 409 });
     }
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
-  }
-}
-
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  const gate = await assertAdmin(request);
-  if (!('ok' in gate) || gate.ok !== true) return gate.res;
-  const { id } = params;
-  try {
-    const instructorId = parseInt(id);
-    if (isNaN(instructorId)) {
-      return NextResponse.json({ error: 'Invalid instructor ID' }, { status: 400 });
-    }
-
-    const body = await request.json();
-    const { status } = body;
-
-    // Check existing instructor
-    const existing = await prisma.instructor.findUnique({ where: { instructorId } });
-    if (!existing) {
-      return NextResponse.json({ error: 'Instructor not found' }, { status: 404 });
-    }
-
-    // Update instructor status
-    const updated = await prisma.instructor.update({
-      where: { instructorId },
-      data: {
-        status: status as Status,
-      },
-      include: {
-        Department: {
-          select: {
-            departmentId: true,
-            departmentName: true,
-            departmentCode: true,
-          }
-        }
-      }
-    });
-
-    return NextResponse.json({
-      data: updated,
-      message: 'Instructor status updated successfully',
-    });
-  } catch (error: any) {
-    console.error('[INSTRUCTOR_PATCH]', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
