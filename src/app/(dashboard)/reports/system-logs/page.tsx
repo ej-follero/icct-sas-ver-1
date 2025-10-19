@@ -762,27 +762,31 @@ export default function SystemLogsPage() {
           open={bulkActionsDialogOpen}
           onOpenChange={setBulkActionsDialogOpen}
           selectedItems={paginatedLogs.filter(item => selectedItems.includes(item.id))}
-          entityType="course"
+          entityType="systemLog"
           entityLabel="log"
           availableActions={[
-            { type: 'status-update', title: 'Update Status', description: 'Update status of selected logs', icon: <Settings className="w-4 h-4" /> },
-            { type: 'notification', title: 'Send Notification', description: 'Send notification to administrators', icon: <Bell className="w-4 h-4" /> },
-            { type: 'export', title: 'Export Data', description: 'Export selected logs data', icon: <Download className="w-4 h-4" /> },
+            { 
+              id: 'status-update', 
+              label: 'Update Status', 
+              description: 'Update status of selected logs', 
+              icon: <Settings className="w-4 h-4" />,
+              tabId: 'status-update'
+            },
+            { 
+              id: 'notification', 
+              label: 'Send Notification', 
+              description: 'Send notification to administrators', 
+              icon: <Bell className="w-4 h-4" />,
+              tabId: 'notification'
+            },
+            { 
+              id: 'export', 
+              label: 'Export Data', 
+              description: 'Export selected logs data', 
+              icon: <Download className="w-4 h-4" />,
+              tabId: 'export'
+            },
           ]}
-          exportColumns={[
-            { id: 'timestamp', label: 'Timestamp', default: true },
-            { id: 'level', label: 'Level', default: true },
-            { id: 'module', label: 'Module', default: true },
-            { id: 'action', label: 'Action', default: true },
-            { id: 'userEmail', label: 'User Email', default: true },
-            { id: 'ipAddress', label: 'IP Address', default: true }
-          ]}
-          notificationTemplates={[]}
-          stats={{
-            total: selectedItems.length,
-            active: paginatedLogs.filter(l => (l.level === 'INFO' || l.level === 'DEBUG') && selectedItems.includes(l.id)).length,
-            inactive: paginatedLogs.filter(l => (l.level === 'ERROR' || l.level === 'WARNING') && selectedItems.includes(l.id)).length
-          }}
           onActionComplete={(actionType: string, results: any) => {
             toast.success(`Bulk action '${actionType}' completed.`);
             setBulkActionsDialogOpen(false);
@@ -798,6 +802,7 @@ export default function SystemLogsPage() {
           }}
           getItemDisplayName={item => item.action}
           getItemStatus={item => item.level}
+          getItemId={item => item.id}
         />
       </div>
     </div>
