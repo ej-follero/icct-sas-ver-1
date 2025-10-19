@@ -29,7 +29,7 @@
     "db:generate": "npx prisma generate",
     "test:email": "node scripts/test-email-functionality.js",
     "test:email:help": "node scripts/test-email-functionality.js --help",
-    "prepare": "husky",
+    "prepare": "husky || echo 'Husky skipped in CI'",
     "precommit:secrets": "lint-staged",
     "perf:test": "node scripts/test-performance-optimizations.js",
     "perf:monitor": "node -e \"console.log('Performance monitoring available at /api/performance/monitor')\"",
