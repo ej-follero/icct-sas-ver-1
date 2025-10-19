@@ -19,12 +19,12 @@ async function assertRole(request: NextRequest, allowed: Array<'SUPER_ADMIN' | '
   }
 }
 
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     // Authorization: SUPER_ADMIN, ADMIN, INSTRUCTOR
     const gate = await assertRole(request, ['SUPER_ADMIN', 'ADMIN', 'INSTRUCTOR']);
     if (!('ok' in gate) || gate.ok !== true) return gate.res;
-    const { id } = params;
+    const { id } = await params;
     const item = await prisma.email.findUnique({ 
       where: { id }, 
       include: { 
@@ -40,13 +40,13 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
   }
 }
 
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     // Authorization: SUPER_ADMIN, ADMIN, INSTRUCTOR (non-admin cannot alter status/priority)
     const gate = await assertRole(request, ['SUPER_ADMIN', 'ADMIN', 'INSTRUCTOR']);
     if (!('ok' in gate) || gate.ok !== true) return gate.res;
     const role = (gate as any).role as 'SUPER_ADMIN' | 'ADMIN' | 'INSTRUCTOR' | undefined;
-    const { id } = params;
+    const { id } = await params;
     const body = await request.json();
     const data: Partial<{ status: EmailStatus; type: EmailFolder; isRead: boolean; isStarred: boolean; isImportant: boolean; priority: Priority }>
       = {};
