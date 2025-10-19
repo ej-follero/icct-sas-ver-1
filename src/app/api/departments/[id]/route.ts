@@ -20,8 +20,8 @@ async function assertAdmin(request: NextRequest) {
 }
 
 // GET a single department by ID
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
-  const { id } = params;
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   try {
     const department = await prisma.department.findUnique({
       where: { departmentId: parseInt(id) },
@@ -43,10 +43,10 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 }
 
 // PATCH (update) a department by ID
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const gate = await assertAdmin(request);
   if (!('ok' in gate) || gate.ok !== true) return gate.res;
-  const { id } = params;
+  const { id } = await params;
   try {
     const body = await request.json();
     const { name, code, headOfDepartment, description, status, courseOfferings, logo } = body;
@@ -119,10 +119,10 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
 }
 
 // DELETE a department by ID
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const gate = await assertAdmin(request);
   if (!('ok' in gate) || gate.ok !== true) return gate.res;
-  const { id } = params;
+  const { id } = await params;
   try {
     // Optional: Check for related records before deleting
     const department = await prisma.department.findUnique({
