@@ -1,6 +1,6 @@
 {
-  "buildCommand": "npm cache clean --force && npm ci --legacy-peer-deps && npm run build",
-  "installCommand": "npm cache clean --force && npm ci --legacy-peer-deps",
+  "buildCommand": "npm cache clean --force && npm ci --legacy-peer-deps --ignore-scripts && npm run build",
+  "installCommand": "npm cache clean --force && npm ci --legacy-peer-deps --ignore-scripts",
   "framework": "nextjs",
   "functions": {
     "src/app/api/**/*.ts": {
