@@ -138,7 +138,7 @@ export async function GET(
 // PATCH update user
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // JWT Authentication - Admin only
@@ -162,7 +162,8 @@ export async function PATCH(
     if (!adminRoles.includes(userCheck.role)) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
-    const userId = parseInt(params.id);
+    const { id } = await params;
+    const userId = parseInt(id);
     
     if (isNaN(userId)) {
       return NextResponse.json(
@@ -251,7 +252,7 @@ export async function PATCH(
 // DELETE user (soft delete by setting status to inactive)
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // JWT Authentication - Admin only
@@ -275,7 +276,8 @@ export async function DELETE(
     if (!adminRoles.includes(userCheck.role)) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
-    const userId = parseInt(params.id);
+    const { id } = await params;
+    const userId = parseInt(id);
     
     if (isNaN(userId)) {
       return NextResponse.json(
