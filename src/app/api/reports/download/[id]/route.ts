@@ -5,7 +5,7 @@ import { join } from 'path';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // Auth: require valid JWT and allowed roles
@@ -45,7 +45,7 @@ export async function GET(
       );
     }
 
-    const reportIdParam = params?.id;
+    const { id: reportIdParam } = await params;
     if (!reportIdParam) {
       return NextResponse.json(
         { error: 'Report ID is required' },
