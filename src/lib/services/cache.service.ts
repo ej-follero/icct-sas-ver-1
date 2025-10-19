@@ -1,4 +1,5 @@
 import Redis from 'ioredis';
+import { env } from '@/lib/env-validation';
 
 export interface CacheOptions {
   ttl?: number; // Time to live in seconds
@@ -19,32 +20,76 @@ export class CacheService {
     hits: 0,
     misses: 0,
   };
+  private isConnected = false;
+  private defaultPrefix = 'icct:';
 
   constructor() {
     this.redis = new Redis({
       host: process.env.REDIS_HOST || 'localhost',
       port: parseInt(process.env.REDIS_PORT || '6379'),
       password: process.env.REDIS_PASSWORD,
-      retryDelayOnFailover: 100,
       maxRetriesPerRequest: 3,
       lazyConnect: true,
+      enableReadyCheck: true,
     });
 
     this.redis.on('error', (err) => {
       console.error('Redis connection error:', err);
+      this.isConnected = false;
     });
 
     this.redis.on('connect', () => {
       console.log('Redis connected successfully');
+      this.isConnected = true;
     });
+
+    this.redis.on('ready', () => {
+      console.log('Redis ready for operations');
+      this.isConnected = true;
+    });
+
+    this.redis.on('close', () => {
+      console.log('Redis connection closed');
+      this.isConnected = false;
+    });
+  }
+
+  /**
+   * Build cache key with prefix
+   */
+  private buildKey(key: string, prefix?: string): string {
+    const keyPrefix = prefix || this.defaultPrefix;
+    return `${keyPrefix}${key}`;
+  }
+
+  /**
+   * Check if Redis is connected
+   */
+  private async ensureConnection(): Promise<boolean> {
+    if (!this.isConnected) {
+      try {
+        await this.redis.ping();
+        this.isConnected = true;
+        return true;
+      } catch (error) {
+        console.error('Redis connection check failed:', error);
+        return false;
+      }
+    }
+    return true;
   }
 
   /**
    * Get value from cache
    */
-  async get<T>(key: string): Promise<T | null> {
+  async get<T>(key: string, options: CacheOptions = {}): Promise<T | null> {
     try {
-      const value = await this.redis.get(key);
+      if (!(await this.ensureConnection())) {
+        return null;
+      }
+
+      const fullKey = this.buildKey(key, options.prefix);
+      const value = await this.redis.get(fullKey);
       if (value) {
         this.stats.hits++;
         return JSON.parse(value);
@@ -64,10 +109,15 @@ export class CacheService {
    */
   async set(key: string, value: any, options: CacheOptions = {}): Promise<boolean> {
     try {
+      if (!(await this.ensureConnection())) {
+        return false;
+      }
+
+      const fullKey = this.buildKey(key, options.prefix);
       const serializedValue = JSON.stringify(value);
       const ttl = options.ttl || 3600; // Default 1 hour
       
-      await this.redis.setex(key, ttl, serializedValue);
+      await this.redis.setex(fullKey, ttl, serializedValue);
       return true;
     } catch (error) {
       console.error('Cache set error:', error);
@@ -78,9 +128,14 @@ export class CacheService {
   /**
    * Delete key from cache
    */
-  async delete(key: string): Promise<boolean> {
+  async delete(key: string, options: CacheOptions = {}): Promise<boolean> {
     try {
-      const result = await this.redis.del(key);
+      if (!(await this.ensureConnection())) {
+        return false;
+      }
+
+      const fullKey = this.buildKey(key, options.prefix);
+      const result = await this.redis.del(fullKey);
       return result > 0;
     } catch (error) {
       console.error('Cache delete error:', error);
@@ -91,10 +146,15 @@ export class CacheService {
   /**
    * Delete multiple keys
    */
-  async deleteMany(keys: string[]): Promise<number> {
+  async deleteMany(keys: string[], options: CacheOptions = {}): Promise<number> {
     try {
+      if (!(await this.ensureConnection())) {
+        return 0;
+      }
+
       if (keys.length === 0) return 0;
-      const result = await this.redis.del(...keys);
+      const fullKeys = keys.map(key => this.buildKey(key, options.prefix));
+      const result = await this.redis.del(...fullKeys);
       return result;
     } catch (error) {
       console.error('Cache delete many error:', error);
@@ -105,9 +165,14 @@ export class CacheService {
   /**
    * Check if key exists
    */
-  async exists(key: string): Promise<boolean> {
+  async exists(key: string, options: CacheOptions = {}): Promise<boolean> {
     try {
-      const result = await this.redis.exists(key);
+      if (!(await this.ensureConnection())) {
+        return false;
+      }
+
+      const fullKey = this.buildKey(key, options.prefix);
+      const result = await this.redis.exists(fullKey);
       return result === 1;
     } catch (error) {
       console.error('Cache exists error:', error);
@@ -136,9 +201,14 @@ export class CacheService {
   /**
    * Invalidate cache by pattern
    */
-  async invalidatePattern(pattern: string): Promise<number> {
+  async invalidatePattern(pattern: string, options: CacheOptions = {}): Promise<number> {
     try {
-      const keys = await this.redis.keys(pattern);
+      if (!(await this.ensureConnection())) {
+        return 0;
+      }
+
+      const fullPattern = this.buildKey(pattern, options.prefix);
+      const keys = await this.redis.keys(fullPattern);
       if (keys.length === 0) return 0;
       
       const result = await this.redis.del(...keys);
@@ -200,14 +270,35 @@ export class CacheService {
   /**
    * Health check
    */
-  async healthCheck(): Promise<boolean> {
+  async healthCheck(): Promise<{ healthy: boolean; latency?: number; error?: string }> {
     try {
+      const start = Date.now();
       const result = await this.redis.ping();
-      return result === 'PONG';
+      const latency = Date.now() - start;
+      
+      if (result === 'PONG') {
+        this.isConnected = true;
+        return { healthy: true, latency };
+      } else {
+        this.isConnected = false;
+        return { healthy: false, error: 'Unexpected ping response' };
+      }
     } catch (error) {
+      this.isConnected = false;
       console.error('Cache health check error:', error);
-      return false;
+      return { 
+        healthy: false, 
+        error: error instanceof Error ? error.message : 'Unknown error' 
+      };
     }
+  }
+
+  /**
+   * Reset cache statistics
+   */
+  resetStats(): void {
+    this.stats.hits = 0;
+    this.stats.misses = 0;
   }
 
   /**

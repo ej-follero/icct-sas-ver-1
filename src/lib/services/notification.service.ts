@@ -68,8 +68,6 @@ export class NotificationService {
         where: { userId: notification.userId },
         include: {
           Student: true,
-          Instructor: true,
-          Guardian: true,
         },
       });
 
@@ -172,7 +170,7 @@ export class NotificationService {
           type: notificationType.toUpperCase() as any,
           message: `Notification sent for ${notificationType}`,
           recipient: 'PARENT',
-                           method: 'EMAIL',
+          method: 'EMAIL',
           status: 'SENT',
           sentAt: new Date(),
         },

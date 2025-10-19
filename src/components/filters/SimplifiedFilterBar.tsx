@@ -1,10 +1,34 @@
 import React, { useState, useCallback } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Filter, Settings, RotateCcw, Users, Building, GraduationCap, Calendar, TrendingUp, AlertTriangle, User, UserCheck, BookOpen, MapPin } from 'lucide-react';
+import { Filter, Settings, RotateCcw, Users, Building, GraduationCap, Calendar, TrendingUp, AlertTriangle, User, UserCheck, BookOpen, MapPin, Target } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { FilterDropdown } from '@/components/reusable/FilterDropdown';
-import type { Filters, FilterPreset } from '@/app/(dashboard)/list/attendance/students/page';
+import FilterDropdown from '@/components/reusable/FilterDropdown';
+
+// Local type definitions
+interface Filters {
+  departments: string[];
+  courses: string[];
+  yearLevels: string[];
+  sections: string[];
+  attendanceRates: string[];
+  riskLevels: string[];
+  studentStatuses: string[];
+  studentTypes: string[];
+  subjects: string[];
+  subjectInstructors: string[];
+  subjectRooms: string[];
+  dateRangeStart: string;
+  dateRangeEnd: string;
+}
+
+interface FilterPreset {
+  id: string;
+  name: string;
+  description: string;
+  icon: any;
+  filters: Partial<Filters>;
+}
 
 /**
  * SimplifiedFilterBar
@@ -62,7 +86,7 @@ export const SimplifiedFilterBar = ({
   }, [openDropdown]);
 
   const handleFilterChange = useCallback((filterType: keyof Filters, values: string[]) => {
-    setFilters(prev => ({
+    setFilters((prev: Filters) => ({
       ...prev,
       [filterType]: values
     }));
@@ -176,8 +200,8 @@ export const SimplifiedFilterBar = ({
               icon={Building}
               options={filterOptions.departments}
               selectedValues={filters.departments}
-              onSelectionChange={(values) => handleFilterChange('departments', values)}
-              getCount={(option) => getFilterCount('departments', option)}
+              onSelectionChange={(values: string[]) => handleFilterChange('departments', values)}
+              getCount={(option: string) => getFilterCount('departments', option)}
               isOpen={openDropdown === 'departments'}
               onToggle={() => handleDropdownToggle('departments')}
             />

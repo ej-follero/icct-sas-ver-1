@@ -24,6 +24,12 @@ function CourseFormDialog({
   // Progress state (will be updated by CourseForm via callback)
   const [progress, setProgress] = useState(0);
 
+  // Handle success callback - CourseForm expects no parameters, but our onSuccess expects a course parameter
+  const handleSuccess = () => {
+    // Since CourseForm doesn't provide the course data, we'll call onSuccess with the data we have
+    onSuccess(data || {});
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden bg-white/95 backdrop-blur-sm border border-blue-200 shadow-2xl rounded-2xl p-0 mx-2 my-1 sm:max-w-[600px] sm:mx-4 sm:my-1 md:max-w-[750px] md:mx-6 md:my-1 lg:max-w-[900px] lg:mx-8 lg:my-1 flex flex-col">
@@ -74,7 +80,7 @@ function CourseFormDialog({
             type={type}
             data={data}
             id={id}
-            onSuccess={onSuccess}
+            onSuccess={handleSuccess}
           />
         </div>
       </DialogContent>

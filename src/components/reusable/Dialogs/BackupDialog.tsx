@@ -20,7 +20,7 @@ import {
   Unlock
 } from "lucide-react";
 import { toast } from "sonner";
-import { backupService, type CreateBackupRequest } from '@/lib/services/backup.service';
+import { backupService } from '@/lib/services/backup.service';
 import ProgressBar from '@/components/ProgressBar';
 
 export interface BackupDialogProps {
@@ -169,34 +169,15 @@ export default function BackupDialog({
     try {
       let newBackup;
       
-      if (formData.type === "INCREMENTAL") {
-        // Validate base backup selection for incremental backups
-        if (!formData.baseBackupId) {
-          toast.error("Please select a base backup for incremental backup");
-          return;
-        }
-        
-        // Use incremental backup service
-        const incrementalRequest = {
-          name: formData.name,
-          description: formData.description,
-          baseBackupId: formData.baseBackupId,
-          detectChanges: formData.detectChanges,
-          createdBy: validUserId,
-        };
-        newBackup = await backupService.createIncrementalBackup(incrementalRequest);
-      } else {
-        // Use regular backup service
-        const backupRequest: CreateBackupRequest = {
-          name: formData.name,
-          description: formData.description,
-          type: formData.type,
-          location: formData.location,
-          isEncrypted: formData.isEncrypted,
-          createdBy: validUserId,
-        };
-        newBackup = await backupService.createBackup(backupRequest);
-      }
+      // Use regular backup service for all backup types
+      const backupRequest = {
+        name: formData.name,
+        description: formData.description,
+        type: formData.type,
+        location: formData.location === 'HYBRID' ? 'LOCAL' : formData.location,
+        createdBy: validUserId,
+      };
+      newBackup = await backupService.createBackup(backupRequest);
       
       clearInterval(progressInterval);
       setCreationProgress(100);

@@ -289,7 +289,7 @@ export class IncrementalBackupService {
           lastModified: currentFile.lastModified,
           checksum: currentFile.checksum
         });
-      } else if (baseFile.checksum !== currentFile.checksum) {
+      } else if (baseFile && (baseFile as any).checksum !== currentFile.checksum) {
         // Modified file
         changes.push({
           path,
@@ -345,8 +345,9 @@ export class IncrementalBackupService {
     compressionLevel: number
   ): Promise<void> {
     return new Promise((resolve, reject) => {
-      const output = fs.createWriteStream(outputPath);
-      const archive = require('archiver')('zip', {
+      const output = require('fs').createWriteStream(outputPath);
+      const archiver = require('archiver');
+      const archive = archiver('zip', {
         zlib: { level: compressionLevel }
       });
 
@@ -356,7 +357,7 @@ export class IncrementalBackupService {
       archive.pipe(output);
 
       for (const file of files) {
-        if (fs.existsSync(file)) {
+        if (require('fs').existsSync(file)) {
           archive.file(file, { name: file });
         }
       }
@@ -376,8 +377,9 @@ export class IncrementalBackupService {
     changes: IncrementalBackupData
   ): Promise<void> {
     return new Promise((resolve, reject) => {
-      const output = fs.createWriteStream(finalPath);
-      const archive = require('archiver')('zip');
+      const output = require('fs').createWriteStream(finalPath);
+      const archiver = require('archiver');
+      const archive = archiver('zip');
 
       output.on('close', () => resolve());
       archive.on('error', (err: any) => reject(err));
@@ -398,18 +400,18 @@ export class IncrementalBackupService {
       archive.append(JSON.stringify(metadata, null, 2), { name: 'metadata.json' });
 
       // Add changes log
-      if (fs.existsSync(changesPath)) {
+      if (require('fs').existsSync(changesPath)) {
         archive.file(changesPath, { name: 'changes.json' });
       }
 
       // Add changed files
-      if (fs.existsSync(filesPath)) {
+      if (require('fs').existsSync(filesPath)) {
         archive.file(filesPath, { name: 'files.zip' });
       }
 
       // Add database dump if it exists
       const dbDumpPath = `${backupPath}_database.sql`;
-      if (fs.existsSync(dbDumpPath)) {
+      if (require('fs').existsSync(dbDumpPath)) {
         archive.file(dbDumpPath, { name: 'database.sql' });
       }
 
@@ -503,7 +505,7 @@ export class IncrementalBackupService {
   private async cleanupTempFiles(files: string[]): Promise<void> {
     for (const file of files) {
       try {
-        if (fs.existsSync(file)) {
+        if (require('fs').existsSync(file)) {
           await fs.unlink(file);
         }
       } catch (error) {

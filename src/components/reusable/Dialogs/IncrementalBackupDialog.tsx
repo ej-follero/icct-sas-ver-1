@@ -24,7 +24,7 @@ import {
   AlertCircle
 } from "lucide-react";
 import { toast } from "sonner";
-import { backupService, type CreateBackupRequest } from '@/lib/services/backup.service';
+import { backupService } from '@/lib/services/backup.service';
 import ProgressBar from '@/components/ProgressBar';
 
 export interface IncrementalBackupDialogProps {
@@ -129,9 +129,17 @@ export default function IncrementalBackupDialog({
 
     setIsDetectingChanges(true);
     try {
-      const changes = await backupService.detectChanges(formData.baseBackupId);
-      setChangesData(changes);
-      toast.success(`Detected ${changes.totalFiles} changed files`);
+      const response = await fetch(`/api/backup/incremental?baseBackupId=${formData.baseBackupId}`);
+      if (!response.ok) {
+        throw new Error('Failed to detect changes');
+      }
+      const data = await response.json();
+      if (data.success) {
+        setChangesData(data.data);
+        toast.success(`Detected ${data.data.totalFiles} changed files`);
+      } else {
+        throw new Error(data.error || 'Failed to detect changes');
+      }
     } catch (error) {
       console.error('Error detecting changes:', error);
       toast.error(error instanceof Error ? error.message : 'Failed to detect changes');
@@ -168,11 +176,11 @@ export default function IncrementalBackupDialog({
     setCreationProgress(0);
 
     try {
-      const backupData: CreateBackupRequest = {
+      const backupData = {
         name: formData.name,
         description: formData.description,
         type: "INCREMENTAL",
-        location: formData.location,
+        location: formData.location === 'HYBRID' ? 'LOCAL' : formData.location,
         isEncrypted: formData.isEncrypted,
         baseBackupId: formData.baseBackupId,
         createdBy: validUserId,
@@ -189,7 +197,24 @@ export default function IncrementalBackupDialog({
         });
       }, 1000);
 
-      const backup = await backupService.createBackup(backupData);
+      const response = await fetch('/api/backup/incremental', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(backupData),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to create incremental backup');
+      }
+
+      const result = await response.json();
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to create incremental backup');
+      }
+
+      const backup = result.data.backup;
 
       clearInterval(progressInterval);
       setCreationProgress(100);

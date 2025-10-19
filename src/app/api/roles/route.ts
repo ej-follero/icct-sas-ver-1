@@ -174,7 +174,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate permission strings
-    const invalidPermissions = data.permissions.filter(perm => 
+    const invalidPermissions = data.permissions.filter((perm: any) => 
       typeof perm !== 'string' || perm.trim().length === 0
     );
     if (invalidPermissions.length > 0) {
@@ -211,7 +211,7 @@ export async function POST(request: NextRequest) {
       data: {
         name: data.name.trim(),
         description: data.description?.trim() || null,
-        permissions: data.permissions.map(perm => perm.trim()), // Clean and validate permissions
+        permissions: data.permissions.map((perm: any) => perm.trim()), // Clean and validate permissions
         status: (data.status || 'ACTIVE') as 'ACTIVE' | 'INACTIVE' | 'ARCHIVED',
       },
       include: {

@@ -38,22 +38,41 @@ export async function POST(request: NextRequest) {
       }, { status: 409 });
     }
 
-    // Create new reader record (without roomId - admin will assign)
+    // Find or create a default room for unassigned readers
+    let defaultRoom = await prisma.room.findFirst({
+      where: { roomNo: 'UNASSIGNED' }
+    });
+
+    if (!defaultRoom) {
+      defaultRoom = await prisma.room.create({
+        data: {
+          roomNo: 'UNASSIGNED',
+          roomType: 'LABORATORY',
+          roomCapacity: 0,
+          readerId: deviceId,
+          status: 'MAINTENANCE',
+          roomBuildingLoc: 'BuildingA',
+          roomFloorLoc: 'F1',
+          notes: 'Default room for unassigned RFID readers'
+        }
+      });
+    }
+
+    // Create new reader record with default room
     const newReader = await prisma.rFIDReader.create({
       data: {
         deviceId,
         deviceName: deviceName || `Reader ${deviceId}`,
         ipAddress: ipAddress || null,
         status: 'TESTING', // Start as testing until admin assigns room
+        roomId: defaultRoom.roomId,
         components: {
           macAddress: macAddress || null,
           firmwareVersion: firmwareVersion || null,
           location: location || null,
           registeredAt: new Date().toISOString()
         },
-        notes: `Auto-registered via MQTT at ${new Date().toLocaleString()}`,
-        // roomId will be null - admin must assign
-        roomId: null
+        notes: `Auto-registered via MQTT at ${new Date().toLocaleString()}`
       }
     });
 
@@ -96,9 +115,21 @@ export async function POST(request: NextRequest) {
 // Get readers that need room assignment
 export async function GET(request: NextRequest) {
   try {
+    // Find the default unassigned room
+    const defaultRoom = await prisma.room.findFirst({
+      where: { roomNo: 'UNASSIGNED' }
+    });
+
+    if (!defaultRoom) {
+      return NextResponse.json({
+        success: true,
+        data: []
+      });
+    }
+
     const readersNeedingAssignment = await prisma.rFIDReader.findMany({
       where: {
-        roomId: null,
+        roomId: defaultRoom.roomId,
         status: 'TESTING'
       },
       select: {
@@ -108,10 +139,10 @@ export async function GET(request: NextRequest) {
         ipAddress: true,
         status: true,
         components: true,
-        createdAt: true
+        assemblyDate: true
       },
       orderBy: {
-        createdAt: 'desc'
+        assemblyDate: 'desc'
       }
     });
 

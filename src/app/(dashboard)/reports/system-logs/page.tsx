@@ -62,7 +62,7 @@ import { TablePagination } from "@/components/reusable/Table/TablePagination";
 import { ConfirmDeleteDialog } from '@/components/ConfirmDeleteDialog';
 import { ViewDialog } from '@/components/reusable/Dialogs/ViewDialog';
 import { ExportDialog } from '@/components/reusable/Dialogs/ExportDialog';
-import { SortDialog, SortFieldOption } from '@/components/reusable/Dialogs/SortDialog';
+import { SortDialog } from '@/components/reusable/Dialogs/SortDialog';
 import { VisibleColumnsDialog, ColumnOption } from '@/components/reusable/Dialogs/VisibleColumnsDialog';
 import { BulkActionsDialog } from '@/components/reusable/Dialogs/BulkActionsDialog';
 import { ImportDialog } from '@/components/reusable/Dialogs/ImportDialog';
@@ -91,7 +91,7 @@ interface SystemLog {
 type SortField = 'timestamp' | 'level' | 'module' | 'action' | 'userEmail' | 'ipAddress';
 type SortOrder = 'asc' | 'desc';
 
-const systemLogSortFieldOptions: SortFieldOption<string>[] = [
+const systemLogSortFieldOptions: { value: string; label: string }[] = [
   { value: 'timestamp', label: 'Timestamp' },
   { value: 'level', label: 'Level' },
   { value: 'module', label: 'Module' },

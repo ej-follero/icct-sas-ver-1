@@ -97,30 +97,6 @@ export function useStudentData(options: UseStudentDataOptions = {}): UseStudentD
 
       // Student attendance API was removed
       throw new Error('Student attendance functionality has been removed');
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      
-      if (data.error) {
-        throw new Error(data.error);
-      }
-
-      const studentData = data.students || [];
-
-      // Cache the data if enabled
-      if (enableCaching) {
-        localStorage.setItem(cacheKey, JSON.stringify({
-          data: studentData,
-          timestamp: Date.now()
-        }));
-      }
-
-      setStudents(studentData);
-      setLastFetch(Date.now());
-      setError(null);
     } catch (err) {
       console.error('Error fetching students:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch students');

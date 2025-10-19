@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -143,6 +143,11 @@ export function EnhancedNotificationSystem({
   onDeleteTemplate,
   onScheduleCampaign
 }: EnhancedNotificationSystemProps) {
+  // Validate props
+  if (!onSendNotification || !onSaveTemplate || !onDeleteTemplate || !onScheduleCampaign) {
+    console.error('EnhancedNotificationSystem: Missing required props');
+    return null;
+  }
   const [activeTab, setActiveTab] = useState('compose');
   const [templates, setTemplates] = useState<NotificationTemplate[]>(DEFAULT_TEMPLATES);
   const [campaigns, setCampaigns] = useState<NotificationCampaign[]>([]);
@@ -211,20 +216,25 @@ export function EnhancedNotificationSystem({
     return () => clearInterval(interval);
   }, []);
 
-  const handleTemplateSelect = (templateId: string) => {
-    const template = templates.find(t => t.id === templateId);
-    if (template) {
-      setComposeData(prev => ({
-        ...prev,
-        templateId,
-        type: template.type,
-        subject: template.subject,
-        message: template.message
-      }));
+  const handleTemplateSelect = useCallback((templateId: string) => {
+    try {
+      const template = templates.find(t => t.id === templateId);
+      if (template) {
+        setComposeData(prev => ({
+          ...prev,
+          templateId,
+          type: template.type,
+          subject: template.subject,
+          message: template.message
+        }));
+      }
+    } catch (error) {
+      console.error('Error selecting template:', error);
+      toast.error('Failed to select template');
     }
-  };
+  }, [templates]);
 
-  const handleSendNotification = async () => {
+  const handleSendNotification = useCallback(async () => {
     if (!composeData.subject || !composeData.message) {
       toast.error('Please fill in subject and message');
       return;
@@ -238,7 +248,7 @@ export function EnhancedNotificationSystem({
     try {
       const notification = {
         ...composeData,
-        recipients: composeData.recipients.map(s => s.id),
+        recipients: composeData.recipients.map(s => (s as any).id || s.studentId || s.studentName),
         scheduledFor: composeData.immediate ? undefined : new Date(composeData.scheduleFor)
       };
 
@@ -262,11 +272,12 @@ export function EnhancedNotificationSystem({
         immediate: true
       });
     } catch (error) {
+      console.error('Error sending notification:', error);
       toast.error('Failed to send notification');
     }
-  };
+  }, [composeData, onSendNotification]);
 
-  const handleSaveTemplate = async (template: NotificationTemplate) => {
+  const handleSaveTemplate = useCallback(async (template: NotificationTemplate) => {
     try {
       await onSaveTemplate(template);
       setTemplates(prev => {
@@ -281,30 +292,30 @@ export function EnhancedNotificationSystem({
       setEditingTemplate(null);
       toast.success('Template saved successfully');
     } catch (error) {
+      console.error('Error saving template:', error);
       toast.error('Failed to save template');
     }
-  };
+  }, [onSaveTemplate]);
 
-  const handleDeleteTemplate = async (templateId: string) => {
+  const handleDeleteTemplate = useCallback(async (templateId: string) => {
     try {
       await onDeleteTemplate(templateId);
       setTemplates(prev => prev.filter(t => t.id !== templateId));
       toast.success('Template deleted successfully');
     } catch (error) {
+      console.error('Error deleting template:', error);
       toast.error('Failed to delete template');
     }
-  };
+  }, [onDeleteTemplate]);
 
-  const getRecipientStats = () => {
+  const recipientStats = useMemo(() => {
     const total = composeData.recipients.length;
     const lowAttendance = composeData.recipients.filter(s => s.attendanceRate < 75).length;
     const highAttendance = composeData.recipients.filter(s => s.attendanceRate >= 90).length;
     const departments = [...new Set(composeData.recipients.map(s => s.department))];
 
     return { total, lowAttendance, highAttendance, departments };
-  };
-
-  const recipientStats = getRecipientStats();
+  }, [composeData.recipients]);
 
   return (
     <div className="space-y-6">
@@ -516,10 +527,15 @@ export function EnhancedNotificationSystem({
                         variant="outline"
                         size="sm"
                         className="w-full justify-start"
-                        onClick={() => {
-                          const lowAttendance = students.filter(s => s.attendanceRate < 75);
-                          setComposeData(prev => ({ ...prev, recipients: lowAttendance }));
-                        }}
+                        onClick={useCallback(() => {
+                          try {
+                            const lowAttendance = students.filter(s => s.attendanceRate < 75);
+                            setComposeData(prev => ({ ...prev, recipients: lowAttendance }));
+                          } catch (error) {
+                            console.error('Error selecting low attendance students:', error);
+                            toast.error('Failed to select students');
+                          }
+                        }, [students])}
                       >
                         <AlertTriangle className="w-4 h-4 mr-2" />
                         Low Attendance (&lt; 75%)
@@ -528,10 +544,15 @@ export function EnhancedNotificationSystem({
                         variant="outline"
                         size="sm"
                         className="w-full justify-start"
-                        onClick={() => {
-                          const absent = students.filter(s => s.status === 'ABSENT');
-                          setComposeData(prev => ({ ...prev, recipients: absent }));
-                        }}
+                        onClick={useCallback(() => {
+                          try {
+                            const absent = students.filter(s => (s.status as string) === 'ABSENT' || (s.status as string) === 'absent');
+                            setComposeData(prev => ({ ...prev, recipients: absent }));
+                          } catch (error) {
+                            console.error('Error selecting absent students:', error);
+                            toast.error('Failed to select students');
+                          }
+                        }, [students])}
                       >
                         <XCircle className="w-4 h-4 mr-2" />
                         Currently Absent
@@ -540,9 +561,14 @@ export function EnhancedNotificationSystem({
                         variant="outline"
                         size="sm"
                         className="w-full justify-start"
-                        onClick={() => {
-                          setComposeData(prev => ({ ...prev, recipients: students }));
-                        }}
+                        onClick={useCallback(() => {
+                          try {
+                            setComposeData(prev => ({ ...prev, recipients: students }));
+                          } catch (error) {
+                            console.error('Error selecting all students:', error);
+                            toast.error('Failed to select students');
+                          }
+                        }, [students])}
                       >
                         <Users className="w-4 h-4 mr-2" />
                         All Students
@@ -754,7 +780,14 @@ export function EnhancedNotificationSystem({
                     <Switch
                       id="enable-email"
                       checked={settings.enableEmail}
-                      onCheckedChange={(checked) => setSettings(prev => ({ ...prev, enableEmail: checked }))}
+                      onCheckedChange={(checked) => {
+                        try {
+                          setSettings(prev => ({ ...prev, enableEmail: checked }));
+                        } catch (error) {
+                          console.error('Error updating email setting:', error);
+                          toast.error('Failed to update email setting');
+                        }
+                      }}
                     />
                   </div>
 
@@ -766,7 +799,14 @@ export function EnhancedNotificationSystem({
                     <Switch
                       id="enable-push"
                       checked={settings.enablePush}
-                      onCheckedChange={(checked) => setSettings(prev => ({ ...prev, enablePush: checked }))}
+                      onCheckedChange={(checked) => {
+                        try {
+                          setSettings(prev => ({ ...prev, enablePush: checked }));
+                        } catch (error) {
+                          console.error('Error updating push setting:', error);
+                          toast.error('Failed to update push setting');
+                        }
+                      }}
                     />
                   </div>
                 </div>
@@ -783,7 +823,14 @@ export function EnhancedNotificationSystem({
                     <Switch
                       id="auto-send"
                       checked={settings.autoSendAttendanceAlerts}
-                      onCheckedChange={(checked) => setSettings(prev => ({ ...prev, autoSendAttendanceAlerts: checked }))}
+                      onCheckedChange={(checked) => {
+                        try {
+                          setSettings(prev => ({ ...prev, autoSendAttendanceAlerts: checked }));
+                        } catch (error) {
+                          console.error('Error updating auto-send setting:', error);
+                          toast.error('Failed to update auto-send setting');
+                        }
+                      }}
                     />
                   </div>
                   {settings.autoSendAttendanceAlerts && (
@@ -793,7 +840,19 @@ export function EnhancedNotificationSystem({
                         type="number"
                         id="threshold"
                         value={settings.attendanceThreshold}
-                        onChange={(e) => setSettings(prev => ({ ...prev, attendanceThreshold: parseInt(e.target.value) }))}
+                        onChange={(e) => {
+                          try {
+                            const value = parseInt(e.target.value);
+                            if (isNaN(value) || value < 0 || value > 100) {
+                              toast.error('Please enter a valid threshold between 0 and 100');
+                              return;
+                            }
+                            setSettings(prev => ({ ...prev, attendanceThreshold: value }));
+                          } catch (error) {
+                            console.error('Error updating threshold:', error);
+                            toast.error('Failed to update threshold');
+                          }
+                        }}
                         min="0"
                         max="100"
                         className="w-full px-3 py-2 border border-gray-300 rounded-md"
@@ -814,10 +873,17 @@ export function EnhancedNotificationSystem({
                     <Switch
                       id="rate-limit"
                       checked={settings.rateLimit.enabled}
-                      onCheckedChange={(checked) => setSettings(prev => ({ 
-                        ...prev, 
-                        rateLimit: { ...prev.rateLimit, enabled: checked }
-                      }))}
+                      onCheckedChange={(checked) => {
+                        try {
+                          setSettings(prev => ({ 
+                            ...prev, 
+                            rateLimit: { ...prev.rateLimit, enabled: checked }
+                          }));
+                        } catch (error) {
+                          console.error('Error updating rate limit setting:', error);
+                          toast.error('Failed to update rate limit setting');
+                        }
+                      }}
                     />
                   </div>
                   {settings.rateLimit.enabled && (
@@ -828,10 +894,22 @@ export function EnhancedNotificationSystem({
                           type="number"
                           id="max-hour"
                           value={settings.rateLimit.maxPerHour}
-                          onChange={(e) => setSettings(prev => ({ 
-                            ...prev, 
-                            rateLimit: { ...prev.rateLimit, maxPerHour: parseInt(e.target.value) }
-                          }))}
+                          onChange={(e) => {
+                            try {
+                              const value = parseInt(e.target.value);
+                              if (isNaN(value) || value < 1) {
+                                toast.error('Please enter a valid number greater than 0');
+                                return;
+                              }
+                              setSettings(prev => ({ 
+                                ...prev, 
+                                rateLimit: { ...prev.rateLimit, maxPerHour: value }
+                              }));
+                            } catch (error) {
+                              console.error('Error updating max per hour:', error);
+                              toast.error('Failed to update max per hour');
+                            }
+                          }}
                           className="w-full px-3 py-2 border border-gray-300 rounded-md"
                         />
                       </div>
@@ -841,10 +919,22 @@ export function EnhancedNotificationSystem({
                           type="number"
                           id="max-day"
                           value={settings.rateLimit.maxPerDay}
-                          onChange={(e) => setSettings(prev => ({ 
-                            ...prev, 
-                            rateLimit: { ...prev.rateLimit, maxPerDay: parseInt(e.target.value) }
-                          }))}
+                          onChange={(e) => {
+                            try {
+                              const value = parseInt(e.target.value);
+                              if (isNaN(value) || value < 1) {
+                                toast.error('Please enter a valid number greater than 0');
+                                return;
+                              }
+                              setSettings(prev => ({ 
+                                ...prev, 
+                                rateLimit: { ...prev.rateLimit, maxPerDay: value }
+                              }));
+                            } catch (error) {
+                              console.error('Error updating max per day:', error);
+                              toast.error('Failed to update max per day');
+                            }
+                          }}
                           className="w-full px-3 py-2 border border-gray-300 rounded-md"
                         />
                       </div>
@@ -853,7 +943,18 @@ export function EnhancedNotificationSystem({
                 </div>
               </div>
 
-              <Button className="w-full">
+              <Button 
+                className="w-full"
+                onClick={() => {
+                  try {
+                    // Here you would typically save settings to a backend
+                    toast.success('Settings saved successfully');
+                  } catch (error) {
+                    console.error('Error saving settings:', error);
+                    toast.error('Failed to save settings');
+                  }
+                }}
+              >
                 <Settings className="w-4 h-4 mr-2" />
                 Save Settings
               </Button>

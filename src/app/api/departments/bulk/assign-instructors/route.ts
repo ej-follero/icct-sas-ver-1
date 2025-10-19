@@ -46,29 +46,17 @@ export async function POST(request: NextRequest) {
       }, { status: 404 });
     }
 
-    // Create instructor-department assignments
-    const assignments = [];
-    for (const departmentId of departmentIds) {
-      for (const instructorId of instructorIds) {
-        assignments.push({
-          departmentId: parseInt(departmentId),
-          instructorId: parseInt(instructorId),
-        });
-      }
-    }
-
-    // Use upsert to avoid duplicate assignments
+    // Update instructor department assignments
+    // Since instructors can only belong to one department, we'll assign each instructor to the first department
     const results = await Promise.allSettled(
-      assignments.map(assignment =>
-        prisma.instructorDepartment.upsert({
+      instructorIds.map(instructorId =>
+        prisma.instructor.update({
           where: {
-            instructorId_departmentId: {
-              instructorId: assignment.instructorId,
-              departmentId: assignment.departmentId
-            }
+            instructorId: parseInt(instructorId)
           },
-          update: {},
-          create: assignment
+          data: {
+            departmentId: parseInt(departmentIds[0]) // Assign to first department only
+          }
         })
       )
     );
@@ -78,11 +66,13 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: `Successfully assigned ${instructorIds.length} instructors to ${departmentIds.length} departments`,
+      message: `Successfully assigned ${instructorIds.length} instructors to department ${departmentIds[0]}${departmentIds.length > 1 ? ` (Note: Only first department used as instructors can only belong to one department)` : ''}`,
       details: {
         successful,
         failed,
-        totalAssignments: assignments.length
+        totalAssignments: instructorIds.length,
+        assignedDepartment: departmentIds[0],
+        ignoredDepartments: departmentIds.slice(1)
       }
     });
 

@@ -33,16 +33,16 @@ export class OptimizedApiService {
       where: {
         ...(options.departmentId && { departmentId: options.departmentId }),
         ...(options.courseId && { courseId: options.courseId }),
-        ...(options.status && { status: options.status }),
+        ...(options.status && { status: options.status as any }),
       },
       take: options.limit || 50,
       skip: options.offset || 0,
       include: {
-        department: true,
-        course: true,
-        studentSections: {
+        Department: true,
+        CourseOffering: true,
+        StudentSection: {
           include: {
-            section: true,
+            Section: true,
           },
         },
       },
@@ -90,18 +90,18 @@ export class OptimizedApiService {
             lte: options.endDate,
           },
         }),
-        ...(options.status && { status: options.status }),
+        ...(options.status && { status: options.status as any }),
       },
       take: options.limit || 100,
       skip: options.offset || 0,
       include: {
         student: {
           include: {
-            department: true,
-            course: true,
+            Department: true,
+            CourseOffering: true,
           },
         },
-        subjectSched: {
+        subjectSchedule: {
           include: {
             subject: true,
             section: true,
@@ -199,23 +199,23 @@ export class OptimizedApiService {
       where: {
         ...(options.courseId && { courseId: options.courseId }),
         ...(options.yearLevel && { yearLevel: options.yearLevel }),
-        ...(options.status && { sectionStatus: options.status }),
+        ...(options.status && { sectionStatus: options.status as any }),
       },
       take: options.limit || 50,
       skip: options.offset || 0,
       include: {
-        course: true,
-        studentSections: {
+        Course: true,
+        StudentSection: {
           include: {
-            student: {
+            Student: {
               include: {
-                department: true,
-                course: true,
+                Department: true,
+                CourseOffering: true,
               },
             },
           },
         },
-        subjectSchedules: {
+        SubjectSchedule: {
           include: {
             subject: true,
             instructor: true,
@@ -360,7 +360,7 @@ export class OptimizedApiService {
         attendanceId: true,
       },
       _avg: {
-        // Add any numeric fields you want to average
+        // No numeric fields to average in attendance table
       },
     });
 
@@ -374,9 +374,9 @@ export class OptimizedApiService {
   private async getDepartmentStats(filters: Record<string, any>) {
     const departments = await prisma.department.findMany({
       include: {
-        students: {
+        Student: {
           include: {
-            attendance: {
+            Attendance: {
               where: {
                 timestamp: {
                   gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
@@ -393,8 +393,8 @@ export class OptimizedApiService {
       data: departments.map(dept => ({
         departmentId: dept.departmentId,
         departmentName: dept.departmentName,
-        studentCount: dept.students.length,
-        totalAttendance: dept.students.reduce((sum, student) => sum + student.attendance.length, 0),
+        studentCount: dept.Student.length,
+        totalAttendance: dept.Student.reduce((sum: number, student: any) => sum + student.Attendance.length, 0),
       })),
     };
   }
@@ -406,7 +406,7 @@ export class OptimizedApiService {
         ...(filters.courseId && { courseId: filters.courseId }),
       },
       include: {
-        attendance: {
+        Attendance: {
           where: {
             timestamp: {
               gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
@@ -419,8 +419,8 @@ export class OptimizedApiService {
     return {
       type: 'student_performance',
       data: students.map(student => {
-        const totalAttendance = student.attendance.length;
-        const presentCount = student.attendance.filter(a => a.status === 'PRESENT').length;
+        const totalAttendance = student.Attendance.length;
+        const presentCount = student.Attendance.filter((a: any) => a.status === 'PRESENT').length;
         const attendanceRate = totalAttendance > 0 ? (presentCount / totalAttendance) * 100 : 0;
 
         return {

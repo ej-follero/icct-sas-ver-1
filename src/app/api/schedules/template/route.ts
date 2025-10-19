@@ -52,7 +52,7 @@ export async function GET(request: NextRequest) {
       }),
       prisma.semester.findMany({
         take: 3,
-        select: { semesterId: true, semesterName: true, year: true }
+        select: { semesterId: true, semesterType: true, year: true }
       })
     ]);
 

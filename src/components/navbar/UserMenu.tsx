@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import { User, Settings, HelpCircle, LogOut, ChevronDown, Shield, Activity } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -17,24 +17,43 @@ export const UserMenu: React.FC<UserMenuProps> = ({
   open,
   onOpenChange,
 }) => {
-  const { user, profile, logout, loading } = useUser();
+  // Validate props
+  if (!onOpenChange) {
+    console.error('UserMenu: Missing required props');
+    return null;
+  }
 
-  const handleMenuAction = async (action: "profile" | "settings" | "help" | "logout") => {
-    switch (action) {
-      case "profile":
-        window.location.href = "/settings/profile";
-        break;
-      case "settings":
-        window.location.href = "/settings";
-        break;
-      case "help":
-        window.location.href = "/help";
-        break;
-      case "logout":
-        await logout();
-        break;
+  const { user, profile, logout, loading } = useUser();
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  const handleMenuAction = useCallback(async (action: "profile" | "settings" | "help" | "logout") => {
+    try {
+      switch (action) {
+        case "profile":
+          window.location.href = "/settings/profile";
+          break;
+        case "settings":
+          window.location.href = "/settings";
+          break;
+        case "help":
+          window.location.href = "/help";
+          break;
+        case "logout":
+          try {
+            setIsLoggingOut(true);
+            await logout();
+          } catch (error) {
+            console.error('Logout failed:', error);
+            // You could show a toast notification here
+          } finally {
+            setIsLoggingOut(false);
+          }
+          break;
+      }
+    } catch (error) {
+      console.error('UserMenu action error:', error);
     }
-  };
+  }, [logout]);
 
   if (loading) {
     return (
@@ -47,6 +66,19 @@ export const UserMenu: React.FC<UserMenuProps> = ({
       </div>
     );
   }
+
+  // Memoize user display information
+  const userDisplayInfo = useMemo(() => {
+    if (!user) return null;
+    
+    return {
+      name: profile?.name || user.email || 'User',
+      email: user.email || '',
+      role: user.role || 'User',
+      department: profile?.department || '',
+      lastLogin: user.lastLogin ? new Date(user.lastLogin).toLocaleDateString() : null
+    };
+  }, [user, profile]);
 
   if (!user) {
     return null;
@@ -62,6 +94,12 @@ export const UserMenu: React.FC<UserMenuProps> = ({
           aria-label="User account menu"
           aria-haspopup="dialog"
           aria-expanded={open}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              onOpenChange(!open);
+            }
+          }}
         >
           <Avatar className="w-9 h-9 bg-gray-200">
             <AvatarFallback>
@@ -80,20 +118,20 @@ export const UserMenu: React.FC<UserMenuProps> = ({
               </AvatarFallback>
             </Avatar>
             <div className="flex-1 min-w-0">
-              <div className="font-semibold text-blue-900 truncate text-base">{user.name}</div>
-              <div className="text-sm text-gray-500 truncate">{user.email}</div>
-              {user.department && (
-                <div className="text-xs text-gray-400 truncate">{user.department}</div>
+              <div className="font-semibold text-blue-900 truncate text-base">{userDisplayInfo?.name}</div>
+              <div className="text-sm text-gray-500 truncate">{userDisplayInfo?.email}</div>
+              {userDisplayInfo?.department && (
+                <div className="text-xs text-gray-400 truncate">{userDisplayInfo.department}</div>
               )}
             </div>
           </div>
           <div className="mt-3 flex items-center gap-2">
             <Badge variant="outline" className="text-xs text-blue-700 border-blue-200 bg-blue-50">
-              {user.role}
+              {userDisplayInfo?.role}
             </Badge>
-            {user.lastLogin && (
+            {userDisplayInfo?.lastLogin && (
               <span className="text-xs text-gray-400">
-                Last login: {new Date(user.lastLogin).toLocaleDateString()}
+                Last login: {userDisplayInfo.lastLogin}
               </span>
             )}
           </div>
@@ -175,11 +213,16 @@ export const UserMenu: React.FC<UserMenuProps> = ({
               variant="ghost"
               className="w-full flex items-center gap-3 justify-start px-4 py-3 text-red-600 hover:bg-red-100 rounded-lg transition"
               onClick={() => handleMenuAction("logout")}
+              disabled={isLoggingOut}
             >
               <LogOut className="w-4 h-4 text-red-500" />
               <div className="flex-1 text-left">
-                <div className="font-medium text-red-600">Sign Out</div>
-                <div className="text-xs text-red-500">Sign out of your account</div>
+                <div className="font-medium text-red-600">
+                  {isLoggingOut ? 'Signing Out...' : 'Sign Out'}
+                </div>
+                <div className="text-xs text-red-500">
+                  {isLoggingOut ? 'Please wait...' : 'Sign out of your account'}
+                </div>
               </div>
             </Button>
           </li>

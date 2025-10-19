@@ -24,7 +24,6 @@ const configureDOMPurify = () => {
     ALLOWED_ATTR,
     ALLOW_DATA_ATTR: true,
     ALLOW_ARIA_ATTR: true,
-    FORBID_SCRIPT: true,
     FORBID_TAGS: ['script', 'object', 'embed', 'link', 'style', 'meta'],
     FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover', 'onfocus', 'onblur', 'href', 'src'],
     KEEP_CONTENT: false,
@@ -78,7 +77,7 @@ export function sanitizeHTML(
         customConfig.ALLOWED_ATTR = options.allowedAttributes;
       }
 
-      return DOMPurify.sanitize(content, customConfig);
+      return DOMPurify.sanitize(content, customConfig) as unknown as string;
     }
 
     // Strip all tags if requested
@@ -87,11 +86,11 @@ export function sanitizeHTML(
         ALLOWED_TAGS: [], 
         ALLOWED_ATTR: [],
         KEEP_CONTENT: true 
-      });
+      }) as unknown as string;
     }
 
     // Use default configuration
-    return sanitizer.sanitize(content);
+    return sanitizer.sanitize(content) as unknown as string;
   } catch (error) {
     console.error('HTML sanitization error:', error);
     // Return empty string on error for security
@@ -113,7 +112,7 @@ export function sanitizeText(input: string, maxLength?: number): string {
       ALLOWED_TAGS: [], 
       ALLOWED_ATTR: [],
       KEEP_CONTENT: true 
-    });
+    }) as unknown as string;
 
     // Remove extra whitespace
     cleaned = cleaned.replace(/\s+/g, ' ').trim();
@@ -138,14 +137,20 @@ export function sanitizeSearchQuery(query: string): string {
     return '';
   }
 
-  // Remove special characters that could be used for injection
-  const cleaned = query
-    .replace(/[<>\"'%&\x00-\x1f\x7f-\x9f]/g, '') // Remove dangerous characters
-    .replace(/\s+/g, ' ') // Normalize whitespace
-    .trim()
-    .substring(0, 200); // Limit length
+  try {
+    // Remove special characters that could be used for injection
+    const cleaned = query
+      .replace(/[<>\"'%&\x00-\x1f\x7f-\x9f]/g, '') // Remove dangerous characters
+      .replace(/[^\w\s\-\.]/g, '') // Keep only alphanumeric, spaces, hyphens, and dots
+      .replace(/\s+/g, ' ') // Normalize whitespace
+      .trim()
+      .substring(0, 200); // Limit length
 
-  return cleaned;
+    return cleaned;
+  } catch (error) {
+    console.error('Search query sanitization error:', error);
+    return '';
+  }
 }
 
 /**
@@ -156,15 +161,22 @@ export function sanitizeFileName(fileName: string): string {
     return 'untitled';
   }
 
-  // Remove path traversal attempts and dangerous characters
-  const cleaned = fileName
-    .replace(/[\/\\:*?"<>|]/g, '_') // Replace dangerous characters
-    .replace(/\.\./g, '_') // Remove path traversal
-    .replace(/^\.+/, '') // Remove leading dots
-    .trim()
-    .substring(0, 255); // Limit length
+  try {
+    // Remove path traversal attempts and dangerous characters
+    const cleaned = fileName
+      .replace(/[\/\\:*?"<>|]/g, '_') // Replace dangerous characters
+      .replace(/\.\./g, '_') // Remove path traversal
+      .replace(/^\.+/, '') // Remove leading dots
+      .replace(/[^\w\-\._]/g, '_') // Keep only safe characters
+      .replace(/_+/g, '_') // Replace multiple underscores with single
+      .trim()
+      .substring(0, 255); // Limit length
 
-  return cleaned || 'untitled';
+    return cleaned || 'untitled';
+  } catch (error) {
+    console.error('File name sanitization error:', error);
+    return 'untitled';
+  }
 }
 
 /**
@@ -176,6 +188,11 @@ export function sanitizeURL(url: string): string | null {
   }
 
   try {
+    // Basic URL validation before parsing
+    if (url.length > 2048) {
+      return null; // Prevent extremely long URLs
+    }
+
     const urlObj = new URL(url);
     
     // Only allow safe protocols
@@ -198,13 +215,19 @@ export function sanitizeURL(url: string): string | null {
       return null;
     }
 
-    // Block private IP ranges (basic check)
-    if (hostname.match(/^(10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.|192\.168\.)/)) {
+    // Block private IP ranges (improved regex)
+    if (hostname.match(/^(10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.|192\.168\.|169\.254\.|127\.)/)) {
+      return null;
+    }
+
+    // Block suspicious patterns
+    if (hostname.includes('..') || hostname.includes('//')) {
       return null;
     }
 
     return urlObj.toString();
   } catch (error) {
+    console.error('URL sanitization error:', error);
     return null;
   }
 }
@@ -225,8 +248,22 @@ export function safeHighlight(
     // First sanitize the input text
     const cleanText = sanitizeText(text);
     
+    // Validate matches array
+    const validMatches = matches.filter(([start, end]) => 
+      typeof start === 'number' && 
+      typeof end === 'number' && 
+      start >= 0 && 
+      end >= start && 
+      start < cleanText.length && 
+      end < cleanText.length
+    );
+    
+    if (validMatches.length === 0) {
+      return sanitizeHTML(text);
+    }
+    
     // Sort matches by start position (descending) to avoid index shifting
-    const sortedMatches = [...matches].sort((a, b) => b[0] - a[0]);
+    const sortedMatches = [...validMatches].sort((a, b) => b[0] - a[0]);
     
     let result = cleanText;
     
@@ -237,8 +274,9 @@ export function safeHighlight(
         const highlighted = result.substring(start, end + 1);
         const after = result.substring(end + 1);
         
-        // Use safe HTML construction
-        result = `${before}<span class="${sanitizeText(className)}">${highlighted}</span>${after}`;
+        // Use safe HTML construction with sanitized className
+        const safeClassName = sanitizeText(className).replace(/[^a-zA-Z0-9\-_]/g, '');
+        result = `${before}<span class="${safeClassName}">${highlighted}</span>${after}`;
       }
     }
     
@@ -260,26 +298,32 @@ export function sanitizeObject<T extends Record<string, any>>(
     return obj;
   }
 
-  const result = {} as T;
+  try {
+    const result = {} as T;
 
-  for (const [key, value] of Object.entries(obj)) {
-    const sanitizedKey = sanitizeText(key);
-    
-    if (typeof value === 'string') {
-      result[sanitizedKey as keyof T] = sanitizeHTML(value) as T[keyof T];
-    } else if (Array.isArray(value)) {
-      result[sanitizedKey as keyof T] = value.map(item => 
-        typeof item === 'string' ? sanitizeHTML(item) : 
-        typeof item === 'object' ? sanitizeObject(item, maxDepth - 1) : item
-      ) as T[keyof T];
-    } else if (typeof value === 'object' && value !== null) {
-      result[sanitizedKey as keyof T] = sanitizeObject(value, maxDepth - 1) as T[keyof T];
-    } else {
-      result[sanitizedKey as keyof T] = value;
+    for (const [key, value] of Object.entries(obj)) {
+      const sanitizedKey = sanitizeText(key);
+      
+      if (typeof value === 'string') {
+        result[sanitizedKey as keyof T] = sanitizeHTML(value) as T[keyof T];
+      } else if (Array.isArray(value)) {
+        result[sanitizedKey as keyof T] = value.map(item => 
+          typeof item === 'string' ? sanitizeHTML(item) : 
+          typeof item === 'object' && item !== null ? sanitizeObject(item, maxDepth - 1) : item
+        ) as T[keyof T];
+      } else if (typeof value === 'object' && value !== null) {
+        result[sanitizedKey as keyof T] = sanitizeObject(value, maxDepth - 1) as T[keyof T];
+      } else {
+        result[sanitizedKey as keyof T] = value;
+      }
     }
-  }
 
-  return result;
+    return result;
+  } catch (error) {
+    console.error('Object sanitization error:', error);
+    // Return a safe empty object on error
+    return {} as T;
+  }
 }
 
 /**

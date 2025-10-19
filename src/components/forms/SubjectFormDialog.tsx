@@ -36,7 +36,7 @@ import {
   FileDiff
 } from "lucide-react";
 import SubjectForm from "./SubjectForm";
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useCallback, useMemo } from "react";
 
 interface SubjectFormDialogProps {
   open: boolean;
@@ -55,7 +55,13 @@ function SubjectFormDialog({
   id,
   onSuccess
 }: SubjectFormDialogProps) {
-  // Add state management similar to DepartmentForm
+  // Validate props
+  if (!onOpenChange || !onSuccess) {
+    console.error('SubjectFormDialog: Missing required props');
+    return null;
+  }
+
+  // State management for form functionality
   const [hasError, setHasError] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -105,18 +111,26 @@ function SubjectFormDialog({
   } | null>(null);
 
   // Helper function to show notification dialogs
-  const showNotification = (type: 'success' | 'error' | 'info' | 'warning', title: string, message: string, action?: { label: string; onClick: () => void }) => {
+  const showNotification = useCallback((type: 'success' | 'error' | 'info' | 'warning', title: string, message: string, action?: { label: string; onClick: () => void }) => {
     setNotificationConfig({ type, title, message, action });
     setShowNotificationDialog(true);
-  };
+  }, []);
 
-  // Calculate form progress (simplified for SubjectForm)
-  useEffect(() => {
-    // For now, set a basic progress calculation
-    // This would need to be updated based on actual form fields
-    const progress = data ? 75 : 25; // Basic progress calculation
-    setFormProgress(progress);
+  // Calculate form progress based on form completion
+  const calculatedProgress = useMemo(() => {
+    if (!data) {
+      return 0;
+    }
+    
+    // Calculate progress based on filled fields
+    const requiredFields = ['name', 'code', 'type', 'semester', 'year_level', 'department'];
+    const filledFields = requiredFields.filter(field => data[field] && data[field].toString().trim() !== '');
+    return Math.round((filledFields.length / requiredFields.length) * 100);
   }, [data]);
+
+  useEffect(() => {
+    setFormProgress(calculatedProgress);
+  }, [calculatedProgress]);
 
   // Auto-save functionality
   const debouncedFormValues = useDebounce(data, 1000);
@@ -306,6 +320,14 @@ function SubjectFormDialog({
         throw new Error('No form data available');
       }
 
+      // Validate required fields
+      const requiredFields = ['name', 'code', 'type', 'semester', 'year_level', 'department'];
+      const missingFields = requiredFields.filter(field => !currentFormData[field] || currentFormData[field].toString().trim() === '');
+      
+      if (missingFields.length > 0) {
+        throw new Error(`Missing required fields: ${missingFields.join(', ')}`);
+      }
+
       // Get the form type to determine units calculation
       const formType = currentFormData.type || 'lecture';
       const units = currentFormData.units || 0;
@@ -343,7 +365,7 @@ function SubjectFormDialog({
       if (!subjectCode.trim()) {
         // Generate a code based on the subject name
         const nameWords = (currentFormData.name || 'Subject').split(' ');
-        const initials = nameWords.map(word => word.charAt(0).toUpperCase()).join('');
+        const initials = nameWords.map((word: string) => word.charAt(0).toUpperCase()).join('');
         const randomSuffix = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
         subjectCode = `${initials}${randomSuffix}`;
       }
@@ -369,7 +391,7 @@ function SubjectFormDialog({
       console.log('Sending subject data:', subjectData);
 
       // Retry mechanism for duplicate codes
-      let response;
+      let response: Response | undefined;
       let retryCount = 0;
       const maxRetries = 3;
       
@@ -394,7 +416,7 @@ function SubjectFormDialog({
           if (errorData.error && errorData.error.includes('already exists') && retryCount < maxRetries - 1) {
             // Generate a new unique code and retry
             const nameWords = (currentFormData.name || 'Subject').split(' ');
-            const initials = nameWords.map(word => word.charAt(0).toUpperCase()).join('');
+            const initials = nameWords.map((word: string) => word.charAt(0).toUpperCase()).join('');
             const randomSuffix = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
             subjectCode = `${initials}${randomSuffix}`;
             subjectData.code = subjectCode;
@@ -411,28 +433,40 @@ function SubjectFormDialog({
         }
       }
 
-      if (!response.ok) {
+      if (!response || !response.ok) {
+        // Type assertion since we know response is defined at this point
+        const errorResponse = response as Response;
         let errorData;
         try {
-          const responseText = await response.text();
+          const responseText = await errorResponse.text();
           console.log('Raw response text:', responseText);
           
           if (responseText.trim() === '') {
-            errorData = { error: `HTTP ${response.status}: ${response.statusText} - Empty response` };
+            errorData = { error: `HTTP ${errorResponse.status}: ${errorResponse.statusText} - Empty response` };
           } else {
             errorData = JSON.parse(responseText);
           }
         } catch (parseError) {
           console.error('Failed to parse error response:', parseError);
-          errorData = { error: `HTTP ${response.status}: ${response.statusText} - Invalid JSON response` };
+          errorData = { error: `HTTP ${errorResponse.status}: ${errorResponse.statusText} - Invalid JSON response` };
         }
         
         console.error('API Error Response:', errorData);
-        console.error('Response Status:', response.status);
-        console.error('Response Status Text:', response.statusText);
-        console.error('Response Headers:', Object.fromEntries(response.headers.entries()));
+        console.error('Response Status:', errorResponse.status);
+        console.error('Response Status Text:', errorResponse.statusText);
+        console.error('Response Headers:', Object.fromEntries(errorResponse.headers.entries()));
         
-        const errorMessage = errorData.error || `HTTP ${response.status}: ${response.statusText}`;
+        // Handle specific error cases
+        let errorMessage = errorData.error || `HTTP ${errorResponse.status}: ${errorResponse.statusText}`;
+        
+        if (errorResponse.status === 400) {
+          errorMessage = 'Invalid form data. Please check all required fields.';
+        } else if (errorResponse.status === 409) {
+          errorMessage = 'A subject with this code already exists. Please use a different code.';
+        } else if (errorResponse.status === 500) {
+          errorMessage = 'Server error. Please try again later.';
+        }
+        
         const errorDetails = errorData.details ? ` Details: ${JSON.stringify(errorData.details)}` : '';
         throw new Error(errorMessage + errorDetails);
       }

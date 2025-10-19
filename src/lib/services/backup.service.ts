@@ -1,6 +1,7 @@
 // Note: This service is designed for client-side use with API routes
 // All database operations are handled through API endpoints
 
+
 export interface BackupItem {
   id: string;
   name: string;
@@ -33,7 +34,7 @@ class BackupService {
   private progressCallbacks: Map<string, (progress: any) => void> = new Map();
 
   constructor() {
-    // No Prisma client needed for client-side service
+    // Client-side service - no database connection needed
   }
 
   async getBackups(): Promise<BackupItem[]> {
@@ -100,194 +101,65 @@ class BackupService {
     createdBy: number;
   }): Promise<BackupItem> {
     try {
-      // Create backup record
-      const backup = await this.prisma.backup.create({
-        data: {
-          name: backupData.name,
-          description: backupData.description,
-          type: backupData.type,
-          status: 'PENDING',
-          location: backupData.location,
-          createdBy: backupData.createdBy,
-          createdAt: new Date(),
-          size: '0 MB',
-          restorePointsCount: 0,
-          logsCount: 0,
-          retentionDays: 30
-        }
+      const response = await fetch('/api/backups', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(backupData),
       });
 
-      // Start backup process
-      this.startBackupProcess(backup.id.toString(), backupData);
+      const data = await response.json();
+      
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to create backup');
+      }
 
-      return {
-        id: backup.id.toString(),
-        name: backup.name,
-        description: backup.description,
-        type: backup.type as any,
-        status: backup.status as any,
-        size: backup.size,
-        location: backup.location as any,
-        createdAt: backup.createdAt.toISOString(),
-        createdBy: backup.createdBy,
-        restorePointsCount: backup.restorePointsCount,
-        logsCount: backup.logsCount,
-        retentionDays: backup.retentionDays
-      };
+      return data.backup;
     } catch (error) {
       console.error('Error creating backup:', error);
       throw error;
     }
   }
 
-  private async startBackupProcess(backupId: string, backupData: any) {
+  async startBackupProcess(backupId: string): Promise<boolean> {
     try {
-      // Update status to in progress
-      await this.prisma.backup.update({
-        where: { id: parseInt(backupId) },
-        data: { status: 'IN_PROGRESS' }
+      const response = await fetch(`/api/backups/${backupId}/start`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
       });
 
-      // Create backup directory
-      const backupPath = join(this.backupDir, backupId);
-      await mkdir(backupPath, { recursive: true });
-
-      // Perform database backup
-      await this.performDatabaseBackup(backupPath, backupData.type);
-
-      // Perform file system backup
-      await this.performFileSystemBackup(backupPath, backupData.type);
-
-      // Calculate backup size
-      const size = await this.calculateBackupSize(backupPath);
-
-      // Update backup record
-      await this.prisma.backup.update({
-        where: { id: parseInt(backupId) },
-        data: {
-          status: 'COMPLETED',
-          completedAt: new Date(),
-          size: size,
-          filePath: backupPath
-        }
-      });
-
-      // Create restore point
-      await this.createRestorePoint(backupId, backupData.name);
-
-      // Clean up old backups based on retention policy
-      await this.cleanupOldBackups();
-
+      const data = await response.json();
+      return data.success;
     } catch (error) {
-      console.error('Error in backup process:', error);
-      
-      await this.prisma.backup.update({
-        where: { id: parseInt(backupId) },
-        data: {
-          status: 'FAILED',
-          errorMessage: error instanceof Error ? error.message : 'Unknown error'
-        }
-      });
+      console.error('Error starting backup process:', error);
+      return false;
     }
   }
 
-  private async performDatabaseBackup(backupPath: string, type: string) {
-    try {
-      // Mock database backup - in real implementation, this would use pg_dump
-      console.log(`Performing ${type} database backup to ${backupPath}`);
-      
-      // Simulate backup process
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      console.log('Database backup completed');
-    } catch (error) {
-      console.error('Database backup failed:', error);
-      throw error;
-    }
-  }
-
-  private async performFileSystemBackup(backupPath: string, type: string) {
-    try {
-      // Mock file system backup - in real implementation, this would copy files
-      console.log(`Performing ${type} file system backup to ${backupPath}`);
-      
-      // Simulate backup process
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      console.log('File system backup completed');
-    } catch (error) {
-      console.error('File system backup failed:', error);
-      throw error;
-    }
-  }
-
-  private async calculateBackupSize(backupPath: string): Promise<string> {
-    try {
-      // Mock backup size calculation
-      return '25.6 MB';
-    } catch (error) {
-      console.error('Error calculating backup size:', error);
-      return '0 MB';
-    }
-  }
-
-  private async createRestorePoint(backupId: string, name: string) {
-    try {
-      await this.prisma.restorePoint.create({
-        data: {
-          name: `Restore Point for ${name}`,
-          backupId: parseInt(backupId),
-          status: 'AVAILABLE',
-          createdAt: new Date(),
-          size: '0 MB' // Will be updated
-        }
-      });
-    } catch (error) {
-      console.error('Error creating restore point:', error);
-    }
-  }
-
-  private async cleanupOldBackups() {
-    try {
-      const retentionDays = 30; // Default retention
-      const cutoffDate = new Date();
-      cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
-
-      const oldBackups = await this.prisma.backup.findMany({
-        where: {
-          createdAt: { lt: cutoffDate },
-          status: 'COMPLETED'
-        }
-      });
-
-      for (const backup of oldBackups) {
-        // Mock file deletion - in real implementation, this would delete files
-        console.log(`Cleaning up backup: ${backup.name}`);
-
-        // Delete database record
-        await this.prisma.backup.delete({
-          where: { id: backup.id }
-        });
-      }
-
-      console.log(`Cleaned up ${oldBackups.length} old backups`);
-    } catch (error) {
-      console.error('Error cleaning up old backups:', error);
-    }
-  }
 
   async downloadBackup(backupId: string): Promise<boolean> {
     try {
-      const backup = await this.prisma.backup.findUnique({
-        where: { id: parseInt(backupId) }
+      const response = await fetch(`/api/backups/${backupId}/download`, {
+        method: 'GET',
       });
 
-      if (!backup) {
-        throw new Error('Backup not found');
+      if (!response.ok) {
+        throw new Error('Failed to download backup');
       }
 
-      // Mock download process - in real implementation, this would create zip file
-      console.log(`Downloading backup: ${backup.name}`);
+      // Create download link
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `backup-${backupId}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
       
       return true;
     } catch (error) {
@@ -298,23 +170,12 @@ class BackupService {
 
   async deleteBackup(backupId: string): Promise<boolean> {
     try {
-      const backup = await this.prisma.backup.findUnique({
-        where: { id: parseInt(backupId) }
+      const response = await fetch(`/api/backups/${backupId}`, {
+        method: 'DELETE',
       });
 
-      if (!backup) {
-        throw new Error('Backup not found');
-      }
-
-      // Mock file deletion - in real implementation, this would delete files
-      console.log(`Deleting backup: ${backup.name}`);
-
-      // Delete database record
-      await this.prisma.backup.delete({
-        where: { id: parseInt(backupId) }
-      });
-
-      return true;
+      const data = await response.json();
+      return data.success;
     } catch (error) {
       console.error('Error deleting backup:', error);
       return false;
@@ -323,15 +184,16 @@ class BackupService {
 
   async updateBackupStatus(backupId: string, status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED' | 'SCHEDULED', reason?: string): Promise<boolean> {
     try {
-      await this.prisma.backup.update({
-        where: { id: parseInt(backupId) },
-        data: {
-          status,
-          errorMessage: reason || null,
-          ...(status === 'COMPLETED' ? { completedAt: new Date() } : {})
-        }
+      const response = await fetch(`/api/backups/${backupId}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ status, reason }),
       });
-      return true;
+
+      const data = await response.json();
+      return data.success;
     } catch (error) {
       console.error('Error updating backup status:', error);
       return false;
@@ -340,21 +202,15 @@ class BackupService {
 
   async restoreSystem(backupId: string): Promise<boolean> {
     try {
-      const backup = await this.prisma.backup.findUnique({
-        where: { id: parseInt(backupId) }
+      const response = await fetch(`/api/backups/${backupId}/restore`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
       });
 
-      if (!backup) {
-        throw new Error('Backup not found');
-      }
-
-      // Mock restore process - in real implementation, this would restore database and files
-      console.log(`Restoring system from backup: ${backup.name}`);
-      
-      // Simulate restore process
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      return true;
+      const data = await response.json();
+      return data.success;
     } catch (error) {
       console.error('Error restoring system:', error);
       return false;

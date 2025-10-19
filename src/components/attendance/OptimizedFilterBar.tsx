@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useCallback, memo } from 'react';
+import React, { useMemo, useCallback, memo, useEffect, useRef } from 'react';
 import { Filter, Search, X, ChevronDown, ChevronUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -29,7 +29,13 @@ const OptimizedFilterBar = memo<FilterBarProps>(({
   onClearAll,
   isLoading = false
 }) => {
-  const debouncedSearch = useDebounce(searchQuery, 300);
+  // Validate props
+  if (!onSearchChange || !onFilterChange || !onClearAll) {
+    console.error('OptimizedFilterBar: Missing required props');
+    return null;
+  }
+  // Note: debouncedSearch is available for future use if needed
+  // const debouncedSearch = useDebounce(searchQuery, 300);
 
   const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     onSearchChange(e.target.value);
@@ -48,6 +54,10 @@ const OptimizedFilterBar = memo<FilterBarProps>(({
     return Math.floor(Math.random() * 50) + 1;
   }, []);
 
+  const createFilterCountGetter = useCallback((filterType: string) => {
+    return (option: string) => getFilterCount(filterType, option);
+  }, [getFilterCount]);
+
   const FilterDropdown = useMemo(() => {
     return React.memo<{
       title: string;
@@ -58,22 +68,51 @@ const OptimizedFilterBar = memo<FilterBarProps>(({
       getCount: (option: string) => number;
     }>(({ title, icon: Icon, options, selectedValues, onSelectionChange, getCount }) => {
       const [isOpen, setIsOpen] = React.useState(false);
+      const dropdownRef = React.useRef<HTMLDivElement>(null);
 
-      const handleCheckboxChange = (option: string, checked: boolean) => {
+      const handleCheckboxChange = React.useCallback((option: string, checked: boolean) => {
         const newValues = checked 
           ? [...selectedValues, option]
           : selectedValues.filter(v => v !== option);
         onSelectionChange(newValues);
-      };
+      }, [selectedValues, onSelectionChange]);
+
+      const handleKeyDown = React.useCallback((e: React.KeyboardEvent) => {
+        if (e.key === 'Escape') {
+          setIsOpen(false);
+        }
+      }, []);
+
+      const toggleOpen = React.useCallback(() => {
+        setIsOpen(prev => !prev);
+      }, []);
+
+      // Close dropdown when clicking outside
+      useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+          if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+            setIsOpen(false);
+          }
+        };
+
+        if (isOpen) {
+          document.addEventListener('mousedown', handleClickOutside);
+          return () => document.removeEventListener('mousedown', handleClickOutside);
+        }
+      }, [isOpen]);
 
       return (
-        <div className="relative">
+        <div className="relative" ref={dropdownRef}>
           <Button
             variant="outline"
             size="sm"
-            onClick={() => setIsOpen(!isOpen)}
+            onClick={toggleOpen}
+            onKeyDown={handleKeyDown}
             className="h-8 px-3 text-xs"
             disabled={isLoading}
+            aria-expanded={isOpen}
+            aria-haspopup="listbox"
+            aria-label={`Filter by ${title.toLowerCase()}`}
           >
             <Icon className="h-3 w-3 mr-1" />
             {title}
@@ -86,15 +125,25 @@ const OptimizedFilterBar = memo<FilterBarProps>(({
           </Button>
 
           {isOpen && (
-            <div className="absolute top-full left-0 mt-1 w-64 bg-white border border-gray-200 rounded-md shadow-lg z-50 max-h-60 overflow-y-auto">
+            <div 
+              className="absolute top-full left-0 mt-1 w-64 bg-white border border-gray-200 rounded-md shadow-lg z-50 max-h-60 overflow-y-auto"
+              role="listbox"
+              aria-label={`${title} filter options`}
+            >
               <div className="p-2">
                 {options.map((option) => (
-                  <label key={option} className="flex items-center space-x-2 p-1 hover:bg-gray-50 rounded cursor-pointer">
+                  <label 
+                    key={option} 
+                    className="flex items-center space-x-2 p-1 hover:bg-gray-50 rounded cursor-pointer"
+                    role="option"
+                    aria-selected={selectedValues.includes(option)}
+                  >
                     <input
                       type="checkbox"
                       checked={selectedValues.includes(option)}
                       onChange={(e) => handleCheckboxChange(option, e.target.checked)}
                       className="rounded"
+                      aria-label={`Select ${option}`}
                     />
                     <span className="text-sm flex-1">{option}</span>
                     <span className="text-xs text-gray-500">({getCount(option)})</span>
@@ -120,6 +169,8 @@ const OptimizedFilterBar = memo<FilterBarProps>(({
             onChange={handleSearchChange}
             className="pl-10"
             disabled={isLoading}
+            aria-label="Search students, departments, and courses"
+            role="searchbox"
           />
         </div>
         
@@ -154,7 +205,7 @@ const OptimizedFilterBar = memo<FilterBarProps>(({
             options={options}
             selectedValues={filters[filterType] || []}
             onSelectionChange={(values) => onFilterChange(filterType, values)}
-            getCount={getFilterCount}
+            getCount={createFilterCountGetter(filterType)}
           />
         ))}
       </div>

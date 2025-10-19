@@ -83,7 +83,7 @@ class InMemoryRateLimitStore {
 
 export class RateLimiter {
   private config: RateLimitConfig;
-  private store: InMemoryRateLimitStore;
+  public store: InMemoryRateLimitStore;
 
   constructor(config: RateLimitConfig) {
     this.config = config;
@@ -98,10 +98,37 @@ export class RateLimiter {
     // Default key generation: IP + User-Agent hash for better uniqueness
     const ip = this.getClientIP(request);
     const userAgent = request.headers.get('user-agent') || '';
-    const crypto = require('crypto');
-    const uaHash = crypto.createHash('md5').update(userAgent).digest('hex').substring(0, 8);
+    
+    // Use Web Crypto API for better compatibility
+    let uaHash = '';
+    try {
+      if (typeof window !== 'undefined' && window.crypto && window.crypto.subtle) {
+        // Browser environment - use a simple hash
+        uaHash = this.simpleHash(userAgent);
+      } else {
+        // Node.js environment - use crypto module
+        const crypto = require('crypto');
+        uaHash = crypto.createHash('md5').update(userAgent).digest('hex').substring(0, 8);
+      }
+    } catch (error) {
+      // Fallback to simple hash
+      uaHash = this.simpleHash(userAgent);
+    }
     
     return `${ip}:${uaHash}`;
+  }
+
+  private simpleHash(str: string): string {
+    let hash = 0;
+    if (str.length === 0) return hash.toString();
+    
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32-bit integer
+    }
+    
+    return Math.abs(hash).toString(16).substring(0, 8);
   }
 
   private getClientIP(request: NextRequest): string {
@@ -146,46 +173,63 @@ export class RateLimiter {
     resetTime: number;
     retryAfter?: number;
   }> {
-    const key = this.getKey(request);
-    const result = this.store.increment(key, this.config.windowMs);
-    
-    const allowed = result.count <= this.config.maxRequests;
-    const remaining = Math.max(0, this.config.maxRequests - result.count);
-    const retryAfter = allowed ? undefined : Math.ceil((result.resetTime - Date.now()) / 1000);
+    try {
+      const key = this.getKey(request);
+      const result = this.store.increment(key, this.config.windowMs);
+      
+      const allowed = result.count <= this.config.maxRequests;
+      const remaining = Math.max(0, this.config.maxRequests - result.count);
+      const retryAfter = allowed ? undefined : Math.ceil((result.resetTime - Date.now()) / 1000);
 
-    return {
-      allowed,
-      limit: this.config.maxRequests,
-      remaining,
-      resetTime: result.resetTime,
-      retryAfter
-    };
+      return {
+        allowed,
+        limit: this.config.maxRequests,
+        remaining,
+        resetTime: result.resetTime,
+        retryAfter
+      };
+    } catch (error) {
+      console.error('Rate limiter error:', error);
+      // On error, allow the request to prevent blocking legitimate users
+      return {
+        allowed: true,
+        limit: this.config.maxRequests,
+        remaining: this.config.maxRequests,
+        resetTime: Date.now() + this.config.windowMs
+      };
+    }
   }
 
   middleware() {
     return async (request: NextRequest): Promise<NextResponse | null> => {
-      const result = await this.checkLimit(request);
-      
-      if (!result.allowed) {
-        const response = NextResponse.json(
-          {
-            error: 'Too many requests',
-            message: this.config.message || `Too many requests. Limit: ${this.config.maxRequests} per ${this.config.windowMs / 1000} seconds.`,
-            retryAfter: result.retryAfter
-          },
-          { status: 429 }
-        );
+      try {
+        const result = await this.checkLimit(request);
+        
+        if (!result.allowed) {
+          const response = NextResponse.json(
+            {
+              error: 'Too many requests',
+              message: this.config.message || `Too many requests. Limit: ${this.config.maxRequests} per ${this.config.windowMs / 1000} seconds.`,
+              retryAfter: result.retryAfter
+            },
+            { status: 429 }
+          );
 
-        // Add rate limit headers
-        response.headers.set('X-RateLimit-Limit', result.limit.toString());
-        response.headers.set('X-RateLimit-Remaining', result.remaining.toString());
-        response.headers.set('X-RateLimit-Reset', Math.ceil(result.resetTime / 1000).toString());
-        response.headers.set('Retry-After', result.retryAfter?.toString() || '60');
+          // Add rate limit headers
+          response.headers.set('X-RateLimit-Limit', result.limit.toString());
+          response.headers.set('X-RateLimit-Remaining', result.remaining.toString());
+          response.headers.set('X-RateLimit-Reset', Math.ceil(result.resetTime / 1000).toString());
+          response.headers.set('Retry-After', result.retryAfter?.toString() || '60');
 
-        return response;
+          return response;
+        }
+
+        return null; // Continue processing
+      } catch (error) {
+        console.error('Rate limiter middleware error:', error);
+        // On error, allow the request to prevent blocking legitimate users
+        return null;
       }
-
-      return null; // Continue processing
     };
   }
 
@@ -286,7 +330,7 @@ export function getRateLimiterForPath(pathname: string): RateLimiter | null {
 // Cleanup function for graceful shutdown
 export function cleanupRateLimiters(): void {
   Object.values(rateLimiters).forEach(limiter => {
-    if (limiter && 'store' in limiter && limiter.store && 'destroy' in limiter.store) {
+    if (limiter && limiter.store && 'destroy' in limiter.store) {
       (limiter.store as any).destroy();
     }
   });

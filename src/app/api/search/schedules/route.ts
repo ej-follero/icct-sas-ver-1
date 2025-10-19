@@ -96,7 +96,7 @@ export async function GET(req: NextRequest) {
 
     const items = schedules.map(s => ({
       value: String(s.subjectSchedId),
-      label: `${s.subject.subjectCode} • ${s.section.sectionName} • ${s.day} ${s.startTime}-${s.endTime} • ${s.instructor.firstName} ${s.instructor.lastName}`,
+      label: `${s.subject.subjectCode} • ${s.section.sectionName} • ${s.day} ${s.startTime}-${s.endTime} • ${s.instructor?.firstName || 'Unknown'} ${s.instructor?.lastName || 'Instructor'}`,
     }));
 
     console.log('Returning items:', items);

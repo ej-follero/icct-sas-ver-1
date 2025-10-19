@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -18,14 +18,14 @@ interface RFIDTagFormDialogProps {
   initialData?: {
     tagId: number;
     tagNumber: string;
-    tagType: 'STUDENT_CARD' | 'INSTRUCTOR_CARD' | 'TEMPORARY_PASS' | 'VISITOR_PASS' | 'MAINTENANCE' | 'TEST';
+    tagType: 'STUDENT_CARD' | 'TEMPORARY_PASS' | 'VISITOR_PASS' | 'MAINTENANCE' | 'TEST';
     status: 'ACTIVE' | 'INACTIVE' | 'LOST' | 'DAMAGED' | 'EXPIRED' | 'REPLACED' | 'RESERVED';
     notes?: string;
     studentId?: number;
-    instructorId?: number;
     assignedBy?: number;
     assignmentReason?: string;
     expiresAt?: string;
+    assignedAt?: string;
   };
   onSubmit: (data: any) => Promise<void>;
   isSubmitting?: boolean;
@@ -41,21 +41,36 @@ export function RFIDTagFormDialog({
   mode = 'create'
 }: RFIDTagFormDialogProps) {
   const [isInternalSubmitting, setIsInternalSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = async (data: any) => {
+  // Validate props
+  if (!onSubmit || !onOpenChange) {
+    console.error('RFIDTagFormDialog: Missing required props');
+    return null;
+  }
+
+  const handleSubmit = useCallback(async (data: any) => {
     try {
+      setError(null);
       setIsInternalSubmitting(true);
       await onSubmit(data);
       onOpenChange(false); // Close dialog on success
     } catch (error) {
       console.error('Dialog submission error:', error);
-      // Error handling is done in the form component
+      setError(error instanceof Error ? error.message : 'An error occurred while submitting the form');
     } finally {
       setIsInternalSubmitting(false);
     }
-  };
+  }, [onSubmit, onOpenChange]);
 
   const isDialogSubmitting = isSubmitting || isInternalSubmitting;
+
+  // Reset error when dialog opens
+  useEffect(() => {
+    if (open) {
+      setError(null);
+    }
+  }, [open]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -101,6 +116,11 @@ export function RFIDTagFormDialog({
 
         {/* Form Content - Scrollable */}
         <div className="flex-1 overflow-y-auto p-6">
+          {error && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
+              <p className="text-sm text-red-600">{error}</p>
+            </div>
+          )}
           <RFIDTagForm
             initialData={initialData}
             onSubmit={handleSubmit}
@@ -121,29 +141,14 @@ export function RFIDTagFormDialog({
             >
               Cancel
             </Button>
-            <Button
-              onClick={() => {
-                // Trigger form submission
-                const form = document.querySelector('form');
-                if (form) {
-                  form.requestSubmit();
-                }
-              }}
-              disabled={isDialogSubmitting}
-              className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded font-medium transition-colors"
-            >
-              {isDialogSubmitting ? (
+            <div className="text-sm text-gray-500 flex items-center">
+              {isDialogSubmitting && (
                 <>
-                  <div className="w-4 h-4 mr-2 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                  <div className="w-4 h-4 mr-2 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
                   {mode === 'create' ? 'Creating...' : 'Updating...'}
                 </>
-              ) : (
-                <>
-                  <CreditCard className="w-4 h-4 mr-2" />
-                  {mode === 'create' ? 'Create Tag' : 'Update Tag'}
-                </>
               )}
-            </Button>
+            </div>
           </div>
         </div>
       </DialogContent>

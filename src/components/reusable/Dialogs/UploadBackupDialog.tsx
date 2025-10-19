@@ -163,15 +163,55 @@ export default function UploadBackupDialog({
     setUploadProgress(0);
 
     try {
-      const newBackup = await backupService.uploadBackup(
-        selectedFile,
-        formData.name,
-        formData.description || undefined,
-        userId,
-        (progress) => {
+      // Create FormData for file upload
+      const uploadFormData = new FormData();
+      uploadFormData.append('file', selectedFile);
+      uploadFormData.append('name', formData.name);
+      uploadFormData.append('description', formData.description || '');
+      uploadFormData.append('createdBy', userId.toString());
+
+      // Create XMLHttpRequest for progress tracking
+      const xhr = new XMLHttpRequest();
+      
+      // Set up progress tracking
+      xhr.upload.addEventListener('progress', (event) => {
+        if (event.lengthComputable) {
+          const progress = Math.round((event.loaded / event.total) * 100);
           setUploadProgress(progress);
         }
-      );
+      });
+
+      // Handle response
+      const newBackup = await new Promise<BackupItem>((resolve, reject) => {
+        xhr.addEventListener('load', () => {
+          if (xhr.status === 200) {
+            try {
+              const response = JSON.parse(xhr.responseText);
+              if (response.success) {
+                resolve(response.data);
+              } else {
+                reject(new Error(response.error || 'Upload failed'));
+              }
+            } catch (error) {
+              reject(new Error('Invalid response format'));
+            }
+          } else {
+            try {
+              const errorResponse = JSON.parse(xhr.responseText);
+              reject(new Error(errorResponse.error || 'Upload failed'));
+            } catch {
+              reject(new Error('Upload failed'));
+            }
+          }
+        });
+
+        xhr.addEventListener('error', () => {
+          reject(new Error('Network error during upload'));
+        });
+
+        xhr.open('POST', '/api/backup/upload');
+        xhr.send(uploadFormData);
+      });
 
       if (newBackup) {
         onSuccess?.(newBackup);

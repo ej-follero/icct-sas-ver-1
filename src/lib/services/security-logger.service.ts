@@ -1,6 +1,4 @@
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { prisma } from '@/lib/prisma';
 
 export interface SecurityEvent {
   eventType: 'LOGIN_ATTEMPT' | 'LOGIN_SUCCESS' | 'LOGIN_FAILED' | 'LOGOUT' | 'PASSWORD_CHANGE' | 'SETTINGS_UPDATE' | 'SUSPICIOUS_ACTIVITY' | 'SECURITY_ALERT' | 'ALERT_RESOLVED' | 'ACCESS_DENIED' | 'USER_CREATED' | 'USER_DELETED' | 'ROLE_CHANGE';
@@ -13,25 +11,31 @@ export interface SecurityEvent {
 }
 
 export class SecurityLogger {
-  static async logEvent(event: SecurityEvent) {
+  static async logEvent(event: SecurityEvent): Promise<boolean> {
     try {
       await prisma.securityLog.create({
         data: {
           eventType: event.eventType,
           severity: event.severity,
-          description: event.description,
+          message: event.description,
+          level: event.severity,
+          module: 'SECURITY',
+          action: event.eventType,
           userId: event.userId || null,
           ipAddress: event.ipAddress || null,
           userAgent: event.userAgent || null,
           details: event.details || null,
-        },
+        } as any, // Type assertion to handle schema differences
       });
+      return true;
     } catch (error) {
       console.error('Failed to log security event:', error);
+      // Don't throw error to prevent breaking the main application flow
+      return false;
     }
   }
 
-  static async logLoginAttempt(userId: number, success: boolean, ipAddress?: string, userAgent?: string) {
+  static async logLoginAttempt(userId: number, success: boolean, ipAddress?: string, userAgent?: string): Promise<boolean> {
     const event: SecurityEvent = {
       eventType: success ? 'LOGIN_SUCCESS' : 'LOGIN_FAILED',
       severity: success ? 'LOW' : 'HIGH',
@@ -45,10 +49,10 @@ export class SecurityLogger {
       },
     };
 
-    await this.logEvent(event);
+    return await this.logEvent(event);
   }
 
-  static async logLogout(userId: number, ipAddress?: string) {
+  static async logLogout(userId: number, ipAddress?: string): Promise<boolean> {
     const event: SecurityEvent = {
       eventType: 'LOGOUT',
       severity: 'LOW',
@@ -60,10 +64,10 @@ export class SecurityLogger {
       },
     };
 
-    await this.logEvent(event);
+    return await this.logEvent(event);
   }
 
-  static async logPasswordChange(userId: number, ipAddress?: string) {
+  static async logPasswordChange(userId: number, ipAddress?: string): Promise<boolean> {
     const event: SecurityEvent = {
       eventType: 'PASSWORD_CHANGE',
       severity: 'MEDIUM',
@@ -75,10 +79,10 @@ export class SecurityLogger {
       },
     };
 
-    await this.logEvent(event);
+    return await this.logEvent(event);
   }
 
-  static async logSettingsUpdate(userId: number, settingsChanged: string[], ipAddress?: string) {
+  static async logSettingsUpdate(userId: number, settingsChanged: string[], ipAddress?: string): Promise<boolean> {
     const event: SecurityEvent = {
       eventType: 'SETTINGS_UPDATE',
       severity: 'MEDIUM',
@@ -91,10 +95,10 @@ export class SecurityLogger {
       },
     };
 
-    await this.logEvent(event);
+    return await this.logEvent(event);
   }
 
-  static async logSuspiciousActivity(userId: number, activity: string, ipAddress?: string, userAgent?: string) {
+  static async logSuspiciousActivity(userId: number, activity: string, ipAddress?: string, userAgent?: string): Promise<boolean> {
     const event: SecurityEvent = {
       eventType: 'SUSPICIOUS_ACTIVITY',
       severity: 'HIGH',
@@ -108,7 +112,7 @@ export class SecurityLogger {
       },
     };
 
-    await this.logEvent(event);
+    return await this.logEvent(event);
   }
 
   static async logSecurityAlert(data: {
@@ -117,7 +121,7 @@ export class SecurityLogger {
     message: string;
     userId?: number;
     ipAddress?: string;
-  }): Promise<void> {
+  }): Promise<boolean> {
     const event: SecurityEvent = {
       eventType: 'SECURITY_ALERT',
       severity: 'HIGH',
@@ -131,14 +135,14 @@ export class SecurityLogger {
       },
     };
 
-    await this.logEvent(event);
+    return await this.logEvent(event);
   }
 
   static async logAlertResolved(data: {
     alertId: string;
     resolvedBy: number;
     resolutionNotes?: string;
-  }): Promise<void> {
+  }): Promise<boolean> {
     const event: SecurityEvent = {
       eventType: 'ALERT_RESOLVED',
       severity: 'LOW',
@@ -151,10 +155,10 @@ export class SecurityLogger {
       },
     };
 
-    await this.logEvent(event);
+    return await this.logEvent(event);
   }
 
-  static async logAccessDenied(userId: number, resource: string, ipAddress?: string) {
+  static async logAccessDenied(userId: number, resource: string, ipAddress?: string): Promise<boolean> {
     const event: SecurityEvent = {
       eventType: 'ACCESS_DENIED',
       severity: 'HIGH',
@@ -167,10 +171,10 @@ export class SecurityLogger {
       },
     };
 
-    await this.logEvent(event);
+    return await this.logEvent(event);
   }
 
-  static async logUserCreated(userId: number, createdBy: number, ipAddress?: string) {
+  static async logUserCreated(userId: number, createdBy: number, ipAddress?: string): Promise<boolean> {
     const event: SecurityEvent = {
       eventType: 'USER_CREATED',
       severity: 'MEDIUM',
@@ -183,10 +187,10 @@ export class SecurityLogger {
       },
     };
 
-    await this.logEvent(event);
+    return await this.logEvent(event);
   }
 
-  static async logUserDeleted(userId: number, deletedBy: number, ipAddress?: string) {
+  static async logUserDeleted(userId: number, deletedBy: number, ipAddress?: string): Promise<boolean> {
     const event: SecurityEvent = {
       eventType: 'USER_DELETED',
       severity: 'HIGH',
@@ -199,10 +203,10 @@ export class SecurityLogger {
       },
     };
 
-    await this.logEvent(event);
+    return await this.logEvent(event);
   }
 
-  static async logRoleChange(userId: number, oldRole: string, newRole: string, changedBy: number, ipAddress?: string) {
+  static async logRoleChange(userId: number, oldRole: string, newRole: string, changedBy: number, ipAddress?: string): Promise<boolean> {
     const event: SecurityEvent = {
       eventType: 'ROLE_CHANGE',
       severity: 'HIGH',
@@ -217,43 +221,53 @@ export class SecurityLogger {
       },
     };
 
-    await this.logEvent(event);
+    return await this.logEvent(event);
   }
 
   // Get recent security events
-  static async getRecentEvents(limit: number = 50) {
-    return await prisma.securityLog.findMany({
-      orderBy: { timestamp: 'desc' },
-      take: limit,
-      include: {
-        user: {
-          select: {
-            userId: true,
-            userName: true,
-            email: true,
+  static async getRecentEvents(limit: number = 50): Promise<any[]> {
+    try {
+      return await prisma.securityLog.findMany({
+        orderBy: { timestamp: 'desc' },
+        take: limit,
+        include: {
+          user: {
+            select: {
+              userId: true,
+              userName: true,
+              email: true,
+            },
           },
         },
-      },
-    });
+      });
+    } catch (error) {
+      console.error('Failed to get recent security events:', error);
+      return [];
+    }
   }
 
   // Get security statistics
-  static async getSecurityStats(days: number = 30) {
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - days);
+  static async getSecurityStats(days: number = 30): Promise<any[]> {
+    try {
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - days);
 
-    const stats = await prisma.securityLog.groupBy({
-      by: ['eventType', 'severity'],
-      where: {
-        timestamp: {
-          gte: startDate,
+      const stats = await prisma.securityLog.groupBy({
+        by: ['eventType', 'severity'],
+        where: {
+          timestamp: {
+            gte: startDate,
+          },
         },
-      },
-      _count: {
-        id: true,
-      },
-    });
+        _count: {
+          id: true,
+        },
+      });
 
-    return stats;
+      return stats;
+    } catch (error) {
+      console.error('Failed to get security statistics:', error);
+      return [];
+    }
   }
 } 

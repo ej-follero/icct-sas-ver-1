@@ -2,6 +2,14 @@ import { db } from '../db';
 import { ScheduleFrequency, ScheduleLogStatus, BackupType, BackupLocation, DayOfWeek } from '@prisma/client';
 import { backupServerService } from './backup-server.service';
 import { backupService } from './backup.service';
+// import { logger } from './logger.service';
+
+// Temporary logger implementation
+const logger = {
+  info: (message: string, ...args: any[]) => console.log(`[INFO] ${message}`, ...args),
+  error: (message: string, ...args: any[]) => console.error(`[ERROR] ${message}`, ...args),
+  warn: (message: string, ...args: any[]) => console.warn(`[WARN] ${message}`, ...args)
+};
 
 export interface CreateScheduleRequest {
   name: string;
@@ -45,6 +53,19 @@ export class BackupSchedulingService {
    */
   async createSchedule(scheduleData: CreateScheduleRequest) {
     try {
+      // Validate input data
+      if (!scheduleData.name || !scheduleData.frequency || !scheduleData.createdBy) {
+        throw new Error('Missing required fields: name, frequency, and createdBy are required');
+      }
+
+      if (scheduleData.interval <= 0) {
+        throw new Error('Interval must be greater than 0');
+      }
+
+      if (scheduleData.retentionDays < 0) {
+        throw new Error('Retention days cannot be negative');
+      }
+
       const nextRun = this.calculateNextRun(
         scheduleData.frequency,
         scheduleData.interval,
@@ -81,9 +102,10 @@ export class BackupSchedulingService {
         }
       });
 
+      logger.info(`Backup schedule created: ${schedule.name} (ID: ${schedule.id})`);
       return schedule;
     } catch (error) {
-      console.error('Error creating backup schedule:', error);
+      logger.error('Error creating backup schedule:', error);
       throw error;
     }
   }
@@ -99,6 +121,11 @@ export class BackupSchedulingService {
     search?: string;
   }) {
     try {
+      // Validate pagination parameters
+      const page = Math.max(1, params?.page || 1);
+      const limit = Math.min(100, Math.max(1, params?.limit || 10));
+      const skip = (page - 1) * limit;
+
       const where: any = {};
       
       if (params?.isActive !== undefined) {
@@ -115,10 +142,6 @@ export class BackupSchedulingService {
           { description: { contains: params.search, mode: 'insensitive' } }
         ];
       }
-
-      const page = params?.page || 1;
-      const limit = params?.limit || 10;
-      const skip = (page - 1) * limit;
 
       const [schedules, total] = await Promise.all([
         db.backupSchedule.findMany({
@@ -142,6 +165,8 @@ export class BackupSchedulingService {
         db.backupSchedule.count({ where })
       ]);
 
+      logger.info(`Fetched ${schedules.length} backup schedules (page ${page}/${Math.ceil(total / limit)})`);
+      
       return {
         schedules,
         pagination: {
@@ -152,7 +177,7 @@ export class BackupSchedulingService {
         }
       };
     } catch (error) {
-      console.error('Error fetching backup schedules:', error);
+      logger.error('Error fetching backup schedules:', error);
       throw error;
     }
   }
@@ -162,8 +187,14 @@ export class BackupSchedulingService {
    */
   async getSchedule(scheduleId: string) {
     try {
+      // Validate schedule ID
+      const id = parseInt(scheduleId);
+      if (isNaN(id) || id <= 0) {
+        throw new Error('Invalid schedule ID');
+      }
+
       const schedule = await db.backupSchedule.findUnique({
-        where: { id: parseInt(scheduleId) },
+        where: { id },
         include: {
           createdByUser: {
             select: {
@@ -187,9 +218,14 @@ export class BackupSchedulingService {
         }
       });
 
+      if (!schedule) {
+        throw new Error('Schedule not found');
+      }
+
+      logger.info(`Fetched backup schedule: ${schedule.name} (ID: ${schedule.id})`);
       return schedule;
     } catch (error) {
-      console.error('Error fetching backup schedule:', error);
+      logger.error('Error fetching backup schedule:', error);
       throw error;
     }
   }
@@ -199,17 +235,41 @@ export class BackupSchedulingService {
    */
   async updateSchedule(scheduleId: string, updateData: Partial<CreateScheduleRequest>) {
     try {
+      // Validate schedule ID
+      const id = parseInt(scheduleId);
+      if (isNaN(id) || id <= 0) {
+        throw new Error('Invalid schedule ID');
+      }
+
+      // Check if schedule exists
+      const existingSchedule = await db.backupSchedule.findUnique({
+        where: { id }
+      });
+
+      if (!existingSchedule) {
+        throw new Error('Schedule not found');
+      }
+
+      // Validate update data
+      if (updateData.interval !== undefined && updateData.interval <= 0) {
+        throw new Error('Interval must be greater than 0');
+      }
+
+      if (updateData.retentionDays !== undefined && updateData.retentionDays < 0) {
+        throw new Error('Retention days cannot be negative');
+      }
+
       const nextRun = updateData.frequency ? this.calculateNextRun(
         updateData.frequency,
-        updateData.interval || 1,
-        updateData.timeOfDay || '02:00',
+        updateData.interval || existingSchedule.interval,
+        updateData.timeOfDay || existingSchedule.timeOfDay,
         updateData.daysOfWeek,
         updateData.dayOfMonth
       ) : undefined;
 
       const { createdBy, daysOfWeek, ...updateDataWithoutCreatedBy } = updateData;
       const schedule = await db.backupSchedule.update({
-        where: { id: parseInt(scheduleId) },
+        where: { id },
         data: {
           ...updateDataWithoutCreatedBy,
           daysOfWeek: daysOfWeek ? (daysOfWeek as DayOfWeek[]) : undefined,
@@ -218,9 +278,10 @@ export class BackupSchedulingService {
         }
       });
 
+      logger.info(`Updated backup schedule: ${schedule.name} (ID: ${schedule.id})`);
       return schedule;
     } catch (error) {
-      console.error('Error updating backup schedule:', error);
+      logger.error('Error updating backup schedule:', error);
       throw error;
     }
   }
@@ -230,13 +291,29 @@ export class BackupSchedulingService {
    */
   async deleteSchedule(scheduleId: string) {
     try {
-      await db.backupSchedule.delete({
-        where: { id: parseInt(scheduleId) }
+      // Validate schedule ID
+      const id = parseInt(scheduleId);
+      if (isNaN(id) || id <= 0) {
+        throw new Error('Invalid schedule ID');
+      }
+
+      // Check if schedule exists
+      const existingSchedule = await db.backupSchedule.findUnique({
+        where: { id }
       });
 
+      if (!existingSchedule) {
+        throw new Error('Schedule not found');
+      }
+
+      await db.backupSchedule.delete({
+        where: { id }
+      });
+
+      logger.info(`Deleted backup schedule: ${existingSchedule.name} (ID: ${id})`);
       return true;
     } catch (error) {
-      console.error('Error deleting backup schedule:', error);
+      logger.error('Error deleting backup schedule:', error);
       throw error;
     }
   }
@@ -246,8 +323,14 @@ export class BackupSchedulingService {
    */
   async toggleScheduleStatus(scheduleId: string) {
     try {
+      // Validate schedule ID
+      const id = parseInt(scheduleId);
+      if (isNaN(id) || id <= 0) {
+        throw new Error('Invalid schedule ID');
+      }
+
       const schedule = await db.backupSchedule.findUnique({
-        where: { id: parseInt(scheduleId) }
+        where: { id }
       });
 
       if (!schedule) {
@@ -255,16 +338,17 @@ export class BackupSchedulingService {
       }
 
       const updatedSchedule = await db.backupSchedule.update({
-        where: { id: parseInt(scheduleId) },
+        where: { id },
         data: {
           isActive: !schedule.isActive,
           updatedAt: new Date()
         }
       });
 
+      logger.info(`Toggled schedule status: ${schedule.name} (ID: ${id}) - ${updatedSchedule.isActive ? 'Active' : 'Inactive'}`);
       return updatedSchedule;
     } catch (error) {
-      console.error('Error toggling schedule status:', error);
+      logger.error('Error toggling schedule status:', error);
       throw error;
     }
   }
@@ -274,8 +358,14 @@ export class BackupSchedulingService {
    */
   async executeScheduledBackup(scheduleId: string) {
     try {
+      // Validate schedule ID
+      const id = parseInt(scheduleId);
+      if (isNaN(id) || id <= 0) {
+        throw new Error('Invalid schedule ID');
+      }
+
       const schedule = await db.backupSchedule.findUnique({
-        where: { id: parseInt(scheduleId) }
+        where: { id }
       });
 
       if (!schedule) {
@@ -286,10 +376,12 @@ export class BackupSchedulingService {
         throw new Error('Schedule is inactive');
       }
 
+      logger.info(`Executing scheduled backup: ${schedule.name} (ID: ${id})`);
+
       // Create schedule log entry
       const scheduleLog = await db.backupScheduleLog.create({
         data: {
-          scheduleId: parseInt(scheduleId),
+          scheduleId: id,
           status: ScheduleLogStatus.RUNNING,
           scheduledAt: new Date(),
           startedAt: new Date(),
@@ -303,8 +395,7 @@ export class BackupSchedulingService {
           name: `Scheduled: ${schedule.name}`,
           description: `Automated backup from schedule: ${schedule.name}`,
           type: schedule.backupType,
-          location: schedule.location,
-          isEncrypted: schedule.isEncrypted,
+          location: schedule.location === 'HYBRID' ? 'LOCAL' : schedule.location,
           createdBy: schedule.createdBy
         });
 
@@ -321,7 +412,7 @@ export class BackupSchedulingService {
 
           // Update schedule statistics
           await db.backupSchedule.update({
-            where: { id: parseInt(scheduleId) },
+            where: { id },
             data: {
               lastRun: new Date(),
               nextRun: this.calculateNextRun(
@@ -336,6 +427,7 @@ export class BackupSchedulingService {
             }
           });
 
+          logger.info(`Successfully executed scheduled backup: ${schedule.name} (ID: ${id})`);
           return backup;
         } else {
           throw new Error('Failed to create backup');
@@ -353,7 +445,7 @@ export class BackupSchedulingService {
 
         // Update schedule statistics
         await db.backupSchedule.update({
-          where: { id: parseInt(scheduleId) },
+          where: { id },
           data: {
             lastRun: new Date(),
             totalRuns: { increment: 1 },
@@ -361,10 +453,11 @@ export class BackupSchedulingService {
           }
         });
 
+        logger.error(`Failed to execute scheduled backup: ${schedule.name} (ID: ${id})`, error);
         throw error;
       }
     } catch (error) {
-      console.error('Error executing scheduled backup:', error);
+      logger.error('Error executing scheduled backup:', error);
       throw error;
     }
   }
@@ -382,12 +475,16 @@ export class BackupSchedulingService {
           nextRun: {
             lte: now
           }
+        },
+        orderBy: {
+          nextRun: 'asc'
         }
       });
 
+      logger.info(`Found ${schedules.length} schedules ready for execution`);
       return schedules;
     } catch (error) {
-      console.error('Error fetching schedules to execute:', error);
+      logger.error('Error fetching schedules to execute:', error);
       throw error;
     }
   }
@@ -425,7 +522,7 @@ export class BackupSchedulingService {
         })
       ]);
 
-      return {
+      const stats = {
         totalSchedules,
         activeSchedules,
         inactiveSchedules,
@@ -434,8 +531,11 @@ export class BackupSchedulingService {
         failedRuns: failedRuns._sum.failedRuns || 0,
         nextScheduledRun: nextScheduledRun?.nextRun || undefined
       };
+
+      logger.info(`Retrieved schedule statistics: ${stats.totalSchedules} total, ${stats.activeSchedules} active`);
+      return stats;
     } catch (error) {
-      console.error('Error getting schedule stats:', error);
+      logger.error('Error getting schedule stats:', error);
       throw error;
     }
   }
@@ -450,57 +550,77 @@ export class BackupSchedulingService {
     daysOfWeek?: string[],
     dayOfMonth?: number
   ): Date {
-    const now = new Date();
-    const [hours, minutes] = timeOfDay.split(':').map(Number);
-    
-    let nextRun = new Date(now);
-    nextRun.setHours(hours, minutes, 0, 0);
-
-    // If the time has already passed today, move to the next occurrence
-    if (nextRun <= now) {
-      nextRun.setDate(nextRun.getDate() + 1);
-    }
-
-    switch (frequency) {
-      case ScheduleFrequency.DAILY:
-        nextRun.setDate(nextRun.getDate() + (interval - 1));
-        break;
+    try {
+      const now = new Date();
       
-      case ScheduleFrequency.WEEKLY:
-        if (daysOfWeek && daysOfWeek.length > 0) {
-          // Find the next occurrence of any of the specified days
-          const currentDay = nextRun.getDay();
-          const targetDays = daysOfWeek.map(day => this.getDayNumber(day));
-          const nextDay = targetDays.find(day => day > currentDay) || targetDays[0];
-          
-          if (nextDay > currentDay) {
-            nextRun.setDate(nextRun.getDate() + (nextDay - currentDay));
+      // Validate time format
+      const timeMatch = timeOfDay.match(/^(\d{1,2}):(\d{2})$/);
+      if (!timeMatch) {
+        throw new Error('Invalid time format. Expected HH:MM');
+      }
+      
+      const hours = parseInt(timeMatch[1], 10);
+      const minutes = parseInt(timeMatch[2], 10);
+      
+      if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+        throw new Error('Invalid time values');
+      }
+      
+      let nextRun = new Date(now);
+      nextRun.setHours(hours, minutes, 0, 0);
+
+      // If the time has already passed today, move to the next occurrence
+      if (nextRun <= now) {
+        nextRun.setDate(nextRun.getDate() + 1);
+      }
+
+      switch (frequency) {
+        case ScheduleFrequency.DAILY:
+          nextRun.setDate(nextRun.getDate() + (interval - 1));
+          break;
+        
+        case ScheduleFrequency.WEEKLY:
+          if (daysOfWeek && daysOfWeek.length > 0) {
+            // Find the next occurrence of any of the specified days
+            const currentDay = nextRun.getDay();
+            const targetDays = daysOfWeek.map(day => this.getDayNumber(day));
+            const nextDay = targetDays.find(day => day > currentDay) || targetDays[0];
+            
+            if (nextDay > currentDay) {
+              nextRun.setDate(nextRun.getDate() + (nextDay - currentDay));
+            } else {
+              nextRun.setDate(nextRun.getDate() + (7 - currentDay + nextDay));
+            }
           } else {
-            nextRun.setDate(nextRun.getDate() + (7 - currentDay + nextDay));
+            nextRun.setDate(nextRun.getDate() + (7 * interval));
           }
-        } else {
-          nextRun.setDate(nextRun.getDate() + (7 * interval));
-        }
-        break;
-      
-      case ScheduleFrequency.MONTHLY:
-        if (dayOfMonth) {
-          nextRun.setDate(dayOfMonth);
-          if (nextRun <= now) {
+          break;
+        
+        case ScheduleFrequency.MONTHLY:
+          if (dayOfMonth) {
+            if (dayOfMonth < 1 || dayOfMonth > 31) {
+              throw new Error('Invalid day of month');
+            }
+            nextRun.setDate(dayOfMonth);
+            if (nextRun <= now) {
+              nextRun.setMonth(nextRun.getMonth() + interval);
+            }
+          } else {
             nextRun.setMonth(nextRun.getMonth() + interval);
           }
-        } else {
-          nextRun.setMonth(nextRun.getMonth() + interval);
-        }
-        break;
-      
-      case ScheduleFrequency.CUSTOM:
-        // For custom schedules, use the interval as days
-        nextRun.setDate(nextRun.getDate() + interval);
-        break;
-    }
+          break;
+        
+        case ScheduleFrequency.CUSTOM:
+          // For custom schedules, use the interval as days
+          nextRun.setDate(nextRun.getDate() + interval);
+          break;
+      }
 
-    return nextRun;
+      return nextRun;
+    } catch (error) {
+      logger.error('Error calculating next run time:', error);
+      throw error;
+    }
   }
 
   /**
@@ -516,7 +636,14 @@ export class BackupSchedulingService {
       'FRIDAY': 5,
       'SATURDAY': 6
     };
-    return dayMap[day] || 0;
+    
+    const dayNumber = dayMap[day.toUpperCase()];
+    if (dayNumber === undefined) {
+      logger.warn(`Invalid day string: ${day}, defaulting to Sunday (0)`);
+      return 0;
+    }
+    
+    return dayNumber;
   }
 }
 

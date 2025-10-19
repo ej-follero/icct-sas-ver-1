@@ -1,8 +1,84 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { RotateCcw } from 'lucide-react';
-import { SelectDropdown } from '@/components/ui/select-dropdown';
-import type { Filters, AdvancedFilters, FilterPreset } from '@/app/(dashboard)/list/attendance/students/page';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
+// Define the types locally to avoid import issues
+interface Filters extends Record<string, string[]> {
+  departments: string[];
+  courses: string[];
+  yearLevels: string[];
+  attendanceRates: string[];
+  riskLevels: string[];
+  subjects: string[];
+  statuses: string[];
+  studentStatuses: string[];
+  sections: string[];
+}
+
+interface FilterPreset {
+  id: string;
+  name: string;
+  description: string;
+  icon: any;
+  filters: Partial<Filters>;
+}
+
+interface AdvancedFilters {
+  attendanceRangeMin: number;
+  attendanceRangeMax: number;
+  dateRangeStart: string;
+  dateRangeEnd: string;
+  lastAttendanceDays: string;
+  presentDaysMin: string;
+  presentDaysMax: string;
+  absentDaysMin: string;
+  absentDaysMax: string;
+  lateDaysMin: string;
+  lateDaysMax: string;
+  totalDaysMin: string;
+  totalDaysMax: string;
+  logicalOperator: 'AND' | 'OR';
+  customTextFilter: string;
+  excludeInactive: boolean;
+  onlyRecentEnrollments: boolean;
+  verificationStatus: string[];
+  attendanceTypes: string[];
+  eventTypes: string[];
+  semester: string[];
+  academicYear: string[];
+  subjectScheduleDays: string[];
+  subjectScheduleTimes: string[];
+  timeOfDay: string[];
+  attendanceTrends: string[];
+  subjectEnrollments: string[];
+  enrollmentStatuses: string[];
+}
+
+// SelectDropdown component to replace the missing one
+interface SelectDropdownProps {
+  value: string;
+  onValueChange: (value: string) => void;
+  options: { value: string; label: string }[];
+  placeholder?: string;
+}
+
+const SelectDropdown: React.FC<SelectDropdownProps> = ({ value, onValueChange, options, placeholder }) => {
+  return (
+    <Select value={value} onValueChange={onValueChange}>
+      <SelectTrigger className="w-full">
+        <SelectValue placeholder={placeholder} />
+      </SelectTrigger>
+      <SelectContent>
+        {options.map((option) => (
+          <SelectItem key={option.value} value={option.value}>
+            {option.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+};
 
 /**
  * AdvancedFilterDropdown
@@ -56,10 +132,118 @@ export const AdvancedFilterDropdown = ({
   isPresetActive: (preset: FilterPreset) => boolean;
   handleClearFilters: () => void;
 }) => {
-  const totalActiveFilters = Object.values(filters).reduce((sum, filterArray) => sum + filterArray.length, 0);
+  // Validate props
+  if (!setFilters || !setAdvancedFilters || !handleClearFilters) {
+    console.error('AdvancedFilterDropdown: Missing required props');
+    return null;
+  }
+
+  const totalActiveFilters = useMemo(() => 
+    Object.values(filters).reduce((sum, filterArray) => sum + (Array.isArray(filterArray) ? filterArray.length : 0), 0), 
+    [filters]
+  );
+  
   const [showQuickFilters, setShowQuickFilters] = useState(true);
   const [showAttendanceFilters, setShowAttendanceFilters] = useState(true);
   const [showRangeFilters, setShowRangeFilters] = useState(true);
+
+  // Memoized handlers for better performance
+  const handleDepartmentChange = useCallback((value: string) => {
+    setFilters({ ...filters, departments: value === "all" ? [] : [value] });
+  }, [filters, setFilters]);
+
+  const handleAttendanceRateChange = useCallback((value: string) => {
+    setFilters({ ...filters, attendanceRates: value === "all" ? [] : [value] });
+  }, [filters, setFilters]);
+
+  const handleYearLevelChange = useCallback((value: string) => {
+    setFilters({ ...filters, yearLevels: value === "all-levels" ? [] : [value] });
+  }, [filters, setFilters]);
+
+  const handleRiskLevelChange = useCallback((value: string) => {
+    setFilters({ ...filters, riskLevels: value === "all-risk" ? [] : [value] });
+  }, [filters, setFilters]);
+
+  const handleCourseChange = useCallback((value: string) => {
+    setFilters({ ...filters, courses: value === "all-courses" ? [] : [value] });
+  }, [filters, setFilters]);
+
+  const handleSectionChange = useCallback((value: string) => {
+    setFilters({ ...filters, sections: value === "all-sections" ? [] : [value] });
+  }, [filters, setFilters]);
+
+  const handleStudentStatusChange = useCallback((value: string) => {
+    setFilters({ ...filters, studentStatuses: value === "all-status" ? [] : [value] });
+  }, [filters, setFilters]);
+
+  const handleVerificationStatusChange = useCallback((value: string) => {
+    setAdvancedFilters({ ...advancedFilters, verificationStatus: value === "all-status" ? [] : [value] });
+  }, [advancedFilters, setAdvancedFilters]);
+
+  const handleAttendanceTypeChange = useCallback((value: string) => {
+    setAdvancedFilters({ ...advancedFilters, attendanceTypes: value === "all-types" ? [] : [value] });
+  }, [advancedFilters, setAdvancedFilters]);
+
+  const handleEventTypeChange = useCallback((value: string) => {
+    setAdvancedFilters({ ...advancedFilters, eventTypes: value === "all-events" ? [] : [value] });
+  }, [advancedFilters, setAdvancedFilters]);
+
+  const handleSemesterChange = useCallback((value: string) => {
+    setAdvancedFilters({ ...advancedFilters, semester: value === "all-semesters" ? [] : [value] });
+  }, [advancedFilters, setAdvancedFilters]);
+
+  const handleAcademicYearChange = useCallback((value: string) => {
+    setAdvancedFilters({ ...advancedFilters, academicYear: value === "all-years" ? [] : [value] });
+  }, [advancedFilters, setAdvancedFilters]);
+
+  const handleAttendanceRangeMinChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setAdvancedFilters((prev: AdvancedFilters) => ({...prev, attendanceRangeMin: parseInt(e.target.value) || 0}));
+  }, [setAdvancedFilters]);
+
+  const handleAttendanceRangeMaxChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setAdvancedFilters((prev: AdvancedFilters) => ({...prev, attendanceRangeMax: parseInt(e.target.value) || 100}));
+  }, [setAdvancedFilters]);
+
+  const handleDateRangeStartChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setAdvancedFilters((prev: AdvancedFilters) => ({...prev, dateRangeStart: e.target.value}));
+  }, [setAdvancedFilters]);
+
+  const handleDateRangeEndChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setAdvancedFilters((prev: AdvancedFilters) => ({...prev, dateRangeEnd: e.target.value}));
+  }, [setAdvancedFilters]);
+
+  const resetAdvancedFilters = useCallback(() => {
+    setAdvancedFilters({
+      attendanceRangeMin: 0,
+      attendanceRangeMax: 100,
+      dateRangeStart: '',
+      dateRangeEnd: '',
+      lastAttendanceDays: '',
+      presentDaysMin: '',
+      presentDaysMax: '',
+      absentDaysMin: '',
+      absentDaysMax: '',
+      lateDaysMin: '',
+      lateDaysMax: '',
+      totalDaysMin: '',
+      totalDaysMax: '',
+      logicalOperator: 'AND',
+      customTextFilter: '',
+      excludeInactive: false,
+      onlyRecentEnrollments: false,
+      verificationStatus: [],
+      attendanceTypes: [],
+      eventTypes: [],
+      semester: [],
+      academicYear: [],
+      subjectScheduleDays: [],
+      subjectScheduleTimes: [],
+      timeOfDay: [],
+      attendanceTrends: [],
+      subjectEnrollments: [],
+      enrollmentStatuses: []
+    });
+  }, [setAdvancedFilters]);
   return (
     <div className="space-y-8">
       {/* Quick Filters Section (collapsible) */}
@@ -79,7 +263,7 @@ export const AdvancedFilterDropdown = ({
               <label className="text-xs font-semibold text-blue-700 mb-1 flex items-center gap-1">Department</label>
               <SelectDropdown
                 value={filters.departments[0] || "all"}
-                onValueChange={(value) => setFilters({ ...filters, departments: value === "all" ? [] : [value] })}
+                onValueChange={handleDepartmentChange}
                 options={[
                   { value: "all", label: "All Departments" },
                   ...departments.map((dept) => ({ value: dept, label: dept })),
@@ -92,7 +276,7 @@ export const AdvancedFilterDropdown = ({
               <label className="text-xs font-semibold text-blue-700 mb-1 flex items-center gap-1">Attendance Rate</label>
               <SelectDropdown
                 value={filters.attendanceRates[0] || "all"}
-                onValueChange={(value) => setFilters({ ...filters, attendanceRates: value === "all" ? [] : [value] })}
+                onValueChange={handleAttendanceRateChange}
                 options={[
                   { value: "all", label: "All Rates" },
                   { value: "High (≥90%)", label: "High (≥90%)" },
@@ -107,7 +291,7 @@ export const AdvancedFilterDropdown = ({
               <label className="text-xs font-semibold text-blue-700 mb-1 flex items-center gap-1">Year Level</label>
               <SelectDropdown
                 value={filters.yearLevels[0] || "all-levels"}
-                onValueChange={(value) => setFilters({ ...filters, yearLevels: value === "all-levels" ? [] : [value] })}
+                onValueChange={handleYearLevelChange}
                 options={[
                   { value: "all-levels", label: "All Levels" },
                   ...yearLevels.map((level) => ({ value: level, label: level })),
@@ -120,7 +304,7 @@ export const AdvancedFilterDropdown = ({
               <label className="text-xs font-semibold text-blue-700 mb-1 flex items-center gap-1">Risk Level</label>
               <SelectDropdown
                 value={filters.riskLevels[0] || "all-risk"}
-                onValueChange={(value) => setFilters({ ...filters, riskLevels: value === "all-risk" ? [] : [value] })}
+                onValueChange={handleRiskLevelChange}
                 options={[
                   { value: "all-risk", label: "All Risk Levels" },
                   ...riskLevels.map((risk) => ({ value: risk, label: risk })),
@@ -133,7 +317,7 @@ export const AdvancedFilterDropdown = ({
               <label className="text-xs font-semibold text-blue-700 mb-1 flex items-center gap-1">Course</label>
               <SelectDropdown
                 value={filters.courses[0] || "all-courses"}
-                onValueChange={(value) => setFilters({ ...filters, courses: value === "all-courses" ? [] : [value] })}
+                onValueChange={handleCourseChange}
                 options={[
                   { value: "all-courses", label: "All Courses" },
                   ...courses.map((course) => ({ value: course, label: course })),
@@ -146,7 +330,7 @@ export const AdvancedFilterDropdown = ({
               <label className="text-xs font-semibold text-blue-700 mb-1 flex items-center gap-1">Section</label>
               <SelectDropdown
                 value={filters.sections[0] || "all-sections"}
-                onValueChange={(value) => setFilters({ ...filters, sections: value === "all-sections" ? [] : [value] })}
+                onValueChange={handleSectionChange}
                 options={[
                   { value: "all-sections", label: "All Sections" },
                   ...sections.map((section) => ({ value: section, label: section })),
@@ -175,7 +359,7 @@ export const AdvancedFilterDropdown = ({
               <label className="text-xs font-semibold text-blue-700 mb-1 flex items-center gap-1">Verification Status</label>
               <SelectDropdown
                 value={advancedFilters.verificationStatus[0] || "all-status"}
-                onValueChange={(value) => setAdvancedFilters({ ...advancedFilters, verificationStatus: value === "all-status" ? [] : [value] })}
+                onValueChange={handleVerificationStatusChange}
                 options={[
                   { value: "all-status", label: "All Statuses" },
                   { value: "PENDING", label: "Pending" },
@@ -191,7 +375,7 @@ export const AdvancedFilterDropdown = ({
               <label className="text-xs font-semibold text-blue-700 mb-1 flex items-center gap-1">Attendance Type</label>
               <SelectDropdown
                 value={advancedFilters.attendanceTypes[0] || "all-types"}
-                onValueChange={(value) => setAdvancedFilters({ ...advancedFilters, attendanceTypes: value === "all-types" ? [] : [value] })}
+                onValueChange={handleAttendanceTypeChange}
                 options={[
                   { value: "all-types", label: "All Types" },
                   { value: "RFID_SCAN", label: "RFID Scan" },
@@ -206,7 +390,7 @@ export const AdvancedFilterDropdown = ({
               <label className="text-xs font-semibold text-blue-700 mb-1 flex items-center gap-1">Event Type</label>
               <SelectDropdown
                 value={advancedFilters.eventTypes[0] || "all-events"}
-                onValueChange={(value) => setAdvancedFilters({ ...advancedFilters, eventTypes: value === "all-events" ? [] : [value] })}
+                onValueChange={handleEventTypeChange}
                 options={[
                   { value: "all-events", label: "All Events" },
                   { value: "REGULAR", label: "Regular" },
@@ -220,7 +404,7 @@ export const AdvancedFilterDropdown = ({
               <label className="text-xs font-semibold text-blue-700 mb-1 flex items-center gap-1">Semester</label>
               <SelectDropdown
                 value={advancedFilters.semester[0] || "all-semesters"}
-                onValueChange={(value) => setAdvancedFilters({ ...advancedFilters, semester: value === "all-semesters" ? [] : [value] })}
+                onValueChange={handleSemesterChange}
                 options={[
                   { value: "all-semesters", label: "All Semesters" },
                   { value: "2024-1", label: "2024-1" },
@@ -235,7 +419,7 @@ export const AdvancedFilterDropdown = ({
               <label className="text-xs font-semibold text-blue-700 mb-1 flex items-center gap-1">Academic Year</label>
               <SelectDropdown
                 value={advancedFilters.academicYear[0] || "all-years"}
-                onValueChange={(value) => setAdvancedFilters({ ...advancedFilters, academicYear: value === "all-years" ? [] : [value] })}
+                onValueChange={handleAcademicYearChange}
                 options={[
                   { value: "all-years", label: "All Years" },
                   { value: "2023-2024", label: "2023-2024" },
@@ -250,7 +434,7 @@ export const AdvancedFilterDropdown = ({
               <label className="text-xs font-medium text-blue-700 mb-2 flex items-center gap-2">Student Status</label>
               <SelectDropdown
                 value={filters.studentStatuses[0] || "all-status"}
-                onValueChange={(value) => setFilters({ ...filters, studentStatuses: value === "all-status" ? [] : [value] })}
+                onValueChange={handleStudentStatusChange}
                 options={[
                   { value: "all-status", label: "All Status" },
                   { value: "ACTIVE", label: "Active" },
@@ -285,7 +469,7 @@ export const AdvancedFilterDropdown = ({
                     min="0"
                     max="100"
                     value={advancedFilters.attendanceRangeMin}
-                    onChange={(e) => setAdvancedFilters(prev => ({...prev, attendanceRangeMin: parseInt(e.target.value) || 0}))}
+                    onChange={handleAttendanceRangeMinChange}
                     className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:outline-none text-blue-700 bg-gray-50"
                     placeholder="Min"
                   />
@@ -297,7 +481,7 @@ export const AdvancedFilterDropdown = ({
                     min="0"
                     max="100"
                     value={advancedFilters.attendanceRangeMax}
-                    onChange={(e) => setAdvancedFilters(prev => ({...prev, attendanceRangeMax: parseInt(e.target.value) || 100}))}
+                    onChange={handleAttendanceRangeMaxChange}
                     className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:outline-none text-blue-700 bg-gray-50"
                     placeholder="Max"
                   />
@@ -312,7 +496,7 @@ export const AdvancedFilterDropdown = ({
                   <input
                     type="date"
                     value={advancedFilters.dateRangeStart}
-                    onChange={(e) => setAdvancedFilters(prev => ({...prev, dateRangeStart: e.target.value}))}
+                    onChange={handleDateRangeStartChange}
                     className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:outline-none text-blue-700 bg-gray-50"
                   />
                 </div>
@@ -321,7 +505,7 @@ export const AdvancedFilterDropdown = ({
                   <input
                     type="date"
                     value={advancedFilters.dateRangeEnd}
-                    onChange={(e) => setAdvancedFilters(prev => ({...prev, dateRangeEnd: e.target.value}))}
+                    onChange={handleDateRangeEndChange}
                     className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:outline-none text-blue-700 bg-gray-50"
                   />
                 </div>
@@ -334,36 +518,7 @@ export const AdvancedFilterDropdown = ({
       <div className="flex items-center justify-between pt-3 border-t border-blue-100">
         <div className="flex items-center gap-2">
           <Button
-            onClick={() => setAdvancedFilters({
-              attendanceRangeMin: 0,
-              attendanceRangeMax: 100,
-              dateRangeStart: '',
-              dateRangeEnd: '',
-              lastAttendanceDays: '',
-              presentDaysMin: '',
-              presentDaysMax: '',
-              absentDaysMin: '',
-              absentDaysMax: '',
-              lateDaysMin: '',
-              lateDaysMax: '',
-              totalDaysMin: '',
-              totalDaysMax: '',
-              logicalOperator: 'AND',
-              customTextFilter: '',
-              excludeInactive: false,
-              onlyRecentEnrollments: false,
-              verificationStatus: [],
-              attendanceTypes: [],
-              eventTypes: [],
-              semester: [],
-              academicYear: [],
-              subjectScheduleDays: [],
-              subjectScheduleTimes: [],
-              timeOfDay: [],
-              attendanceTrends: [],
-              subjectEnrollments: [],
-              enrollmentStatuses: []
-            })}
+            onClick={resetAdvancedFilters}
             size="sm"
             className="h-7 px-3 text-xs rounded border-blue-200"
           >
@@ -374,8 +529,8 @@ export const AdvancedFilterDropdown = ({
         <div className="flex items-center gap-2">
           <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-pulse"></div>
           <span className="text-xs text-blue-600 font-medium">
-            {Object.values(filters).reduce((sum, filterArray) => sum + filterArray.length, 0) > 0
-              ? `${Object.values(filters).reduce((sum, filterArray) => sum + filterArray.length, 0)} filter${Object.values(filters).reduce((sum, filterArray) => sum + filterArray.length, 0) !== 1 ? 's' : ''} active`
+            {totalActiveFilters > 0
+              ? `${totalActiveFilters} filter${totalActiveFilters !== 1 ? 's' : ''} active`
               : 'No filters applied'}
           </span>
         </div>

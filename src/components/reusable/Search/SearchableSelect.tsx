@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 
 interface Option {
   value: string;
@@ -38,6 +38,11 @@ const SearchableSelectSearch: React.FC<SearchableSelectProps> = ({
   asyncSearch,
   minChars = 2,
 }) => {
+  // Validate props
+  if (!onChange) {
+    console.error('SearchableSelectSearch: Missing required props');
+    return null;
+  }
   const [search, setSearch] = useState('');
   const [isOpen, setIsOpen] = useState(false);
   const [displayValue, setDisplayValue] = useState('');
@@ -45,13 +50,14 @@ const SearchableSelectSearch: React.FC<SearchableSelectProps> = ({
   const [loading, setLoading] = useState(false);
   const [selectedOption, setSelectedOption] = useState<Option | null>(null);
   const [isMouseInside, setIsMouseInside] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
   
   const sourceOptions = asyncOptions ?? options;
   
   // Handle click outside to close dropdown
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (isOpen && !(event.target as Element).closest('.searchable-select-container')) {
+      if (isOpen && containerRef.current && !containerRef.current.contains(event.target as Node)) {
         setIsOpen(false);
       }
     };
@@ -81,63 +87,77 @@ const SearchableSelectSearch: React.FC<SearchableSelectProps> = ({
       }
     }
   }, [value, sourceOptions, selectedOption]);
-  const filteredOptions = sourceOptions.filter(opt => 
-    opt.label.toLowerCase().includes(search.toLowerCase())
-  );
+  
+  // Memoize filtered options for better performance
+  const filteredOptions = useMemo(() => {
+    return sourceOptions.filter(opt => 
+      opt.label.toLowerCase().includes(search.toLowerCase())
+    );
+  }, [sourceOptions, search]);
 
-  // Async search loader
+  // Async search loader with debouncing
   useEffect(() => {
     let cancelled = false;
+    let timeoutId: NodeJS.Timeout;
+    
     const run = async () => {
       if (!asyncSearch) return;
       if (search.trim().length < minChars) {
         setAsyncOptions(null);
         return;
       }
+      
       setLoading(true);
       try {
         const res = await asyncSearch(search.trim());
         if (!cancelled) {
           setAsyncOptions(res);
-          console.log('Async search results:', res);
         }
       } catch (e) {
         console.error('Async search error:', e);
-        if (!cancelled) setAsyncOptions([]);
+        if (!cancelled) {
+          setAsyncOptions([]);
+        }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     };
-    run();
+    
+    // Debounce the search
+    timeoutId = setTimeout(run, 300);
+    
     return () => {
       cancelled = true;
+      clearTimeout(timeoutId);
     };
   }, [search, asyncSearch, minChars]);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const newSearch = e.target.value;
     setSearch(newSearch);
     setIsOpen(true);
-  };
+  }, []);
 
-  const handleOptionClick = (option: Option) => {
+  const handleOptionClick = useCallback((option: Option) => {
     setSelectedOption(option);
     onChange(option.value);
     setSearch('');
     setIsOpen(false);
-  };
+  }, [onChange]);
 
-  const handleInputFocus = () => {
+  const handleInputFocus = useCallback(() => {
     setIsOpen(true);
-  };
+  }, []);
 
-  const handleInputBlur = () => {
+  const handleInputBlur = useCallback(() => {
     // Delay closing to allow clicking on options
     setTimeout(() => setIsOpen(false), 1000);
-  };
+  }, []);
 
   return (
-    <div className={`relative searchable-select-container ${className}`}>
+    <div ref={containerRef} className={`relative searchable-select-container ${className}`}>
       <input
         type="text"
         value={displayValue}
@@ -211,46 +231,77 @@ const MultiSearchableSelectSearch: React.FC<MultiSearchableSelectProps> = ({
   noMoreOptionsMessage = 'No more options found',
   startTypingMessage = 'Start typing to search'
 }) => {
+  // Validate props
+  if (!onChange) {
+    console.error('MultiSearchableSelectSearch: Missing required props');
+    return null;
+  }
   const [search, setSearch] = useState('');
   const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
   
-  const filteredOptions = options.filter(opt => 
-    opt.label.toLowerCase().includes(search.toLowerCase()) && !value.includes(opt.value)
-  );
+  // Memoize filtered options for better performance
+  const filteredOptions = useMemo(() => {
+    return options.filter(opt => 
+      opt.label.toLowerCase().includes(search.toLowerCase()) && !value.includes(opt.value)
+    );
+  }, [options, search, value]);
 
-  const selectedOptions = options.filter(opt => value.includes(opt.value));
-  const displayText = selectedOptions.length > 0 
-    ? selectedOptions.slice(0, maxDisplayItems).map(opt => opt.label).join(', ') + 
-      (selectedOptions.length > maxDisplayItems ? ` +${selectedOptions.length - maxDisplayItems} more` : '')
-    : search;
+  // Memoize selected options and display text
+  const selectedOptions = useMemo(() => {
+    return options.filter(opt => value.includes(opt.value));
+  }, [options, value]);
+  
+  const displayText = useMemo(() => {
+    return selectedOptions.length > 0 
+      ? selectedOptions.slice(0, maxDisplayItems).map(opt => opt.label).join(', ') + 
+        (selectedOptions.length > maxDisplayItems ? ` +${selectedOptions.length - maxDisplayItems} more` : '')
+      : search;
+  }, [selectedOptions, maxDisplayItems, search]);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setSearch(e.target.value);
     setIsOpen(true);
-  };
+  }, []);
 
-  const handleOptionClick = (option: Option) => {
+  const handleOptionClick = useCallback((option: Option) => {
     onChange([...value, option.value]);
     setSearch('');
-  };
+  }, [onChange, value]);
 
-  const handleRemoveOption = (optionValue: string) => {
+  const handleRemoveOption = useCallback((optionValue: string) => {
     onChange(value.filter(v => v !== optionValue));
-  };
+  }, [onChange, value]);
 
-  const handleInputFocus = () => {
+  const handleInputFocus = useCallback(() => {
     setSearch('');
-    setDisplayValue('');
     setIsOpen(true);
-  };
+  }, []);
 
-  const handleInputBlur = () => {
+  const handleInputBlur = useCallback(() => {
     // Delay closing to allow clicking on options
     setTimeout(() => setIsOpen(false), 1000);
-  };
+  }, []);
+
+  // Handle click outside to close dropdown
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (isOpen && containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isOpen]);
 
   return (
-    <div className={`relative ${className}`}>
+    <div ref={containerRef} className={`relative ${className}`}>
       <div className="min-h-[42px] px-3 py-2 border border-gray-300 rounded bg-background text-sm ring-offset-background focus-within:outline-none focus-within:ring-2 focus-within:ring-blue-400 focus-within:border-blue-400">
         {/* Selected Items Display */}
         {selectedOptions.length > 0 && (

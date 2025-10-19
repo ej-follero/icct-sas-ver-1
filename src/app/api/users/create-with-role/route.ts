@@ -93,58 +93,55 @@ export async function POST(req: Request) {
 
       // Role-specific creation
       if (data.role === Role.INSTRUCTOR) {
+        const instructorData = data as z.infer<typeof instructorSchema>;
         await tx.instructor.create({
           data: {
             instructorId: user.userId,
-            email: data.email,
-            phoneNumber: data.phoneNumber,
-            firstName: data.firstName,
-            middleName: data.middleName ?? undefined,
-            lastName: data.lastName,
-            suffix: data.suffix ?? undefined,
-            gender: data.gender as any,
-            instructorType: data.instructorType as any,
+            email: instructorData.email,
+            phoneNumber: instructorData.phoneNumber,
+            firstName: instructorData.firstName,
+            middleName: instructorData.middleName || '',
+            lastName: instructorData.lastName,
+            suffix: instructorData.suffix ?? undefined,
+            gender: instructorData.gender as any,
+            instructorType: instructorData.instructorType as any,
             status: PrismaStatus.ACTIVE,
-            departmentId: data.departmentId,
-            officeLocation: data.officeLocation ?? undefined,
-            officeHours: data.officeHours ?? undefined,
-            specialization: data.specialization ?? undefined,
-            rfidTag: data.rfidTag ?? `${user.userId}-${Date.now()}`,
-            employeeId: data.employeeId,
+            departmentId: instructorData.departmentId,
+            officeLocation: instructorData.officeLocation ?? undefined,
+            officeHours: instructorData.officeHours ?? undefined,
+            specialization: instructorData.specialization ?? undefined,
+            rfidTag: instructorData.rfidTag,
+            employeeId: instructorData.employeeId,
           },
         });
       } else if (data.role === Role.STUDENT) {
+        const studentData = data as z.infer<typeof studentSchema>;
         await tx.student.create({
           data: {
             studentId: user.userId,
-            studentIdNum: data.studentIdNum,
-            rfidTag: data.rfidTag ?? `${user.userId}-${Date.now()}`,
-            firstName: data.firstName,
-            middleName: data.middleName ?? undefined,
-            lastName: data.lastName,
-            suffix: data.suffix ?? undefined,
-            email: data.email,
-            phoneNumber: data.phoneNumber,
-            address: data.address ?? '',
+            studentIdNum: studentData.studentIdNum,
+            rfidTag: studentData.rfidTag,
+            firstName: studentData.firstName,
+            middleName: studentData.middleName || '',
+            lastName: studentData.lastName,
+            suffix: studentData.suffix ?? undefined,
+            email: studentData.email,
+            phoneNumber: studentData.phoneNumber,
+            address: studentData.address,
             img: null,
-            gender: data.gender as any,
-            birthDate: data.birthDate ? new Date(data.birthDate) : null,
-            nationality: data.nationality ?? undefined,
-            studentType: data.studentType as any,
+            gender: studentData.gender as any,
+            birthDate: studentData.birthDate ? new Date(studentData.birthDate) : null,
+            nationality: studentData.nationality ?? undefined,
+            studentType: studentData.studentType as any,
             status: PrismaStatus.ACTIVE,
-            yearLevel: data.yearLevel as any,
-            courseId: data.courseId,
+            yearLevel: studentData.yearLevel as any,
+            courseId: studentData.courseId,
             departmentId: null,
             lastLogin: null,
-            guardianId: data.guardianId ?? 0,
+            guardianId: studentData.guardianId ?? 0,
             userId: user.userId,
           },
         });
-      } else if (data.role === Role.GUARDIAN) {
-        // Removed: guardian is no longer a user role
-        throw new Error('GUARDIAN role is no longer supported');
-      } else if (data.role === Role.SYSTEM_AUDITOR) {
-        throw new Error('SYSTEM_AUDITOR role is no longer supported');
       }
 
       return user;

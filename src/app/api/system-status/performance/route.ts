@@ -1,5 +1,6 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { performanceMonitor, PerformanceStats, PerformanceAlert } from '@/lib/performance-monitor';
+import { prisma } from '@/lib/prisma';
 
 // Mock authentication for API routes
 interface AuthSession {
@@ -120,17 +121,6 @@ export async function POST(request: NextRequest) {
     if (!adminRoles.includes(reqUser.role)) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
-    const session = await getServerSession();
-    
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    // Check if user has permission to manage performance monitoring
-    const userRole = session.user?.role;
-    if (!userRole || !['SUPER_ADMIN'].includes(userRole)) {
-      return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
-    }
 
     const { action, alertId } = await request.json();
 
@@ -157,8 +147,6 @@ export async function POST(request: NextRequest) {
       default:
         return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
     }
-
-    return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
 
   } catch (error) {
     console.error('Error processing performance action:', error);

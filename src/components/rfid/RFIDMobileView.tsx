@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -10,16 +10,12 @@ import {
   BarChart3, 
   PieChart, 
   Activity, 
-  Settings, 
   RefreshCw,
   Download,
   Filter,
   Search,
   ChevronUp,
-  ChevronDown,
-  Smartphone,
-  Tablet,
-  Monitor
+  ChevronDown
 } from "lucide-react";
 import DataChart from "@/components/DataChart";
 // Local copy of filter options since Advanced Filters were removed
@@ -60,24 +56,87 @@ export default function RFIDMobileView({
   const [activeTab, setActiveTab] = useState('overview');
   const [showFilters, setShowFilters] = useState(false);
   const [expandedCards, setExpandedCards] = useState<string[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
-  const toggleCardExpansion = (cardId: string) => {
+  const toggleCardExpansion = useCallback((cardId: string) => {
     setExpandedCards(prev => 
       prev.includes(cardId) 
         ? prev.filter(id => id !== cardId)
         : [...prev, cardId]
     );
-  };
+  }, []);
 
-  const isCardExpanded = (cardId: string) => expandedCards.includes(cardId);
+  const isCardExpanded = useCallback((cardId: string) => expandedCards.includes(cardId), [expandedCards]);
 
-  const handleChartClick = (data: any, index: number) => {
+  const handleChartClick = useCallback((data: any, index: number) => {
     console.log('Chart data point clicked:', data, index);
     // Handle chart interaction for mobile
-  };
+  }, []);
+
+  const handleRefresh = useCallback(async () => {
+    try {
+      setError(null);
+      await onRefresh();
+    } catch (error) {
+      console.error('Refresh error:', error);
+      setError(error instanceof Error ? error.message : 'Failed to refresh data');
+    }
+  }, [onRefresh]);
+
+  const handleExport = useCallback(async (type: string, format: string) => {
+    try {
+      setError(null);
+      await onExport(type, format);
+    } catch (error) {
+      console.error('Export error:', error);
+      setError(error instanceof Error ? error.message : 'Failed to export data');
+    }
+  }, [onExport]);
+
+  const handleFiltersChange = useCallback((newFilters: RFIDFilterOptions) => {
+    try {
+      setError(null);
+      onFiltersChange(newFilters);
+    } catch (error) {
+      console.error('Filter change error:', error);
+      setError(error instanceof Error ? error.message : 'Failed to update filters');
+    }
+  }, [onFiltersChange]);
+
+  // Memoized stats for better performance
+  const memoizedStats = useMemo(() => ({
+    totalTags: stats?.totalTags || 0,
+    activeReaders: stats?.activeReaders || 0,
+    todayScans: stats?.todayScans || 0,
+    totalScans: stats?.totalScans || 0
+  }), [stats]);
+
+  // Memoized recent logs for better performance
+  const memoizedRecentLogs = useMemo(() => 
+    recentLogs?.slice(0, 5) || [], 
+    [recentLogs]
+  );
+
+  // Reset error when component mounts
+  useEffect(() => {
+    setError(null);
+  }, []);
+
+  // Validate props
+  if (!onFiltersChange || !onRefresh || !onExport) {
+    console.error('RFIDMobileView: Missing required props');
+    return null;
+  }
 
   return (
     <div className="space-y-4 p-4">
+      {/* Error Display */}
+      {error && (
+        <div className="p-3 bg-red-50 border border-red-200 rounded-md">
+          <p className="text-sm text-red-600">{error}</p>
+        </div>
+      )}
+
       {/* Mobile Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -95,7 +154,7 @@ export default function RFIDMobileView({
           <Button
             variant="outline"
             size="sm"
-            onClick={onRefresh}
+            onClick={handleRefresh}
             disabled={isLoading}
           >
             <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
@@ -119,7 +178,7 @@ export default function RFIDMobileView({
               <CardContent className="p-0">
                 <div className="text-center">
                   <p className="text-xs text-gray-600">Total Tags</p>
-                  <p className="text-2xl font-bold text-blue-600">{stats.totalTags}</p>
+                  <p className="text-2xl font-bold text-blue-600">{memoizedStats.totalTags}</p>
                 </div>
               </CardContent>
             </Card>
@@ -127,15 +186,15 @@ export default function RFIDMobileView({
               <CardContent className="p-0">
                 <div className="text-center">
                   <p className="text-xs text-gray-600">Active Readers</p>
-                  <p className="text-2xl font-bold text-green-600">{stats.activeReaders}</p>
+                  <p className="text-2xl font-bold text-green-600">{memoizedStats.activeReaders}</p>
                 </div>
               </CardContent>
             </Card>
             <Card className="p-3">
               <CardContent className="p-0">
                 <div className="text-center">
-                  <p className="text-xs text-gray-600">Today's Scans</p>
-                  <p className="text-2xl font-bold text-purple-600">{stats.todayScans}</p>
+                  <p className="text-xs text-gray-600">Today&apos;s Scans</p>
+                  <p className="text-2xl font-bold text-purple-600">{memoizedStats.todayScans}</p>
                 </div>
               </CardContent>
             </Card>
@@ -143,7 +202,7 @@ export default function RFIDMobileView({
               <CardContent className="p-0">
                 <div className="text-center">
                   <p className="text-xs text-gray-600">Total Scans</p>
-                  <p className="text-2xl font-bold text-orange-600">{stats.totalScans}</p>
+                  <p className="text-2xl font-bold text-orange-600">{memoizedStats.totalScans}</p>
                 </div>
               </CardContent>
             </Card>
@@ -159,7 +218,7 @@ export default function RFIDMobileView({
                 variant="outline" 
                 size="sm" 
                 className="w-full justify-start"
-                onClick={() => onExport('all', 'csv')}
+                onClick={() => handleExport('all', 'csv')}
               >
                 <Download className="h-4 w-4 mr-2" />
                 Export Data
@@ -212,8 +271,7 @@ export default function RFIDMobileView({
                   type="pie"
                   data={tagStatusData}
                   height={200}
-                  interactive={true}
-                  onDataPointClick={handleChartClick}
+                  title="Tag Status Distribution"
                 />
               </CardContent>
             )}
@@ -244,8 +302,7 @@ export default function RFIDMobileView({
                   data={readerStatusData}
                   height={200}
                   colors={["#22c55e", "#ef4444"]}
-                  interactive={true}
-                  onDataPointClick={handleChartClick}
+                  title="Reader Status Distribution"
                 />
               </CardContent>
             )}
@@ -276,8 +333,7 @@ export default function RFIDMobileView({
                   data={scanTrendsData}
                   height={200}
                   colors={["#3b82f6"]}
-                  interactive={true}
-                  onDataPointClick={handleChartClick}
+                  title="Scan Trends Over Time"
                 />
               </CardContent>
             )}
@@ -293,8 +349,8 @@ export default function RFIDMobileView({
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {recentLogs.slice(0, 5).map((log, index) => (
-                  <div key={log.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                {memoizedRecentLogs.map((log, index) => (
+                  <div key={log.id || index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
                         <Badge 
@@ -317,7 +373,7 @@ export default function RFIDMobileView({
                   </div>
                 ))}
               </div>
-              {recentLogs.length > 5 && (
+              {memoizedRecentLogs.length > 5 && (
                 <Button 
                   variant="outline" 
                   size="sm" 
@@ -347,11 +403,9 @@ export default function RFIDMobileView({
                 placeholder="Search RFID logs..."
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg"
                 value={filters.studentName || ''}
-                onChange={(e) => onFiltersChange({
+                onChange={(e) => handleFiltersChange({
                   ...filters,
-                  studentName: e.target.value,
-                  tagId: e.target.value,
-                  readerId: e.target.value
+                  studentName: e.target.value
                 })}
               />
             </div>
@@ -370,7 +424,7 @@ export default function RFIDMobileView({
                         const newStatus = filters.status.includes(status)
                           ? filters.status.filter((s: string) => s !== status)
                           : [...filters.status, status];
-                        onFiltersChange({ ...filters, status: newStatus });
+                        handleFiltersChange({ ...filters, status: newStatus });
                       }}
                     >
                       {status}
@@ -391,7 +445,7 @@ export default function RFIDMobileView({
                         const newLocation = filters.location.includes(location)
                           ? filters.location.filter((l: string) => l !== location)
                           : [...filters.location, location];
-                        onFiltersChange({ ...filters, location: newLocation });
+                        handleFiltersChange({ ...filters, location: newLocation });
                       }}
                     >
                       {location}
@@ -406,7 +460,7 @@ export default function RFIDMobileView({
               variant="outline"
               className="w-full"
               onClick={() => {
-                onFiltersChange({
+                handleFiltersChange({
                   dateRange: { from: undefined, to: undefined },
                   status: [],
                   location: [],

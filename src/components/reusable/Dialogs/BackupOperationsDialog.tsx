@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -49,6 +49,11 @@ export default function BackupOperationsDialog({
   canDownloadBackup = true,
   userId
 }: BackupOperationsDialogProps) {
+  // Validate props
+  if (!onOpenChange) {
+    console.error('BackupOperationsDialog: Missing required props');
+    return null;
+  }
   const [activeTab, setActiveTab] = useState("upload");
   const [uploadProgress, setUploadProgress] = useState(0);
   const [downloadProgress, setDownloadProgress] = useState(0);
@@ -79,7 +84,7 @@ export default function BackupOperationsDialog({
     }
   }, [open]);
 
-  const loadAvailableBackups = async () => {
+  const loadAvailableBackups = useCallback(async () => {
     setLoadingBackups(true);
     try {
       const response = await fetch('/api/backup');
@@ -87,7 +92,8 @@ export default function BackupOperationsDialog({
         const data = await response.json();
         setAvailableBackups(data.data || []);
       } else {
-        toast.error('Failed to load available backups');
+        const errorData = await response.json().catch(() => ({}));
+        toast.error(errorData.error || 'Failed to load available backups');
       }
     } catch (error) {
       console.error('Error loading available backups:', error);
@@ -95,18 +101,18 @@ export default function BackupOperationsDialog({
     } finally {
       setLoadingBackups(false);
     }
-  };
+  }, []);
 
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
       // Auto-fill the name field with the file name (without extension)
       const fileName = file.name.replace(/\.[^/.]+$/, "");
       setUploadForm(prev => ({ ...prev, name: fileName }));
     }
-  };
+  }, []);
 
-  const handleUploadBackup = async () => {
+  const handleUploadBackup = useCallback(async () => {
     if (!fileInputRef.current?.files?.[0]) {
       toast.error('Please select a backup file to upload');
       return;
@@ -173,9 +179,9 @@ export default function BackupOperationsDialog({
       setUploading(false);
       setUploadProgress(0);
     }
-  };
+  }, [uploadForm, userId, onSuccess, loadAvailableBackups]);
 
-  const handleDownloadBackup = async () => {
+  const handleDownloadBackup = useCallback(async () => {
     if (!downloadForm.selectedBackupId) {
       toast.error('Please select a backup to download');
       return;
@@ -213,9 +219,9 @@ export default function BackupOperationsDialog({
       setDownloading(false);
       setDownloadProgress(0);
     }
-  };
+  }, [downloadForm]);
 
-  const handleDeleteBackup = async (backupId: string) => {
+  const handleDeleteBackup = useCallback(async (backupId: string) => {
     if (!window.confirm('Are you sure you want to delete this backup? This action cannot be undone.')) {
       return;
     }
@@ -236,7 +242,7 @@ export default function BackupOperationsDialog({
       console.error('Error deleting backup:', error);
       toast.error('Failed to delete backup');
     }
-  };
+  }, [loadAvailableBackups]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

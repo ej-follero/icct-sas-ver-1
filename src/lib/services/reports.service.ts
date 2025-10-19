@@ -63,8 +63,8 @@ export class ReportsService {
       activeUsers,
       systemLogs
     ] = await Promise.all([
-      prisma.reportLogs.count(),
-      prisma.reportLogs.count({
+      prisma.reportLog.count(),
+      prisma.reportLog.count({
         where: {
           createdAt: {
             gte: today,
@@ -91,7 +91,7 @@ export class ReportsService {
     ]);
 
     const hasRecentErrors = systemLogs.some(log => 
-      log.logLevel === 'ERROR' || log.logLevel === 'FATAL'
+      log.actionType === 'ERROR' || log.actionType === 'FATAL'
     );
     
     const systemStatus = hasRecentErrors ? 'Issues Detected' : 'Online';

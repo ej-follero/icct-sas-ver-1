@@ -28,13 +28,36 @@ import { useUser } from '@/hooks/useUser';
 import { useRouter } from 'next/navigation';
 import { toast } from "sonner";
 
+// Type definitions
+interface Permission {
+  id: number;
+  name: string;
+  description: string;
+  category: string;
+}
+
+interface Role {
+  id: number;
+  name: string;
+  permissions: number[];
+  userCount: number;
+}
+
+interface AccessRule {
+  id: number;
+  name: string;
+  type: string;
+  isActive: boolean;
+  rules: string[];
+}
+
 export default function AccessControlPage() {
   const { user, isSuperAdmin, isAdmin, loading } = useUser();
   const router = useRouter();
   
-  const [permissions, setPermissions] = useState([]);
-  const [roles, setRoles] = useState([]);
-  const [accessRules, setAccessRules] = useState([]);
+  const [permissions, setPermissions] = useState<Permission[]>([]);
+  const [roles, setRoles] = useState<Role[]>([]);
+  const [accessRules, setAccessRules] = useState<AccessRule[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {

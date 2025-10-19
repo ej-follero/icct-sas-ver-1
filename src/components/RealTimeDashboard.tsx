@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -95,27 +95,35 @@ export function RealTimeDashboard({
   onAlertAction,
   onLocationClick
 }: RealTimeDashboardProps) {
+  // Validate props
+  if (!onRefresh || !onAlertAction || !onLocationClick) {
+    console.error('RealTimeDashboard: Missing required props');
+    return null;
+  }
+
   const [activeTab, setActiveTab] = useState('overview');
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [refreshInterval, setRefreshInterval] = useState(30); // seconds
   const [showDetails, setShowDetails] = useState(false);
   const [lastRefresh, setLastRefresh] = useState(new Date());
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const refreshTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Real-time metrics state
-  const [metrics, setMetrics] = useState<RealTimeMetrics>({
+  const [metrics, setMetrics] = useState<RealTimeMetrics>(() => ({
     totalStudents: students.length,
-    presentStudents: students.filter(s => s.status === 'PRESENT').length,
-    absentStudents: students.filter(s => s.status === 'ABSENT').length,
-    lateStudents: students.filter(s => s.status === 'LATE').length,
-    excusedStudents: students.filter(s => s.status === 'EXCUSED').length,
+    presentStudents: students.filter(s => (s.status as string) === 'PRESENT' || (s.status as string) === 'present').length,
+    absentStudents: students.filter(s => (s.status as string) === 'ABSENT' || (s.status as string) === 'absent').length,
+    lateStudents: students.filter(s => (s.status as string) === 'LATE' || (s.status as string) === 'late').length,
+    excusedStudents: students.filter(s => (s.status as string) === 'EXCUSED' || (s.status as string) === 'excused').length,
     attendanceRate: 0,
     lastUpdate: new Date(),
     activeRFIDReaders: 8,
     totalRFIDReaders: 12,
     alerts: [],
     trends: []
-  });
+  }));
 
   // Alerts state
   const [alerts, setAlerts] = useState<RealTimeAlert[]>([
@@ -201,6 +209,55 @@ export function RealTimeDashboard({
   // Trend data state
   const [trends, setTrends] = useState<TrendData[]>([]);
 
+  // Memoize attendance calculations
+  const attendanceStats = useMemo(() => {
+    const present = students.filter(s => (s.status as string) === 'PRESENT' || (s.status as string) === 'present').length;
+    const absent = students.filter(s => (s.status as string) === 'ABSENT' || (s.status as string) === 'absent').length;
+    const late = students.filter(s => (s.status as string) === 'LATE' || (s.status as string) === 'late').length;
+    const excused = students.filter(s => (s.status as string) === 'EXCUSED' || (s.status as string) === 'excused').length;
+    const total = students.length;
+    
+    return {
+      present,
+      absent,
+      late,
+      excused,
+      total,
+      attendanceRate: total > 0 ? Math.round((present / total) * 100) : 0
+    };
+  }, [students]);
+
+  const refreshData = useCallback(async () => {
+    setIsRefreshing(true);
+    setError(null);
+    try {
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Update metrics using memoized calculations
+      setMetrics(prev => ({
+        ...prev,
+        totalStudents: attendanceStats.total,
+        presentStudents: attendanceStats.present,
+        absentStudents: attendanceStats.absent,
+        lateStudents: attendanceStats.late,
+        excusedStudents: attendanceStats.excused,
+        attendanceRate: attendanceStats.attendanceRate,
+        lastUpdate: new Date()
+      }));
+
+      setLastRefresh(new Date());
+      await onRefresh();
+    } catch (error) {
+      console.error('Refresh error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to refresh data';
+      setError(errorMessage);
+      toast.error(errorMessage);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [attendanceStats, onRefresh]);
+
   // Auto-refresh effect
   useEffect(() => {
     if (!autoRefresh) return;
@@ -209,83 +266,100 @@ export function RealTimeDashboard({
       refreshData();
     }, refreshInterval * 1000);
 
-    return () => clearInterval(interval);
-  }, [autoRefresh, refreshInterval]);
+    return () => {
+      clearInterval(interval);
+      if (refreshTimeoutRef.current) {
+        clearTimeout(refreshTimeoutRef.current);
+      }
+    };
+  }, [autoRefresh, refreshInterval, refreshData]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (refreshTimeoutRef.current) {
+        clearTimeout(refreshTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Initialize trend data
   useEffect(() => {
-    const generateTrendData = () => {
-      const now = new Date();
-      const data: TrendData[] = [];
-      
-      for (let i = 23; i >= 0; i--) {
-        const time = new Date(now.getTime() - i * 60 * 60 * 1000);
-        const present = Math.floor(Math.random() * 20) + 80;
-        const absent = Math.floor(Math.random() * 10) + 5;
-        const late = Math.floor(Math.random() * 5) + 2;
-        const total = present + absent + late;
+    const generateTrendData = useCallback(() => {
+      try {
+        const now = new Date();
+        const data: TrendData[] = [];
         
-        data.push({
-          timestamp: time,
-          present,
-          absent,
-          late,
-          total,
-          rate: Math.round((present / total) * 100)
-        });
+        for (let i = 23; i >= 0; i--) {
+          const time = new Date(now.getTime() - i * 60 * 60 * 1000);
+          const present = Math.floor(Math.random() * 20) + 80;
+          const absent = Math.floor(Math.random() * 10) + 5;
+          const late = Math.floor(Math.random() * 5) + 2;
+          const total = present + absent + late;
+          
+          data.push({
+            timestamp: time,
+            present,
+            absent,
+            late,
+            total,
+            rate: Math.round((present / total) * 100)
+          });
+        }
+        
+        setTrends(data);
+      } catch (error) {
+        console.error('Error generating trend data:', error);
+        setError('Failed to generate trend data');
       }
-      
-      setTrends(data);
-    };
+    }, []);
 
     generateTrendData();
   }, []);
 
-  const refreshData = async () => {
-    setIsRefreshing(true);
+  const handleAlertAction = useCallback((alertId: string, action: string) => {
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      setAlerts(prev => 
+        prev.map(alert => 
+          alert.id === alertId 
+            ? { ...alert, acknowledged: true }
+            : alert
+        )
+      );
       
-      // Update metrics
-      const present = students.filter(s => s.status === 'PRESENT').length;
-      const absent = students.filter(s => s.status === 'ABSENT').length;
-      const late = students.filter(s => s.status === 'LATE').length;
-      const total = students.length;
-      
-      setMetrics(prev => ({
-        ...prev,
-        totalStudents: total,
-        presentStudents: present,
-        absentStudents: absent,
-        lateStudents: late,
-        attendanceRate: total > 0 ? Math.round((present / total) * 100) : 0,
-        lastUpdate: new Date()
-      }));
-
-      setLastRefresh(new Date());
-      onRefresh();
+      onAlertAction(alertId, action);
+      toast.success(`Alert ${action} successfully`);
     } catch (error) {
-      toast.error('Failed to refresh data');
-    } finally {
-      setIsRefreshing(false);
+      console.error('Error handling alert action:', error);
+      toast.error(`Failed to ${action} alert`);
     }
-  };
+  }, [onAlertAction]);
 
-  const handleAlertAction = (alertId: string, action: string) => {
-    setAlerts(prev => 
-      prev.map(alert => 
-        alert.id === alertId 
-          ? { ...alert, acknowledged: true }
-          : alert
-      )
-    );
+  // Memoized calculations for better performance
+  const unacknowledgedAlerts = useMemo(() => 
+    alerts.filter(alert => !alert.acknowledged), 
+    [alerts]
+  );
+
+  const criticalAlerts = useMemo(() => 
+    alerts.filter(alert => alert.severity === 'critical' || alert.severity === 'high'), 
+    [alerts]
+  );
+
+  // Memoize trend calculations
+  const trendStats = useMemo(() => {
+    if (trends.length === 0) return { peak: 0, lowest: 0, average: 0, current: 0 };
     
-    onAlertAction(alertId, action);
-    toast.success(`Alert ${action} successfully`);
-  };
+    const rates = trends.map(t => t.rate);
+    return {
+      peak: Math.max(...rates),
+      lowest: Math.min(...rates),
+      average: Math.round(rates.reduce((sum, rate) => sum + rate, 0) / rates.length),
+      current: rates[rates.length - 1] || 0
+    };
+  }, [trends]);
 
-  const getAlertIcon = (type: string) => {
+  const getAlertIcon = useCallback((type: string) => {
     switch (type) {
       case 'warning': return <AlertTriangle className="w-4 h-4" />;
       case 'error': return <XCircle className="w-4 h-4" />;
@@ -293,9 +367,9 @@ export function RealTimeDashboard({
       case 'success': return <CheckCircle className="w-4 h-4" />;
       default: return <Bell className="w-4 h-4" />;
     }
-  };
+  }, []);
 
-  const getAlertColor = (severity: string) => {
+  const getAlertColor = useCallback((severity: string) => {
     switch (severity) {
       case 'critical': return 'text-red-600 bg-red-50 border-red-200';
       case 'high': return 'text-orange-600 bg-orange-50 border-orange-200';
@@ -303,22 +377,26 @@ export function RealTimeDashboard({
       case 'low': return 'text-blue-600 bg-blue-50 border-blue-200';
       default: return 'text-gray-600 bg-gray-50 border-gray-200';
     }
-  };
+  }, []);
 
-  const getLocationStatusColor = (status: string) => {
+  const getLocationStatusColor = useCallback((status: string) => {
     switch (status) {
       case 'active': return 'text-green-600 bg-green-50 border-green-200';
       case 'inactive': return 'text-gray-600 bg-gray-50 border-gray-200';
       case 'error': return 'text-red-600 bg-red-50 border-red-200';
       default: return 'text-gray-600 bg-gray-50 border-gray-200';
     }
-  };
-
-  const unacknowledgedAlerts = alerts.filter(alert => !alert.acknowledged);
-  const criticalAlerts = alerts.filter(alert => alert.severity === 'critical' || alert.severity === 'high');
+  }, []);
 
   return (
     <div className="space-y-6">
+      {/* Error Display */}
+      {error && (
+        <div className="p-3 bg-red-50 border border-red-200 rounded-md">
+          <p className="text-sm text-red-600">{error}</p>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -347,7 +425,14 @@ export function RealTimeDashboard({
           <Button
             variant="outline"
             size="sm"
-            onClick={() => setShowDetails(!showDetails)}
+            onClick={() => {
+              try {
+                setShowDetails(!showDetails);
+              } catch (error) {
+                console.error('Error toggling details:', error);
+                toast.error('Failed to toggle details');
+              }
+            }}
           >
             {showDetails ? <EyeOff className="w-4 h-4 mr-2" /> : <Eye className="w-4 h-4 mr-2" />}
             {showDetails ? 'Hide Details' : 'Show Details'}
@@ -587,7 +672,14 @@ export function RealTimeDashboard({
               <Card 
                 key={location.id} 
                 className="cursor-pointer hover:shadow-md transition-shadow"
-                onClick={() => onLocationClick(location.id)}
+                onClick={() => {
+                  try {
+                    onLocationClick(location.id);
+                  } catch (error) {
+                    console.error('Error handling location click:', error);
+                    toast.error('Failed to load location details');
+                  }
+                }}
               >
                 <CardHeader>
                   <div className="flex items-center justify-between">
@@ -671,25 +763,25 @@ export function RealTimeDashboard({
                 <div>
                   <p className="text-sm font-medium">Peak Attendance</p>
                   <p className="text-lg font-bold text-green-600">
-                    {Math.max(...trends.map(t => t.rate))}%
+                    {trendStats.peak}%
                   </p>
                 </div>
                 <div>
                   <p className="text-sm font-medium">Lowest Attendance</p>
                   <p className="text-lg font-bold text-red-600">
-                    {Math.min(...trends.map(t => t.rate))}%
+                    {trendStats.lowest}%
                   </p>
                 </div>
                 <div>
                   <p className="text-sm font-medium">Average</p>
                   <p className="text-lg font-bold text-blue-600">
-                    {Math.round(trends.reduce((sum, t) => sum + t.rate, 0) / trends.length)}%
+                    {trendStats.average}%
                   </p>
                 </div>
                 <div>
                   <p className="text-sm font-medium">Current</p>
                   <p className="text-lg font-bold text-purple-600">
-                    {trends[trends.length - 1]?.rate || 0}%
+                    {trendStats.current}%
                   </p>
                 </div>
               </div>
@@ -704,7 +796,15 @@ export function RealTimeDashboard({
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setAlerts(prev => prev.map(alert => ({ ...alert, acknowledged: true })))}
+                onClick={() => {
+                  try {
+                    setAlerts(prev => prev.map(alert => ({ ...alert, acknowledged: true })));
+                    toast.success('All alerts acknowledged');
+                  } catch (error) {
+                    console.error('Error acknowledging all alerts:', error);
+                    toast.error('Failed to acknowledge all alerts');
+                  }
+                }}
               >
                 Acknowledge All
               </Button>

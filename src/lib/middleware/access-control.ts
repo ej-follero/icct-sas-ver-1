@@ -14,7 +14,7 @@ const ROLE_HIERARCHY = {
 type Role = keyof typeof ROLE_HIERARCHY;
 
 // Define access control rules
-const ACCESS_RULES = {
+const ACCESS_RULES: Record<string, Role[]> = {
   '/settings/security': ['SUPER_ADMIN'],
   '/settings/system-override': ['SUPER_ADMIN'],
   '/settings/advanced-config': ['SUPER_ADMIN'],
@@ -34,12 +34,12 @@ const ACCESS_RULES = {
   // View-only access for ADMIN
   '/settings/system-status': ['SUPER_ADMIN', 'ADMIN'],
   '/settings/backup': ['SUPER_ADMIN', 'ADMIN'],
-} as const;
+};
 
 export function checkAccess(role: Role, path: string): boolean {
   // Check if path has specific access rules
   if (path in ACCESS_RULES) {
-    return ACCESS_RULES[path as keyof typeof ACCESS_RULES].includes(role);
+    return ACCESS_RULES[path].includes(role);
   }
   
   // Default: SUPER_ADMIN has access to everything
@@ -53,7 +53,7 @@ export function checkAccess(role: Role, path: string): boolean {
 
 export function getRequiredRole(path: string): Role | null {
   if (path in ACCESS_RULES) {
-    const roles = ACCESS_RULES[path as keyof typeof ACCESS_RULES];
+    const roles = ACCESS_RULES[path];
     return roles[0]; // Return the highest required role
   }
   return null;

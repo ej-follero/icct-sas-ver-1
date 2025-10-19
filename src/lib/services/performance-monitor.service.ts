@@ -83,18 +83,33 @@ export class PerformanceMonitorService {
    * Get current performance metrics
    */
   async getCurrentMetrics(): Promise<PerformanceMetrics> {
-    const cacheStats = await cacheService.getStats();
-    
-    return {
-      timestamp: new Date(),
-      responseTime: this.getAverageResponseTime(),
-      memoryUsage: process.memoryUsage().heapUsed / 1024 / 1024, // MB
-      cpuUsage: process.cpuUsage().user / 1000000, // Convert to seconds
-      cacheHitRate: cacheStats.hitRate,
-      activeConnections: 0, // This would need to be tracked separately
-      slowQueries: this.getSlowQueriesCount(),
-      errorRate: this.getErrorRate(),
-    };
+    try {
+      const cacheStats = await cacheService.getStats();
+      
+      return {
+        timestamp: new Date(),
+        responseTime: this.getAverageResponseTime(),
+        memoryUsage: process.memoryUsage().heapUsed / 1024 / 1024, // MB
+        cpuUsage: process.cpuUsage().user / 1000000, // Convert to seconds
+        cacheHitRate: cacheStats.hitRate,
+        activeConnections: 0, // This would need to be tracked separately
+        slowQueries: this.getSlowQueriesCount(),
+        errorRate: this.getErrorRate(),
+      };
+    } catch (error) {
+      console.error('Error getting current metrics:', error);
+      // Return default metrics on error
+      return {
+        timestamp: new Date(),
+        responseTime: 0,
+        memoryUsage: process.memoryUsage().heapUsed / 1024 / 1024,
+        cpuUsage: process.cpuUsage().user / 1000000,
+        cacheHitRate: 0,
+        activeConnections: 0,
+        slowQueries: 0,
+        errorRate: 0,
+      };
+    }
   }
 
   /**
@@ -150,7 +165,12 @@ export class PerformanceMonitorService {
     value: number;
     threshold: number;
   }> {
-    const alerts = [];
+    const alerts: Array<{
+      type: 'warning' | 'error' | 'critical';
+      message: string;
+      value: number;
+      threshold: number;
+    }> = [];
     const currentMetrics = this.metrics[this.metrics.length - 1];
     
     if (!currentMetrics) return alerts;
@@ -228,7 +248,12 @@ export class PerformanceMonitorService {
     impact: 'low' | 'medium' | 'high';
     effort: 'low' | 'medium' | 'high';
   }> {
-    const recommendations = [];
+    const recommendations: Array<{
+      category: string;
+      recommendation: string;
+      impact: 'low' | 'medium' | 'high';
+      effort: 'low' | 'medium' | 'high';
+    }> = [];
     const currentMetrics = this.metrics[this.metrics.length - 1];
     
     if (!currentMetrics) return recommendations;

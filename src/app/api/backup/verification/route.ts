@@ -1,5 +1,6 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { backupVerificationService } from "@/lib/services/backup-verification.service";
+import { prisma } from "@/lib/prisma";
 
 // GET /api/backup/verification - Get verification statistics
 export async function GET() {

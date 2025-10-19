@@ -9,5 +9,4 @@ export { default as Table } from './Table/Table';
 export { default as EmptyState } from './EmptyState';
 export { default as BulkActionsDialog } from './Dialogs/BulkActionsDialog';
 
-// Export FilterPreset type from instructor-attendance (for now, as a shared type)
-export type { FilterPreset } from '../../types/instructor-attendance'; 
+// FilterPreset type is defined locally in components that need it 

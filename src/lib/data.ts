@@ -342,33 +342,40 @@ export const studentsData: Student[] = [
 ];
 
 export interface Parent {
-  id: string;
+  id: number;
   name: string;
   email: string;
-  phoneNumber: string;
+  phoneNumber?: string;
+  phone?: string;
   address: string;
   firstName: string;
   middleName?: string;
   lastName: string;
   suffix?: string;
   img?: string;
-  gender: string;
-  guardianType: string;
-  status: 'active' | 'inactive';
+  gender?: string;
+  guardianType?: string;
+  status?: 'active' | 'inactive';
   occupation?: string;
   workplace?: string;
   emergencyContact?: string;
-  relationshipToStudent: string;
-  totalStudents: number;
+  relationshipToStudent?: string;
+  totalStudents?: number;
   lastLogin?: string;
-  createdAt: string;
-  updatedAt: string;
+  createdAt?: string;
+  updatedAt?: string;
+  username?: string;
+  bloodType?: string;
+  birthday?: string;
+  sex?: string;
   students: {
-    id: string;
+    id: number;
     name: string;
-    studentIdNum: string;
-    yearLevel: string;
-    status: string;
+    studentIdNum?: string;
+    yearLevel?: string;
+    status?: string;
+    grade?: number;
+    class?: string;
     course?: {
       name: string;
       code: string;
@@ -401,6 +408,8 @@ export const parentsData: Parent[] = [
   {
     id: 2,
     name: "Jane Doe",
+    firstName: "Jane",
+    lastName: "Doe",
     email: "jane@doe.com",
     students: [
       { id: 2, name: "Cecilia Bradley", grade: 9, class: "B" },
@@ -411,6 +420,8 @@ export const parentsData: Parent[] = [
   {
     id: 3,
     name: "Mike Geller",
+    firstName: "Mike",
+    lastName: "Geller",
     email: "mike@geller.com",
     students: [
       { id: 3, name: "Fanny Caldwell", grade: 8, class: "C" },
@@ -421,7 +432,9 @@ export const parentsData: Parent[] = [
   {
     id: 4,
     name: "Jay French",
-    email: "mike@geller.com",
+    firstName: "Jay",
+    lastName: "French",
+    email: "jay@french.com",
     students: [
       { id: 4, name: "Mollie Fitzgerald", grade: 7, class: "A" },
       { id: 5, name: "Ian Bryant", grade: 7, class: "B" },
@@ -432,62 +445,74 @@ export const parentsData: Parent[] = [
   {
     id: 5,
     name: "Jane Smith",
+    firstName: "Jane",
+    lastName: "Smith",
     students: [
       { id: 6, name: "Mable Harvey", grade: 6, class: "A" },
     ],
-    email: "mike@geller.com",
+    email: "jane@smith.com",
     phone: "1234567890",
     address: "123 Main St, Anytown, USA",
   },
   {
     id: 6,
     name: "Anna Santiago",
+    firstName: "Anna",
+    lastName: "Santiago",
     students: [
       { id: 7, name: "Joel Lambert", grade: 5, class: "A" },
     ],
-    email: "mike@geller.com",
+    email: "anna@santiago.com",
     phone: "1234567890",
     address: "123 Main St, Anytown, USA",
   },
   {
     id: 7,
     name: "Allen Black",
+    firstName: "Allen",
+    lastName: "Black",
     students: [
       { id: 8, name: "Carrie Tucker", grade: 4, class: "A" },
       { id: 9, name: "Lilly Underwood", grade: 4, class: "B" },
     ],
-    email: "mike@geller.com",
+    email: "allen@black.com",
     phone: "1234567890",
     address: "123 Main St, Anytown, USA",
   },
   {
     id: 8,
     name: "Ophelia Castro",
+    firstName: "Ophelia",
+    lastName: "Castro",
     students: [
       { id: 10, name: "Alexander Blair", grade: 3, class: "A" },
     ],
-    email: "mike@geller.com",
+    email: "ophelia@castro.com",
     phone: "1234567890",
     address: "123 Main St, Anytown, USA",
   },
   {
     id: 9,
     name: "Derek Briggs",
+    firstName: "Derek",
+    lastName: "Briggs",
     students: [
       { id: 11, name: "Susan Webster", grade: 2, class: "A" },
       { id: 12, name: "Maude Stone", grade: 2, class: "B" },
     ],
-    email: "mike@geller.com",
+    email: "derek@briggs.com",
     phone: "1234567890",
     address: "123 Main St, Anytown, USA",
   },
   {
     id: 10,
     name: "John Glover",
+    firstName: "John",
+    lastName: "Glover",
     students: [
       { id: 13, name: "Stella Scott", grade: 1, class: "A" },
     ],
-    email: "mike@geller.com",
+    email: "john@glover.com",
     phone: "1234567890",
     address: "123 Main St, Anytown, USA",
   },
@@ -583,7 +608,7 @@ export const classesData = [
     supervisor: "Iva Frank",
   },
   {
-    id: 5,
+    id: 6,
     name: "5B",
     capacity: 20,
     grade: 5,

@@ -115,7 +115,7 @@ class WebSocketService {
     try {
       const response = await fetch('http://localhost:3002/ping', {
         method: 'GET',
-        timeout: 5000
+        signal: AbortSignal.timeout(5000)
       });
       return response.ok;
     } catch (error) {

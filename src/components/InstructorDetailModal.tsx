@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -27,32 +27,37 @@ const InstructorDetailModal: React.FC<InstructorDetailModalProps> = ({
   isOpen,
   onClose
 }) => {
+  // Validate props
+  if (!onClose) {
+    console.error('InstructorDetailModal: Missing required props');
+    return null;
+  }
+
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
 
   if (!instructor) return null;
 
   // View-only: remove copy/print helpers
 
-  const getRiskBadgeColor = (risk: string) => {
+  const getRiskBadgeColor = useCallback((risk: string) => {
     switch (risk) {
       case 'LOW': return 'bg-green-100 text-green-800 border-green-200';
       case 'MEDIUM': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
       case 'HIGH': return 'bg-red-100 text-red-800 border-red-200';
       default: return 'bg-gray-100 text-gray-800 border-gray-200';
     }
-  };
+  }, []);
 
-  const getStatusBadgeColor = (status: string) => {
+  const getStatusBadgeColor = useCallback((status: string) => {
     switch (status) {
       case 'ACTIVE': return 'bg-green-100 text-green-800 border-green-200';
       case 'INACTIVE': return 'bg-gray-100 text-gray-800 border-gray-200';
-      
       default: return 'bg-gray-100 text-gray-800 border-gray-200';
     }
-  };
+  }, []);
 
-  const WeeklyPatternChart = ({ pattern }: { pattern: any }) => {
-    const days = [
+  const WeeklyPatternChart = React.memo(({ pattern }: { pattern: any }) => {
+    const days = useMemo(() => [
       { key: 'monday', label: 'Mon', value: pattern.monday },
       { key: 'tuesday', label: 'Tue', value: pattern.tuesday },
       { key: 'wednesday', label: 'Wed', value: pattern.wednesday },
@@ -60,7 +65,7 @@ const InstructorDetailModal: React.FC<InstructorDetailModalProps> = ({
       { key: 'friday', label: 'Fri', value: pattern.friday },
       { key: 'saturday', label: 'Sat', value: pattern.saturday },
       { key: 'sunday', label: 'Sun', value: pattern.sunday }
-    ];
+    ], [pattern]);
 
     return (
       <div className="space-y-3">
@@ -75,9 +80,10 @@ const InstructorDetailModal: React.FC<InstructorDetailModalProps> = ({
         ))}
       </div>
     );
-  };
+  });
+  WeeklyPatternChart.displayName = 'WeeklyPatternChart';
 
-  const ScheduleCard = ({ schedule }: { schedule: any }) => (
+  const ScheduleCard = React.memo(({ schedule }: { schedule: any }) => (
     <Card className="mb-3">
       <CardContent className="p-4">
         <div className="flex justify-between items-start mb-2">
@@ -97,7 +103,8 @@ const InstructorDetailModal: React.FC<InstructorDetailModalProps> = ({
         </div>
       </CardContent>
     </Card>
-  );
+  ));
+  ScheduleCard.displayName = 'ScheduleCard';
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -143,7 +150,10 @@ const InstructorDetailModal: React.FC<InstructorDetailModalProps> = ({
                 <Avatar className="h-20 w-20">
                   <AvatarImage src={instructor.avatarUrl} />
                   <AvatarFallback className="text-lg">
-                    {instructor.instructorName.split(' ').map(n => n[0]).join('')}
+                    {useMemo(() => 
+                      instructor.instructorName.split(' ').map((n: string) => n[0]).join(''), 
+                      [instructor.instructorName]
+                    )}
                   </AvatarFallback>
                 </Avatar>
                 
@@ -202,9 +212,15 @@ const InstructorDetailModal: React.FC<InstructorDetailModalProps> = ({
                 </CardHeader>
                 <CardContent>
                   <ScrollArea className="h-96">
-                    {instructor.schedules.map((schedule, index) => (
-                      <ScheduleCard key={index} schedule={schedule} />
-                    ))}
+                    {instructor.schedules?.length > 0 ? (
+                      instructor.schedules.map((schedule: any, index: number) => (
+                        <ScheduleCard key={index} schedule={schedule} />
+                      ))
+                    ) : (
+                      <div className="text-center py-8 text-gray-500">
+                        No schedules found
+                      </div>
+                    )}
                   </ScrollArea>
                 </CardContent>
               </Card>
@@ -220,7 +236,7 @@ const InstructorDetailModal: React.FC<InstructorDetailModalProps> = ({
                     <Calendar
                       mode="single"
                       selected={selectedDate}
-                      onSelect={(date) => date && setSelectedDate(date)}
+                      onSelect={useCallback((date: Date | undefined) => date && setSelectedDate(date), [])}
                     />
                   </div>
                 </CardContent>
@@ -257,10 +273,12 @@ const InstructorDetailModal: React.FC<InstructorDetailModalProps> = ({
                         <span>{instructor.officeHours}</span>
                       </div>
                     )}
-                    <div className="flex items-center gap-3">
-                      <Zap className="w-5 h-5 text-gray-500" />
-                      <span>RFID Tag: {instructor.rfidTag}</span>
-                    </div>
+                    {instructor.rfidTag && (
+                      <div className="flex items-center gap-3">
+                        <Zap className="w-5 h-5 text-gray-500" />
+                        <span>RFID Tag: {instructor.rfidTag}</span>
+                      </div>
+                    )}
                   </div>
 
                   {/* View-only: no action buttons in contact tab */}

@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { UserStatus, Role } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 
@@ -10,7 +10,7 @@ export async function GET() {
     const adminUsers = await prisma.user.findMany({
       where: {
         role: {
-          in: [Role.ADMIN, Role.SUPER_ADMIN, Role.DEPARTMENT_HEAD, Role.SYSTEM_AUDITOR]
+          in: [Role.ADMIN, Role.SUPER_ADMIN, Role.DEPARTMENT_HEAD]
         }
       },
       include: {
@@ -178,9 +178,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate role
-    if (![Role.ADMIN, Role.SUPER_ADMIN, Role.DEPARTMENT_HEAD, Role.SYSTEM_AUDITOR].includes(role)) {
+    if (![Role.ADMIN, Role.SUPER_ADMIN, Role.DEPARTMENT_HEAD].includes(role)) {
       return NextResponse.json(
-        { error: 'Invalid role. Only ADMIN, SUPER_ADMIN, DEPARTMENT_HEAD, and SYSTEM_AUDITOR roles are allowed' },
+        { error: 'Invalid role. Only ADMIN, SUPER_ADMIN, and DEPARTMENT_HEAD roles are allowed' },
         { status: 400 }
       );
     }
@@ -260,14 +260,6 @@ function getPermissionsForRole(role: Role): string[] {
         'Limited system access',
         'Department-specific RFID management',
         'Department communication'
-      ];
-    case Role.SYSTEM_AUDITOR:
-      return [
-        'Read-only access to all data',
-        'Audit log access',
-        'Compliance reporting',
-        'System analytics access',
-        'No modification permissions'
       ];
     default:
       return ['read'];

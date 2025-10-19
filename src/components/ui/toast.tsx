@@ -72,6 +72,8 @@ export function Toast({ message, type, duration = 5000, onClose }: ToastProps) {
 // Toast context for managing multiple toasts
 interface ToastContextType {
   showToast: (message: string, type: 'success' | 'error' | 'info') => void;
+  removeToast: (id: string) => void;
+  toasts: Array<{ id: string; message: string; type: 'success' | 'error' | 'info' }>;
 }
 
 export const useToast = (): ToastContextType => {

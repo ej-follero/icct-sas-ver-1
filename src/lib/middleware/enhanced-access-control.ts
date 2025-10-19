@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import jwt from 'jsonwebtoken';
 import { securityAuditService } from '@/lib/services/security-audit.service';
+import { env } from '@/lib/env-validation';
 
 export interface UserContext {
   userId: number;
@@ -147,7 +148,8 @@ export class EnhancedAccessControl {
     userContext: UserContext
   ): Promise<{ allowed: boolean; reason?: string; requiredRole?: string; requiredPermission?: string }> {
     
-    const { pathname, method } = request.nextUrl;
+    const { pathname } = request.nextUrl;
+    const method = request.method;
     
     // Find matching access rule
     const rule = this.findMatchingRule(pathname, method);
@@ -296,21 +298,21 @@ export class EnhancedAccessControl {
   static extractUserContext(request: NextRequest): UserContext | null {
     try {
       // Get JWT token from cookies
-      const token = request.cookies.get('auth-token')?.value;
+      const token = request.cookies.get('token')?.value;
       
       if (!token) {
         return null;
       }
       
       // Verify and decode JWT
-      const decoded = jwt.verify(token, process.env.JWT_SECRET!) as any;
+      const decoded = jwt.verify(token, env.JWT_SECRET) as any;
       
       return {
         userId: decoded.userId,
         email: decoded.email,
         role: decoded.role,
         permissions: decoded.permissions || [],
-        ipAddress: request.ip || request.headers.get('x-forwarded-for') || 'unknown',
+        ipAddress: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown',
         userAgent: request.headers.get('user-agent') || 'unknown',
       };
     } catch (error) {

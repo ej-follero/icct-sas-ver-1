@@ -9,7 +9,7 @@ const roomSchema = z.object({
   roomCapacity: z.number().min(1, "Room capacity must be at least 1"),
   roomBuildingLoc: z.enum(["BuildingA", "BuildingB", "BuildingC", "BuildingD", "BuildingE"]),
   roomFloorLoc: z.enum(["F1", "F2", "F3", "F4", "F5", "F6"]),
-  readerId: z.string().optional(),
+  readerId: z.string().min(1, "Reader ID is required"),
   status: z.enum(["AVAILABLE", "OCCUPIED", "MAINTENANCE", "RESERVED", "INACTIVE"]).optional(),
   isActive: z.boolean().optional(),
 });
@@ -123,8 +123,28 @@ export async function POST(request: NextRequest) {
       status: body.status || "AVAILABLE",
       isActive: typeof body.isActive === 'boolean' ? body.isActive : true,
     });
+    const roomData = {
+      roomNo: validatedData.roomNo,
+      roomType: validatedData.roomType,
+      roomCapacity: validatedData.roomCapacity,
+      roomBuildingLoc: validatedData.roomBuildingLoc,
+      roomFloorLoc: validatedData.roomFloorLoc,
+      readerId: validatedData.readerId,
+      status: (validatedData.status || "AVAILABLE") as "AVAILABLE" | "OCCUPIED" | "MAINTENANCE" | "RESERVED" | "INACTIVE",
+      isActive: validatedData.isActive ?? true,
+    } as const;
+
     const createdRoom = await prisma.room.create({
-      data: validatedData,
+      data: {
+        roomNo: validatedData.roomNo,
+        roomType: validatedData.roomType,
+        roomCapacity: validatedData.roomCapacity,
+        roomBuildingLoc: validatedData.roomBuildingLoc,
+        roomFloorLoc: validatedData.roomFloorLoc,
+        readerId: validatedData.readerId,
+        status: (validatedData.status || "AVAILABLE") as any,
+        isActive: validatedData.isActive ?? true,
+      },
     });
     return NextResponse.json(createdRoom, { status: 201 });
   } catch (error) {

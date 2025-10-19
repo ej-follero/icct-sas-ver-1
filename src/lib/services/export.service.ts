@@ -22,6 +22,7 @@ export interface ExportResult {
   filename?: string;
   filePath?: string;
   fileSize?: number;
+  data?: string | Uint8Array; // For client-side downloads
   error?: string;
 }
 
@@ -32,6 +33,15 @@ export class ExportService {
     try {
       const { filename, format, data, columns, title, description } = options;
       
+      // Validate input data
+      if (!data || data.length === 0) {
+        return { success: false, error: 'No data provided for export' };
+      }
+      
+      if (!columns || columns.length === 0) {
+        return { success: false, error: 'No columns defined for export' };
+      }
+      
       // Ensure reports directory exists and write a simple CSV for demo
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
       const relPath = `reports/${filename}_${timestamp}.${format}`; // relative to /public
@@ -39,12 +49,22 @@ export class ExportService {
       // CSV
       if (format === 'csv') {
         const headers = columns.map(c => c.label);
-        const rows = data.map(row => columns.map(c => {
-          const raw = row[c.key];
-          const val = c.format ? c.format(raw) : raw;
-          return `"${String(val ?? '').replace(/"/g, '""')}"`;
-        }).join(','));
-        const csv = [headers.join(','), ...rows].join('\n');
+        
+        // Process data in chunks to avoid memory issues with large datasets
+        const chunkSize = 1000;
+        const chunks: string[] = [];
+        
+        for (let i = 0; i < data.length; i += chunkSize) {
+          const chunk = data.slice(i, i + chunkSize);
+          const chunkRows = chunk.map(row => columns.map(c => {
+            const raw = row[c.key];
+            const val = c.format ? c.format(raw) : raw;
+            return `"${String(val ?? '').replace(/"/g, '""')}"`;
+          }).join(','));
+          chunks.push(chunkRows.join('\n'));
+        }
+        
+        const csv = [headers.join(','), ...chunks].join('\n');
 
         // For client-side, return the CSV data for download
         const fileSize = new Blob([csv]).size;
@@ -59,10 +79,10 @@ export class ExportService {
 
       // PDF
       if (format === 'pdf') {
-        // For client-side, prepare PDF data for download
-
-        const { jsPDF } = await import('jspdf');
-        const autoTable = (await import('jspdf-autotable')).default;
+        try {
+          // For client-side, prepare PDF data for download
+          const { jsPDF } = await import('jspdf');
+          const autoTable = (await import('jspdf-autotable')).default;
 
         const doc = new jsPDF({ orientation: 'landscape' });
         // Academic header (institution — report, subtitle/period)
@@ -135,18 +155,23 @@ export class ExportService {
 
         const pdfData = doc.output('datauristring');
         
-        return {
-          success: true,
-          filename: `${filename}.pdf`,
-          data: pdfData,
-          fileSize: new Blob([pdfData]).size
-        };
+          return {
+            success: true,
+            filename: `${filename}.pdf`,
+            data: pdfData,
+            fileSize: new Blob([pdfData]).size
+          };
+        } catch (error) {
+          console.error('PDF generation error:', error);
+          return { success: false, error: 'Failed to generate PDF' };
+        }
       }
 
       // Excel (XLSX)
       if (format === 'excel') {
-      const XLSX = await import('xlsx');
-        // For client-side, prepare PDF data for download
+        try {
+          const XLSX = await import('xlsx');
+          // For client-side, prepare Excel data for download
 
         // Convert data to sheet with selected columns
         const rows = data.map(row => {
@@ -165,12 +190,16 @@ export class ExportService {
         const wbout = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
         const excelData = new Uint8Array(wbout);
 
-        return {
-          success: true,
-          filename: `${filename}.xlsx`,
-          data: excelData,
-          fileSize: excelData.length
-        };
+          return {
+            success: true,
+            filename: `${filename}.xlsx`,
+            data: excelData,
+            fileSize: excelData.length
+          };
+        } catch (error) {
+          console.error('Excel generation error:', error);
+          return { success: false, error: 'Failed to generate Excel file' };
+        }
       }
 
       // Fallback

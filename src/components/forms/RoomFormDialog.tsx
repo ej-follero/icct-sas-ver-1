@@ -2,7 +2,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { BadgeInfo } from "lucide-react";
 import RoomForm from "./RoomForm";
-import React from "react";
+import React, { useCallback, useState, useEffect } from "react";
 
 interface RoomFormDialogProps {
   open: boolean;
@@ -21,6 +21,21 @@ function RoomFormDialog({
   id,
   onSuccess
 }: RoomFormDialogProps) {
+  // Validate props
+  if (!onOpenChange || !onSuccess) {
+    console.error('RoomFormDialog: Missing required props');
+    return null;
+  }
+
+  const handleSuccess = useCallback((room: any) => {
+    try {
+      onSuccess(room);
+      onOpenChange(false); // Close dialog on success
+    } catch (error) {
+      console.error('Room form success handler error:', error);
+    }
+  }, [onSuccess, onOpenChange]);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -47,10 +62,12 @@ function RoomFormDialog({
         </DialogHeader>
         <div className="py-4">
           <RoomForm
+            open={open}
+            onOpenChange={onOpenChange}
             type={type}
             data={data}
             id={id}
-            onSuccess={onSuccess}
+            onSuccess={handleSuccess}
           />
         </div>
       </DialogContent>
