@@ -1,6 +1,4 @@
 {
-  "buildCommand": "rm -rf .next && rm -rf node_modules/.cache && npm run build",
-  "installCommand": "npm install --legacy-peer-deps --force",
   "framework": "nextjs",
   "functions": {
     "src/app/api/**/*.ts": {
