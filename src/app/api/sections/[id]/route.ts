@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 // GET /api/sections/[id]
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // JWT Authentication
@@ -36,7 +36,8 @@ export async function GET(
       return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
     }
 
-    const id = parseInt(params.id);
+    const { id: sectionId } = await params;
+    const id = parseInt(sectionId);
     
     const section = await prisma.section.findUnique({
       where: { sectionId: id },
@@ -96,7 +97,7 @@ export async function GET(
 // PUT /api/sections/[id]
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // JWT Authentication - Admin only
@@ -128,7 +129,8 @@ export async function PUT(
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
 
-    const id = parseInt(params.id);
+    const { id: sectionId } = await params;
+    const id = parseInt(sectionId);
     const data = await request.json();
     
     const updatedSection = await prisma.section.update({
@@ -185,7 +187,7 @@ export async function PUT(
 // DELETE /api/sections/[id] - Soft delete
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // JWT Authentication - Admin only
@@ -217,7 +219,8 @@ export async function DELETE(
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
 
-    const id = parseInt(params.id);
+    const { id: sectionId } = await params;
+    const id = parseInt(sectionId);
     
     // Soft delete by updating status to DELETED
     const deletedSection = await prisma.section.update({

@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 // GET /api/sections/[id]/subjects
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // JWT Authentication
@@ -36,7 +36,8 @@ export async function GET(
       return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
     }
 
-    const sectionId = parseInt(params.id);
+    const { id } = await params;
+    const sectionId = parseInt(id);
     
     // Fetch subjects for this section through SubjectSchedule
     const subjectSchedules = await prisma.subjectSchedule.findMany({

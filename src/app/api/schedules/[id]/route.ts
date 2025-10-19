@@ -5,7 +5,7 @@ import { createNotification } from '@/lib/notifications';
 // GET individual schedule
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // JWT Authentication
@@ -37,7 +37,8 @@ export async function GET(
       return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
     }
 
-    const scheduleId = parseInt(params.id);
+    const { id } = await params;
+    const scheduleId = parseInt(id);
     
     if (isNaN(scheduleId)) {
       return NextResponse.json({ error: 'Invalid schedule ID' }, { status: 400 });
@@ -68,7 +69,7 @@ export async function GET(
 // PUT update schedule
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // JWT Authentication - Admin only
@@ -100,7 +101,8 @@ export async function PUT(
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
 
-    const scheduleId = parseInt(params.id);
+    const { id } = await params;
+    const scheduleId = parseInt(id);
     
     if (isNaN(scheduleId)) {
       return NextResponse.json({ error: 'Invalid schedule ID' }, { status: 400 });
@@ -231,7 +233,7 @@ export async function PUT(
 // DELETE schedule
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // JWT Authentication - Admin only
@@ -263,7 +265,8 @@ export async function DELETE(
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
 
-    const scheduleId = parseInt(params.id);
+    const { id } = await params;
+    const scheduleId = parseInt(id);
     
     if (isNaN(scheduleId)) {
       return NextResponse.json({ error: 'Invalid schedule ID' }, { status: 400 });

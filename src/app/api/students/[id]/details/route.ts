@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // JWT Authentication (SUPER_ADMIN, ADMIN, DEPARTMENT_HEAD, INSTRUCTOR)
@@ -27,7 +27,8 @@ export async function GET(
     if (!allowedRoles.includes(reqUser.role)) {
       return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
     }
-    const studentId = params.id;
+    const { id } = await params;
+    const studentId = id;
     
     if (!studentId) {
       return NextResponse.json({ error: 'Student ID is required' }, { status: 400 });

@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma';
 // PATCH - Soft delete student (deactivate)
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // JWT Authentication - Admin only
@@ -28,7 +28,8 @@ export async function PATCH(
     if (!adminRoles.includes(reqUser.role)) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
-    const studentId = parseInt(params.id);
+    const { id } = await params;
+    const studentId = parseInt(id);
     
     if (isNaN(studentId)) {
       return NextResponse.json(

@@ -21,9 +21,10 @@ const subjectSchema = z.object({
 // GET handler for individual subject
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     // JWT Authentication (SUPER_ADMIN, ADMIN, DEPARTMENT_HEAD, INSTRUCTOR)
     const token = request.cookies.get('token')?.value;
     if (!token) {
@@ -47,7 +48,7 @@ export async function GET(
       return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
     }
 
-    const subjectId = parseInt(params.id);
+    const subjectId = parseInt(id);
     
     if (isNaN(subjectId)) {
       return NextResponse.json(
@@ -128,7 +129,7 @@ export async function GET(
 // PUT handler for updating a subject
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // JWT Authentication - Admin only
@@ -153,7 +154,8 @@ export async function PUT(
     if (!adminRoles.includes(user.role)) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
-    const subjectId = parseInt(params.id);
+    const { id } = await params;
+    const subjectId = parseInt(id);
     
     if (isNaN(subjectId)) {
       return NextResponse.json(
@@ -265,7 +267,7 @@ export async function PUT(
 // DELETE handler for removing a subject
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // JWT Authentication - Admin only
@@ -290,7 +292,8 @@ export async function DELETE(
     if (!adminRoles.includes(user.role)) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
-    const subjectId = parseInt(params.id);
+    const { id } = await params;
+    const subjectId = parseInt(id);
     
     // Check for associated data
     const subject = await prisma.subjects.findUnique({
@@ -352,7 +355,7 @@ export async function DELETE(
 // HEAD handler to check if subject can be deleted
 export async function HEAD(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // JWT Authentication - Admin only
@@ -377,7 +380,8 @@ export async function HEAD(
     if (!adminRoles.includes(user.role)) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
-    const subjectId = parseInt(params.id);
+    const { id } = await params;
+    const subjectId = parseInt(id);
     
     if (isNaN(subjectId)) {
       return NextResponse.json(

@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // JWT Authentication
@@ -35,7 +35,8 @@ export async function GET(
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
 
-    const roleId = parseInt(params.id);
+    const { id } = await params;
+    const roleId = parseInt(id);
     if (isNaN(roleId)) {
       return NextResponse.json({ error: 'Invalid role ID' }, { status: 400 });
     }
@@ -79,7 +80,7 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // JWT Authentication
@@ -111,7 +112,8 @@ export async function PUT(
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
 
-    const roleId = parseInt(params.id);
+    const { id } = await params;
+    const roleId = parseInt(id);
     if (isNaN(roleId)) {
       return NextResponse.json({ error: 'Invalid role ID' }, { status: 400 });
     }
@@ -194,7 +196,7 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // JWT Authentication
@@ -226,7 +228,8 @@ export async function DELETE(
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
 
-    const roleId = parseInt(params.id);
+    const { id } = await params;
+    const roleId = parseInt(id);
     if (isNaN(roleId)) {
       return NextResponse.json({ error: 'Invalid role ID' }, { status: 400 });
     }
