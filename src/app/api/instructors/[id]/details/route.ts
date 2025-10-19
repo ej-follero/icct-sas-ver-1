@@ -4,10 +4,11 @@ import { DayOfWeek, ScheduleStatus } from '@prisma/client';
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const instructorId = parseInt(params.id);
+    const { id } = await params;
+    const instructorId = parseInt(id);
     
     if (isNaN(instructorId)) {
       return NextResponse.json({ error: 'Invalid instructor ID' }, { status: 400 });
