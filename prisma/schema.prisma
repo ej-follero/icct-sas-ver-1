@@ -7,74 +7,179 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// Email/Communication models and enums for the Email Management module
+// These support composing, storing, and tracking email status and folders
+
+enum EmailStatus {
+  SENT
+  DELIVERED
+  READ
+  FAILED
+  DRAFT
+  PENDING
+}
+
+enum EmailFolder {
+  INBOX
+  SENT
+  DRAFT
+  SPAM
+  TRASH
+}
+
+enum EmailRecipientType {
+  TO
+  CC
+  BCC
+}
+
+model Email {
+  id           String        @id @default(cuid())
+  subject      String
+  sender       String
+  recipient    String
+  // ISO timestamp from UI maps to this
+  timestamp    DateTime      @default(now())
+  status       EmailStatus   @default(PENDING)
+  // Reuse existing Priority enum: LOW, NORMAL, HIGH, URGENT
+  priority     Priority      @default(NORMAL)
+  type         EmailFolder   @default(INBOX)
+  content      String
+  isRead       Boolean       @default(false)
+  isStarred    Boolean       @default(false)
+  isImportant  Boolean       @default(false)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  recipients   EmailRecipient[]
+  attachments  EmailAttachment[]
+
+  @@index([status, type])
+  @@index([timestamp])
+  @@index([priority])
+}
+
+model EmailRecipient {
+  id        Int                @id @default(autoincrement())
+  emailId   String
+  address   String
+  rtype     EmailRecipientType
+  createdAt DateTime           @default(now())
+  email     Email              @relation(fields: [emailId], references: [id], onDelete: Cascade)
+
+  @@index([emailId, rtype])
+}
+
+model EmailAttachment {
+  id        Int      @id @default(autoincrement())
+  emailId   String
+  name      String
+  url       String
+  createdAt DateTime @default(now())
+  email     Email    @relation(fields: [emailId], references: [id], onDelete: Cascade)
+
+  @@index([emailId])
+}
+
+model RoleManagement {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  description String?
+  permissions Json
+  status      String   @default("ACTIVE")
+  totalUsers  Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  users       User[]   @relation("UserRoles")
+
+  @@index([status])
+  @@index([name])
+}
+
 model User {
-  userId              Int            @id @default(autoincrement())
-  userName            String
-  email               String         @unique @db.VarChar(100)
-  passwordHash        String         @db.VarChar(255)
-  role                Role
-  status              UserStatus     @default(ACTIVE)
-  lastLogin           DateTime?
-  lastPasswordChange  DateTime?
-  failedLoginAttempts Int            @default(0)
-  isEmailVerified     Boolean        @default(false)
-  isPhoneVerified     Boolean        @default(false)
-  twoFactorEnabled    Boolean        @default(false)
-  createdAt           DateTime       @default(now())
-  updatedAt           DateTime       @updatedAt
-  Announcements       Announcement[]
-  Attendance          Attendance[]
-  VerifiedAttendances Attendance[]   @relation("AttendanceVerification")
-  DepartmentHead      Department[]   @relation("DepartmentHead")
-  Event               Event[]
-  Guardian            Guardian?
-  Instructor          Instructor?
-  RFIDLogs            RFIDLogs[]
-  AssignedTags        RFIDTags[]     @relation("TagAssignment")
-  ReportLogs          ReportLog[]
-  Student             Student[]
-  SystemLogs          SystemLogs[]
+  userId                 Int                  @id @default(autoincrement())
+  userName               String
+  email                  String               @unique @db.VarChar(100)
+  passwordHash           String               @db.VarChar(255)
+  role                   Role
+  status                 UserStatus           @default(ACTIVE)
+  lastLogin              DateTime?
+  lastPasswordChange     DateTime?
+  failedLoginAttempts    Int                  @default(0)
+  isEmailVerified        Boolean              @default(false)
+  isPhoneVerified        Boolean              @default(false)
+  twoFactorEnabled       Boolean              @default(false)
+  createdAt              DateTime             @default(now())
+  updatedAt              DateTime             @updatedAt
+  sessionVersion         Int                  @default(1)
+  customRoleId           Int?
+  Announcements          Announcement[]
+  attendanceOverrides    Attendance[]         @relation("AttendanceOverride")
+  Attendance             Attendance[]
+  VerifiedAttendances    Attendance[]         @relation("AttendanceVerification")
+  BackupLogs             BackupLog[]
+  BackupSchedules        BackupSchedule[]
+  BackupScheduleLogs     BackupScheduleLog[]
+  DepartmentHead         Department[]         @relation("DepartmentHead")
+  Event                  Event[]
+  Instructor             Instructor?
+  PasswordResetTokens    PasswordResetToken[]
+  RFIDLogs               RFIDLogs[]
+  AssignedTags           RFIDTags[]           @relation("TagAssignment")
+  ReportLogs             ReportLog[]
+  RestorePoints          RestorePoint[]
+  ResolvedSecurityAlerts SecurityAlert[]      @relation("SecurityAlertResolver")
+  SecurityAlerts         SecurityAlert[]
+  ResolvedSecurityLogs   SecurityLog[]        @relation("SecurityLogResolver")
+  SecurityLogs           SecurityLog[]
+  Student                Student[]
+  SystemBackups          SystemBackup[]
+  SystemLogs             SystemLogs[]
+  CustomRole             RoleManagement?      @relation("UserRoles", fields: [customRoleId], references: [id])
+  Backups                Backup[]
+  Notifications          Notification[]
 
   @@index([email])
   @@index([role, status])
   @@index([lastLogin])
+  @@index([customRoleId])
 }
 
 model Student {
-  studentId        Int               @id @default(autoincrement())
-  studentIdNum     String            @unique
-  rfidTag          String            @unique
-  firstName        String
-  middleName       String?
-  lastName         String
-  suffix           String?
-  email            String            @unique
-  phoneNumber      String            @unique
-  address          String
-  img              String?
-  gender           UserGender
-  birthDate        DateTime?
-  nationality      String?
-  studentType      StudentType
-  status           Status            @default(ACTIVE)
-  yearLevel        yearLevel
-  courseId         Int?
-  departmentId     Int?
-  totalSubjects    Int               @default(0)
-  totalAttendance  Int               @default(0)
-  lastLogin        DateTime?
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
-  guardianId       Int
-  userId           Int
-  RFIDTags         RFIDTags?
-  CourseOffering   CourseOffering?   @relation(fields: [courseId], references: [courseId])
-  Department       Department?       @relation(fields: [departmentId], references: [departmentId])
-  Guardian         Guardian          @relation(fields: [guardianId], references: [guardianId])
-  User             User              @relation(fields: [userId], references: [userId])
-  StudentSchedules StudentSchedule[]
-  StudentSection   StudentSection[]
-  Attendance       Attendance[]      @relation("AttendanceToStudent")
+  studentId               Int                      @id @default(autoincrement())
+  studentIdNum            String                   @unique
+  rfidTag                 String                   @unique
+  firstName               String
+  middleName              String?
+  lastName                String
+  suffix                  String?
+  email                   String                   @unique
+  phoneNumber             String                   @unique
+  address                 String
+  img                     String?
+  gender                  UserGender
+  birthDate               DateTime?
+  nationality             String?
+  studentType             StudentType
+  status                  Status                   @default(ACTIVE)
+  yearLevel               yearLevel
+  courseId                Int?
+  departmentId            Int?
+  lastLogin               DateTime?
+  deletedAt               DateTime?
+  deletionReason          String?
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+  guardianId              Int
+  userId                  Int
+  Attendance              Attendance[]             @relation("StudentToAttendance")
+  attendanceNotifications AttendanceNotification[]
+  RFIDTags                RFIDTags?
+  CourseOffering          CourseOffering?          @relation(fields: [courseId], references: [courseId])
+  Department              Department?              @relation(fields: [departmentId], references: [departmentId])
+  Guardian                Guardian                 @relation(fields: [guardianId], references: [guardianId])
+  User                    User                     @relation(fields: [userId], references: [userId])
+  StudentSchedules        StudentSchedule[]
+  StudentSection          StudentSection[]
 
   @@index([studentIdNum])
   @@index([rfidTag])
@@ -105,7 +210,6 @@ model Guardian {
   notificationPreferences Json?
   createdAt               DateTime     @default(now())
   updatedAt               DateTime     @updatedAt
-  User                    User         @relation(fields: [guardianId], references: [userId])
   Student                 Student[]
 
   @@index([guardianType, status])
@@ -129,17 +233,16 @@ model Instructor {
   officeLocation  String?
   officeHours     String?
   specialization  String?
-  totalSubjects   Int               @default(0)
-  totalStudents   Int               @default(0)
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
   rfidTag         String            @unique
+  employeeId      String            @unique
   Announcements   Announcement[]    @relation("InstructorToAnnouncements")
+  Attendance      Attendance[]      @relation("InstructorToAttendance")
   Department      Department        @relation(fields: [departmentId], references: [departmentId])
   User            User              @relation(fields: [instructorId], references: [userId])
   RFIDTags        RFIDTags?
   SubjectSchedule SubjectSchedule[]
-  Attendance      Attendance[]      @relation("AttendanceToInstructor")
   Subjects        Subjects[]        @relation("InstructorToSubjects")
 
   @@index([departmentId, status])
@@ -152,8 +255,6 @@ model Room {
   roomNo          String            @unique
   roomType        RoomType
   roomCapacity    Int
-  roomBuildingLoc String
-  roomFloorLoc    String
   readerId        String            @unique
   status          RoomStatus        @default(AVAILABLE)
   isActive        Boolean           @default(true)
@@ -162,6 +263,8 @@ model Room {
   notes           String?
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
+  roomBuildingLoc RoomBuilding
+  roomFloorLoc    RoomFloor
   RFIDReader      RFIDReader?
   SubjectSchedule SubjectSchedule[]
 
@@ -186,7 +289,7 @@ model Semester {
   notes             String?
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
-  CourseOfferings   CourseOffering[]
+  Attendance        Attendance[]      @relation("SemesterToAttendance")
   Sections          Section[]
   SubjectSchedules  SubjectSchedule[]
 
@@ -218,7 +321,6 @@ model StudentSection {
 model Section {
   sectionId         Int               @id @default(autoincrement())
   sectionName       String            @unique
-  sectionType       SectionType
   sectionCapacity   Int
   sectionStatus     SectionStatus
   yearLevel         Int
@@ -240,35 +342,27 @@ model Section {
   @@index([sectionName])
   @@index([courseId, sectionStatus])
   @@index([yearLevel, academicYear])
-  @@index([roomAssignment])
 }
 
 model CourseOffering {
-  courseId      Int          @id @default(autoincrement())
-  courseCode    String       @unique
-  courseName    String
-  courseType    CourseType
-  courseStatus  CourseStatus @default(ACTIVE)
-  description   String?
-  departmentId  Int
-  academicYear  String
-  semester      SemesterType
-  totalUnits    Int
-  totalSections Int          @default(0)
-  totalStudents Int          @default(0)
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
-  semesterId    Int
-  Department    Department   @relation(fields: [departmentId], references: [departmentId])
-  Semester      Semester     @relation(fields: [semesterId], references: [semesterId])
-  Section       Section[]
-  Student       Student[]
-  Subjects      Subjects[]
-  major         String?
+  courseId     Int          @id @default(autoincrement())
+  courseCode   String       @unique
+  courseName   String
+  courseType   CourseType
+  courseStatus CourseStatus @default(ACTIVE)
+  description  String?
+  departmentId Int
+  totalUnits   Int
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  major        String?
+  Department   Department   @relation(fields: [departmentId], references: [departmentId])
+  Section      Section[]
+  Student      Student[]
+  Subjects     Subjects[]
 
   @@index([courseCode])
   @@index([departmentId, courseStatus])
-  @@index([academicYear, semester])
 }
 
 model Department {
@@ -282,10 +376,9 @@ model Department {
   location              String?
   contactEmail          String?
   contactPhone          String?
-  totalInstructors      Int              @default(0)
-  totalStudents         Int              @default(0)
   createdAt             DateTime         @default(now())
   updatedAt             DateTime         @updatedAt
+  departmentLogo        String?
   CourseOffering        CourseOffering[]
   head                  User?            @relation("DepartmentHead", fields: [headOfDepartment], references: [userId])
   Instructor            Instructor[]
@@ -296,31 +389,31 @@ model Department {
   @@index([departmentType, departmentStatus])
   @@index([headOfDepartment])
 }
+
 model Subjects {
-  subjectId         Int               @id @default(autoincrement())
-  subjectName       String
-  subjectCode       String            @unique
-  subjectType       SubjectType       @default(LECTURE)
-  status            SubjectStatus     @default(ACTIVE)
-  description       String?
-  lectureUnits      Int               @default(0)
-  labUnits          Int               @default(0)
-  creditedUnits     Int               @default(0)
-  totalHours        Int
-  prerequisites     String?
-  courseId          Int
-  departmentId      Int
-  academicYear      String
-  semester          SemesterType
-  maxStudents       Int               @default(30)
-  currentEnrollment Int               @default(0)
-  createdAt         DateTime          @default(now())
-  updatedAt         DateTime          @updatedAt
-  Announcement      Announcement[]
-  SubjectSchedule   SubjectSchedule[]
-  CourseOffering    CourseOffering    @relation(fields: [courseId], references: [courseId])
-  Department        Department        @relation(fields: [departmentId], references: [departmentId])
-  Instructor        Instructor[]      @relation("InstructorToSubjects")
+  subjectId       Int               @id @default(autoincrement())
+  subjectName     String
+  subjectCode     String            @unique
+  subjectType     SubjectType       @default(LECTURE)
+  status          SubjectStatus     @default(ACTIVE)
+  description     String?
+  lectureUnits    Int               @default(0)
+  labUnits        Int               @default(0)
+  creditedUnits   Int               @default(0)
+  totalHours      Int
+  prerequisites   String?
+  courseId        Int
+  departmentId    Int
+  academicYear    String
+  semester        SemesterType
+  maxStudents     Int               @default(30)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  Announcement    Announcement[]
+  SubjectSchedule SubjectSchedule[]
+  CourseOffering  CourseOffering    @relation(fields: [courseId], references: [courseId])
+  Department      Department        @relation(fields: [departmentId], references: [departmentId])
+  Instructor      Instructor[]      @relation("InstructorToSubjects")
 
   @@index([subjectCode])
   @@index([courseId, status])
@@ -329,34 +422,33 @@ model Subjects {
 }
 
 model SubjectSchedule {
-  subjectSchedId    Int               @id @default(autoincrement())
-  subjectId         Int
-  sectionId         Int
-  instructorId      Int
-  roomId            Int
-  day               DayOfWeek
-  startTime         String
-  endTime           String
-  slots             Int               @default(0)
-  scheduleType      ScheduleType      @default(REGULAR)
-  status            ScheduleStatus    @default(ACTIVE)
-  semesterId        Int
-  academicYear      String
-  isRecurring       Boolean           @default(true)
-  startDate         DateTime?
-  endDate           DateTime?
-  maxStudents       Int               @default(30)
-  currentEnrollment Int               @default(0)
-  notes             String?
-  createdAt         DateTime          @default(now())
-  updatedAt         DateTime          @updatedAt
-  StudentSchedule   StudentSchedule[]
-  instructor        Instructor        @relation(fields: [instructorId], references: [instructorId])
-  room              Room              @relation(fields: [roomId], references: [roomId])
-  section           Section           @relation(fields: [sectionId], references: [sectionId])
-  semester          Semester          @relation(fields: [semesterId], references: [semesterId])
-  subject           Subjects          @relation(fields: [subjectId], references: [subjectId])
-  Attendance        Attendance[]      @relation("AttendanceToSubjectSchedule")
+  subjectSchedId  Int               @id @default(autoincrement())
+  subjectId       Int
+  sectionId       Int
+  instructorId    Int
+  roomId          Int
+  day             DayOfWeek
+  startTime       String
+  endTime         String
+  slots           Int               @default(0)
+  scheduleType    ScheduleType      @default(REGULAR)
+  status          ScheduleStatus    @default(ACTIVE)
+  semesterId      Int
+  academicYear    String
+  isRecurring     Boolean           @default(true)
+  startDate       DateTime?
+  endDate         DateTime?
+  maxStudents     Int               @default(30)
+  notes           String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  Attendance      Attendance[]      @relation("SubjectScheduleToAttendance")
+  StudentSchedule StudentSchedule[]
+  instructor      Instructor        @relation(fields: [instructorId], references: [instructorId])
+  room            Room              @relation(fields: [roomId], references: [roomId])
+  section         Section           @relation(fields: [sectionId], references: [sectionId])
+  semester        Semester          @relation(fields: [semesterId], references: [semesterId])
+  subject         Subjects          @relation(fields: [subjectId], references: [subjectId])
 
   @@index([subjectId, day, startTime])
   @@index([instructorId, day, startTime])
@@ -382,35 +474,53 @@ model StudentSchedule {
 }
 
 model Attendance {
-  attendanceId      Int                    @id @default(autoincrement())
-  eventId           Int?
-  scheduleId        Int?
-  userId            Int
-  userRole          Role
-  status            AttendanceStatus
-  attendanceType    AttendanceType
-  verification      AttendanceVerification @default(PENDING)
-  timestamp         DateTime               @default(now())
-  checkOutTime      DateTime?
-  duration          Int?
-  notes             String?
-  deviceInfo        Json?
-  location          String?
-  verifiedBy        Int?
-  verificationTime  DateTime?
-  verificationNotes String?
-  event             Event?                 @relation(fields: [eventId], references: [eventId], onDelete: Cascade)
-  user              User                   @relation(fields: [userId], references: [userId])
-  verifier          User?                  @relation("AttendanceVerification", fields: [verifiedBy], references: [userId])
-  Instructor        Instructor[]           @relation("AttendanceToInstructor")
-  Student           Student[]              @relation("AttendanceToStudent")
-  SubjectSchedule   SubjectSchedule[]      @relation("AttendanceToSubjectSchedule")
+  attendanceId            Int                      @id @default(autoincrement())
+  eventId                 Int?
+  userId                  Int
+  userRole                Role
+  status                  AttendanceStatus
+  attendanceType          AttendanceType
+  verification            AttendanceVerification   @default(PENDING)
+  timestamp               DateTime                 @default(now())
+  checkOutTime            DateTime?
+  duration                Int?
+  notes                   String?
+  deviceInfo              Json?
+  location                String?
+  verifiedBy              Int?
+  verificationTime        DateTime?
+  verificationNotes       String?
+  academicYear            String?
+  instructorId            Int?
+  originalStatus          AttendanceStatus?
+  overrideBy              Int?
+  overrideReason          String?
+  rfidLogId               Int?                     @unique
+  semesterId              Int?
+  studentId               Int?
+  subjectSchedId          Int?
+  event                   Event?                   @relation(fields: [eventId], references: [eventId], onDelete: Cascade)
+  instructor              Instructor?              @relation("InstructorToAttendance", fields: [instructorId], references: [instructorId])
+  overrideUser            User?                    @relation("AttendanceOverride", fields: [overrideBy], references: [userId])
+  rfidLog                 RFIDLogs?                @relation(fields: [rfidLogId], references: [logsId])
+  semester                Semester?                @relation("SemesterToAttendance", fields: [semesterId], references: [semesterId])
+  student                 Student?                 @relation("StudentToAttendance", fields: [studentId], references: [studentId])
+  subjectSchedule         SubjectSchedule?         @relation("SubjectScheduleToAttendance", fields: [subjectSchedId], references: [subjectSchedId])
+  user                    User                     @relation(fields: [userId], references: [userId])
+  verifier                User?                    @relation("AttendanceVerification", fields: [verifiedBy], references: [userId])
+  attendanceNotifications AttendanceNotification[]
 
+  @@unique([studentId, subjectSchedId, timestamp])
   @@index([userId, timestamp])
   @@index([eventId, timestamp])
-  @@index([scheduleId, timestamp])
+  @@index([subjectSchedId, timestamp])
+  @@index([studentId])
+  @@index([instructorId])
+  @@index([semesterId])
   @@index([status, verification])
   @@index([attendanceType, timestamp])
+  @@index([rfidLogId])
+  @@index([studentId, subjectSchedId, timestamp])
 }
 
 model Event {
@@ -431,6 +541,7 @@ model Event {
   imageUrl             String?
   contactEmail         String?
   contactPhone         String?
+  deletedAt            DateTime?    // Soft delete field
   createdAt            DateTime     @default(now())
   updatedAt            DateTime     @updatedAt
   Attendance           Attendance[]
@@ -440,24 +551,26 @@ model Event {
   @@index([eventType])
   @@index([status])
   @@index([createdBy, status])
+  @@index([deletedAt])
 }
 
 model RFIDTags {
-  tagId            Int         @id @default(autoincrement())
-  tagNumber        String      @unique
+  tagId            Int                    @id @default(autoincrement())
+  tagNumber        String                 @unique
   tagType          TagType
-  assignedAt       DateTime    @default(now())
+  assignedAt       DateTime               @default(now())
   lastUsed         DateTime?
   expiresAt        DateTime?
-  status           RFIDStatus  @default(ACTIVE)
+  status           RFIDStatus             @default(ACTIVE)
   notes            String?
-  studentId        Int?        @unique
-  instructorId     Int?        @unique
+  studentId        Int?                   @unique
+  instructorId     Int?                   @unique
   assignedBy       Int?
   assignmentReason String?
-  assignedByUser   User?       @relation("TagAssignment", fields: [assignedBy], references: [userId])
-  instructor       Instructor? @relation(fields: [instructorId], references: [instructorId])
-  student          Student?    @relation(fields: [studentId], references: [studentId])
+  assignmentLogs   RFIDTagAssignmentLog[]
+  assignedByUser   User?                  @relation("TagAssignment", fields: [assignedBy], references: [userId])
+  instructor       Instructor?            @relation(fields: [instructorId], references: [instructorId])
+  student          Student?               @relation(fields: [studentId], references: [studentId])
 
   @@unique([studentId, instructorId], name: "unique_student_or_instructor")
   @@index([status])
@@ -489,23 +602,26 @@ model RFIDReader {
 }
 
 model RFIDLogs {
-  logsId     Int        @id @default(autoincrement())
-  rfidTag    String
-  readerId   Int
-  scanType   ScanType
-  scanStatus ScanStatus @default(SUCCESS)
-  location   String
-  timestamp  DateTime   @default(now())
-  userId     Int
-  userRole   Role
-  deviceInfo Json?
-  ipAddress  String?
-  reader     RFIDReader @relation(fields: [readerId], references: [readerId])
-  user       User       @relation(fields: [userId], references: [userId])
+  logsId       Int         @id @default(autoincrement())
+  rfidTag      String
+  readerId     Int
+  scanType     ScanType
+  scanStatus   ScanStatus  @default(SUCCESS)
+  location     String
+  timestamp    DateTime    @default(now())
+  userId       Int
+  userRole     Role
+  deviceInfo   Json?
+  ipAddress    String?
+  attendanceId Int?
+  rfidLog      Attendance?
+  reader       RFIDReader  @relation(fields: [readerId], references: [readerId])
+  user         User        @relation(fields: [userId], references: [userId])
 
   @@index([rfidTag, timestamp])
   @@index([userId, userRole])
   @@index([readerId, timestamp])
+  @@index([attendanceId])
 }
 
 model RFIDReaderLogs {
@@ -584,6 +700,235 @@ model Announcement {
   subject        Subjects?   @relation(fields: [subjectId], references: [subjectId], map: "Announcement_subjectId_fkey")
 
   @@index([createdby, userType])
+}
+
+model RFIDTagAssignmentLog {
+  id              Int      @id @default(autoincrement())
+  tagId           Int
+  action          String
+  assignedToType  String?
+  assignedToId    Int?
+  assignedToName  String?
+  performedBy     Int?
+  performedByName String?
+  timestamp       DateTime @default(now())
+  notes           String?
+  RFIDTag         RFIDTags @relation(fields: [tagId], references: [tagId])
+}
+
+model AttendanceNotification {
+  notificationId Int                @id @default(autoincrement())
+  studentId      Int
+  attendanceId   Int?
+  type           NotificationType
+  message        String
+  recipient      RecipientType
+  method         NotificationMethod
+  status         NotificationStatus
+  sentAt         DateTime?
+  createdAt      DateTime           @default(now())
+  attendance     Attendance?        @relation(fields: [attendanceId], references: [attendanceId])
+  student        Student            @relation(fields: [studentId], references: [studentId])
+}
+
+model PasswordResetToken {
+  id        Int      @id @default(autoincrement())
+  token     String   @unique
+  userId    Int
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  User      User     @relation(fields: [userId], references: [userId], onDelete: Cascade)
+}
+
+model SystemBackup {
+  id            Int                 @id @default(autoincrement())
+  name          String
+  description   String?
+  type          BackupType
+  size          String
+  status        BackupStatus        @default(IN_PROGRESS)
+  location      BackupLocation
+  isEncrypted   Boolean             @default(true)
+  retentionDays Int                 @default(30)
+  filePath      String?
+  checksum      String?
+  createdBy     Int
+  createdAt     DateTime            @default(now())
+  completedAt   DateTime?
+  errorMessage  String?
+  backupLogs    BackupLog[]
+  scheduleLogs  BackupScheduleLog[]
+  restorePoints RestorePoint[]
+  createdByUser User                @relation(fields: [createdBy], references: [userId])
+
+  @@index([status])
+  @@index([type])
+  @@index([createdAt])
+  @@index([createdBy])
+}
+
+model RestorePoint {
+  id            Int           @id @default(autoincrement())
+  name          String
+  description   String?
+  backupId      Int
+  status        RestoreStatus @default(AVAILABLE)
+  createdBy     Int
+  createdAt     DateTime      @default(now())
+  restoredAt    DateTime?
+  errorMessage  String?
+  backup        SystemBackup  @relation(fields: [backupId], references: [id], onDelete: Cascade)
+  createdByUser User          @relation(fields: [createdBy], references: [userId])
+
+  @@index([backupId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model BackupLog {
+  id            Int           @id @default(autoincrement())
+  backupId      Int?
+  action        String
+  status        String
+  message       String?
+  details       Json?
+  createdBy     Int
+  createdAt     DateTime      @default(now())
+  backup        SystemBackup? @relation(fields: [backupId], references: [id])
+  createdByUser User          @relation(fields: [createdBy], references: [userId])
+
+  @@index([backupId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+model BackupSettings {
+  id                Int      @id @default(autoincrement())
+  autoBackup        Boolean  @default(true)
+  backupFrequency   String   @default("WEEKLY")
+  retentionDays     Int      @default(30)
+  encryptionEnabled Boolean  @default(true)
+  cloudStorage      Boolean  @default(false)
+  compressionLevel  String   @default("MEDIUM")
+  maxBackupSize     Int      @default(10)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([autoBackup])
+  @@index([backupFrequency])
+}
+
+model BackupSchedule {
+  id             Int                 @id @default(autoincrement())
+  name           String
+  description    String?
+  frequency      ScheduleFrequency
+  interval       Int                 @default(1)
+  timeOfDay      String              @default("02:00")
+  daysOfWeek     DayOfWeek[]         @default([])
+  dayOfMonth     Int?
+  isActive       Boolean             @default(true)
+  lastRun        DateTime?
+  nextRun        DateTime?
+  totalRuns      Int                 @default(0)
+  successfulRuns Int                 @default(0)
+  failedRuns     Int                 @default(0)
+  backupType     BackupType          @default(FULL)
+  location       BackupLocation      @default(LOCAL)
+  isEncrypted    Boolean             @default(true)
+  retentionDays  Int                 @default(30)
+  createdBy      Int
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  createdByUser  User                @relation(fields: [createdBy], references: [userId])
+  scheduleLogs   BackupScheduleLog[]
+
+  @@index([isActive])
+  @@index([nextRun])
+  @@index([createdBy])
+}
+
+model BackupScheduleLog {
+  id            Int               @id @default(autoincrement())
+  scheduleId    Int
+  backupId      Int?
+  status        ScheduleLogStatus @default(PENDING)
+  scheduledAt   DateTime
+  startedAt     DateTime?
+  completedAt   DateTime?
+  errorMessage  String?
+  createdBy     Int
+  createdAt     DateTime          @default(now())
+  backup        SystemBackup?     @relation(fields: [backupId], references: [id])
+  createdByUser User              @relation(fields: [createdBy], references: [userId])
+  schedule      BackupSchedule    @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+
+  @@index([scheduleId])
+  @@index([scheduledAt])
+  @@index([backupId])
+}
+
+model SecuritySettings {
+  id                          Int      @id @default(1)
+  minPasswordLength           Int
+  requireUppercase            Boolean
+  requireLowercase            Boolean
+  requireNumbers              Boolean
+  requireSpecialChars         Boolean
+  passwordExpiryDays          Int
+  sessionTimeoutMinutes       Int
+  maxConcurrentSessions       Int
+  forceLogoutOnPasswordChange Boolean
+  twoFactorEnabled            Boolean
+  twoFactorMethod             String
+  backupCodesEnabled          Boolean
+  maxLoginAttempts            Int
+  lockoutDurationMinutes      Int
+  ipWhitelistEnabled          Boolean
+  ipWhitelist                 String[]
+  auditLoggingEnabled         Boolean
+  loginNotificationsEnabled   Boolean
+  suspiciousActivityAlerts    Boolean
+  sslEnforcement              Boolean
+  apiRateLimiting             Boolean
+  dataEncryptionAtRest        Boolean
+}
+
+model SecurityLog {
+  id          Int       @id @default(autoincrement())
+  timestamp   DateTime  @default(now())
+  eventType   String
+  severity    String
+  description String
+  userId      Int?
+  ipAddress   String?
+  userAgent   String?
+  details     Json?
+  resolved    Boolean   @default(false)
+  resolvedBy  Int?
+  resolvedAt  DateTime?
+  resolver    User?     @relation("SecurityLogResolver", fields: [resolvedBy], references: [userId])
+  user        User?     @relation(fields: [userId], references: [userId])
+}
+
+model SecurityAlert {
+  id             String    @id @default(cuid())
+  type           String
+  title          String
+  message        String
+  timestamp      DateTime  @default(now())
+  userId         Int?
+  ipAddress      String?
+  resolved       Boolean   @default(false)
+  resolvedBy     Int?
+  resolvedAt     DateTime?
+  actionRequired Boolean   @default(false)
+  resolver       User?     @relation("SecurityAlertResolver", fields: [resolvedBy], references: [userId])
+  user           User?     @relation(fields: [userId], references: [userId])
+
+  @@index([type])
+  @@index([resolved])
+  @@index([timestamp])
 }
 
 enum UserStatus {
@@ -682,10 +1027,11 @@ enum AttendanceVerification {
 }
 
 enum Role {
+  SUPER_ADMIN
   ADMIN
-  TEACHER
+  DEPARTMENT_HEAD
+  INSTRUCTOR
   STUDENT
-  GUARDIAN
 }
 
 enum StudentType {
@@ -721,11 +1067,6 @@ enum SemesterType {
   THIRD_SEMESTER
 }
 
-enum SectionType {
-  LECTURE
-  LAB
-}
-
 enum SectionStatus {
   ACTIVE
   INACTIVE
@@ -734,6 +1075,66 @@ enum SectionStatus {
 enum CourseType {
   MANDATORY
   ELECTIVE
+}
+
+// Additional admin functionality models
+model Backup {
+  id                  Int      @id @default(autoincrement())
+  name                String
+  description         String?
+  type                String
+  status              String   @default("PENDING")
+  size                String?
+  location            String   @default("LOCAL")
+  filePath            String?
+  createdBy           Int
+  createdAt           DateTime @default(now())
+  completedAt         DateTime?
+  errorMessage        String?
+  restorePointsCount  Int      @default(0)
+  logsCount           Int      @default(0)
+  retentionDays       Int      @default(30)
+  user                User     @relation(fields: [createdBy], references: [userId])
+
+  @@index([createdAt])
+  @@map("backups")
+}
+
+model Notification {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  title     String
+  message   String?
+  type      String   @default("SYSTEM")
+  priority  String   @default("NORMAL")
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [userId])
+
+  @@index([userId])
+  @@map("notifications")
+}
+
+model Permission {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  description String?
+  category    String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  @@map("permissions")
+}
+
+model AccessRule {
+  id        Int      @id @default(autoincrement())
+  name      String
+  type      String
+  rules     Json?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@map("access_rules")
 }
 
 enum DayOfWeek {
@@ -775,6 +1176,7 @@ enum ReportType {
 enum Status {
   ACTIVE
   INACTIVE
+  ARCHIVED
 }
 
 enum RFIDStatus {
@@ -887,4 +1289,86 @@ enum EventStatus {
   COMPLETED
   CANCELLED
   POSTPONED
+}
+
+enum NotificationType {
+  ABSENCE
+  TARDINESS
+  IMPROVEMENT
+  CONCERN
+}
+
+enum RecipientType {
+  PARENT
+  STUDENT
+  BOTH
+}
+
+enum NotificationMethod {
+  EMAIL
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+enum BackupType {
+  FULL
+  INCREMENTAL
+  DIFFERENTIAL
+}
+
+enum BackupStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum BackupLocation {
+  LOCAL
+  CLOUD
+  HYBRID
+}
+
+enum RestoreStatus {
+  AVAILABLE
+  RESTORING
+  FAILED
+  COMPLETED
+}
+
+enum ScheduleFrequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+  CUSTOM
+}
+
+enum ScheduleLogStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum RoomBuilding {
+  BuildingA
+  BuildingB
+  BuildingC
+  BuildingD
+  BuildingE
+}
+
+enum RoomFloor {
+  F1
+  F2
+  F3
+  F4
+  F5
+  F6
 }

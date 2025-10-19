@@ -129,7 +129,7 @@ const menuConfig: Record<Role, MenuSection[]> = {
     {
       title: "SCHEDULE",
       items: [
-        { icon: <Calendar className="w-5 h-5" />, label: "My Schedule", href: "/list/schedule" },
+        { icon: <Calendar className="w-5 h-5" />, label: "My Schedule", href: "/list/Schedules" },
       ],
     },
     {
@@ -198,7 +198,7 @@ const menuConfig: Record<Role, MenuSection[]> = {
     {
       title: "SCHEDULE",
       items: [
-        { icon: <Calendar className="w-5 h-5" />, label: "Weekly Timetable", href: "/list/schedule" },
+      { icon: <Calendar className="w-5 h-5" />, label: "My Schedule", href: "/list/Schedules" },
       ],
     },
     {

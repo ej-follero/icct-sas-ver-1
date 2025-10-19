@@ -139,7 +139,7 @@ export default function InstructorDetailPage() {
                 <div className="text-base text-gray-900 font-medium">{instructor.departmentId}</div>
               </div>
             </div>
-            {/* RFID Information */}
+ 
             <div className="bg-gray-50 rounded-xl p-6">
               <div className="flex items-center gap-2 mb-4 text-blue-700 font-semibold">
                 <QrCode className="w-5 h-5" /> RFID Information
@@ -153,7 +153,7 @@ export default function InstructorDetailPage() {
                 <div className="text-base text-gray-900 font-medium">{instructor.rfidtagNumber}</div>
               </div>
             </div>
-            {/* Additional Information */}
+
             <div className="bg-gray-50 rounded-xl p-6 md:col-span-2">
               <div className="flex items-center gap-2 mb-4 text-blue-700 font-semibold">
                 <Clock className="w-5 h-5" /> Additional Information
@@ -172,7 +172,7 @@ export default function InstructorDetailPage() {
           </div>
         </CardContent>
       </Card>
-      {/* Delete Confirmation Dialog */}
+
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent>
           <DialogHeader>

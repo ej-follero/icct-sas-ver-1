@@ -45,7 +45,6 @@ interface QuickAction {
   color: string;
 }
 
-// Mock data for demonstration
 const mockStats: MockStats = {
   students: { total: 1234, change: 12 },
   classes: { total: 45, active: 8 },

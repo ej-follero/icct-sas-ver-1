@@ -3,7 +3,8 @@
 import { UserGender, InstructorType, Status } from "@/types/enums";
 import { Teacher } from "@/types/teacher";
 
-export let role = "admin";
+export let role = "teacher";
+
 
 type StudentType = "regular" | "irregular" | "transferee";
 
@@ -49,7 +50,7 @@ export const instructorsData: Teacher[] = [
     createdAt: new Date(),
     updatedAt: new Date()
   },
-  // Add more mock data as needed
+
 ];
 
 export const teachersData = [
@@ -992,8 +993,6 @@ export const announcementsData = [
   },
 ];
 
-
-// YOU SHOULD CHANGE THE DATES OF THE EVENTS TO THE CURRENT DATE TO SEE THE EVENTS ON THE CALENDAR
 export const calendarEvents = [
   {
     id: 1,

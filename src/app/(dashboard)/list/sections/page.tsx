@@ -37,7 +37,6 @@ const sectionSchema = z.object({
 
 type Section = z.infer<typeof sectionSchema>;
 
-// Update the form schema to match the form fields
 const sectionFormSchema = z.object({
   sectionName: z.string().min(1, "Section name is required"),
   sectionType: z.enum(["REGULAR", "IRREGULAR", "SUMMER"]),
@@ -53,7 +52,6 @@ const sectionFormSchema = z.object({
 
 type SectionFormData = z.infer<typeof sectionFormSchema>;
 
-// Mock data - replace with actual API calls later
 const initialSections: Section[] = [
   {
     sectionId: 1,
