@@ -13,7 +13,7 @@ import autoTable from "jspdf-autotable";
 import { toast } from "sonner";
 import Fuse from "fuse.js";
 import React from "react";
-import { Settings, Plus, Trash2, Printer, Loader2, MoreHorizontal, Upload, List, Columns3, ChevronDown, ChevronUp, UserCheck, UserX, Users, UserPlus, RefreshCw, Download, Search, Bell, Building2, RotateCcw, Eye, Pencil, BookOpen, GraduationCap, BadgeInfo, X, ChevronRight, Hash, Tag, Layers, FileText, Clock, Info, UserCheck as UserCheckIcon, Archive, Shield, Mail, Phone, Key, Calendar, Activity, AlertTriangle, CheckCircle } from "lucide-react";
+import { Settings, Plus, Trash2, Printer, Loader2, MoreHorizontal, Upload, List, Columns3, ChevronDown, ChevronUp, UserCheck, UserX, Users, UserPlus, RefreshCw, Download, Search, Bell, Building2, RotateCcw, Eye, Pencil, BookOpen, GraduationCap, BadgeInfo, X, ChevronRight, Hash, Tag, Layers, FileText, Clock, Info, UserCheck as UserCheckIcon, Archive, Shield, Mail, Phone, Key, Calendar, Activity, AlertTriangle, CheckCircle, MapPin, Briefcase } from "lucide-react";
 import { ImportDialog } from "@/components/reusable/Dialogs/ImportDialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ExportDialog } from '@/components/reusable/Dialogs/ExportDialog';
@@ -1165,7 +1165,7 @@ export default function GuardiansListPage() {
                   getItemId={(item) => item.guardianId.toString()}
                   getItemName={(item) => `${item.firstName} ${item.lastName}`}
                   getItemCode={(item) => item.guardianId.toString()}
-                  getItemStatus={(item) => item.status as 'ACTIVE' | 'INACTIVE'}
+                  getItemStatus={(item) => item.status.toLowerCase() as 'active' | 'inactive'}
                   getItemDescription={(item) => item.email}
                   getItemDetails={(item) => [
                     { label: 'Phone', value: item.phoneNumber },
