@@ -44,7 +44,6 @@
     "@babel/runtime": "^7.28.4",
     "@faker-js/faker": "^9.9.0",
     "@hookform/resolvers": "^3.3.4",
-    "@next/swc-win32-x64-msvc": "^15.5.3",
     "@prisma/client": "^6.8.2",
     "@prisma/extension-accelerate": "^2.0.1",
     "@radix-ui/react-avatar": "^1.0.4",

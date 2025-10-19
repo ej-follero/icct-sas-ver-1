@@ -1,6 +1,6 @@
 {
-  "buildCommand": "npm install --legacy-peer-deps && npm run build",
-  "installCommand": "npm install --legacy-peer-deps",
+  "buildCommand": "npm ci --legacy-peer-deps && npm run build",
+  "installCommand": "npm ci --legacy-peer-deps",
   "framework": "nextjs",
   "functions": {
     "src/app/api/**/*.ts": {
@@ -14,5 +14,6 @@
     "env": {
       "NODE_ENV": "production"
     }
-  }
+  },
+  "ignoreCommand": "git diff --quiet HEAD^ HEAD ./"
 }
