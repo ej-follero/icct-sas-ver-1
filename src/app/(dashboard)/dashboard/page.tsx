@@ -14,6 +14,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
@@ -226,7 +227,7 @@ const DepartmentPerformanceChart: React.FC<{ data: DashboardData['charts']['depa
     <Card className="h-full">
       <CardHeader className="pb-3">
         <div className="flex items-center gap-2">
-          <Building2 className="w-5 h-5 text-green-600" />
+          <Building2 className="w-5 h-5 text-blue-600" />
           <h3 className="text-lg font-semibold">Department Performance</h3>
         </div>
       </CardHeader>
@@ -268,7 +269,7 @@ const RFIDActivityChart: React.FC<{ data: DashboardData['charts']['rfidActivity'
     <Card className="h-full">
       <CardHeader className="pb-3">
         <div className="flex items-center gap-2">
-          <Wifi className="w-5 h-5 text-purple-600" />
+          <Wifi className="w-5 h-5 text-blue-600" />
           <h3 className="text-lg font-semibold">RFID System Status</h3>
         </div>
       </CardHeader>
@@ -399,7 +400,7 @@ const SystemHealthWidget: React.FC<{ health: DashboardData['systemHealth'] }> = 
     <Card className="h-full">
       <CardHeader className="pb-3">
         <div className="flex items-center gap-2">
-          <Shield className="w-5 h-5 text-green-600" />
+          <Shield className="w-5 h-5 text-blue-600" />
           <h3 className="text-lg font-semibold">System Health</h3>
         </div>
       </CardHeader>
@@ -432,6 +433,8 @@ export default function AdminDashboardPage() {
   const [period, setPeriod] = useState('7d');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showNotificationDialog, setShowNotificationDialog] = useState(false);
+  const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false);
+  const [autoRefreshIntervalMs, setAutoRefreshIntervalMs] = useState(30000); // default 30s
   const { data, loading, error, refetch } = useDashboardData(period);
 
   const handleRefresh = useCallback(async () => {
@@ -446,17 +449,34 @@ export default function AdminDashboardPage() {
     }
   }, [refetch]);
 
-  // Quick Actions handlers
-  const handleAddStudent = () => {
-    router.push('/list/attendance/students');
+  // Auto refresh effect
+  useEffect(() => {
+    if (!autoRefreshEnabled) return;
+    const id = setInterval(() => {
+      refetch();
+    }, autoRefreshIntervalMs);
+    return () => clearInterval(id);
+  }, [autoRefreshEnabled, autoRefreshIntervalMs, refetch]);
+
+  // Quick Actions handlers (admin-focused)
+  const handleManageUsers = () => {
+    router.push('/list/users');
   };
 
-  const handleMarkAttendance = () => {
-    router.push('/list/attendance/students');
+  const handleManageSchedules = () => {
+    router.push('/list/schedules');
   };
 
-  const handleAddCourse = () => {
+  const handleManageSubjects = () => {
+    router.push('/list/subjects');
+  };
+
+  const handleManageCourses = () => {
     router.push('/list/courses');
+  };
+
+  const handleLiveAttendance = () => {
+    router.push('/list/live-attendance');
   };
 
   const handleGenerateReports = () => {
@@ -468,8 +488,7 @@ export default function AdminDashboardPage() {
   };
 
   const handleSystemSettings = () => {
-    // Navigate to RFID config as the closest settings page
-    router.push('/list/rfid/config');
+    router.push('/settings');
   };
 
   if (loading) {
@@ -532,7 +551,7 @@ export default function AdminDashboardPage() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Select value={period} onValueChange={setPeriod}>
-              <SelectTrigger className="w-40">
+              <SelectTrigger className="w-40 rounded">
                 <SelectValue placeholder="Select period" />
               </SelectTrigger>
               <SelectContent>
@@ -546,15 +565,26 @@ export default function AdminDashboardPage() {
               Last updated: {new Date(data.metadata.generatedAt).toLocaleString()}
             </div>
           </div>
-          <Button 
-            onClick={handleRefresh} 
-            disabled={isRefreshing}
-            variant="outline"
-            size="sm"
-          >
-            <RefreshCw className={`w-4 h-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <Switch checked={autoRefreshEnabled} onCheckedChange={setAutoRefreshEnabled} />
+              <span className="text-sm text-gray-600">Auto refresh</span>
+            </div>
+            <Select
+              value={String(autoRefreshIntervalMs)}
+              onValueChange={(v) => setAutoRefreshIntervalMs(Number(v))}
+            >
+              <SelectTrigger className="w-32 rounded">
+                <SelectValue placeholder="Interval" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="15000">Every 15s</SelectItem>
+                <SelectItem value="30000">Every 30s</SelectItem>
+                <SelectItem value="60000">Every 1m</SelectItem>
+                <SelectItem value="300000">Every 5m</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         {/* Summary Cards */}
@@ -646,25 +676,39 @@ export default function AdminDashboardPage() {
           }
           actionCards={[
             {
-              id: 'add-student',
-              label: 'Add Student',
-              description: 'Register new student',
-              icon: <UserPlus className="w-5 h-5 text-white" />,
-              onClick: handleAddStudent
+              id: 'manage-users',
+              label: 'Manage Users',
+              description: 'View and manage all users',
+              icon: <Users className="w-5 h-5 text-white" />,
+              onClick: handleManageUsers
             },
             {
-              id: 'mark-attendance',
-              label: 'Mark Attendance',
-              description: 'Manual attendance entry',
-              icon: <CalendarCheck className="w-5 h-5 text-white" />,
-              onClick: handleMarkAttendance
+              id: 'manage-schedules',
+              label: 'Manage Schedules',
+              description: 'View and edit class schedules',
+              icon: <Calendar className="w-5 h-5 text-white" />,
+              onClick: handleManageSchedules
             },
             {
-              id: 'add-course',
-              label: 'Add Course',
-              description: 'Create new course',
+              id: 'manage-subjects',
+              label: 'Manage Subjects',
+              description: 'Create and update subjects',
               icon: <BookOpen className="w-5 h-5 text-white" />,
-              onClick: handleAddCourse
+              onClick: handleManageSubjects
+            },
+            {
+              id: 'manage-courses',
+              label: 'Manage Courses',
+              description: 'Create and update courses',
+              icon: <GraduationCap className="w-5 h-5 text-white" />,
+              onClick: handleManageCourses
+            },
+            {
+              id: 'live-attendance',
+              label: 'Live Attendance',
+              description: 'Monitor real-time attendance',
+              icon: <Wifi className="w-5 h-5 text-white" />,
+              onClick: handleLiveAttendance
             },
             {
               id: 'generate-reports',

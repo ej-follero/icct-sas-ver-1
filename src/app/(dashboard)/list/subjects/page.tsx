@@ -1109,15 +1109,56 @@ export default function SubjectsPage() {
     checkSubjectDeletable(subject);
   };
 
-  // Handler for importing subjects (stub)
+  // Handler for importing subjects
   const handleImportSubjects = async (data: any[]) => {
-    // Simulate API call or implement real import logic
-    await new Promise(res => setTimeout(res, 1000));
-    toast.success(`${data.length} subjects imported (stub).`);
-    setImportDialogOpen(false);
-    // Optionally refresh subjects list
-    refreshSubjects();
-    return { success: data.length, failed: 0, errors: [] };
+    try {
+      const response = await fetch('/api/subjects/bulk', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          records: data,
+          options: {
+            skipDuplicates: true,
+            updateExisting: false,
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to import subjects');
+      }
+
+      const result = await response.json();
+      toast.success(`Successfully imported ${result.results.success} subjects`);
+      
+      if (result.results.failed > 0) {
+        toast.warning(`${result.results.failed} subjects failed to import`);
+      }
+      
+      if (result.results.duplicates > 0) {
+        toast.info(`${result.results.duplicates} duplicate subjects skipped`);
+      }
+
+      setImportDialogOpen(false);
+      refreshSubjects();
+      
+      return {
+        success: result.results.success,
+        failed: result.results.failed,
+        errors: result.results.errors
+      };
+    } catch (error: any) {
+      console.error('Error importing subjects:', error);
+      toast.error(error.message || 'Failed to import subjects');
+      return {
+        success: 0,
+        failed: data.length,
+        errors: [error.message || 'Unknown error']
+      };
+    }
   };
 
   // --- Step 1: Page Structure & Header ---

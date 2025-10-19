@@ -54,7 +54,7 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuIte
 import { Dialog, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Plus, Search, Filter, SortAsc, FileDown, Printer, Eye, Pencil, Trash2, School, CheckSquare, Square, ChevronUp, ChevronDown, Loader2, Inbox, RefreshCw, Users, UserCheck, UserX, UserPlus, Upload, Columns3, List, Settings, Bell, Download, RotateCcw } from "lucide-react";
+import { Plus, Search, Filter, SortAsc, FileDown, Printer, Eye, Pencil, Trash2, School, CheckSquare, Square, ChevronUp, ChevronDown, Loader2, Inbox, RefreshCw, Users, UserCheck, UserX, UserPlus, Upload, Columns3, List, Settings, Bell, Download, RotateCcw, FileText, BookOpen } from "lucide-react";
 import TableSearch from "@/components/reusable/Search/TableSearch";
 import { Pagination } from "@/components/Pagination";
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
@@ -80,6 +80,7 @@ import { TablePagination } from '@/components/reusable/Table/TablePagination';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { VisibleColumnsDialog, ColumnOption } from '@/components/reusable/Dialogs/VisibleColumnsDialog';
 import { ImportDialog } from '@/components/reusable/Dialogs/ImportDialog';
+import { BulkAssignStudentsDialog } from '@/components/reusable/Dialogs/BulkAssignStudentsDialog';
 import { generateBulkActions } from '@/lib/utils';
 
 // Section data model (mirroring backend API response)
@@ -281,6 +282,15 @@ function SectionExpandedRowTabs({ sectionId, colSpan }: { sectionId: number, col
   const [subjects, setSubjects] = React.useState<any[] | null>(null);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [sectionName, setSectionName] = React.useState<string>('');
+
+  // Fetch section name
+  React.useEffect(() => {
+    fetch(`/api/sections/${sectionId}`)
+      .then(res => res.json())
+      .then(data => setSectionName(data.sectionName || `Section ${sectionId}`))
+      .catch(() => setSectionName(`Section ${sectionId}`));
+  }, [sectionId]);
 
   React.useEffect(() => {
     setError(null);
@@ -299,6 +309,147 @@ function SectionExpandedRowTabs({ sectionId, colSpan }: { sectionId: number, col
         .finally(() => setLoading(false));
     }
   }, [tab, sectionId]);
+
+  // Export functions
+  const exportStudents = (format: 'csv' | 'excel' | 'pdf' = 'csv') => {
+    if (!students || students.length === 0) {
+      toast.error('No students to export');
+      return;
+    }
+
+    if (format === 'csv') {
+      const csvContent = [
+        ['Name', 'ID Number', 'Year Level', 'Status', 'Email'],
+        ...students.map(s => [
+          `${s.firstName} ${s.lastName}`,
+          s.studentIdNumber,
+          s.yearLevel,
+          s.status,
+          s.email
+        ])
+      ].map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
+
+      const blob = new Blob([csvContent], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${sectionName}_students_${new Date().toISOString().split('T')[0]}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } else if (format === 'excel') {
+      const workbook = XLSX.utils.book_new();
+      const studentsData = students.map(s => ({
+        'Student ID': s.studentIdNumber,
+        'Full Name': `${s.firstName} ${s.lastName}`,
+        'First Name': s.firstName,
+        'Last Name': s.lastName,
+        'Year Level': s.yearLevel,
+        'Status': s.status,
+        'Email': s.email,
+        'Phone': s.phoneNumber || '',
+        'Department': s.departmentName || ''
+      }));
+      const sheet = XLSX.utils.json_to_sheet(studentsData);
+      XLSX.utils.book_append_sheet(workbook, sheet, 'Students');
+      XLSX.writeFile(workbook, `${sectionName}_students_${new Date().toISOString().split('T')[0]}.xlsx`);
+    } else if (format === 'pdf') {
+      const doc = new jsPDF();
+      doc.setFontSize(16);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(12, 37, 86);
+      doc.text(`${sectionName} - Students`, doc.internal.pageSize.width / 2, 20, { align: 'center' });
+      
+      const studentsData = students.map(s => [
+        s.studentIdNumber,
+        `${s.firstName} ${s.lastName}`,
+        s.yearLevel.toString(),
+        s.status,
+        s.email
+      ]);
+
+      autoTable(doc, {
+        head: [['ID Number', 'Full Name', 'Year Level', 'Status', 'Email']],
+        body: studentsData,
+        startY: 30,
+        styles: { fontSize: 8 },
+        headStyles: { fillColor: [12, 37, 86], halign: 'center', textColor: [255, 255, 255] },
+        bodyStyles: { halign: 'left' }
+      });
+
+      doc.save(`${sectionName}_students_${new Date().toISOString().split('T')[0]}.pdf`);
+    }
+    
+    toast.success(`Students exported as ${format.toUpperCase()}`);
+  };
+
+  const exportSubjects = (format: 'csv' | 'excel' | 'pdf' = 'csv') => {
+    if (!subjects || subjects.length === 0) {
+      toast.error('No subjects to export');
+      return;
+    }
+
+    if (format === 'csv') {
+      const csvContent = [
+        ['Code', 'Name', 'Units', 'Type', 'Status'],
+        ...subjects.map(s => [
+          s.code,
+          s.name,
+          s.units,
+          s.type,
+          s.status
+        ])
+      ].map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
+
+      const blob = new Blob([csvContent], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${sectionName}_subjects_${new Date().toISOString().split('T')[0]}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } else if (format === 'excel') {
+      const workbook = XLSX.utils.book_new();
+      const subjectsData = subjects.map(s => ({
+        'Subject Code': s.code,
+        'Subject Name': s.name,
+        'Units': s.units,
+        'Type': s.type,
+        'Status': s.status,
+        'Description': s.description || '',
+        'Prerequisites': s.prerequisites || ''
+      }));
+      const sheet = XLSX.utils.json_to_sheet(subjectsData);
+      XLSX.utils.book_append_sheet(workbook, sheet, 'Subjects');
+      XLSX.writeFile(workbook, `${sectionName}_subjects_${new Date().toISOString().split('T')[0]}.xlsx`);
+    } else if (format === 'pdf') {
+      const doc = new jsPDF();
+      doc.setFontSize(16);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(12, 37, 86);
+      doc.text(`${sectionName} - Subjects`, doc.internal.pageSize.width / 2, 20, { align: 'center' });
+      
+      const subjectsData = subjects.map(s => [
+        s.code,
+        s.name,
+        s.units.toString(),
+        s.type,
+        s.status
+      ]);
+
+      autoTable(doc, {
+        head: [['Code', 'Subject Name', 'Units', 'Type', 'Status']],
+        body: subjectsData,
+        startY: 30,
+        styles: { fontSize: 8 },
+        headStyles: { fillColor: [12, 37, 86], halign: 'center', textColor: [255, 255, 255] },
+        bodyStyles: { halign: 'left' }
+      });
+
+      doc.save(`${sectionName}_subjects_${new Date().toISOString().split('T')[0]}.pdf`);
+    }
+    
+    toast.success(`Subjects exported as ${format.toUpperCase()}`);
+  };
 
   // Table headers and rows for each tab
   let headers: string[] = [];
@@ -343,15 +494,83 @@ function SectionExpandedRowTabs({ sectionId, colSpan }: { sectionId: number, col
     <td colSpan={colSpan} className="p-0">
       <div className="bg-blue-50 p-4">
         {/* Tabs */}
-        <div className="flex gap-2 justify-end mb-4">
-          <button
-            className={`px-5 py-2 rounded-t-lg font-semibold transition-all duration-150 ${tab === 'students' ? 'bg-white shadow text-blue-900 border-b-2 border-blue-600' : 'bg-blue-50 text-blue-700 hover:bg-blue-100'}`}
-            onClick={() => setTab('students')}
-          >Students</button>
-          <button
-            className={`px-5 py-2 rounded-t-lg font-semibold transition-all duration-150 ${tab === 'subjects' ? 'bg-white shadow text-blue-900 border-b-2 border-blue-600' : 'bg-blue-50 text-blue-700 hover:bg-blue-100'}`}
-            onClick={() => setTab('subjects')}
-          >Subjects</button>
+        <div className="flex gap-2 justify-between mb-4">
+          <div className="flex gap-2">
+            <button
+              className={`px-5 py-2 rounded-t-lg font-semibold transition-all duration-150 ${tab === 'students' ? 'bg-white shadow text-blue-900 border-b-2 border-blue-600' : 'bg-blue-50 text-blue-700 hover:bg-blue-100'}`}
+              onClick={() => setTab('students')}
+            >Students</button>
+            <button
+              className={`px-5 py-2 rounded-t-lg font-semibold transition-all duration-150 ${tab === 'subjects' ? 'bg-white shadow text-blue-900 border-b-2 border-blue-600' : 'bg-blue-50 text-blue-700 hover:bg-blue-100'}`}
+              onClick={() => setTab('subjects')}
+            >Subjects</button>
+          </div>
+          
+          {/* Export Buttons */}
+          <div className="flex gap-2">
+            {tab === 'students' && students && students.length > 0 && (
+              <div className="flex gap-1">
+                <Button
+                  onClick={() => exportStudents('csv')}
+                  size="sm"
+                  variant="outline"
+                  className="text-blue-700 border-blue-300 hover:bg-blue-50"
+                >
+                  <FileDown className="w-4 h-4 mr-1" />
+                  CSV
+                </Button>
+                <Button
+                  onClick={() => exportStudents('excel')}
+                  size="sm"
+                  variant="outline"
+                  className="text-green-700 border-green-300 hover:bg-green-50"
+                >
+                  <FileText className="w-4 h-4 mr-1" />
+                  Excel
+                </Button>
+                <Button
+                  onClick={() => exportStudents('pdf')}
+                  size="sm"
+                  variant="outline"
+                  className="text-red-700 border-red-300 hover:bg-red-50"
+                >
+                  <Printer className="w-4 h-4 mr-1" />
+                  PDF
+                </Button>
+              </div>
+            )}
+            {tab === 'subjects' && subjects && subjects.length > 0 && (
+              <div className="flex gap-1">
+                <Button
+                  onClick={() => exportSubjects('csv')}
+                  size="sm"
+                  variant="outline"
+                  className="text-blue-700 border-blue-300 hover:bg-blue-50"
+                >
+                  <FileDown className="w-4 h-4 mr-1" />
+                  CSV
+                </Button>
+                <Button
+                  onClick={() => exportSubjects('excel')}
+                  size="sm"
+                  variant="outline"
+                  className="text-green-700 border-green-300 hover:bg-green-50"
+                >
+                  <FileText className="w-4 h-4 mr-1" />
+                  Excel
+                </Button>
+                <Button
+                  onClick={() => exportSubjects('pdf')}
+                  size="sm"
+                  variant="outline"
+                  className="text-red-700 border-red-300 hover:bg-red-50"
+                >
+                  <Printer className="w-4 h-4 mr-1" />
+                  PDF
+                </Button>
+              </div>
+            )}
+          </div>
         </div>
         {/* Table */}
         <Table className="bg-white rounded-md">
@@ -412,6 +631,7 @@ export default function SectionsPage() {
   const [expandedRowIds, setExpandedRowIds] = useState<string[]>([]);
   const [bulkActionsDialogOpen, setBulkActionsDialogOpen] = useState(false);
   const [selectedSectionsForBulkAction, setSelectedSectionsForBulkAction] = useState<Section[]>([]);
+  const [bulkAssignStudentsDialogOpen, setBulkAssignStudentsDialogOpen] = useState(false);
   // Add itemsPerPage state
   const [itemsPerPage, setItemsPerPage] = useState(10);
   // Add state for courses
@@ -1272,6 +1492,257 @@ export default function SectionsPage() {
     setSelectedSectionsForBulkAction([]);
   };
 
+  // Export section data (students and subjects for all sections)
+  const handleExportSectionData = async (format: 'csv' | 'excel' | 'pdf' = 'csv') => {
+    try {
+      const allSectionsData = [];
+      
+      for (const section of sections) {
+        try {
+          // Fetch students and subjects for each section
+          const [studentsRes, subjectsRes] = await Promise.all([
+            fetch(`/api/sections/${section.sectionId}/students`),
+            fetch(`/api/sections/${section.sectionId}/subjects`)
+          ]);
+
+          const students = studentsRes.ok ? await studentsRes.json() : [];
+          const subjects = subjectsRes.ok ? await subjectsRes.json() : [];
+
+          allSectionsData.push({
+            sectionName: section.sectionName,
+            sectionId: section.sectionId,
+            yearLevel: section.yearLevel,
+            courseName: section.courseName,
+            academicYear: section.academicYear,
+            semester: section.semester,
+            students: students,
+            subjects: subjects,
+            studentCount: students.length,
+            subjectCount: subjects.length
+          });
+        } catch (error) {
+          console.error(`Error fetching data for section ${section.sectionName}:`, error);
+        }
+      }
+
+      if (format === 'csv') {
+        // CSV Export
+        const exportData = allSectionsData.map(section => ({
+          'Section Name': section.sectionName,
+          'Section ID': section.sectionId,
+          'Year Level': section.yearLevel,
+          'Course': section.courseName,
+          'Academic Year': section.academicYear,
+          'Semester': section.semester,
+          'Student Count': section.studentCount,
+          'Subject Count': section.subjectCount,
+          'Students': section.students.map((s: any) => `${s.firstName} ${s.lastName} (${s.studentIdNumber})`).join('; '),
+          'Subjects': section.subjects.map((s: any) => `${s.name} (${s.code})`).join('; ')
+        }));
+
+        const csvContent = [
+          Object.keys(exportData[0]),
+          ...exportData.map(row => Object.values(row))
+        ].map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
+
+        const blob = new Blob([csvContent], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `sections_complete_data_${new Date().toISOString().split('T')[0]}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+      } else if (format === 'excel') {
+        // Excel Export with academic layout
+        const workbook = XLSX.utils.book_new();
+        
+        // Summary Sheet
+        const summaryData = allSectionsData.map(section => ({
+          'Section Name': section.sectionName,
+          'Year Level': section.yearLevel,
+          'Course': section.courseName,
+          'Academic Year': section.academicYear,
+          'Semester': section.semester,
+          'Student Count': section.studentCount,
+          'Subject Count': section.subjectCount
+        }));
+
+        const summarySheet = XLSX.utils.json_to_sheet(summaryData);
+        XLSX.utils.book_append_sheet(workbook, summarySheet, 'Section Summary');
+
+        // Individual Section Sheets
+        allSectionsData.forEach(section => {
+          // Students sheet for this section
+          if (section.students.length > 0) {
+            const studentsData = section.students.map((s: any) => ({
+              'Student ID': s.studentIdNumber,
+              'Full Name': `${s.firstName} ${s.lastName}`,
+              'First Name': s.firstName,
+              'Last Name': s.lastName,
+              'Year Level': s.yearLevel,
+              'Status': s.status,
+              'Email': s.email,
+              'Phone': s.phoneNumber || '',
+              'Department': s.departmentName || '',
+              'Course': s.courseName || ''
+            }));
+            const studentsSheet = XLSX.utils.json_to_sheet(studentsData);
+            XLSX.utils.book_append_sheet(workbook, studentsSheet, `${section.sectionName} - Students`);
+          }
+
+          // Subjects sheet for this section
+          if (section.subjects.length > 0) {
+            const subjectsData = section.subjects.map((s: any) => ({
+              'Subject Code': s.code,
+              'Subject Name': s.name,
+              'Units': s.units,
+              'Type': s.type,
+              'Status': s.status,
+              'Description': s.description || '',
+              'Prerequisites': s.prerequisites || ''
+            }));
+            const subjectsSheet = XLSX.utils.json_to_sheet(subjectsData);
+            XLSX.utils.book_append_sheet(workbook, subjectsSheet, `${section.sectionName} - Subjects`);
+          }
+        });
+
+        XLSX.writeFile(workbook, `sections_academic_report_${new Date().toISOString().split('T')[0]}.xlsx`);
+      } else if (format === 'pdf') {
+        // PDF Export with academic layout
+        const doc = new jsPDF();
+        
+        // Header
+        doc.setFontSize(20);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(12, 37, 86);
+        doc.text('Academic Section Report', doc.internal.pageSize.width / 2, 20, { align: 'center' });
+        
+        // Subtitle
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(100, 100, 100);
+        const currentDate = new Date().toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
+        });
+        doc.text(`Generated on ${currentDate}`, doc.internal.pageSize.width / 2, 30, { align: 'center' });
+        
+        // Summary Table
+        doc.setFontSize(14);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(12, 37, 86);
+        doc.text('Section Summary', 20, 50);
+        
+        const summaryData = allSectionsData.map(section => [
+          section.sectionName,
+          `Year ${section.yearLevel}`,
+          section.courseName,
+          section.academicYear || '',
+          section.semester || '',
+          section.studentCount.toString(),
+          section.subjectCount.toString()
+        ]);
+
+        autoTable(doc, {
+          head: [['Section Name', 'Year Level', 'Course', 'Academic Year', 'Semester', 'Students', 'Subjects']],
+          body: summaryData,
+          startY: 60,
+          styles: { fontSize: 8 },
+          headStyles: { fillColor: [12, 37, 86], halign: 'center', textColor: [255, 255, 255] },
+          bodyStyles: { halign: 'center' },
+          margin: { left: 20, right: 20 }
+        });
+
+        // Individual Section Details
+        let currentY = (doc as any).lastAutoTable.finalY + 20;
+        
+        allSectionsData.forEach((section, index) => {
+          if (currentY > doc.internal.pageSize.height - 40) {
+            doc.addPage();
+            currentY = 20;
+          }
+
+          // Section Header
+          doc.setFontSize(12);
+          doc.setFont('helvetica', 'bold');
+          doc.setTextColor(12, 37, 86);
+          doc.text(`${section.sectionName} - Year ${section.yearLevel}`, 20, currentY);
+          
+          currentY += 10;
+
+          // Students Table
+          if (section.students.length > 0) {
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'bold');
+            doc.text('Students:', 20, currentY);
+            currentY += 5;
+
+            const studentsData = section.students.map((s: any) => [
+              s.studentIdNumber,
+              `${s.firstName} ${s.lastName}`,
+              s.yearLevel.toString(),
+              s.status,
+              s.email
+            ]);
+
+            autoTable(doc, {
+              head: [['ID Number', 'Full Name', 'Year Level', 'Status', 'Email']],
+              body: studentsData,
+              startY: currentY,
+              styles: { fontSize: 7 },
+              headStyles: { fillColor: [200, 200, 200], halign: 'center' },
+              bodyStyles: { halign: 'left' },
+              margin: { left: 20, right: 20 }
+            });
+
+            currentY = (doc as any).lastAutoTable.finalY + 10;
+          }
+
+          // Subjects Table
+          if (section.subjects.length > 0) {
+            if (currentY > doc.internal.pageSize.height - 40) {
+              doc.addPage();
+              currentY = 20;
+            }
+
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'bold');
+            doc.text('Subjects:', 20, currentY);
+            currentY += 5;
+
+            const subjectsData = section.subjects.map((s: any) => [
+              s.code,
+              s.name,
+              s.units.toString(),
+              s.type,
+              s.status
+            ]);
+
+            autoTable(doc, {
+              head: [['Code', 'Subject Name', 'Units', 'Type', 'Status']],
+              body: subjectsData,
+              startY: currentY,
+              styles: { fontSize: 7 },
+              headStyles: { fillColor: [200, 200, 200], halign: 'center' },
+              bodyStyles: { halign: 'left' },
+              margin: { left: 20, right: 20 }
+            });
+
+            currentY = (doc as any).lastAutoTable.finalY + 15;
+          }
+        });
+
+        doc.save(`sections_academic_report_${new Date().toISOString().split('T')[0]}.pdf`);
+      }
+      
+      toast.success(`Exported ${format.toUpperCase()} report for ${allSectionsData.length} sections`);
+    } catch (error) {
+      console.error('Error exporting section data:', error);
+      toast.error('Failed to export section data');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#f8fafc] via-[#ffffff] to-[#f8fafc] p-0 overflow-x-hidden">
       <div className="w-full max-w-full px-4 sm:px-6 lg:px-8 space-y-8 sm:space-y-10">
@@ -1376,6 +1847,34 @@ export default function SectionsPage() {
                 description: 'Configure sorting',
                 icon: <List className="w-5 h-5 text-white" />,
                 onClick: () => setSortDialogOpen(true)
+              },
+              {
+                id: 'bulk-assign-students',
+                label: 'Bulk Assign Students',
+                description: 'Assign multiple students to sections',
+                icon: <UserPlus className="w-5 h-5 text-white" />,
+                onClick: () => setBulkAssignStudentsDialogOpen(true)
+              },
+              {
+                id: 'export-section-csv',
+                label: 'Export CSV',
+                description: 'Export section data as CSV',
+                icon: <FileDown className="w-5 h-5 text-white" />,
+                onClick: () => handleExportSectionData('csv')
+              },
+              {
+                id: 'export-section-excel',
+                label: 'Export Excel',
+                description: 'Export section data as Excel workbook',
+                icon: <FileText className="w-5 h-5 text-white" />,
+                onClick: () => handleExportSectionData('excel')
+              },
+              {
+                id: 'export-section-pdf',
+                label: 'Export PDF',
+                description: 'Export section data as PDF report',
+                icon: <Printer className="w-5 h-5 text-white" />,
+                onClick: () => handleExportSectionData('pdf')
               }
             ]}
             lastActionTime={lastActionTime}
@@ -2108,6 +2607,25 @@ export default function SectionsPage() {
                 error: (error as Error).message
               };
             }
+          }}
+        />
+
+        {/* Bulk Assign Students Dialog */}
+        <BulkAssignStudentsDialog
+          open={bulkAssignStudentsDialogOpen}
+          onOpenChange={setBulkAssignStudentsDialogOpen}
+          sections={sections.map(section => ({
+            sectionId: section.sectionId,
+            sectionName: section.sectionName,
+            sectionCapacity: section.sectionCapacity,
+            currentEnrollment: typeof section.totalStudents === 'number' ? section.totalStudents : (section.currentEnrollment ?? 0),
+            yearLevel: section.yearLevel,
+            courseName: section.courseName || 'Unknown Course'
+          }))}
+          onSuccess={(assignedCount) => {
+            toast.success(`Successfully assigned ${assignedCount} students to sections`);
+            // Refresh sections to update enrollment counts
+            refreshSections();
           }}
         />
 

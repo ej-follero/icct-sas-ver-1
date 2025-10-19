@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { createNotification } from '@/lib/notifications';
 
 export async function POST(request: NextRequest) {
   try {
@@ -44,6 +45,20 @@ export async function POST(request: NextRequest) {
         errors.push(e?.message || 'create failed');
       }
     }
+
+    // Optional: notify admin of duplicate scans detection for this bulk window
+    try {
+      // A simple heuristic: if failures are high or multiple DUPLICATE statuses are present
+      const hasDuplicateFlag = records.some((r: any) => String(r.scanStatus || '').toUpperCase() === 'DUPLICATE');
+      if (hasDuplicateFlag) {
+        await createNotification(userId, {
+          title: 'Possible duplicate scans detected',
+          message: 'Duplicate scan entries present in bulk import.',
+          priority: 'NORMAL',
+          type: 'RFID',
+        });
+      }
+    } catch {}
 
     return NextResponse.json({ results: { success, failed, errors } });
   } catch (e: any) {

@@ -19,6 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import PageHeader from '@/components/PageHeader/PageHeader';
 import { Card, CardHeader } from "@/components/ui/card";
+import { PrintLayout } from '@/components/PrintLayout';
 import SummaryCard from '@/components/SummaryCard';
 import { EmptyState } from '@/components/reusable';
 import { QuickActionsPanel } from '@/components/reusable/QuickActionsPanel';
@@ -740,20 +741,39 @@ export default function RFIDReadersPage() {
     return Array.from(new Set(roomIds)).sort((a, b) => a - b);
   }, [readers]);
 
-  // Print handler
+  // Print handler using shared PrintLayout (reference: departments page)
   const handlePrint = () => {
-    const printColumns = exportableColumns.map(col => ({ header: col.label, accessor: col.key }));
+    const printColumns = [
+      { header: 'Device ID', accessor: 'deviceId' },
+      { header: 'Device Name', accessor: 'deviceName' },
+      { header: 'Status', accessor: 'status' },
+      { header: 'IP Address', accessor: 'ipAddress' },
+      { header: 'Room', accessor: 'roomLabel' },
+      { header: 'Last Seen', accessor: 'lastSeenLabel' },
+    ];
 
-    // Create a temporary element to render the print layout
-    const printElement = document.createElement('div');
-    printElement.style.display = 'none';
-    document.body.appendChild(printElement);
-    
-    // This would need to be implemented with a proper print component
-    // For now, we'll use a simple window.print() as fallback
-    window.print();
-    
-    document.body.removeChild(printElement);
+    const printData = filteredReaders.map((r: any) => ({
+      deviceId: r.deviceId,
+      deviceName: r.deviceName || '',
+      status: r.status,
+      ipAddress: r.ipAddress || '',
+      roomLabel: r?.room ? `${r.room.roomNo} (${r.room.roomBuildingLoc || ''})` : String(r.roomId ?? 'N/A'),
+      lastSeenLabel: r.lastSeen ? new Date(r.lastSeen as any).toLocaleString() : '',
+    }));
+
+    const printFunction = PrintLayout({
+      title: 'RFID Readers',
+      data: printData,
+      columns: printColumns,
+      totalItems: filteredReaders.length,
+    });
+    try {
+      printFunction();
+      toast.success('Print dialog opened');
+    } catch (err) {
+      console.error('Print error:', err);
+      toast.error('Failed to open print dialog. Please check if popups are blocked.');
+    }
   };
 
   return (
@@ -1021,8 +1041,10 @@ export default function RFIDReadersPage() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All Rooms</SelectItem>
-                      {roomOptions.map((roomId) => (
-                        <SelectItem key={roomId} value={String(roomId)}>Room {roomId}</SelectItem>
+                      {roomOptions.map((roomId, idx) => (
+                        <SelectItem key={`room-${String(roomId)}-${idx}`} value={String(roomId)}>
+                          Room {roomId}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>

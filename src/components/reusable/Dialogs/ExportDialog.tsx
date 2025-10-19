@@ -19,22 +19,18 @@ interface ExportDialogProps {
 }
 
 interface ExportOptions {
-  includeCharts: boolean;
   includeFilters: boolean;
   includeSummary: boolean;
   includeTable?: boolean;
-  selectedCharts?: string[]; // keys matching data-chart attributes
   selectedColumns?: string[]; // columns to include in table export
 }
 
 export function ExportDialog({ open, onOpenChange, onExport, dataCount, entityType }: ExportDialogProps) {
   const [format, setFormat] = useState<'pdf' | 'csv' | 'excel'>('excel');
   const [options, setOptions] = useState<ExportOptions>({
-    includeCharts: false,
     includeFilters: true,
     includeSummary: true,
     includeTable: true,
-    selectedCharts: ['attendance-trend','department-stats','risk-level','late-arrival'],
     selectedColumns: ['studentName', 'studentId', 'department', 'date', 'timeIn', 'timeOut', 'status', 'subject', 'room']
   });
   const [isExporting, setIsExporting] = useState(false);
@@ -57,8 +53,6 @@ export function ExportDialog({ open, onOpenChange, onExport, dataCount, entityTy
       // Sanitize options before passing to caller
       const sanitized: ExportOptions = {
         ...options,
-        includeCharts: format === 'pdf' ? !!options.includeCharts : false,
-        selectedCharts: format === 'pdf' ? (options.selectedCharts || []) : [],
         selectedColumns: options.includeTable ? validSelectedColumns : []
       };
       await onExport(format, sanitized);
@@ -97,19 +91,7 @@ export function ExportDialog({ open, onOpenChange, onExport, dataCount, entityTy
 
   const handleSelectFormat = (value: 'pdf' | 'csv' | 'excel') => {
     setFormat(value);
-    setOptions(prev => ({
-      ...prev,
-      // Charts can be exported only for PDF
-      includeCharts: value === 'pdf' ? prev.includeCharts : false
-    }));
   };
-  const chartsDisabled = format !== 'pdf';
-  const chartList = [
-    { key: 'attendance-trend', label: 'Attendance Trend' },
-    { key: 'department-stats', label: 'Department Performance' },
-    { key: 'risk-level', label: 'Risk Level' },
-    { key: 'late-arrival', label: 'Late Arrival' }
-  ];
 
   // Available columns for table export
   const availableColumns = [
@@ -200,11 +182,9 @@ export function ExportDialog({ open, onOpenChange, onExport, dataCount, entityTy
                 size="sm"
                 className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
                 onClick={() => {
-                  const chartsAllowed = format === 'pdf';
-                  const allSelected = (chartsAllowed ? options.includeCharts : true) && options.includeFilters && options.includeSummary;
+                  const allSelected = options.includeFilters && options.includeSummary;
                   setOptions(prev => ({
                     ...prev,
-                    includeCharts: chartsAllowed ? !allSelected : false,
                     includeFilters: !allSelected,
                     includeSummary: !allSelected
                   }));
@@ -215,36 +195,6 @@ export function ExportDialog({ open, onOpenChange, onExport, dataCount, entityTy
             </div>
             <div className="border border-gray-200 rounded-lg p-3 max-h-64 overflow-y-auto">
               <div className="space-y-3">
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="includeCharts"
-                    checked={options.includeCharts}
-                    disabled={chartsDisabled}
-                    onCheckedChange={(checked) => setOptions(prev => ({ ...prev, includeCharts: chartsDisabled ? false : !!checked }))}
-                  />
-                  <Label htmlFor="includeCharts" className={`text-sm ${chartsDisabled ? 'text-gray-400' : ''}`}>
-                    Include charts and visualizations
-                  </Label>
-                </div>
-                {/* Chart selection (PDF only) */}
-                {!chartsDisabled && options.includeCharts && (
-                  <div className="ml-6 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {chartList.map(c => (
-                      <label key={c.key} className="flex items-center space-x-2 text-sm">
-                        <Checkbox
-                          checked={options.selectedCharts?.includes(c.key) || false}
-                          onCheckedChange={(checked) => setOptions(prev => ({
-                            ...prev,
-                            selectedCharts: checked
-                              ? Array.from(new Set([...(prev.selectedCharts || []), c.key]))
-                              : (prev.selectedCharts || []).filter(k => k !== c.key)
-                          }))}
-                        />
-                        <span>{c.label}</span>
-                      </label>
-                    ))}
-                  </div>
-                )}
                 <div className="flex items-center space-x-2">
                   <Checkbox
                     id="includeFilters"

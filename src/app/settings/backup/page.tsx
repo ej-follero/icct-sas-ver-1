@@ -893,24 +893,24 @@ export default function BackupRestorePage() {
             sublabel="All backup files"
           />
           <SummaryCard
-            icon={<CheckCircle className="text-green-500 w-5 h-5" />}
+            icon={<CheckCircle className="text-blue-500 w-5 h-5" />}
             label="Completed"
             value={completedBackups}
-            valueClassName="text-green-900"
+            valueClassName="text-blue-900"
             sublabel="Successful backups"
           />
           <SummaryCard
-            icon={<AlertTriangle className="text-red-500 w-5 h-5" />}
+            icon={<AlertTriangle className="text-blue-500 w-5 h-5" />}
             label="Failed"
             value={failedBackups}
-            valueClassName="text-red-900"
+            valueClassName="text-blue-900"
             sublabel="Failed backups"
           />
           <SummaryCard
-            icon={<HardDrive className="text-purple-500 w-5 h-5" />}
+            icon={<HardDrive className="text-blue-500 w-5 h-5" />}
             label="Total Size"
             value={totalSize >= 1 ? `${totalSize.toFixed(1)} GB` : `${(totalSize * 1024).toFixed(1)} MB`}
-            valueClassName="text-purple-900"
+            valueClassName="text-blue-900"
             sublabel="Storage used"
           />
         </div>

@@ -78,11 +78,13 @@ const userSchema = z.object({
 }).refine((data) => {
   // Instructor required by schema: middleName (non-null), rfidTag, employeeId, instructorType, departmentId
   if (data.role === "INSTRUCTOR") {
-    return !!(data.instructorType && data.departmentId && data.employeeId && (data.middleName !== undefined) && (data.rfidTag && data.rfidTag.length > 0));
+    // Temporarily relax RFID requirement
+    return !!(data.instructorType && data.departmentId && data.employeeId && (data.middleName !== undefined));
   }
   // Student required: studentIdNum, studentType, yearLevel, (courseId can be null), address, email, phoneNumber, rfidTag (guardianId is optional)
   if (data.role === "STUDENT") {
-    return !!(data.studentIdNum && data.studentType && data.yearLevel && (data.address && data.address.length > 0) && (data.rfidTag && data.rfidTag.length > 0));
+    // Temporarily relax RFID requirement
+    return !!(data.studentIdNum && data.studentType && data.yearLevel && (data.address && data.address.length > 0));
   }
   return true;
 }, {
@@ -138,6 +140,24 @@ export function UserForm({ open, onOpenChange, type, data, id, onSuccess }: User
   const [courses, setCourses] = useState<Array<{courseId: number, courseName: string}>>([]);
   const [guardians, setGuardians] = useState<Array<{guardianId: number, firstName: string, lastName: string}>>([]);
   const [rfidTags, setRfidTags] = useState<Array<{tagId: number, tagNumber: string, tagType: string, status: string}>>([]);
+  const [creatingGuardian, setCreatingGuardian] = useState(false);
+  const [guardianForm, setGuardianForm] = useState({
+    email: '',
+    phoneNumber: '',
+    firstName: '',
+    middleName: '',
+    lastName: '',
+    suffix: '',
+    address: '',
+    img: '',
+    gender: 'MALE' as 'MALE' | 'FEMALE',
+    guardianType: 'PARENT' as 'PARENT' | 'GUARDIAN',
+    occupation: '',
+    workplace: '',
+    emergencyContact: '',
+    relationshipToStudent: ''
+  });
+  const [guardianErrors, setGuardianErrors] = useState<Record<string, string>>({});
   
   // State to track scanned RFID tags
   const [scannedTags, setScannedTags] = useState<string[]>([]);
@@ -299,7 +319,13 @@ export function UserForm({ open, onOpenChange, type, data, id, onSuccess }: User
       const response = await fetch('/api/departments');
       if (response.ok) {
         const data = await response.json();
-        setDepartments(data.data || []);
+        const raw = Array.isArray(data) ? data : (Array.isArray(data.data) ? data.data : []);
+        // Normalize to { departmentId: number, departmentName: string }
+        const transformed = raw.map((d: any) => ({
+          departmentId: typeof d.departmentId === 'number' ? d.departmentId : parseInt(d.id),
+          departmentName: d.departmentName || d.name
+        })).filter((d: any) => Number.isFinite(d.departmentId) && typeof d.departmentName === 'string' && d.departmentName.length > 0);
+        setDepartments(transformed);
       }
     } catch (error) {
       console.error('Failed to fetch departments:', error);
@@ -461,22 +487,89 @@ export function UserForm({ open, onOpenChange, type, data, id, onSuccess }: User
   const onSubmit = async (values: UserFormValues) => {
     setLoading(true);
     try {
+      // Client-side required field guard with helpful feedback
+      const missing: string[] = [];
+      // Base required
+      if (!values.userName) missing.push('Username');
+      if (!values.email) missing.push('Email');
+      if (!values.firstName) missing.push('First name');
+      if (!values.lastName) missing.push('Last name');
+      if (!values.phoneNumber) missing.push('Phone number');
+      if (!values.gender) missing.push('Gender');
+      // Role-specific
+      if (values.role === 'INSTRUCTOR') {
+        if (!values.instructorType) missing.push('Instructor Type');
+        if (!values.departmentId) missing.push('Department');
+        if (!values.employeeId) missing.push('Employee ID');
+        if (values.middleName === undefined) missing.push('Middle Name');
+      }
+      if (values.role === 'STUDENT') {
+        if (!values.studentIdNum) missing.push('Student ID Number');
+        if (!values.studentType) missing.push('Student Type');
+        if (!values.yearLevel) missing.push('Year Level');
+        if (!values.courseId) missing.push('Course');
+        if (!values.address) missing.push('Address');
+      }
+
+      if (missing.length > 0) {
+        // Mark some common fields for inline messages
+        if (!values.address && values.role === 'STUDENT') form.setError('address', { type: 'manual', message: 'Address is required' });
+        if (!values.departmentId && values.role === 'INSTRUCTOR') form.setError('departmentId', { type: 'manual', message: 'Department is required' });
+        if (!values.employeeId && values.role === 'INSTRUCTOR') form.setError('employeeId', { type: 'manual', message: 'Employee ID is required' });
+        if (!values.studentIdNum && values.role === 'STUDENT') form.setError('studentIdNum', { type: 'manual', message: 'Student ID Number is required' });
+        toast.error(`Please complete the following fields: ${missing.join(', ')}`);
+        setLoading(false);
+        return;
+      }
+      // If student and user opted to create a new guardian inline, create it first
+      if (values.role === "STUDENT" && creatingGuardian) {
+        const missing: Record<string,string> = {};
+        const required: Array<keyof typeof guardianForm> = [
+          'email','phoneNumber','firstName','lastName','address','gender','guardianType','relationshipToStudent'
+        ];
+        for (const key of required) {
+          const v = guardianForm[key];
+          if (!v || (typeof v === 'string' && v.trim() === '')) missing[key as string] = 'Required';
+        }
+        if (Object.keys(missing).length > 0) {
+          setGuardianErrors(missing);
+          throw new Error('Please complete required guardian fields');
+        }
+
+        const gRes = await fetch('/api/guardians', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(guardianForm)
+        });
+        if (!gRes.ok) {
+          const gErr = await gRes.json().catch(() => ({}));
+          throw new Error(gErr.error || 'Failed to create guardian');
+        }
+        const gData = await gRes.json();
+        // Assign returned guardianId to the form values
+        form.setValue('guardianId', gData?.data?.guardianId ?? 0);
+        values.guardianId = gData?.data?.guardianId ?? 0;
+      }
+
       const url = data ? `/api/users/${data.id}` : "/api/users";
       const method = data ? "PATCH" : "POST";
       
       // Prepare the data for the API
-      const apiData = {
+      const apiData: any = {
         ...values,
         fullName: `${values.firstName} ${values.middleName ? values.middleName + ' ' : ''}${values.lastName}${values.suffix ? ' ' + values.suffix : ''}`.trim(),
         ...(type === "create" ? { 
           passwordHash: "temporary_hash_placeholder" // In production, this should be properly hashed
         } : {}),
       };
+      // Avoid sending lowercase status to the create endpoint (server expects enum). Let backend default it.
+      if (type === 'create') {
+        delete apiData.status;
+      }
       
-      // For create mode, we need to create both User and role-specific records
+      // For create mode, create the base User record
       if (type === "create") {
-        // Create user and role-specific record in one transaction
-        const createResponse = await fetch("/api/users/create-with-role", {
+        const createResponse = await fetch("/api/users", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(apiData),
@@ -551,7 +644,8 @@ export function UserForm({ open, onOpenChange, type, data, id, onSuccess }: User
               guardianId: values.guardianId || null,
               rfidTag: values.rfidTag,
             };
-            const sRes = await fetch(`/api/students/${data.id}`, {
+            const targetStudentId = (data as any)?.relatedInfo?.id || data.id;
+            const sRes = await fetch(`/api/students/${targetStudentId}`, {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(studentPayload),
@@ -563,7 +657,85 @@ export function UserForm({ open, onOpenChange, type, data, id, onSuccess }: User
           }
         }
       }
-      
+
+      // If create mode and role-specific data provided, create corresponding record using the newly created user
+      if (type === "create") {
+        // Fetch created user to get its id (email is unique)
+        // Alternatively backend could return id; for now rely on email lookup
+        // Then POST to role-specific endpoint
+        if (values.role === "INSTRUCTOR") {
+          const instructorPayload = {
+            userId: undefined as any,
+            email: values.email,
+            phoneNumber: values.phoneNumber,
+            firstName: values.firstName,
+            middleName: values.middleName ?? null,
+            lastName: values.lastName,
+            suffix: values.suffix ?? null,
+            gender: values.gender,
+            instructorType: values.instructorType,
+            departmentId: values.departmentId,
+            officeLocation: values.officeLocation ?? null,
+            officeHours: values.officeHours ?? null,
+            specialization: values.specialization ?? null,
+            employeeId: values.employeeId,
+            rfidTag: values.rfidTag,
+          };
+          // get user id by fetching users (lightweight alternative would be an API to get by email)
+          const me = await fetch('/api/users');
+          const meJson = await me.json().catch(()=>({}));
+          const created = Array.isArray(meJson.data) ? meJson.data.find((u:any)=>u.email===values.email) : undefined;
+          if (created?.id) {
+            instructorPayload.userId = parseInt(created.id);
+            const iRes = await fetch('/api/instructors/create', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(instructorPayload),
+            });
+            if (!iRes.ok) {
+              const err = await iRes.json().catch(() => ({}));
+              throw new Error(err.error || 'Failed to create instructor');
+            }
+          }
+        }
+        if (values.role === "STUDENT") {
+          const studentPayload = {
+            userId: undefined as any,
+            studentIdNum: values.studentIdNum,
+            email: values.email,
+            phoneNumber: values.phoneNumber,
+            firstName: values.firstName,
+            middleName: values.middleName ?? null,
+            lastName: values.lastName,
+            suffix: values.suffix ?? null,
+            address: values.address ?? '',
+            gender: values.gender,
+            birthDate: values.birthDate || null,
+            nationality: values.nationality ?? null,
+            studentType: values.studentType,
+            yearLevel: values.yearLevel,
+            courseId: values.courseId,
+            guardianId: values.guardianId || null,
+            rfidTag: values.rfidTag,
+          };
+          const me = await fetch('/api/users');
+          const meJson = await me.json().catch(()=>({}));
+          const created = Array.isArray(meJson.data) ? meJson.data.find((u:any)=>u.email===values.email) : undefined;
+          if (created?.id) {
+            studentPayload.userId = parseInt(created.id);
+            const sRes = await fetch('/api/students', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(studentPayload),
+            });
+            if (!sRes.ok) {
+              const err = await sRes.json().catch(() => ({}));
+              throw new Error(err.error || 'Failed to create student');
+            }
+          }
+        }
+      }
+
       localStorage.removeItem("userFormDraft");
       setShowDraft(false);
       setShowSuccessDialog(true);
@@ -910,7 +1082,7 @@ export function UserForm({ open, onOpenChange, type, data, id, onSuccess }: User
                             <FormItem>
                               <FormLabel>Middle Name</FormLabel>
                               <FormControl>
-                                <Input {...field} placeholder="Enter middle name (optional)" className="focus:ring-blue-300 focus:border-blue-300 rounded" />
+                                <Input value={field.value ?? ''} onChange={field.onChange} placeholder="Enter middle name (optional)" className="focus:ring-blue-300 focus:border-blue-300 rounded" />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
@@ -923,7 +1095,7 @@ export function UserForm({ open, onOpenChange, type, data, id, onSuccess }: User
                             <FormItem>
                               <FormLabel>Suffix</FormLabel>
                               <FormControl>
-                                <Input {...field} placeholder="e.g., Jr., Sr., III" className="focus:ring-blue-300 focus:border-blue-300 rounded" />
+                                <Input value={field.value ?? ''} onChange={field.onChange} placeholder="e.g., Jr., Sr., III" className="focus:ring-blue-300 focus:border-blue-300 rounded" />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
@@ -973,7 +1145,7 @@ export function UserForm({ open, onOpenChange, type, data, id, onSuccess }: User
                           <FormItem>
                             <FormLabel>Address</FormLabel>
                             <FormControl>
-                              <Input {...field} placeholder="Enter address" className="focus:ring-blue-300 focus:border-blue-300 rounded" />
+                              <Input value={field.value ?? ''} onChange={field.onChange} placeholder="Enter address" className="focus:ring-blue-300 focus:border-blue-300 rounded" />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -1137,8 +1309,8 @@ export function UserForm({ open, onOpenChange, type, data, id, onSuccess }: User
                               render={({ field }) => (
                                 <FormItem>
                                   <FormLabel>Office Location</FormLabel>
-                                  <FormControl>
-                                    <Input {...field} placeholder="Enter office location" className="focus:ring-blue-300 focus:border-blue-300 rounded" />
+                              <FormControl>
+                                <Input value={field.value ?? ''} onChange={field.onChange} placeholder="Enter office location" className="focus:ring-blue-300 focus:border-blue-300 rounded" />
                                   </FormControl>
                                   <FormMessage />
                                 </FormItem>
@@ -1150,22 +1322,22 @@ export function UserForm({ open, onOpenChange, type, data, id, onSuccess }: User
                               render={({ field }) => (
                                 <FormItem>
                                   <FormLabel>Office Hours</FormLabel>
-                                  <FormControl>
-                                    <Input {...field} placeholder="e.g., Mon-Fri 9AM-5PM" className="focus:ring-blue-300 focus:border-blue-300 rounded" />
+                              <FormControl>
+                                <Input value={field.value ?? ''} onChange={field.onChange} placeholder="e.g., Mon-Fri 9AM-5PM" className="focus:ring-blue-300 focus:border-blue-300 rounded" />
                                   </FormControl>
                                   <FormMessage />
                                 </FormItem>
                               )}
                             />
                           </div>
-                          <FormField
+                            <FormField
                             control={form.control}
                             name="specialization"
                             render={({ field }) => (
                               <FormItem>
                                 <FormLabel>Specialization</FormLabel>
-                                <FormControl>
-                                  <Input {...field} placeholder="Enter specialization or expertise" className="focus:ring-blue-300 focus:border-blue-300 rounded" />
+                                  <FormControl>
+                                    <Input value={field.value ?? ''} onChange={field.onChange} placeholder="Enter specialization or expertise" className="focus:ring-blue-300 focus:border-blue-300 rounded" />
                                 </FormControl>
                                 <FormMessage />
                               </FormItem>
@@ -1378,7 +1550,15 @@ export function UserForm({ open, onOpenChange, type, data, id, onSuccess }: User
                                 <FormItem>
                                   <FormLabel>Guardian</FormLabel>
                                   <FormControl>
-                                    <Select value={field.value?.toString() || "none"} onValueChange={(value) => field.onChange(value === "none" ? undefined : parseInt(value))}>
+                                  <Select value={creatingGuardian ? 'create' : (field.value?.toString() || "none")} onValueChange={(value) => {
+                                    if (value === 'create') {
+                                      setCreatingGuardian(true);
+                                      field.onChange(undefined);
+                                    } else {
+                                      setCreatingGuardian(false);
+                                      field.onChange(value === "none" ? undefined : parseInt(value));
+                                    }
+                                  }}>
                                       <SelectTrigger className="focus:ring-blue-300 focus:border-blue-300 rounded">
                                         <SelectValue placeholder="Select guardian" />
                                       </SelectTrigger>
@@ -1386,6 +1566,9 @@ export function UserForm({ open, onOpenChange, type, data, id, onSuccess }: User
                                         <SelectItem value="none">
                                           No Guardian Selected
                                         </SelectItem>
+                                      <SelectItem value="create">
+                                        + Create New Guardian
+                                      </SelectItem>
                                         {guardians
                                           .filter((g) => g && typeof g.guardianId === 'number')
                                           .map((guardian) => (
@@ -1400,6 +1583,70 @@ export function UserForm({ open, onOpenChange, type, data, id, onSuccess }: User
                                 </FormItem>
                               )}
                             />
+                          {creatingGuardian && (
+                            <div className="col-span-1 md:col-span-2 mt-4 p-4 border border-blue-200 rounded-lg bg-blue-50/50 w-full">
+                              <div className="flex items-center gap-2 mb-3">
+                                <Users className="w-4 h-4 text-blue-600" />
+                                <h4 className="text-sm font-semibold text-blue-900">New Guardian Details</h4>
+                              </div>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                  <FormLabel>First Name *</FormLabel>
+                                  <Input value={guardianForm.firstName} onChange={(e) => { setGuardianForm(v => ({...v, firstName: e.target.value})); guardianErrors.firstName && setGuardianErrors(p=>({ ...p, firstName: ''})); }} className={guardianErrors.firstName ? 'border-red-500' : ''} />
+                                  {guardianErrors.firstName && <p className="text-red-500 text-xs mt-1">{guardianErrors.firstName}</p>}
+                                </div>
+                                <div>
+                                  <FormLabel>Last Name *</FormLabel>
+                                  <Input value={guardianForm.lastName} onChange={(e) => { setGuardianForm(v => ({...v, lastName: e.target.value})); guardianErrors.lastName && setGuardianErrors(p=>({ ...p, lastName: ''})); }} className={guardianErrors.lastName ? 'border-red-500' : ''} />
+                                  {guardianErrors.lastName && <p className="text-red-500 text-xs mt-1">{guardianErrors.lastName}</p>}
+                                </div>
+                                <div>
+                                  <FormLabel>Email *</FormLabel>
+                                  <Input type="email" value={guardianForm.email} onChange={(e) => { setGuardianForm(v => ({...v, email: e.target.value})); guardianErrors.email && setGuardianErrors(p=>({ ...p, email: ''})); }} className={guardianErrors.email ? 'border-red-500' : ''} />
+                                  {guardianErrors.email && <p className="text-red-500 text-xs mt-1">{guardianErrors.email}</p>}
+                                </div>
+                                <div>
+                                  <FormLabel>Phone Number *</FormLabel>
+                                  <Input value={guardianForm.phoneNumber} onChange={(e) => { setGuardianForm(v => ({...v, phoneNumber: e.target.value})); guardianErrors.phoneNumber && setGuardianErrors(p=>({ ...p, phoneNumber: ''})); }} className={guardianErrors.phoneNumber ? 'border-red-500' : ''} />
+                                  {guardianErrors.phoneNumber && <p className="text-red-500 text-xs mt-1">{guardianErrors.phoneNumber}</p>}
+                                </div>
+                                <div>
+                                  <FormLabel>Gender *</FormLabel>
+                                  <Select value={guardianForm.gender} onValueChange={(v) => setGuardianForm(p => ({...p, gender: v as 'MALE'|'FEMALE'}))}>
+                                    <SelectTrigger className="focus:ring-blue-300 focus:border-blue-300 rounded">
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="MALE">Male</SelectItem>
+                                      <SelectItem value="FEMALE">Female</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                                <div>
+                                  <FormLabel>Type *</FormLabel>
+                                  <Select value={guardianForm.guardianType} onValueChange={(v) => setGuardianForm(p => ({...p, guardianType: v as 'PARENT'|'GUARDIAN'}))}>
+                                    <SelectTrigger className="focus:ring-blue-300 focus:border-blue-300 rounded">
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="PARENT">Parent</SelectItem>
+                                      <SelectItem value="GUARDIAN">Guardian</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                                <div className="md:col-span-2">
+                                  <FormLabel>Address *</FormLabel>
+                                  <Input value={guardianForm.address} onChange={(e) => { setGuardianForm(v => ({...v, address: e.target.value})); guardianErrors.address && setGuardianErrors(p=>({ ...p, address: ''})); }} className={guardianErrors.address ? 'border-red-500' : ''} />
+                                  {guardianErrors.address && <p className="text-red-500 text-xs mt-1">{guardianErrors.address}</p>}
+                                </div>
+                                <div className="md:col-span-2">
+                                  <FormLabel>Relationship to Student *</FormLabel>
+                                  <Input value={guardianForm.relationshipToStudent} onChange={(e) => { setGuardianForm(v => ({...v, relationshipToStudent: e.target.value})); guardianErrors.relationshipToStudent && setGuardianErrors(p=>({ ...p, relationshipToStudent: ''})); }} className={guardianErrors.relationshipToStudent ? 'border-red-500' : ''} />
+                                  {guardianErrors.relationshipToStudent && <p className="text-red-500 text-xs mt-1">{guardianErrors.relationshipToStudent}</p>}
+                                </div>
+                              </div>
+                            </div>
+                          )}
                           </div>
                         </div>
                       </div>

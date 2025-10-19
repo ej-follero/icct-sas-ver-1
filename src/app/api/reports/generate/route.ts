@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { createNotification } from '@/lib/notifications';
 
 // Utilities
 async function ensureReportsDir() {
@@ -114,6 +115,15 @@ export async function POST(req: NextRequest) {
             } as any
           }
         });
+        // Notify creator that report is generated
+        try {
+          await createNotification(userId, {
+            title: 'Report generated',
+            message: `${reportName || 'Report'} is ready (${opts.fileFormat.toUpperCase()}, ${Math.round((opts.fileSize/1024) * 10)/10} KB)`,
+            priority: 'NORMAL',
+            type: 'REPORT',
+          });
+        } catch {}
         return created;
       } catch (e) {
         console.warn('Failed to log report:', e);

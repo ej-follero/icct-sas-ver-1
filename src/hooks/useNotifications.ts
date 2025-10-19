@@ -31,9 +31,30 @@ export const useNotifications = () => {
     setLoading(true);
     try {
       const response = await fetch('/api/notifications', { cache: 'no-store' });
-      if (!response.ok) throw new Error('Failed to fetch notifications');
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        
+        // Handle authentication errors gracefully
+        if (response.status === 401) {
+          console.log('🔐 [useNotifications] Authentication required - skipping notifications load');
+          setNotifications([]);
+          setMessages([]);
+          return;
+        }
+        
+        throw new Error(errorData.error || `Failed to fetch notifications (HTTP ${response.status})`);
+      }
       const data = await response.json();
-      const items: NotificationItem[] = Array.isArray(data?.items) ? data.items : [];
+      const items: NotificationItem[] = Array.isArray(data?.data) ? data.data.map((n: any) => ({
+        id: n.id,
+        title: n.title,
+        message: n.message || '',
+        time: n.createdAt,
+        unread: !n.isRead,
+        type: 'notification' as const,
+        priority: n.priority?.toLowerCase() as 'low' | 'medium' | 'high' | undefined,
+        actionUrl: n.actionUrl
+      })) : [];
       setNotifications(items);
       setMessages([]); // messages feature not yet backed by API
     } catch (error) {
@@ -44,40 +65,56 @@ export const useNotifications = () => {
     }
   }, []); // Removed dependencies since mock data is now static
 
-  // Mark notification as read
+  // Toggle notification read status
   const markAsRead = useCallback(async (id: number, type: 'notification' | 'message') => {
     try {
       if (type === 'notification') {
-        const res = await fetch(`/api/notifications/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ isRead: true }) });
-        if (!res.ok) throw new Error('Failed to mark as read');
+        // Find current notification to get its current read status
+        const currentNotification = notifications.find(n => n.id === id);
+        const newReadStatus = !currentNotification?.unread; // Toggle the status
+        
+        const res = await fetch(`/api/notifications/${id}`, { 
+          method: 'PATCH', 
+          headers: { 'Content-Type': 'application/json' }, 
+          body: JSON.stringify({ isRead: newReadStatus }) 
+        });
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({}));
+          throw new Error(errorData.error || `Failed to toggle read status (HTTP ${res.status})`);
+        }
       }
       
       if (type === 'notification') {
         setNotifications(prev => 
           prev.map(item => 
-            item.id === id ? { ...item, unread: false } : item
+            item.id === id ? { ...item, unread: !item.unread } : item
           )
         );
       } else {
         setMessages(prev => 
           prev.map(item => 
-            item.id === id ? { ...item, unread: false } : item
+            item.id === id ? { ...item, unread: !item.unread } : item
           )
         );
       }
     } catch (error) {
-      console.error('Failed to mark as read:', error);
+      console.error('Failed to toggle read status:', error);
     }
-  }, []);
+  }, [notifications]);
 
   // Mark all as read
   const markAllAsRead = useCallback(async (type: 'notification' | 'message') => {
     try {
-      // In real implementation, call API
-      // await fetch(`/api/notifications/mark-all-read`, { 
-      //   method: 'PUT',
-      //   body: JSON.stringify({ type })
-      // });
+      if (type === 'notification') {
+        const res = await fetch('/api/notifications', { 
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({}));
+          throw new Error(errorData.error || `Failed to mark all as read (HTTP ${res.status})`);
+        }
+      }
       
       if (type === 'notification') {
         setNotifications(prev => 
@@ -120,9 +157,25 @@ export const useNotifications = () => {
     }
   }, []);
 
-  // Load notifications on mount
+  // Load notifications on mount - removed to avoid duplicate calls
+  // The auto-refresh effect below handles the initial load
+
+  // Auto-refresh notifications every 30 seconds for real-time updates
+  // Only start auto-refresh after initial load to avoid authentication issues
   useEffect(() => {
-    loadNotifications();
+    // Small delay to ensure user authentication is complete
+    const initialDelay = setTimeout(() => {
+      loadNotifications();
+    }, 1000);
+
+    const interval = setInterval(() => {
+      loadNotifications();
+    }, 30000); // 30 seconds
+
+    return () => {
+      clearTimeout(initialDelay);
+      clearInterval(interval);
+    };
   }, [loadNotifications]);
 
   return {

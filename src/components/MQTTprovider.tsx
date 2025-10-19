@@ -1,6 +1,7 @@
 "use client";
 
 import mqtt, { type MqttClient } from "mqtt";
+import { toast } from 'sonner';
 import React, { type ReactNode, useContext, useEffect, useState } from "react";
 
 const MQTT = {
@@ -181,27 +182,52 @@ export function MQTTProvider({ children }: { children: ReactNode }) {
             .then(result => {
               if (result.success) {
                 console.log('✅ Attendance record created:', result.attendance);
+                // success feedback
+                if (client.connected) {
+                  client.publish(
+                    MQTT_TOPIC.FEEDBACK,
+                    JSON.stringify({
+                      topic: MQTT_TOPIC.FEEDBACK,
+                      message: "Recorded!",
+                      value: data.rfid,
+                    }),
+                  );
+                }
+                toast.success('Attendance recorded');
               } else {
                 console.error('❌ Attendance record failed:', result.error);
                 console.log('💡 Check if the RFID tag is properly assigned to a student');
+                const errMsg = typeof result.error === 'string' ? result.error : 'Failed to record attendance';
+                toast.error(`${errMsg}${data?.rfid ? ` (RFID: ${data.rfid})` : ''}`);
+                // error feedback
+                if (client.connected) {
+                  client.publish(
+                    MQTT_TOPIC.FEEDBACK,
+                    JSON.stringify({
+                      topic: MQTT_TOPIC.FEEDBACK,
+                      message: errMsg.includes('not found') ? 'Unrecognized card' : 'Error',
+                      value: data.rfid,
+                    }),
+                  );
+                }
               }
             })
             .catch(error => {
               console.error('❌ Attendance API error:', error);
+              toast.error('Attendance service error');
+              if (client.connected) {
+                client.publish(
+                  MQTT_TOPIC.FEEDBACK,
+                  JSON.stringify({
+                    topic: MQTT_TOPIC.FEEDBACK,
+                    message: 'Service error',
+                    value: data.rfid,
+                  }),
+                );
+              }
             });
           
           setMessages((current) => [...current, { topic, ...data }]);
-
-          if (client.connected) {
-            client.publish(
-              MQTT_TOPIC.FEEDBACK,
-              JSON.stringify({
-                topic: MQTT_TOPIC.FEEDBACK,
-                message: "Recorded!",
-                value: data.rfid,
-              }),
-            );
-          }
         } else if (
           data.mode === "registration" &&
           topic === MQTT_TOPIC.REGISTER

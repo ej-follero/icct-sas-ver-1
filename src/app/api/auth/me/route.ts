@@ -15,10 +15,17 @@ export async function GET() {
   try {
     console.log('🔍 [AUTH/ME] Starting user authentication check');
     
-    // Check database connection first
+    // Check database connection first with timeout
     try {
-      await prisma.$queryRaw`SELECT 1`;
-      console.log('✅ [AUTH/ME] Database connection verified');
+      const dbStartTime = Date.now();
+      await Promise.race([
+        prisma.$queryRaw`SELECT 1`,
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Database connection timeout')), 2000)
+        )
+      ]);
+      const dbTime = Date.now() - dbStartTime;
+      console.log(`✅ [AUTH/ME] Database connection verified in ${dbTime}ms`);
     } catch (dbError) {
       console.error('❌ [AUTH/ME] Database connection failed:', dbError);
       return NextResponse.json({ 
@@ -45,19 +52,40 @@ export async function GET() {
     }
     
     if (!token) {
-      console.log('❌ [AUTH/ME] No token found');
+      console.log('❌ [AUTH/ME] No token found - returning 401 immediately');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     console.log('🔑 [AUTH/ME] Token found, verifying JWT...');
-    const payload = jwt.verify(token, env.JWT_SECRET) as { userId: number };
-    console.log('✅ [AUTH/ME] JWT verified for user ID:', payload.userId);
+    const jwtStartTime = Date.now();
+    let payload: { userId: number };
+    try {
+      payload = await Promise.race([
+        Promise.resolve(jwt.verify(token, env.JWT_SECRET) as { userId: number }),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('JWT verification timeout')), 3000)
+        )
+      ]) as { userId: number };
+    } catch (jwtError) {
+      console.error('❌ [AUTH/ME] JWT verification failed:', jwtError);
+      return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
+    }
+    const jwtTime = Date.now() - jwtStartTime;
+    console.log(`✅ [AUTH/ME] JWT verified for user ID: ${payload.userId} in ${jwtTime}ms`);
 
     console.log('👤 [AUTH/ME] Fetching user data from database...');
-    const user = await prisma.user.findUnique({
-      where: { userId: payload.userId },
-      include: { Student: true },
-    });
+    const userStartTime = Date.now();
+    const user = await Promise.race([
+      prisma.user.findUnique({
+        where: { userId: payload.userId },
+        include: { Student: true },
+      }),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('User fetch timeout')), 3000)
+      )
+    ]) as any;
+    const userTime = Date.now() - userStartTime;
+    console.log(`✅ [AUTH/ME] User fetched in ${userTime}ms`);
 
     if (!user) {
       console.log('❌ [AUTH/ME] User not found in database');
@@ -70,9 +98,22 @@ export async function GET() {
     let instructor = null;
     if (user.role === 'INSTRUCTOR') {
       console.log('👨‍🏫 [AUTH/ME] Fetching instructor details...');
-      instructor = await prisma.instructor.findUnique({
-        where: { email: user.email }
-      });
+      const instructorStartTime = Date.now();
+      try {
+        instructor = await Promise.race([
+          prisma.instructor.findUnique({
+            where: { email: user.email }
+          }),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Instructor fetch timeout')), 2000)
+          )
+        ]) as any;
+        const instructorTime = Date.now() - instructorStartTime;
+        console.log(`✅ [AUTH/ME] Instructor fetched in ${instructorTime}ms`);
+      } catch (instructorError) {
+        console.warn('⚠️ [AUTH/ME] Instructor fetch failed, continuing without instructor data:', instructorError);
+        instructor = null;
+      }
     }
 
     const responseTime = Date.now() - startTime;

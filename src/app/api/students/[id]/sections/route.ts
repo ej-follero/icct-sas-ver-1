@@ -17,6 +17,13 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     if (!student) return NextResponse.json({ error: 'Student not found' }, { status: 404 });
     if (!section) return NextResponse.json({ error: 'Section not found' }, { status: 404 });
 
+    // Validate year level compatibility
+    if (Number(student.yearLevel) !== Number(section.yearLevel)) {
+      return NextResponse.json({ 
+        error: `Year level mismatch: Student is in year ${student.yearLevel} but section requires year ${section.yearLevel}` 
+      }, { status: 400 });
+    }
+
     const upsert = await prisma.studentSection.upsert({
       where: { studentId_sectionId: { studentId, sectionId: Number(sectionId) } },
       update: { enrollmentStatus: 'ACTIVE' },

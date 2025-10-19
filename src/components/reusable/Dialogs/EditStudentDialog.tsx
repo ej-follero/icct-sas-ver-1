@@ -92,6 +92,15 @@ export default function EditStudentDialog({
   }, [formData]);
 
   const [isSaving, setIsSaving] = useState(false);
+  const [sections, setSections] = useState<Array<{ sectionId: number; sectionName: string; courseName?: string; academicYear?: string; semester?: string; currentEnrollment?: number; sectionCapacity?: number }>>([]);
+  const [sectionsLoading, setSectionsLoading] = useState(false);
+  const [selectedSectionId, setSelectedSectionId] = useState<string>("");
+  const [departments, setDepartments] = useState<Array<{ id: string; name: string }>>([]);
+  const [departmentsLoading, setDepartmentsLoading] = useState(false);
+  const [selectedDepartmentId, setSelectedDepartmentId] = useState<string>("");
+  const [courses, setCourses] = useState<Array<{ id: string; name: string; code: string; department: string }>>([]);
+  const [coursesLoading, setCoursesLoading] = useState(false);
+  const [selectedCourseId, setSelectedCourseId] = useState<string>("");
   const [feedback, setFeedback] = useState<{
     open: boolean;
     title: string;
@@ -100,12 +109,104 @@ export default function EditStudentDialog({
     onClose?: () => void;
   }>({ open: false, title: '' });
 
+  // Load sections when dialog opens
+  useEffect(() => {
+    const loadSections = async () => {
+      if (!open) return;
+      setSectionsLoading(true);
+      try {
+        const res = await fetch('/api/sections', { method: 'GET', headers: { 'Content-Type': 'application/json' } });
+        if (!res.ok) {
+          throw new Error(`Failed to load sections (HTTP ${res.status})`);
+        }
+        const json = await res.json();
+        setSections(Array.isArray(json) ? json : []);
+      } catch (e) {
+        // non-blocking; keep list empty
+        console.warn('Failed to fetch sections', e);
+        setSections([]);
+      } finally {
+        setSectionsLoading(false);
+      }
+    };
+    loadSections();
+  }, [open]);
+
+  // Load departments and courses when dialog opens
+  useEffect(() => {
+    if (!open) return;
+    // Departments
+    (async () => {
+      setDepartmentsLoading(true);
+      try {
+        const res = await fetch('/api/departments');
+        if (res.ok) {
+          const json = await res.json();
+          // Normalize to id/name
+          const items = Array.isArray(json) ? json : Array.isArray(json?.data) ? json.data : [];
+          const mapped = (items as Array<any>).map((d: any) => ({ id: String(d.departmentId ?? d.id), name: d.departmentName ?? d.name }));
+          setDepartments(mapped);
+          // Preselect from student data
+          if (formData.department) {
+            const found = mapped.find(d => (d.name || '').toLowerCase() === formData.department.toLowerCase());
+            if (found) setSelectedDepartmentId(found.id);
+          }
+        } else {
+          setDepartments([]);
+        }
+      } catch {
+        setDepartments([]);
+      } finally {
+        setDepartmentsLoading(false);
+      }
+    })();
+    // Courses
+    (async () => {
+      setCoursesLoading(true);
+      try {
+        const res = await fetch('/api/courses');
+        if (res.ok) {
+          const items = await res.json();
+          const mapped = Array.isArray(items)
+            ? items.map((c: any) => ({ id: String(c.id ?? c.courseId), name: c.name ?? c.courseName, code: c.code ?? c.courseCode, department: String(c.department ?? c.departmentId ?? '') }))
+            : [];
+          setCourses(mapped);
+          // Preselect from student data
+          if (formData.course) {
+            const found = mapped.find((c: any) => (c.name || '').toLowerCase() === formData.course.toLowerCase() || (c.code || '').toLowerCase() === formData.course.toLowerCase());
+            if (found) {
+              setSelectedCourseId(found.id);
+              if (found.department) setSelectedDepartmentId(found.department);
+            }
+          }
+        } else {
+          setCourses([]);
+        }
+      } catch {
+        setCourses([]);
+      } finally {
+        setCoursesLoading(false);
+      }
+    })();
+  }, [open, formData.department, formData.course]);
+
+  // Helpers to map year level to numeric
+  const getYearLevelNumber = (yl: string) => {
+    switch (yl) {
+      case 'FIRST_YEAR': return 1;
+      case 'SECOND_YEAR': return 2;
+      case 'THIRD_YEAR': return 3;
+      case 'FOURTH_YEAR': return 4;
+      default: return undefined;
+    }
+  };
+
   const handleSave = async () => {
     if (!student?.studentId) return;
     
     setIsSaving(true);
     try {
-      const payload = {
+      const payload: any = {
         firstName: formData.firstName,
         lastName: formData.lastName,
         studentIdNum: formData.studentIdNum,
@@ -116,6 +217,9 @@ export default function EditStudentDialog({
         yearLevel: formData.yearLevel,
         status: formData.status,
       };
+      // Prefer sending IDs to avoid name-matching issues on the server
+      if (selectedDepartmentId) payload.departmentId = Number(selectedDepartmentId);
+      if (selectedCourseId) payload.courseId = Number(selectedCourseId);
 
       if (onSave) {
         await onSave(payload);
@@ -133,10 +237,23 @@ export default function EditStudentDialog({
         }
       }
 
+      // If a section was selected, enroll the student
+      if (selectedSectionId) {
+        const enrollRes = await fetch(`/api/students/${student.studentId}/sections`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sectionId: Number(selectedSectionId) })
+        });
+        if (!enrollRes.ok) {
+          const err = await enrollRes.json().catch(() => ({}));
+          throw new Error(err?.error || `Failed to enroll to section (HTTP ${enrollRes.status})`);
+        }
+      }
+
       setFeedback({
         open: true,
         title: 'Student updated successfully',
-        description: 'The student information has been saved.',
+        description: selectedSectionId ? 'Profile saved and section enrollment updated.' : 'The student information has been saved.',
         variant: 'success',
         onClose: () => {
           setFeedback({ open: false, title: '' });
@@ -309,26 +426,82 @@ export default function EditStudentDialog({
                     <Label htmlFor="department" className="text-sm font-medium text-gray-700">
                       Department <span className="text-red-500">*</span>
                     </Label>
-                    <Input
-                      id="department"
-                      value={formData.department}
-                      onChange={(e) => setFormData(prev => ({ ...prev, department: e.target.value }))}
-                      className="w-full"
-                      placeholder="Enter department"
-                    />
+                    <Select
+                      value={selectedDepartmentId}
+                      onValueChange={(value) => {
+                        setSelectedDepartmentId(value);
+                        const dept = departments.find(d => d.id === value);
+                        setFormData(prev => ({ ...prev, department: dept?.name || '' }));
+                        // Clear downstream selections
+                        setSelectedCourseId("");
+                        setSelectedSectionId("");
+                      }}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder={departmentsLoading ? 'Loading departments...' : 'Select department'} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {departments.map((d) => (
+                          <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="course" className="text-sm font-medium text-gray-700">
                       Course <span className="text-red-500">*</span>
                     </Label>
-                    <Input
-                      id="course"
-                      value={formData.course}
-                      onChange={(e) => setFormData(prev => ({ ...prev, course: e.target.value }))}
-                      className="w-full"
-                      placeholder="Enter course"
-                    />
+                    <Select
+                      value={selectedCourseId}
+                      onValueChange={(value) => {
+                        setSelectedCourseId(value);
+                        const course = courses.find(c => c.id === value);
+                        setFormData(prev => ({ ...prev, course: course ? (course.name || course.code) : '' }));
+                        // Clear downstream selection
+                        setSelectedSectionId("");
+                      }}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder={coursesLoading ? 'Loading courses...' : (selectedDepartmentId ? 'Select course' : 'Select department first')} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {courses
+                          .filter(c => !selectedDepartmentId || c.department === selectedDepartmentId)
+                          .map(c => (
+                            <SelectItem key={c.id} value={c.id}>{c.code} - {c.name}</SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
                   </div>
+                </div>
+
+                {/* Section Enrollment */}
+                <div className="space-y-2">
+                  <Label htmlFor="section" className="text-sm font-medium text-gray-700">
+                    Section (Enroll)
+                  </Label>
+                  <Select value={selectedSectionId} onValueChange={(value) => setSelectedSectionId(value)}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder={sectionsLoading ? 'Loading sections...' : 'Select section (optional)'} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {sections
+                        .filter(s => {
+                          // Filter by selected course id
+                          const byCourse = selectedCourseId ? String((s as any).courseId ?? '') === selectedCourseId : true;
+                          // Filter by year level if selected
+                          const ylNum = getYearLevelNumber(formData.yearLevel);
+                          const byYear = ylNum ? Number((s as any).yearLevel) === ylNum : true;
+                          return byCourse && byYear;
+                        })
+                        .map(s => (
+                          <SelectItem key={s.sectionId} value={String(s.sectionId)}>
+                            {s.sectionName} {s.courseName ? `• ${s.courseName}` : ''}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-gray-500">Selecting a section will enroll the student to that section on save.</p>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

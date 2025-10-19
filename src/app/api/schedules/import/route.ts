@@ -2,19 +2,22 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from '@/lib/prisma';
 
-// Define the schedule import schema
+// Define the schedule import schema aligned with Prisma schema
 const scheduleImportSchema = z.object({
+  subjectId: z.number().optional(),
   subjectName: z.string().min(1, "Subject name is required"),
   subjectCode: z.string().min(1, "Subject code is required"),
+  sectionId: z.number().optional(),
   sectionName: z.string().min(1, "Section name is required"),
-  instructorName: z.string().min(1, "Instructor name is required"),
   instructorId: z.number().optional(),
+  instructorName: z.string().optional(),
+  roomId: z.number().optional(),
   roomNo: z.string().min(1, "Room number is required"),
   day: z.enum(["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"]),
   startTime: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, "Invalid time format (HH:MM)"),
   endTime: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, "Invalid time format (HH:MM)"),
-  scheduleType: z.enum(["REGULAR", "MAKEUP", "EXAM", "LABORATORY", "TUTORIAL"]).optional().default("REGULAR"),
-  status: z.enum(["ACTIVE", "INACTIVE", "CANCELLED"]).optional().default("ACTIVE"),
+  scheduleType: z.enum(["REGULAR", "MAKEUP", "SPECIAL", "REVIEW", "EXAM"]).optional().default("REGULAR"),
+  status: z.enum(["ACTIVE", "CANCELLED", "POSTPONED", "COMPLETED", "CONFLICT"]).optional().default("ACTIVE"),
   maxStudents: z.number().min(1).optional().default(30),
   notes: z.string().optional(),
   semesterId: z.number().optional(),
@@ -72,46 +75,72 @@ export async function POST(request: NextRequest) {
         });
 
         // Find or create subject
-        let subject = await prisma.subject.findFirst({
-          where: {
-            OR: [
-              { subjectName: { equals: validated.subjectName, mode: 'insensitive' } },
-              { subjectCode: { equals: validated.subjectCode, mode: 'insensitive' } }
-            ]
-          }
-        });
+        let subject;
+        if (validated.subjectId) {
+          subject = await prisma.subjects.findUnique({
+            where: { subjectId: validated.subjectId }
+          });
+        }
+
+        if (!subject) {
+          subject = await prisma.subjects.findFirst({
+            where: {
+              OR: [
+                { subjectName: { equals: validated.subjectName, mode: 'insensitive' } },
+                { subjectCode: { equals: validated.subjectCode, mode: 'insensitive' } }
+              ]
+            }
+          });
+        }
 
         if (!subject) {
           // Create new subject if it doesn't exist
-          subject = await prisma.subject.create({
+          subject = await prisma.subjects.create({
             data: {
               subjectName: validated.subjectName,
               subjectCode: validated.subjectCode,
-              subjectDescription: `Imported subject: ${validated.subjectName}`,
-              subjectUnits: 3, // Default units
-              subjectType: 'LECTURE', // Default type
-              isActive: true,
+              subjectType: 'LECTURE',
+              status: 'ACTIVE',
+              description: `Imported subject: ${validated.subjectName}`,
+              lectureUnits: 3,
+              labUnits: 0,
+              creditedUnits: 3,
+              totalHours: 54,
+              courseId: 1, // Default course - you might want to make this configurable
+              departmentId: 1, // Default department - you might want to make this configurable
+              academicYear: validated.academicYear || new Date().getFullYear().toString(),
+              semester: 'FIRST_SEMESTER',
+              maxStudents: validated.maxStudents || 30,
             }
           });
         }
 
         // Find or create section
-        let section = await prisma.section.findFirst({
-          where: {
-            sectionName: { equals: validated.sectionName, mode: 'insensitive' }
-          }
-        });
+        let section;
+        if (validated.sectionId) {
+          section = await prisma.section.findUnique({
+            where: { sectionId: validated.sectionId }
+          });
+        }
+
+        if (!section) {
+          section = await prisma.section.findFirst({
+            where: {
+              sectionName: { equals: validated.sectionName, mode: 'insensitive' }
+            }
+          });
+        }
 
         if (!section) {
           // Create new section if it doesn't exist
           section = await prisma.section.create({
             data: {
               sectionName: validated.sectionName,
-              sectionCapacity: validated.maxStudents,
+              sectionCapacity: validated.maxStudents || 30,
               sectionStatus: 'ACTIVE',
               yearLevel: 1, // Default year level
               academicYear: validated.academicYear || new Date().getFullYear().toString(),
-              semester: 'FIRST', // Default semester
+              semester: 'FIRST_SEMESTER',
               currentEnrollment: 0,
               courseId: 1, // Default course - you might want to make this configurable
               semesterId: validated.semesterId || 1, // Default semester
@@ -119,15 +148,15 @@ export async function POST(request: NextRequest) {
           });
         }
 
-        // Find instructor
-        let instructor;
+        // Find instructor (optional)
+        let instructor = null;
         if (validated.instructorId) {
           instructor = await prisma.instructor.findUnique({
             where: { instructorId: validated.instructorId }
           });
         }
 
-        if (!instructor) {
+        if (!instructor && validated.instructorName) {
           // Try to find by name
           const nameParts = validated.instructorName.split(' ');
           const firstName = nameParts[0] || '';
@@ -143,16 +172,21 @@ export async function POST(request: NextRequest) {
           });
         }
 
-        if (!instructor) {
-          throw new Error(`Instructor not found: ${validated.instructorName}`);
+        // Find room
+        let room;
+        if (validated.roomId) {
+          room = await prisma.room.findUnique({
+            where: { roomId: validated.roomId }
+          });
         }
 
-        // Find room
-        const room = await prisma.room.findFirst({
-          where: {
-            roomNo: { equals: validated.roomNo, mode: 'insensitive' }
-          }
-        });
+        if (!room) {
+          room = await prisma.room.findFirst({
+            where: {
+              roomNo: { equals: validated.roomNo, mode: 'insensitive' }
+            }
+          });
+        }
 
         if (!room) {
           throw new Error(`Room not found: ${validated.roomNo}`);
@@ -205,7 +239,7 @@ export async function POST(request: NextRequest) {
           data: {
             subjectId: subject.subjectId,
             sectionId: section.sectionId,
-            instructorId: instructor.instructorId,
+            instructorId: instructor?.instructorId || null,
             roomId: room.roomId,
             day: validated.day,
             startTime: validated.startTime,
@@ -216,7 +250,8 @@ export async function POST(request: NextRequest) {
             notes: validated.notes || null,
             semesterId: semesterId,
             academicYear: validated.academicYear || new Date().getFullYear().toString(),
-            currentEnrollment: 0,
+            isRecurring: true,
+            slots: 0,
           },
           include: {
             subject: true,

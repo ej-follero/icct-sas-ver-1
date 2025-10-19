@@ -6,26 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Calendar, AlertTriangle, X, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-
-interface Schedule {
-  subjectSchedId: number;
-  subject: { subjectName: string; subjectCode: string; subjectId: number };
-  section: { sectionName: string; sectionId: number };
-  instructor: { firstName: string; lastName: string; instructorId: number };
-  room: { roomNo: string; roomId: number; roomCapacity: number };
-  day: string;
-  startTime: string;
-  endTime: string;
-  slots: number;
-  scheduleType: string;
-  status: string;
-  semester: { semesterName: string; semesterId: number };
-  academicYear: string;
-  maxStudents: number;
-  currentEnrollment: number;
-  notes?: string;
-  conflicts?: string[];
-}
+import { Schedule } from "@/types/schedule";
 
 interface DeleteScheduleDialogProps {
   open: boolean;
@@ -96,7 +77,7 @@ export function DeleteScheduleDialog({ open, onOpenChange, schedule, onScheduleD
             <div className="text-sm text-gray-600 space-y-1">
               <p><strong>Subject:</strong> {schedule.subject.subjectName} ({schedule.subject.subjectCode})</p>
               <p><strong>Section:</strong> {schedule.section.sectionName}</p>
-              <p><strong>Instructor:</strong> {schedule.instructor.firstName} {schedule.instructor.lastName}</p>
+              <p><strong>Instructor:</strong> {schedule.instructor ? `${schedule.instructor.firstName} ${schedule.instructor.lastName}` : 'No instructor assigned'}</p>
               <p><strong>Room:</strong> {schedule.room.roomNo}</p>
               <p><strong>Day:</strong> {schedule.day}</p>
               <p><strong>Time:</strong> {schedule.startTime} - {schedule.endTime}</p>

@@ -260,15 +260,15 @@ export default function SystemStatusPage() {
   const services: ServiceStatus[] = [
     {
       name: 'Database',
-      status: systemHealth?.services.database.status === 'healthy' ? 'online' : 'offline',
-      responseTime: parseInt(systemHealth?.services.database.responseTime.replace('ms', '').replace('< ', '').replace('timeout', '0') || '0'),
+      status: (systemHealth?.services?.database?.status === 'healthy') ? 'online' : 'offline',
+      responseTime: parseInt((systemHealth?.services?.database?.responseTime || '').replace('ms', '').replace('< ', '').replace('timeout', '0') || '0'),
       lastCheck: systemHealth?.timestamp || '',
       description: 'PostgreSQL database connection',
       icon: <Database className="w-5 h-5" />
     },
     {
       name: 'Cache System',
-      status: systemHealth?.services.cache.status === 'healthy' ? 'online' : 'offline',
+      status: (systemHealth?.services?.cache?.status === 'healthy') ? 'online' : 'offline',
       responseTime: 5,
       lastCheck: systemHealth?.timestamp || '',
       description: 'Redis cache system',
@@ -276,7 +276,7 @@ export default function SystemStatusPage() {
     },
     {
       name: 'WebSocket Server',
-      status: systemHealth?.services.websocket.status === 'healthy' ? 'online' : 'offline',
+      status: (systemHealth?.services?.websocket?.status === 'healthy') ? 'online' : 'offline',
       responseTime: 10,
       lastCheck: systemHealth?.timestamp || '',
       description: 'Real-time communication',
@@ -292,12 +292,12 @@ export default function SystemStatusPage() {
     }
   ];
 
-  const memoryUsagePercent = systemHealth ? 
-    (parseInt(systemHealth.performance.memoryUsage.heapUsed.replace(' MB', '')) / 
-     parseInt(systemHealth.performance.memoryUsage.heapTotal.replace(' MB', ''))) * 100 : 0;
+  const memoryUsagePercent = systemHealth && systemHealth.performance?.memoryUsage ? 
+    (parseInt((systemHealth.performance.memoryUsage.heapUsed || '0').replace(' MB', '')) / 
+     Math.max(1, parseInt((systemHealth.performance.memoryUsage.heapTotal || '1').replace(' MB', '')))) * 100 : 0;
 
-  const cpuUsagePercent = systemHealth ? 
-    (parseInt(systemHealth.performance.cpuUsage.user.replace('ms', '')) / 1000) : 0;
+  const cpuUsagePercent = systemHealth && systemHealth.performance?.cpuUsage ? 
+    (parseInt((systemHealth.performance.cpuUsage.user || '0').replace('ms', '')) / 1000) : 0;
 
   // Filter services based on status filter
   const filteredServices = services.filter(service => 
@@ -409,14 +409,14 @@ export default function SystemStatusPage() {
           <SummaryCard
             icon={<Clock className="text-blue-500 w-5 h-5" />}
             label="Uptime"
-            value={systemHealth?.performance.uptime || 'N/A'}
+            value={systemHealth?.performance?.uptime || 'N/A'}
             valueClassName="text-blue-900"
             sublabel="System uptime"
           />
           <SummaryCard
             icon={<BarChart3 className="text-blue-500 w-5 h-5" />}
             label="Total Queries"
-            value={systemHealth?.performance.queryStats.totalQueries || 0}
+            value={systemHealth?.performance?.queryStats?.totalQueries || 0}
             valueClassName="text-blue-900"
             sublabel="Database queries"
           />
@@ -672,15 +672,15 @@ export default function SystemStatusPage() {
                             <div className="text-sm text-gray-600">Response Time</div>
                           </div>
                           <div className="text-center">
-                            <div className="text-2xl font-bold text-blue-900">{systemHealth.performance.uptime}</div>
+                            <div className="text-2xl font-bold text-blue-900">{systemHealth.performance?.uptime || 'N/A'}</div>
                             <div className="text-sm text-gray-600">Uptime</div>
                           </div>
                           <div className="text-center">
-                            <div className="text-2xl font-bold text-blue-900">{systemHealth.performance.queryStats.totalQueries}</div>
+                            <div className="text-2xl font-bold text-blue-900">{systemHealth.performance?.queryStats?.totalQueries ?? 0}</div>
                             <div className="text-sm text-gray-600">Total Queries</div>
                           </div>
                           <div className="text-center">
-                            <div className="text-2xl font-bold text-blue-900">{systemHealth.performance.queryStats.errorRate}</div>
+                            <div className="text-2xl font-bold text-blue-900">{systemHealth.performance?.queryStats?.errorRate || 'N/A'}</div>
                             <div className="text-sm text-gray-600">Error Rate</div>
                           </div>
                         </div>
@@ -734,18 +734,18 @@ export default function SystemStatusPage() {
                             <div>
                               <div className="flex justify-between text-sm mb-2">
                                 <span>Heap Used</span>
-                                <span>{systemHealth.performance.memoryUsage.heapUsed}</span>
+                                <span>{systemHealth.performance?.memoryUsage?.heapUsed || 'N/A'}</span>
                               </div>
                               <Progress value={memoryUsagePercent} className="h-2" />
                             </div>
-                            <div className="grid grid-cols-2 gap-4 text-sm">
+                              <div className="grid grid-cols-2 gap-4 text-sm">
                               <div>
                                 <span className="text-gray-600">RSS:</span>
-                                <span className="ml-2 font-medium">{systemHealth.performance.memoryUsage.rss}</span>
+                                <span className="ml-2 font-medium">{systemHealth.performance?.memoryUsage?.rss || 'N/A'}</span>
                               </div>
                               <div>
                                 <span className="text-gray-600">External:</span>
-                                <span className="ml-2 font-medium">{systemHealth.performance.memoryUsage.external}</span>
+                                <span className="ml-2 font-medium">{systemHealth.performance?.memoryUsage?.external || 'N/A'}</span>
                               </div>
                             </div>
                           </div>
@@ -761,18 +761,18 @@ export default function SystemStatusPage() {
                             <div>
                               <div className="flex justify-between text-sm mb-2">
                                 <span>User Time</span>
-                                <span>{systemHealth.performance.cpuUsage.user}</span>
+                                <span>{systemHealth.performance?.cpuUsage?.user || 'N/A'}</span>
                               </div>
                               <Progress value={cpuUsagePercent} className="h-2" />
                             </div>
-                            <div className="grid grid-cols-2 gap-4 text-sm">
+                              <div className="grid grid-cols-2 gap-4 text-sm">
                               <div>
                                 <span className="text-gray-600">System:</span>
-                                <span className="ml-2 font-medium">{systemHealth.performance.cpuUsage.system}</span>
+                                <span className="ml-2 font-medium">{systemHealth.performance?.cpuUsage?.system || 'N/A'}</span>
                               </div>
                               <div>
                                 <span className="text-gray-600">Average Query:</span>
-                                <span className="ml-2 font-medium">{systemHealth.performance.queryStats.averageQueryTime}</span>
+                                <span className="ml-2 font-medium">{systemHealth.performance?.queryStats?.averageQueryTime || 'N/A'}</span>
                               </div>
                             </div>
                           </div>
@@ -781,7 +781,7 @@ export default function SystemStatusPage() {
                     </div>
 
                     {/* Analytics Data */}
-                    {systemHealth.performance.analytics && (
+                    {systemHealth?.performance?.analytics && (
                       <Card>
                         <CardHeader>
                           <CardTitle className="text-blue-900">Performance Analytics</CardTitle>

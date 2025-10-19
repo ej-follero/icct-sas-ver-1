@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { createNotification } from '@/lib/notifications';
 
 export async function POST(request: NextRequest) {
   try {
@@ -116,6 +117,14 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    try {
+      await createNotification(userId, {
+        title: 'Import completed',
+        message: `Roles import: ${results.success} success, ${results.failed} failed`,
+        priority: results.failed > 0 ? 'NORMAL' : 'NORMAL',
+        type: 'DATA',
+      });
+    } catch {}
     return NextResponse.json({ results });
   } catch (error: any) {
     console.error('Error bulk importing roles:', error);

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { createNotification } from '@/lib/notifications';
 import { CourseStatus, CourseType } from '@prisma/client';
 import { z } from 'zod';
 
@@ -11,8 +12,7 @@ const bulkCourseSchema = z.object({
       .min(2, "Course code must be at least 2 characters")
       .max(10, "Course code must be less than 10 characters")
       .regex(/^[A-Z0-9]+$/, "Course code must contain only uppercase letters and numbers"),
-    department: z.string().min(1, "Department is required"),
-    departmentCode: z.string().optional(),
+    departmentId: z.number().min(1, "Department ID is required"),
     description: z.string().optional(),
     units: z.number().min(1, "Units must be at least 1").max(10, "Units cannot exceed 10"),
     status: z.enum(["ACTIVE", "INACTIVE", "ARCHIVED", "PENDING_REVIEW"]).default("ACTIVE"),
@@ -91,25 +91,13 @@ export async function POST(request: NextRequest) {
             continue;
           }
         } else {
-          // Find department by name or code
-          let departmentId: number | null = null;
-          
-          if (record.departmentCode) {
-            const dept = await prisma.department.findFirst({
-              where: { departmentCode: record.departmentCode },
-            });
-            departmentId = dept?.departmentId || null;
-          }
-          
-          if (!departmentId) {
-            const dept = await prisma.department.findFirst({
-              where: { departmentName: { contains: record.department, mode: 'insensitive' } },
-            });
-            departmentId = dept?.departmentId || null;
-          }
+          // Verify department exists
+          const department = await prisma.department.findUnique({
+            where: { departmentId: record.departmentId },
+          });
 
-          if (!departmentId) {
-            results.errors.push(`Department not found for course ${record.code}: ${record.department}`);
+          if (!department) {
+            results.errors.push(`Department with ID ${record.departmentId} not found for course ${record.code}`);
             results.failed++;
             continue;
           }
@@ -119,7 +107,7 @@ export async function POST(request: NextRequest) {
             data: {
               courseName: record.name,
               courseCode: record.code,
-              departmentId: departmentId,
+              departmentId: record.departmentId,
               description: record.description || "",
               totalUnits: record.units,
               courseStatus: record.status as CourseStatus,
@@ -135,6 +123,23 @@ export async function POST(request: NextRequest) {
         results.failed++;
       }
     }
+
+    try {
+      const token = request.cookies.get('token')?.value;
+      if (token) {
+        const jwt = require('jsonwebtoken');
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const userId = Number((decoded as any)?.userId);
+        if (Number.isFinite(userId)) {
+          await createNotification(userId, {
+            title: 'Import completed',
+            message: `Courses import: ${results.success} success, ${results.failed} failed, ${results.duplicates} duplicates, ${results.updated} updated`,
+            priority: results.failed > 0 ? 'NORMAL' : 'NORMAL',
+            type: 'DATA',
+          });
+        }
+      }
+    } catch {}
 
     return NextResponse.json({
       message: `Bulk import completed. Success: ${results.success}, Failed: ${results.failed}, Duplicates: ${results.duplicates}, Updated: ${results.updated}`,

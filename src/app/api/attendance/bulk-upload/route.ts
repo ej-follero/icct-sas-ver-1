@@ -1,10 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { parse } from 'csv-parse/sync';
+import { createNotification } from '@/lib/notifications';
 import * as XLSX from 'xlsx';
 
 export async function POST(request: NextRequest) {
   try {
+    // Optional: identify actor for notification
+    let actorUserId: number | null = null;
+    try {
+      const token = request.cookies.get('token')?.value;
+      if (token) {
+        const jwt = require('jsonwebtoken');
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const uid = Number((decoded as any)?.userId);
+        if (Number.isFinite(uid)) actorUserId = uid;
+      }
+    } catch {}
     const formData = await request.formData();
     const file = formData.get('file') as File;
     const entityType = formData.get('entityType') as string;
@@ -174,6 +186,18 @@ export async function POST(request: NextRequest) {
       } catch (error) {
         results.errors.push(`Row ${rowNumber}: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
+    }
+
+    // Notify actor about import summary
+    if (actorUserId) {
+      try {
+        await createNotification(actorUserId, {
+          title: 'Attendance import completed',
+          message: `Success: ${results.success}, Failed: ${results.errors.length}`,
+          priority: results.errors.length > 0 ? 'NORMAL' : 'LOW',
+          type: 'ATTENDANCE',
+        });
+      } catch {}
     }
 
     return NextResponse.json(results);

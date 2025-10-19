@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { createNotification } from '@/lib/notifications';
 
 export async function GET(request: NextRequest) {
   try {
@@ -177,31 +178,112 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    // Create the schedule
+    // Validate that referenced entities exist
+    const [subject, section, room, semester] = await Promise.all([
+      prisma.subjects.findUnique({ where: { subjectId: parseInt(subjectId) } }),
+      prisma.section.findUnique({ where: { sectionId: parseInt(sectionId) } }),
+      prisma.room.findUnique({ where: { roomId: parseInt(roomId) } }),
+      semesterId ? prisma.semester.findUnique({ where: { semesterId: parseInt(semesterId) } }) : null
+    ]);
+
+    if (!subject) {
+      return NextResponse.json({ error: 'Subject not found' }, { status: 400 });
+    }
+    if (!section) {
+      return NextResponse.json({ error: 'Section not found' }, { status: 400 });
+    }
+    if (!room) {
+      return NextResponse.json({ error: 'Room not found' }, { status: 400 });
+    }
+    if (instructorId) {
+      const instructor = await prisma.instructor.findUnique({ where: { instructorId: parseInt(instructorId) } });
+      if (!instructor) {
+        return NextResponse.json({ error: 'Instructor not found' }, { status: 400 });
+      }
+    }
+
+    // Create the schedule with proper schema alignment
     const newSchedule = await prisma.subjectSchedule.create({
       data: {
         subjectId: parseInt(subjectId),
         sectionId: parseInt(sectionId),
         instructorId: instructorId ? parseInt(instructorId) : null,
         roomId: parseInt(roomId),
-        day: day,
+        day: day as any, // Cast to DayOfWeek enum
         startTime: startTime,
         endTime: endTime,
-        scheduleType: scheduleType,
-        status: status,
-        maxStudents: parseInt(maxStudents),
+        scheduleType: scheduleType as any, // Cast to ScheduleType enum
+        status: status as any, // Cast to ScheduleStatus enum
+        maxStudents: parseInt(maxStudents) || 30,
         notes: notes || null,
         semesterId: semesterId ? parseInt(semesterId) : 1, // Default to first semester if not provided
         academicYear: academicYear || new Date().getFullYear().toString(),
+        isRecurring: true, // Default to recurring
+        slots: 0, // Default slots
       },
       include: {
-        subject: true,
-        section: true,
-        instructor: true,
-        room: true,
-        semester: true,
+        subject: {
+          select: {
+            subjectId: true,
+            subjectName: true,
+            subjectCode: true,
+            subjectType: true,
+            status: true
+          }
+        },
+        section: {
+          select: {
+            sectionId: true,
+            sectionName: true,
+            sectionCapacity: true,
+            sectionStatus: true,
+            currentEnrollment: true
+          }
+        },
+        instructor: {
+          select: {
+            instructorId: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            status: true
+          }
+        },
+        room: {
+          select: {
+            roomId: true,
+            roomNo: true,
+            roomCapacity: true,
+            roomType: true,
+            status: true
+          }
+        },
+        semester: {
+          select: {
+            semesterId: true,
+            semesterType: true,
+            year: true,
+            status: true
+          }
+        }
       },
     });
+
+    // Notify on room capacity risk (if capacity exceeded by currentEnrollment)
+    try {
+      const section = newSchedule.section;
+      if (section && typeof section.sectionCapacity === 'number' && section.sectionCapacity > 0) {
+        const enrollment = section.currentEnrollment ?? 0;
+        if (enrollment > section.sectionCapacity) {
+          await createNotification(userId, {
+            title: 'Room capacity exceeded',
+            message: `Section ${section.sectionName} capacity ${section.sectionCapacity} exceeded by ${enrollment - section.sectionCapacity}.`,
+            priority: 'HIGH',
+            type: 'SCHEDULING',
+          });
+        }
+      }
+    } catch {}
 
     return NextResponse.json(newSchedule, { status: 201 });
   } catch (error) {

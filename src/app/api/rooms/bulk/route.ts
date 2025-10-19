@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from '@/lib/prisma';
+import { createNotification } from '@/lib/notifications';
 
 const roomSchema = z.object({
   roomNo: z.string().min(1, "Room number is required"),
@@ -59,7 +60,11 @@ export async function POST(request: NextRequest) {
           status: body[i].status || "AVAILABLE",
           isActive: typeof body[i].isActive === 'boolean' ? body[i].isActive : true,
         });
-        const created = await prisma.room.create({ data: validated });
+        const data = {
+          ...validated,
+          readerId: validated.readerId ?? `${validated.roomNo}-${Date.now()}`,
+        } as any;
+        const created = await prisma.room.create({ data });
         createdRooms.push(created);
         success++;
       } catch (err: any) {
@@ -71,6 +76,14 @@ export async function POST(request: NextRequest) {
         }
       }
     }
+    try {
+      await createNotification(userId, {
+        title: 'Import completed',
+        message: `Rooms import: ${success} success, ${failed} failed`,
+        priority: failed > 0 ? 'NORMAL' : 'NORMAL',
+        type: 'DATA',
+      });
+    } catch {}
     return NextResponse.json({ success, failed, errors, createdRooms });
   } catch (error) {
     return NextResponse.json({ error: "Failed to import rooms" }, { status: 500 });

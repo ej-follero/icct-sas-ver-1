@@ -1,47 +1,122 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { UserGender, InstructorType, Status } from '@prisma/client';
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
 
-async function assertAdmin(request: NextRequest) {
-  const token = request.cookies.get('token')?.value;
-  const isDev = process.env.NODE_ENV !== 'production';
-  if (!token) return isDev ? { ok: true } as const : { ok: false, res: NextResponse.json({ error: 'Authentication required' }, { status: 401 }) };
+export async function GET(request: NextRequest) {
   try {
+    // JWT Authentication
+    const token = request.cookies.get('token')?.value;
+    if (!token) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
     const jwt = require('jsonwebtoken');
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const role = decoded.role as string | undefined;
-    if (!role || (role !== 'SUPER_ADMIN' && role !== 'ADMIN')) {
-      return { ok: false, res: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
+    const userId = Number((decoded as any)?.userId);
+    if (!Number.isFinite(userId)) {
+      return NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 });
     }
-    return { ok: true } as const;
-  } catch {
-    return { ok: false, res: NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 }) };
-  }
-}
 
-export async function GET() {
-  try {
-    console.log('Fetching instructors from database...');
+    // Check user exists and is active
+    const user = await prisma.user.findUnique({
+      where: { userId },
+      select: { status: true, role: true }
+    });
+
+    if (!user || user.status !== 'ACTIVE') {
+      return NextResponse.json({ error: 'User not found or inactive' }, { status: 401 });
+    }
+
+    // Role-based access control
+    const allowedRoles = ['SUPER_ADMIN', 'ADMIN', 'DEPARTMENT_HEAD', 'INSTRUCTOR'];
+    if (!allowedRoles.includes(user.role)) {
+      return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
+    }
+
+    // Get query parameters
+    const { searchParams } = new URL(request.url);
+    const search = searchParams.get("search") || "";
+    const status = searchParams.get("status") || "all";
+
+    // Build where clause
+    const where: any = {};
     
+    if (search) {
+      where.OR = [
+        { firstName: { contains: search, mode: 'insensitive' } },
+        { lastName: { contains: search, mode: 'insensitive' } },
+        { email: { contains: search, mode: 'insensitive' } },
+        { employeeId: { contains: search, mode: 'insensitive' } }
+      ];
+    }
+
+    if (status !== 'all') {
+      where.status = status;
+    }
+
+    // Fetch instructors with related data
     const instructors = await prisma.instructor.findMany({
+      where,
       include: {
         Department: {
           select: {
             departmentId: true,
             departmentName: true,
-            departmentCode: true,
+            departmentCode: true
+          }
+        },
+        Subjects: {
+          select: {
+            subjectId: true,
+            subjectName: true,
+            subjectCode: true
+          }
+        },
+        SubjectSchedule: {
+          select: {
+            subjectSchedId: true,
+            day: true,
+            startTime: true,
+            endTime: true
           }
         }
       },
-      orderBy: {
-        lastName: 'asc',
-      },
+      orderBy: [
+        { firstName: 'asc' },
+        { lastName: 'asc' }
+      ]
     });
 
-    console.log('Instructors found:', instructors.length);
-    console.log('Sample instructor:', instructors[0]);
+    // Transform the data for frontend
+    const transformedInstructors = instructors.map(instructor => ({
+      instructorId: instructor.instructorId,
+      firstName: instructor.firstName,
+      middleName: instructor.middleName,
+      lastName: instructor.lastName,
+      suffix: instructor.suffix,
+      email: instructor.email,
+      phoneNumber: instructor.phoneNumber,
+      employeeId: instructor.employeeId,
+      rfidTag: instructor.rfidTag,
+      gender: instructor.gender,
+      instructorType: instructor.instructorType,
+      status: instructor.status,
+      departmentId: instructor.departmentId,
+      department: instructor.Department ? {
+        departmentId: instructor.Department.departmentId,
+        departmentName: instructor.Department.departmentName,
+        departmentCode: instructor.Department.departmentCode
+      } : null,
+      officeLocation: instructor.officeLocation,
+      officeHours: instructor.officeHours,
+      specialization: instructor.specialization,
+      img: instructor.img,
+      totalSubjects: instructor.Subjects.length,
+      totalSchedules: instructor.SubjectSchedule.length,
+      createdAt: instructor.createdAt,
+      updatedAt: instructor.updatedAt
+    }));
 
-    return NextResponse.json({ data: instructors });
+    return NextResponse.json(transformedInstructors);
   } catch (error) {
     console.error('Error fetching instructors:', error);
     return NextResponse.json(
@@ -50,67 +125,3 @@ export async function GET() {
     );
   }
 }
-
-export async function POST(request: NextRequest) {
-  try {
-    const gate = await assertAdmin(request);
-    if (!('ok' in gate) || gate.ok !== true) return gate.res;
-    const body = await request.json();
-    
-    const {
-      firstName,
-      middleName,
-      lastName,
-      suffix,
-      email,
-      phoneNumber,
-      gender,
-      instructorType,
-      departmentId,
-      status,
-      rfidTag,
-      employeeId,
-      officeLocation,
-      officeHours,
-      specialization,
-    } = body;
-
-    // Create instructor directly; avoid mismatched user/instructor linkage in schema
-    const instructor = await prisma.instructor.create({
-      data: {
-        firstName,
-        middleName,
-        lastName,
-        suffix,
-        email,
-        phoneNumber,
-        gender: (gender as string)?.toUpperCase() as UserGender,
-        instructorType: (instructorType as string)?.toUpperCase() as InstructorType,
-        departmentId,
-        status: (status as string)?.toUpperCase() as Status,
-        rfidTag,
-        employeeId,
-        officeLocation,
-        officeHours,
-        specialization,
-      },
-      include: {
-        Department: {
-          select: {
-            departmentId: true,
-            departmentName: true,
-            departmentCode: true,
-          }
-        }
-      }
-    });
-
-    return NextResponse.json({ data: instructor });
-  } catch (error) {
-    console.error('Error creating instructor:', error);
-    return NextResponse.json(
-      { error: 'Failed to create instructor' },
-      { status: 500 }
-    );
-  }
-} 

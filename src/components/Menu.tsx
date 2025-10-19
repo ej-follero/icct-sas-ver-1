@@ -52,6 +52,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils"; // shadcn classnames utility
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { useUnreadNotifications } from '@/hooks/useUnreadNotifications';
 
 type MenuItem = {
   icon: JSX.Element;
@@ -168,6 +169,7 @@ const menuConfig: MenuConfig = {
           subItems: [
             { icon: <Megaphone className="w-5 h-5" />, label: "Announcements", href: "/list/announcements", description: "Broadcast announcements" },
             { icon: <Calendar className="w-5 h-5" />, label: "Events", href: "/list/events", description: "Manage events" },
+            { icon: <Bell className="w-5 h-5" />, label: "Notifications", href: "/notifications", description: "System notifications" },
           ]
         },
         { icon: <Mail className="w-5 h-5" />, label: "Email", href: "/list/email", description: "Email management" },
@@ -375,6 +377,7 @@ const menuConfig: MenuConfig = {
           subItems: [
             { icon: <Megaphone className="w-5 h-5" />, label: "Announcements", href: "/list/announcements", description: "Broadcast announcements" },
             { icon: <Calendar className="w-5 h-5" />, label: "Events", href: "/list/events", description: "Manage events" },
+            { icon: <Bell className="w-5 h-5" />, label: "Notifications", href: "/notifications", description: "System notifications" },
           ]
         },
         { icon: <Mail className="w-5 h-5" />, label: "Email", href: "/list/email", description: "Email management" },
@@ -674,6 +677,7 @@ const menuConfig: MenuConfig = {
 
 export default function Sidebar({ role, collapsed = false }: { role: Role; collapsed?: boolean }) {
   const pathname = usePathname();
+  const { count: unreadCount } = useUnreadNotifications(30000);
   const [openSections, setOpenSections] = useState<Record<string, boolean>>(() => {
     // Initialize sections based on current path
     const initial: Record<string, boolean> = {};
@@ -823,7 +827,14 @@ export default function Sidebar({ role, collapsed = false }: { role: Role; colla
                                   role="menuitem"
                                   onClick={sub.disabled ? (e) => e.preventDefault() : undefined}
                                 >
-                                  {sub.icon}
+                                  <div className="relative">
+                                    {sub.icon}
+                                    {sub.label === 'Notifications' && unreadCount > 0 && (
+                                      <span className="absolute -top-1 -right-1 text-[10px] leading-none bg-red-600 text-white rounded-full px-1.5 py-0.5 min-w-[18px] text-center">
+                                        {unreadCount > 99 ? '99+' : unreadCount}
+                                      </span>
+                                    )}
+                                  </div>
                                   {expanded && (
                                     <div className="flex items-center justify-between w-full">
                                       <span className="text-left">{sub.label}</span>

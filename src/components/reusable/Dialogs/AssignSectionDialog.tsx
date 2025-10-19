@@ -15,10 +15,48 @@ interface AssignSectionDialogProps {
 export function AssignSectionDialog({ open, onOpenChange, defaultStudentId }: AssignSectionDialogProps) {
   const [studentId, setStudentId] = useState<string>(defaultStudentId ? String(defaultStudentId) : '');
   const [sectionId, setSectionId] = useState<string>('');
-  const [sections, setSections] = useState<Array<{ value: string; label: string }>>([]);
+  const [sections, setSections] = useState<Array<{ value: string; label: string; yearLevel?: number }>>([]);
+  const [studentYearLevel, setStudentYearLevel] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Fetch student year level when student is selected
+  const fetchStudentYearLevel = async (studentId: string) => {
+    if (!studentId || studentId === 'all') {
+      setStudentYearLevel(null);
+      return;
+    }
+
+    try {
+      let resolvedId: number | null = null;
+      if (/^\d+$/.test(studentId)) {
+        resolvedId = Number(studentId);
+      } else {
+        try {
+          const sres = await fetch(`/api/search/entities?type=student&q=${encodeURIComponent(studentId)}&limit=1`);
+          if (sres.ok) {
+            const data = await sres.json();
+            const first = Array.isArray(data.items) && data.items[0];
+            if (first && /^\d+$/.test(first.value)) {
+              resolvedId = Number(first.value);
+            }
+          }
+        } catch {}
+      }
+
+      if (resolvedId) {
+        const res = await fetch(`/api/students/${resolvedId}`);
+        if (res.ok) {
+          const studentData = await res.json();
+          setStudentYearLevel(studentData.yearLevel || null);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching student year level:', error);
+      setStudentYearLevel(null);
+    }
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -28,7 +66,11 @@ export function AssignSectionDialog({ open, onOpenChange, defaultStudentId }: As
         if (!res.ok) throw new Error('Failed to load sections');
         const data = await res.json();
         const options = (data?.data || data?.sections || [])
-          .map((s: any) => ({ value: String(s.sectionId || s.sectionId), label: s.sectionName }));
+          .map((s: any) => ({ 
+            value: String(s.sectionId || s.sectionId), 
+            label: s.sectionName,
+            yearLevel: s.yearLevel 
+          }));
         setSections([{ value: 'all', label: 'Select section...' }, ...options]);
       } catch (e) {
         console.error(e);
@@ -38,10 +80,28 @@ export function AssignSectionDialog({ open, onOpenChange, defaultStudentId }: As
     loadSections();
   }, [open]);
 
+  // Fetch student year level when student ID changes
+  useEffect(() => {
+    if (studentId && studentId !== 'all') {
+      fetchStudentYearLevel(studentId);
+    } else {
+      setStudentYearLevel(null);
+    }
+  }, [studentId]);
+
   const handleAssign = async () => {
     if (!studentId || !sectionId || sectionId === 'all') {
       setError('Student ID and Section are required');
       return;
+    }
+
+    // Check year level compatibility
+    if (studentYearLevel !== null) {
+      const selectedSection = sections.find(s => s.value === sectionId);
+      if (selectedSection && selectedSection.yearLevel !== studentYearLevel) {
+        setError(`Year level mismatch: Student is in year ${studentYearLevel} but section requires year ${selectedSection.yearLevel}`);
+        return;
+      }
     }
     try {
       setSubmitting(true);
@@ -149,15 +209,33 @@ export function AssignSectionDialog({ open, onOpenChange, defaultStudentId }: As
             <SearchableSelect
               value={sectionId || 'all'}
               onChange={(v) => setSectionId(v)}
-              options={sections}
+              options={sections.filter(section => {
+                // If student year level is known, only show compatible sections
+                if (studentYearLevel !== null && section.value !== 'all') {
+                  return section.yearLevel === studentYearLevel;
+                }
+                return true;
+              })}
               placeholder="Search section..."
               className="w-full"
               asyncSearch={async (query) => {
                 const q = (query || '').toLowerCase();
-                const filtered = sections.filter(o => o.label?.toLowerCase().includes(q));
+                const filtered = sections.filter(o => {
+                  const matchesQuery = o.label?.toLowerCase().includes(q);
+                  // If student year level is known, only show compatible sections
+                  if (studentYearLevel !== null && o.value !== 'all') {
+                    return matchesQuery && o.yearLevel === studentYearLevel;
+                  }
+                  return matchesQuery;
+                });
                 return Promise.resolve(filtered);
               }}
             />
+            {studentYearLevel !== null && (
+              <p className="text-sm text-blue-600">
+                Showing sections for Year {studentYearLevel} students only
+              </p>
+            )}
           </div>
           {error && (
             <div className="p-2 bg-red-50 border border-red-200 rounded text-sm text-red-700">{error}</div>

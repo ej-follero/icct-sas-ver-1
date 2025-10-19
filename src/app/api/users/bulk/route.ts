@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { createNotification } from '@/lib/notifications';
 import { z } from 'zod';
 import bcrypt from 'bcryptjs';
 import { UserStatus, Role, Status } from '@prisma/client';
@@ -323,6 +324,14 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    try {
+      await createNotification(reqUserId, {
+        title: 'Import completed',
+        message: `Users import: ${results.success} success, ${results.failed} failed`,
+        priority: results.failed > 0 ? 'NORMAL' : 'NORMAL',
+        type: 'DATA',
+      });
+    } catch {}
     return NextResponse.json({
       message: `Bulk import completed. ${results.success} successful, ${results.failed} failed.`,
       results

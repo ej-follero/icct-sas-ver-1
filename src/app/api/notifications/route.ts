@@ -1,47 +1,59 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getServerSession } from '@/lib/auth';
 
 // GET /api/notifications
-export async function GET(_request: NextRequest) {
+// Query params: isRead (true|false), type, priority, limit, cursor
+export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession();
-    const currentUserId = session?.user?.id ? parseInt(session.user.id, 10) : null;
-    if (!currentUserId) {
-      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-    }
+    const token = request.cookies.get('token')?.value;
+    if (!token) return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = Number((decoded as any)?.userId);
+    if (!Number.isFinite(userId)) return NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 });
+
+    const { searchParams } = new URL(request.url);
+    const isReadParam = searchParams.get('isRead');
+    const type = searchParams.get('type') || undefined;
+    const priority = searchParams.get('priority') || undefined;
+    const limit = Math.max(1, Math.min(100, Number(searchParams.get('limit') || 20)));
+    const cursor = searchParams.get('cursor') || undefined;
+
+    const where: any = { userId };
+    if (isReadParam === 'true') where.isRead = true;
+    if (isReadParam === 'false') where.isRead = false;
+    if (type) where.type = type;
+    if (priority) where.priority = priority;
 
     const notifications = await prisma.notification.findMany({
-      where: { userId: currentUserId },
+      where,
       orderBy: { createdAt: 'desc' },
-      take: 200,
+      take: limit,
+      ...(cursor ? { skip: 1, cursor: { id: Number(cursor) } } : {}),
     });
 
-    // Map DB records to UI shape expected by Notifications page/hook
-    const items = notifications.map(n => ({
-      id: n.id,
-      title: n.title,
-      message: n.message || '',
-      time: n.createdAt.toISOString(),
-      unread: !n.isRead,
-      type: 'notification' as const,
-      priority: ((): 'low' | 'medium' | 'high' => {
-        const p = (n.priority || 'NORMAL').toUpperCase();
-        if (p === 'HIGH' || p === 'CRITICAL') return 'high';
-        if (p === 'MEDIUM' || p === 'NORMAL') return 'medium';
-        return 'low';
-      })(),
-      actionUrl: undefined as string | undefined,
-    }));
-
-    return NextResponse.json({ success: true, items });
-  } catch (error) {
-    console.error('List notifications error:', error);
-    return NextResponse.json(
-      { success: false, error: 'Failed to load notifications', details: error instanceof Error ? error.message : 'Unknown error' },
-      { status: 500 }
-    );
+    const nextCursor = notifications.length === limit ? notifications[notifications.length - 1].id : null;
+    return NextResponse.json({ data: notifications, nextCursor });
+  } catch (e: any) {
+    return NextResponse.json({ error: e?.message || 'Failed to fetch notifications' }, { status: 500 });
   }
 }
 
+// PATCH /api/notifications -> mark all as read for current user
+export async function PATCH(request: NextRequest) {
+  try {
+    const token = request.cookies.get('token')?.value;
+    if (!token) return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = Number((decoded as any)?.userId);
+    if (!Number.isFinite(userId)) return NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 });
 
+    await prisma.notification.updateMany({ where: { userId, isRead: false }, data: { isRead: true } });
+    return NextResponse.json({ success: true });
+  } catch (e: any) {
+    return NextResponse.json({ error: e?.message || 'Failed to update notifications' }, { status: 500 });
+  }
+}
+
+// duplicate block removed

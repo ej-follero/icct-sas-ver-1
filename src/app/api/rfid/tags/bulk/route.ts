@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { createNotification } from '@/lib/notifications';
 
 export async function POST(request: NextRequest) {
   try {
@@ -169,6 +170,14 @@ export async function POST(request: NextRequest) {
 
     console.log('RFID Tags bulk import completed:', { success, failed, errors: errors.length });
 
+    try {
+      await createNotification(userId, {
+        title: 'Import completed',
+        message: `RFID tags import: ${success} success, ${failed} failed`,
+        priority: failed > 0 ? 'NORMAL' : 'NORMAL',
+        type: 'DATA',
+      });
+    } catch {}
     return NextResponse.json({ 
       results: { 
         success, 

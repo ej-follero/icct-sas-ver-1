@@ -7,11 +7,13 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { AlertTriangle, Bell, Check, Search, Inbox, RefreshCw, X, Trash2, ExternalLink } from 'lucide-react';
+import { AlertTriangle, Bell, Check, Search, Inbox, RefreshCw, X, Trash2, ExternalLink, Eye } from 'lucide-react';
 import { useNotifications } from '@/hooks/useNotifications';
 import SummaryCard from '@/components/SummaryCard';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { ViewDialog, ViewDialogField, ViewDialogSection } from '@/components/reusable/Dialogs/ViewDialog';
+import { ConfirmDeleteDialog } from '@/components/ConfirmDeleteDialog';
 
 export default function NotificationsPage() {
   const { notifications, loading, markAsRead, markAllAsRead, getStats, refresh } = useNotifications();
@@ -28,6 +30,10 @@ export default function NotificationsPage() {
   const allSelected = selectedIds.length > 0 && selectedIds.length === allIds.length;
   const indeterminate = selectedIds.length > 0 && selectedIds.length < allIds.length;
   const [hiddenIds, setHiddenIds] = useState<number[]>([]);
+  const [viewDialogOpen, setViewDialogOpen] = useState(false);
+  const [selectedNotification, setSelectedNotification] = useState<any>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteSingleId, setDeleteSingleId] = useState<number | null>(null);
 
   const toggleOne = (id: number) => {
     setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
@@ -44,6 +50,31 @@ export default function NotificationsPage() {
     setSelectedIds([]);
   };
 
+  const markSelectedUnread = async () => {
+    for (const id of selectedIds) {
+      await markAsRead(id, 'notification');
+    }
+    setSelectedIds([]);
+  };
+
+  // Check if all selected notifications are unread
+  const allSelectedUnread = useMemo(() => {
+    if (selectedIds.length === 0) return false;
+    return selectedIds.every(id => {
+      const notification = notifications.find(n => n.id === id);
+      return notification?.unread;
+    });
+  }, [selectedIds, notifications]);
+
+  // Check if all selected notifications are read
+  const allSelectedRead = useMemo(() => {
+    if (selectedIds.length === 0) return false;
+    return selectedIds.every(id => {
+      const notification = notifications.find(n => n.id === id);
+      return !notification?.unread;
+    });
+  }, [selectedIds, notifications]);
+
   const clearSelection = () => setSelectedIds([]);
 
   const deleteOne = async (id: number) => {
@@ -53,9 +84,16 @@ export default function NotificationsPage() {
       if (!res.ok || !result?.success) throw new Error(result?.error || 'Delete failed');
       setHiddenIds(prev => prev.includes(id) ? prev : [...prev, id]);
       setSelectedIds(prev => prev.filter(x => x !== id));
+      setDeleteDialogOpen(false);
+      setDeleteSingleId(null);
     } catch (e) {
       console.error('Delete failed', e);
     }
+  };
+
+  const handleSingleDeleteClick = (id: number) => {
+    setDeleteSingleId(id);
+    setDeleteDialogOpen(true);
   };
 
   const deleteSelected = async () => {
@@ -69,8 +107,24 @@ export default function NotificationsPage() {
       if (!res.ok || !result?.success) throw new Error(result?.error || 'Bulk delete failed');
       setHiddenIds(prev => Array.from(new Set([...prev, ...selectedIds])));
       setSelectedIds([]);
+      setDeleteDialogOpen(false);
     } catch (e) {
       console.error('Bulk delete failed', e);
+    }
+  };
+
+  const handleDeleteClick = () => {
+    setDeleteSingleId(null); // Clear single delete ID for bulk delete
+    setDeleteDialogOpen(true);
+  };
+
+  const viewNotification = async (notification: any) => {
+    setSelectedNotification(notification);
+    setViewDialogOpen(true);
+    
+    // Auto-mark as read if unread
+    if (notification.unread) {
+      await markAsRead(notification.id, 'notification');
     }
   };
 
@@ -112,14 +166,29 @@ export default function NotificationsPage() {
                 variant="ghost"
                 size="icon"
                 className="text-blue-700 hover:text-blue-800"
+                onClick={() => viewNotification(item)}
+                aria-label="View details"
+              >
+                <Eye className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>View details</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="text-blue-700 hover:text-blue-800"
                 onClick={() => markAsRead(item.id, 'notification')}
-                disabled={!item.unread}
-                aria-label="Mark read"
+                aria-label={item.unread ? "Mark read" : "Mark unread"}
               >
                 <Check className="h-4 w-4" />
               </Button>
             </TooltipTrigger>
-            <TooltipContent>Mark read</TooltipContent>
+            <TooltipContent>{item.unread ? "Mark read" : "Mark unread"}</TooltipContent>
           </Tooltip>
         </TooltipProvider>
         <TooltipProvider>
@@ -129,7 +198,7 @@ export default function NotificationsPage() {
                 variant="ghost"
                 size="icon"
                 className="text-red-600 hover:text-red-700"
-                onClick={() => deleteOne(item.id)}
+                onClick={() => handleSingleDeleteClick(item.id)}
                 aria-label="Delete"
               >
                 <Trash2 className="h-4 w-4" />
@@ -188,7 +257,7 @@ export default function NotificationsPage() {
           />
           <SummaryCard
             label="Read Notifications"
-            value={Math.max(0, (stats.total || stats.unread) - stats.unread)}
+            value={Math.max(0, notifications.length - stats.unread)}
             icon={<Check className="h-5 w-5" />}
             sublabel="Already acknowledged"
           />
@@ -298,10 +367,22 @@ export default function NotificationsPage() {
                   {selectedIds.length} selected
                 </div>
                 <div className="flex items-center gap-2">
-                  <Button size="sm" className="text-xs rounded" onClick={markSelectedRead}>
-                    <Check className="h-3 w-3 mr-1" /> Mark selected read
-                  </Button>
-                  <Button variant="destructive" size="sm" className="text-xs rounded" onClick={deleteSelected}>
+                  {allSelectedUnread && (
+                    <Button size="sm" className="text-xs rounded" onClick={markSelectedRead}>
+                      <Check className="h-3 w-3 mr-1" /> Mark selected read
+                    </Button>
+                  )}
+                  {allSelectedRead && (
+                    <Button size="sm" variant="outline" className="text-xs rounded" onClick={markSelectedUnread}>
+                      <X className="h-3 w-3 mr-1" /> Mark selected unread
+                    </Button>
+                  )}
+                  {!allSelectedUnread && !allSelectedRead && (
+                    <Button size="sm" className="text-xs rounded" onClick={markSelectedRead}>
+                      <Check className="h-3 w-3 mr-1" /> Mark selected read
+                    </Button>
+                  )}
+                  <Button variant="destructive" size="sm" className="text-xs rounded" onClick={handleDeleteClick}>
                     <Trash2 className="h-3 w-3 mr-1" /> Delete selected
                   </Button>
                   <Button variant="ghost" size="sm" className="text-xs text-blue-800 hover:text-blue-900 rounded" onClick={clearSelection}>
@@ -342,6 +423,96 @@ export default function NotificationsPage() {
             )}
           </CardContent>
         </Card>
+
+        {/* View Dialog */}
+        {selectedNotification && (
+          <ViewDialog
+            open={viewDialogOpen}
+            onOpenChange={setViewDialogOpen}
+            title={selectedNotification.title || 'Notification'}
+            subtitle={`Notification #${selectedNotification.id}`}
+            status={{
+              value: selectedNotification.unread ? 'Unread' : 'Read',
+              variant: selectedNotification.unread ? 'warning' : 'success'
+            }}
+            sections={[
+              {
+                title: 'Notification Details',
+                fields: [
+                  {
+                    label: 'Message',
+                    value: selectedNotification.message || 'No message provided',
+                    type: 'text',
+                    copyable: true
+                  },
+                  {
+                    label: 'Priority',
+                    value: selectedNotification.priority || 'Normal',
+                    type: 'badge',
+                    badgeVariant: selectedNotification.priority === 'high' ? 'destructive' : 
+                                 selectedNotification.priority === 'medium' ? 'warning' : 'secondary'
+                  },
+                  {
+                    label: 'Created At',
+                    value: selectedNotification.time,
+                    type: 'date',
+                    copyable: true
+                  },
+                  {
+                    label: 'Status',
+                    value: selectedNotification.unread ? 'Unread' : 'Read',
+                    type: 'badge',
+                    badgeVariant: selectedNotification.unread ? 'warning' : 'success'
+                  }
+                ]
+              }
+            ]}
+            actions={[
+              {
+                label: selectedNotification.unread ? 'Mark as Read' : 'Mark as Unread',
+                onClick: () => {
+                  markAsRead(selectedNotification.id, 'notification');
+                  setViewDialogOpen(false);
+                },
+                variant: 'default',
+                icon: <Check className="h-4 w-4" />
+              },
+              {
+                label: 'Close',
+                onClick: () => setViewDialogOpen(false),
+                variant: 'outline'
+              }
+            ]}
+            showCopyButton={true}
+            showPrintButton={true}
+            headerIcon={<Bell className="h-6 w-6" />}
+          />
+        )}
+
+        {/* Delete Confirmation Dialog */}
+        <ConfirmDeleteDialog
+          open={deleteDialogOpen}
+          onOpenChange={(open) => {
+            setDeleteDialogOpen(open);
+            if (!open) {
+              setDeleteSingleId(null);
+            }
+          }}
+          itemName={
+            deleteSingleId 
+              ? "1 notification" 
+              : `${selectedIds.length} notification${selectedIds.length > 1 ? 's' : ''}`
+          }
+          description={
+            deleteSingleId
+              ? "Are you sure you want to delete this notification? This action cannot be undone."
+              : `Are you sure you want to delete ${selectedIds.length} notification${selectedIds.length > 1 ? 's' : ''}? This action cannot be undone.`
+          }
+          onDelete={deleteSingleId ? () => deleteOne(deleteSingleId) : deleteSelected}
+          loading={false}
+          dangerText="Delete Notifications"
+          confirmLabel="Delete"
+        />
       </div>
     </div>
   );

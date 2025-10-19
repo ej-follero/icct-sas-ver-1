@@ -138,6 +138,7 @@ export default function RFIDDashboardPage() {
     }
     return data.tagActivityChart;
   }, [data?.tagActivityChart, stats.activeTags, stats.totalTags]);
+  const hasTagChartData = useMemo(() => (tagStatusData || []).some((d: any) => Number(d?.value) > 0), [tagStatusData]);
   
   const readerStatusData = useMemo(() => {
     if (!data?.readerStatusChart || data.readerStatusChart.length === 0) {
@@ -148,21 +149,10 @@ export default function RFIDDashboardPage() {
     }
     return data.readerStatusChart;
   }, [data?.readerStatusChart, stats.activeReaders, stats.totalReaders]);
+  const hasReaderChartData = useMemo(() => (readerStatusData || []).some((d: any) => Number(d?.value) > 0), [readerStatusData]);
   
   const scanTrendsData = useMemo(() => {
-    if (!data?.scanTrendsChart || data.scanTrendsChart.length === 0) {
-      // Generate mock trend data for the last 7 days
-      const today = new Date();
-      return Array.from({ length: 7 }, (_, i) => {
-        const date = new Date(today);
-        date.setDate(date.getDate() - (6 - i));
-        return {
-          name: date.toISOString().split('T')[0],
-          value: Math.floor(Math.random() * 50) + 20 // Random values between 20-70
-        };
-      });
-    }
-    return data.scanTrendsChart;
+    return data?.scanTrendsChart || [];
   }, [data?.scanTrendsChart]);
   
   const recentLogs = useMemo(() => data?.recentScans || [], [data]);
@@ -548,10 +538,10 @@ export default function RFIDDashboardPage() {
             sublabel="Total RFID tags in system"
           />
           <SummaryCard
-            icon={<Wifi className="text-green-500 w-5 h-5" />}
+            icon={<Wifi className="text-blue-500 w-5 h-5" />}
             label="Active Readers"
             value={stats.activeReaders}
-            valueClassName="text-green-900"
+            valueClassName="text-blue-900"
             sublabel="Currently active"
           />
           <SummaryCard
@@ -562,10 +552,10 @@ export default function RFIDDashboardPage() {
             sublabel="Scans recorded today"
           />
           <SummaryCard
-            icon={<FileText className="text-purple-500 w-5 h-5" />}
+            icon={<FileText className="text-blue-500 w-5 h-5" />}
             label="Total Scans"
             value={stats.totalScans}
-            valueClassName="text-purple-900"
+            valueClassName="text-blue-900"
             sublabel="All-time scan records"
           />
         </div>
@@ -667,24 +657,7 @@ export default function RFIDDashboardPage() {
                         <p className="text-blue-100 text-sm">Visual insights and data trends</p>
                       </div>
                     </div>
-                    <div className="pr-2 sm:pr-0">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={handleRefresh}
-                        disabled={isRefreshing}
-                        aria-label="Refresh charts"
-                        className="border-white/60 text-white hover:bg-white/10 hover:text-white disabled:opacity-50"
-                      >
-                        {isRefreshing ? (
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        ) : (
-                          <RefreshCw className="w-4 h-4 mr-2" />
-                        )}
-                        {isRefreshing ? 'Refreshing...' : 'Refresh'}
-                      </Button>
-                    </div>
+                    {/* Refresh button removed as requested */}
                   </div>
                 </div>
               </div>
@@ -694,7 +667,7 @@ export default function RFIDDashboardPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="bg-white/70 rounded p-4 border border-gray-200">
                   <div className="flex items-center gap-2 mb-3">
-                    <h4 className="font-semibold text-gray-900">Tag Status Distribution</h4>
+                    <h4 className="font-semibold text-blue-900">Tag Status Distribution</h4>
                     <TooltipProvider>
                       <Tooltip>
                         <TooltipTrigger asChild>
@@ -704,7 +677,6 @@ export default function RFIDDashboardPage() {
                       </Tooltip>
                     </TooltipProvider>
                   </div>
-                  <p className="text-sm text-gray-600 mb-4">Breakdown of all RFID tag statuses</p>
                   <div style={{ height: 300 }} className="flex items-center justify-center">
                     {loading ? (
                       <div className="flex flex-col items-center justify-center h-full">
@@ -726,30 +698,37 @@ export default function RFIDDashboardPage() {
                         </Button>
                       </div>
                     ) : (
-                      <DataChart
-                        type="pie"
-                        data={tagStatusData}
-                        title="Tag Status"
-                        height={250}
-                        colors={["#10b981", "#ef4444"]}
-                      />
+                      hasTagChartData ? (
+                        <DataChart
+                          type="pie"
+                          data={tagStatusData}
+                          title="Tag Status"
+                          height={250}
+                          colors={["#10b981", "#ef4444"]}
+                        />
+                      ) : (
+                        <div className="flex flex-col items-center justify-center h-full w-full text-center text-gray-500">
+                          <div className="text-4xl mb-2">📊</div>
+                          <p className="text-sm">No data available</p>
+                          <p className="text-xs text-gray-400">Tag status data will appear here once available.</p>
+                        </div>
+                      )
                     )}
                   </div>
                 </div>
                 
                 <div className="bg-white/70 rounded p-4 border border-gray-200">
                   <div className="flex items-center gap-2 mb-3">
-                    <h4 className="font-semibold text-gray-900">Reader Status</h4>
+                    <h4 className="font-semibold text-blue-900">Reader Status</h4>
                     <TooltipProvider>
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <Info className="w-4 h-4 text-green-500 cursor-pointer" aria-label="Info about reader status" />
+                          <Info className="w-4 h-4 text-blue-500 cursor-pointer" aria-label="Info about reader status" />
                         </TooltipTrigger>
                         <TooltipContent>Online vs Offline readers</TooltipContent>
                       </Tooltip>
                     </TooltipProvider>
                   </div>
-                  <p className="text-sm text-gray-600 mb-4">Online vs Offline readers</p>
                   <div style={{ height: 300 }} className="flex items-center justify-center">
                     {loading ? (
                       <div className="flex flex-col items-center justify-center h-full">
@@ -771,20 +750,28 @@ export default function RFIDDashboardPage() {
                         </Button>
                       </div>
                     ) : (
-                      <DataChart
-                        type="pie"
-                        data={readerStatusData}
-                        title="Reader Status"
-                        height={250}
-                        colors={["#22c55e", "#ef4444"]}
-                      />
+                      hasReaderChartData ? (
+                        <DataChart
+                          type="pie"
+                          data={readerStatusData}
+                          title="Reader Status"
+                          height={250}
+                          colors={["#22c55e", "#ef4444"]}
+                        />
+                      ) : (
+                        <div className="flex flex-col items-center justify-center h-full w-full text-center text-gray-500">
+                          <div className="text-4xl mb-2">📈</div>
+                          <p className="text-sm">No data available</p>
+                          <p className="text-xs text-gray-400">Reader status data will appear here once available.</p>
+                        </div>
+                      )
                     )}
                   </div>
                 </div>
                 
                 <div className="md:col-span-2 bg-white/70 rounded p-4 border border-gray-200">
                   <div className="flex items-center gap-2 mb-3">
-                    <h4 className="font-semibold text-gray-900">Scan Trends (This Week)</h4>
+                    <h4 className="font-semibold text-bblue-900">Scan Trends (This Week)</h4>
                     <TooltipProvider>
                       <Tooltip>
                         <TooltipTrigger asChild>
@@ -794,7 +781,6 @@ export default function RFIDDashboardPage() {
                       </Tooltip>
                     </TooltipProvider>
                   </div>
-                  <p className="text-sm text-gray-600 mb-4">RFID scans per day</p>
                   <div style={{ height: 300 }} className="flex items-center justify-center">
                     {loading ? (
                       <div className="flex flex-col items-center justify-center h-full">
@@ -816,13 +802,21 @@ export default function RFIDDashboardPage() {
                         </Button>
                       </div>
                     ) : (
-                      <DataChart
-                        type="bar"
-                        data={scanTrendsData}
-                        title="Scan Trends"
-                        height={250}
-                        colors={["#3b82f6"]}
-                      />
+                      scanTrendsData && scanTrendsData.length > 0 ? (
+                        <DataChart
+                          type="bar"
+                          data={scanTrendsData}
+                          title="Scan Trends"
+                          height={250}
+                          colors={["#3b82f6"]}
+                        />
+                      ) : (
+                        <div className="flex flex-col items-center justify-center h-full w-full text-center text-gray-500">
+                          <div className="text-4xl mb-2">📅</div>
+                          <p className="text-sm">No trend data available</p>
+                          <p className="text-xs text-gray-400">RFID scans per day will appear here once available.</p>
+                        </div>
+                      )
                     )}
                   </div>
                 </div>

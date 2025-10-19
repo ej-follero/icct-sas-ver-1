@@ -1,6 +1,91 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
+// POST /api/students - create student linked to a user
+export async function POST(request: NextRequest) {
+  try {
+    // Auth
+    const token = request.cookies.get('token')?.value;
+    if (!token) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const reqUserId = Number((decoded as any)?.userId);
+    if (!Number.isFinite(reqUserId)) {
+      return NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 });
+    }
+
+    const reqUser = await prisma.user.findUnique({ where: { userId: reqUserId }, select: { status: true, role: true } });
+    if (!reqUser || reqUser.status !== 'ACTIVE') {
+      return NextResponse.json({ error: 'User not found or inactive' }, { status: 401 });
+    }
+    const adminRoles = ['SUPER_ADMIN', 'ADMIN', 'DEPARTMENT_HEAD'];
+    if (!adminRoles.includes(reqUser.role)) {
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+    }
+
+    const body = await request.json();
+    const {
+      userId,
+      studentIdNum,
+      email,
+      phoneNumber,
+      firstName,
+      middleName,
+      lastName,
+      suffix,
+      address,
+      gender,
+      birthDate,
+      nationality,
+      studentType,
+      yearLevel,
+      courseId,
+      guardianId,
+      rfidTag,
+    } = body || {};
+
+    if (!userId || !studentIdNum || !email || !phoneNumber || !firstName || !lastName || !address || !gender || !studentType || !yearLevel) {
+      return NextResponse.json({ error: 'Missing required student fields' }, { status: 400 });
+    }
+
+    // Ensure user exists
+    const user = await prisma.user.findUnique({ where: { userId: Number(userId) } });
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    // Create student
+    const student = await prisma.student.create({
+      data: {
+        userId: Number(userId),
+        studentIdNum,
+        email,
+        phoneNumber,
+        firstName,
+        middleName: middleName ?? null,
+        lastName,
+        suffix: suffix ?? null,
+        address,
+        gender,
+        birthDate: birthDate ? new Date(birthDate) : null,
+        nationality: nationality ?? null,
+        studentType,
+        yearLevel,
+        courseId: courseId ? Number(courseId) : null,
+        guardianId: guardianId ? Number(guardianId) : null,
+        rfidTag: rfidTag && String(rfidTag).trim().length > 0 ? rfidTag : `PENDING-${Date.now()}`,
+      },
+    });
+
+    return NextResponse.json({ data: student, message: 'Student created successfully' }, { status: 201 });
+  } catch (error) {
+    console.error('Error creating student:', error);
+    return NextResponse.json({ error: 'Failed to create student' }, { status: 500 });
+  }
+}
+
 // GET - Fetch all students with relations
 export async function GET(request: NextRequest) {
   try {
@@ -143,81 +228,6 @@ export async function GET(request: NextRequest) {
     console.error('Error fetching students:', error);
     return NextResponse.json(
       { error: 'Failed to fetch students' },
-      { status: 500 }
-    );
-  }
-}
-
-// POST - Create new student
-export async function POST(request: NextRequest) {
-  try {
-    const body = await request.json();
-    
-    // Validate required fields
-    if (!body.studentIdNum || !body.firstName || !body.lastName || !body.email) {
-      return NextResponse.json(
-        { error: 'Missing required fields' },
-        { status: 400 }
-      );
-    }
-
-    // Check if student ID or RFID tag already exists
-    const existingStudent = await prisma.student.findFirst({
-      where: {
-        OR: [
-          { studentIdNum: body.studentIdNum },
-          { rfidTag: body.rfidTag },
-          { email: body.email }
-        ]
-      }
-    });
-
-    if (existingStudent) {
-      return NextResponse.json(
-        { error: 'Student ID, RFID tag, or email already exists' },
-        { status: 400 }
-      );
-    }
-
-    // Create student
-    const student = await prisma.student.create({
-      data: {
-        studentIdNum: body.studentIdNum,
-        rfidTag: body.rfidTag,
-        firstName: body.firstName,
-        middleName: body.middleName,
-        lastName: body.lastName,
-        suffix: body.suffix,
-        email: body.email,
-        phoneNumber: body.phoneNumber,
-        address: body.address,
-        img: body.img,
-        gender: body.gender,
-        birthDate: body.birthDate ? new Date(body.birthDate) : null,
-        nationality: body.nationality,
-        studentType: body.studentType,
-        yearLevel: body.yearLevel,
-        courseId: body.courseId,
-        departmentId: body.departmentId,
-        guardianId: body.guardianId,
-        userId: body.userId,
-      },
-      include: {
-        Department: true,
-        CourseOffering: true,
-        Guardian: true,
-      }
-    });
-
-    return NextResponse.json({
-      data: student,
-      message: 'Student created successfully'
-    }, { status: 201 });
-
-  } catch (error) {
-    console.error('Error creating student:', error);
-    return NextResponse.json(
-      { error: 'Failed to create student' },
       { status: 500 }
     );
   }

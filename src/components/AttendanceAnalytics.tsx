@@ -145,6 +145,8 @@ interface AttendanceAnalyticsProps {
     startDate?: string;
     endDate?: string;
   }) => void;
+  // Clear analytics filters callback
+  onClearAnalytics?: () => void;
 }
 
 // Utility functions imported from analytics-utils
@@ -1594,15 +1596,6 @@ const ChartNoData = ({
   </div>
 );
 
-// Small helper button shown with no-data placeholders to quickly reset filters
-const ClearFiltersButton = ({ onClear }: { onClear: () => void }) => (
-  <div className="mt-4 flex items-center justify-center">
-    <Button variant="outline" size="sm" className="h-8 px-3" onClick={onClear}>
-      <X className="w-3 h-3 mr-2" />
-      Clear filters
-    </Button>
-  </div>
-);
 
 // Enhanced placeholder components for different chart types
 const AttendanceTrendNoData = ({ timeRange }: { timeRange: string }) => (
@@ -2430,7 +2423,8 @@ export function AttendanceAnalytics({
   subjects = [],
   
   // New filter props
-  onFiltersChange
+  onFiltersChange,
+  onClearAnalytics
 }: AttendanceAnalyticsProps) {
   console.log('🎯 AttendanceAnalytics received data:', {
     dataLength: data?.length,
@@ -2440,8 +2434,6 @@ export function AttendanceAnalytics({
     hasData: data && data.length > 0
   });
   // Enhanced state management for advanced interactivity
-  const [selectedDepartment, setSelectedDepartment] = useState('all');
-  const [selectedRiskLevel, setSelectedRiskLevel] = useState('all');
   const [showDetails, setShowDetails] = useState(false);
   const [expandedCharts, setExpandedCharts] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
@@ -2479,10 +2471,103 @@ export function AttendanceAnalytics({
   const [showLateComparison, setShowLateComparison] = useState(false);
 
   // Enhanced filter state for cascading filters
+  const [selectedDepartment, setSelectedDepartment] = useState('all');
+  const [selectedRiskLevel, setSelectedRiskLevel] = useState('all');
   const [selectedCourse, setSelectedCourse] = useState('all');
   const [selectedSection, setSelectedSection] = useState('all');
   const [selectedYearLevel, setSelectedYearLevel] = useState('all');
   const [internalSelectedSubject, setInternalSelectedSubject] = useState(selectedSubject || 'all');
+
+  // Applied states used to actually fetch and render charts
+  const [appliedSelectedDepartment, setAppliedSelectedDepartment] = useState('all');
+  const [appliedSelectedRiskLevel, setAppliedSelectedRiskLevel] = useState('all');
+  const [appliedSelectedCourse, setAppliedSelectedCourse] = useState('all');
+  const [appliedSelectedSection, setAppliedSelectedSection] = useState('all');
+  const [appliedSelectedYearLevel, setAppliedSelectedYearLevel] = useState('all');
+  const [appliedInternalSelectedSubject, setAppliedInternalSelectedSubject] = useState(selectedSubject || 'all');
+  const [appliedTimeRange, setAppliedTimeRange] = useState<TimeRange>({ ...timeRange });
+
+  const hasPendingChanges = useMemo(() => {
+    return (
+      selectedDepartment !== appliedSelectedDepartment ||
+      selectedRiskLevel !== appliedSelectedRiskLevel ||
+      selectedCourse !== appliedSelectedCourse ||
+      selectedSection !== appliedSelectedSection ||
+      selectedYearLevel !== appliedSelectedYearLevel ||
+      internalSelectedSubject !== appliedInternalSelectedSubject ||
+      timeRange.preset !== appliedTimeRange.preset ||
+      timeRange.start?.getTime() !== appliedTimeRange.start?.getTime() ||
+      timeRange.end?.getTime() !== appliedTimeRange.end?.getTime()
+    );
+  }, [
+    selectedDepartment,
+    selectedRiskLevel,
+    selectedCourse,
+    selectedSection,
+    selectedYearLevel,
+    internalSelectedSubject,
+    timeRange,
+    appliedSelectedDepartment,
+    appliedSelectedRiskLevel,
+    appliedSelectedCourse,
+    appliedSelectedSection,
+    appliedSelectedYearLevel,
+    appliedInternalSelectedSubject,
+    appliedTimeRange
+  ]);
+
+  const handleApplyFilters = useCallback(() => {
+    setAppliedSelectedDepartment(selectedDepartment);
+    setAppliedSelectedRiskLevel(selectedRiskLevel);
+    setAppliedSelectedCourse(selectedCourse);
+    setAppliedSelectedSection(selectedSection);
+    setAppliedSelectedYearLevel(selectedYearLevel);
+    setAppliedInternalSelectedSubject(internalSelectedSubject);
+    setAppliedTimeRange({ ...timeRange });
+    // Emit snapshot upward when applying
+    const snapshot = {
+      departmentId: selectedDepartment !== 'all' ? selectedDepartment : undefined,
+      courseId: selectedCourse !== 'all' ? selectedCourse : undefined,
+      sectionId: selectedSection !== 'all' ? selectedSection : undefined,
+      yearLevel: selectedYearLevel !== 'all' ? selectedYearLevel : undefined,
+      subjectId: internalSelectedSubject !== 'all' ? internalSelectedSubject : undefined,
+      timeRange: timeRange?.preset || 'year',
+      startDate: timeRange?.start?.toISOString(),
+      endDate: timeRange?.end?.toISOString()
+    };
+    // @ts-ignore optional
+    if (typeof onFiltersChange === 'function') onFiltersChange(snapshot);
+    try { setToast({ message: 'Filters applied', type: 'success' }); } catch {}
+  }, [
+    selectedDepartment,
+    selectedRiskLevel,
+    selectedCourse,
+    selectedSection,
+    selectedYearLevel,
+    internalSelectedSubject,
+    timeRange,
+    onFiltersChange
+  ]);
+
+  const clearAnalyticsFilters = useCallback(() => {
+    // Use external clear function if provided, otherwise use internal logic
+    if (typeof onClearAnalytics === 'function') {
+      onClearAnalytics();
+      return;
+    }
+    
+    // Fallback to internal clear logic
+    setSelectedDepartment('all');
+    setSelectedRiskLevel('all');
+    setSelectedCourse('all');
+    setSelectedSection('all');
+    setSelectedYearLevel('all');
+    setInternalSelectedSubject('all');
+    if (typeof onSubjectChange === 'function') onSubjectChange('all');
+    if (typeof onFiltersChange === 'function') onFiltersChange({});
+    try { setToast({ message: 'Analytics filters cleared', type: 'info' }); } catch {}
+  }, [onClearAnalytics, onSubjectChange, onFiltersChange]);
+
   
   // Filter options for cascading dropdowns
   const [filterOptions, setFilterOptions] = useState({
@@ -2512,24 +2597,24 @@ export function AttendanceAnalytics({
         stage: 'processing'
       });
 
-      // Apply analytics filters to the data
+      // Apply analytics filters to the data using APPLIED filter states
       let filteredData = data;
       
-      if (selectedDepartment !== 'all') {
-        filteredData = filteredData.filter(item => item.department === selectedDepartment);
+      if (appliedSelectedDepartment !== 'all') {
+        filteredData = filteredData.filter(item => item.department === appliedSelectedDepartment);
       }
       
-      if (selectedRiskLevel !== 'all') {
-        filteredData = filteredData.filter(item => item.riskLevel === selectedRiskLevel);
+      if (appliedSelectedRiskLevel !== 'all') {
+        filteredData = filteredData.filter(item => item.riskLevel === appliedSelectedRiskLevel);
       }
 
       // Apply time range filter (inclusive)
-      if (timeRange && timeRange.preset !== 'custom') {
+      if (appliedTimeRange && appliedTimeRange.preset !== 'custom') {
         const now = new Date();
         let startDate: Date;
         let endDate: Date = now;
 
-        switch (timeRange.preset) {
+        switch (appliedTimeRange.preset) {
           case 'today':
             startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
             break;
@@ -2656,13 +2741,13 @@ export function AttendanceAnalytics({
       });
       return null;
     }
-  }, [data, type, selectedDepartment, selectedRiskLevel, timeRange]);
+  }, [data, type, appliedSelectedDepartment, appliedSelectedRiskLevel, appliedSelectedCourse, appliedSelectedSection, appliedSelectedYearLevel, appliedInternalSelectedSubject, appliedTimeRange]);
 
   // Dynamic X-axis configuration based on time filter
   const getXAxisConfig = () => {
-    if (!timeRange) return { dataKey: 'week', label: 'Week' };
+    if (!appliedTimeRange) return { dataKey: 'week', label: 'Week' };
 
-    switch (timeRange.preset) {
+    switch (appliedTimeRange.preset) {
       case 'today':
         return { 
           dataKey: 'hour', 
@@ -2777,14 +2862,14 @@ export function AttendanceAnalytics({
 
       const params = new URLSearchParams({
         type,
-        timeRange: timeRange?.preset || 'week',
-        ...(selectedDepartment !== 'all' && { departmentId: selectedDepartment }),
-        ...(selectedSubject !== 'all' && { subjectId: selectedSubject }),
-        ...(selectedCourse !== 'all' && { courseId: selectedCourse }),
-        ...(selectedSection !== 'all' && { sectionId: selectedSection }),
-        ...(selectedYearLevel !== 'all' && { yearLevel: selectedYearLevel }),
-        ...(timeRange?.start && { startDate: timeRange.start.toISOString() }),
-        ...(timeRange?.end && { endDate: timeRange.end.toISOString() })
+        timeRange: appliedTimeRange?.preset || 'week',
+        ...(appliedSelectedDepartment !== 'all' && { departmentId: appliedSelectedDepartment }),
+        ...(appliedInternalSelectedSubject !== 'all' && { subjectId: appliedInternalSelectedSubject }),
+        ...(appliedSelectedCourse !== 'all' && { courseId: appliedSelectedCourse }),
+        ...(appliedSelectedSection !== 'all' && { sectionId: appliedSelectedSection }),
+        ...(appliedSelectedYearLevel !== 'all' && { yearLevel: appliedSelectedYearLevel }),
+        ...(appliedTimeRange?.start && { startDate: appliedTimeRange.start.toISOString() }),
+        ...(appliedTimeRange?.end && { endDate: appliedTimeRange.end.toISOString() })
       });
 
       // Force bypass of HTTP caches and server cache
@@ -2838,16 +2923,24 @@ export function AttendanceAnalytics({
       }));
       setHasFetchedOnce(true);
     }
-  }, [type, timeRange, selectedDepartment, selectedSubject, selectedCourse, selectedSection, selectedYearLevel]);
+  }, [
+    type,
+    appliedTimeRange,
+    appliedSelectedDepartment,
+    appliedInternalSelectedSubject,
+    appliedSelectedCourse,
+    appliedSelectedSection,
+    appliedSelectedYearLevel
+  ]);
 
   // Fetch data when dependencies change
   useEffect(() => {
     console.log('🔄 AttendanceAnalytics: fetchAnalyticsData triggered', {
-      timeRange: timeRange?.preset,
-      selectedDepartment,
-      selectedSubject,
-      selectedCourse,
-      selectedSection
+      timeRange: appliedTimeRange?.preset,
+      selectedDepartment: appliedSelectedDepartment,
+      selectedSubject: appliedInternalSelectedSubject,
+      selectedCourse: appliedSelectedCourse,
+      selectedSection: appliedSelectedSection
     });
     fetchAnalyticsData();
   }, [fetchAnalyticsData]);
@@ -2920,43 +3013,49 @@ export function AttendanceAnalytics({
     }
   }, [onSubjectChange]);
 
+  const handleCourseChange = useCallback((value: string) => {
+    setSelectedCourse(value);
+  }, []);
+
+  const handleSectionChange = useCallback((value: string) => {
+    setSelectedSection(value);
+  }, []);
+
+  const handleYearLevelChange = useCallback((value: string) => {
+    setSelectedYearLevel(value);
+  }, []);
+
+  const handleTimeRangeChange = useCallback((range: TimeRange) => {
+    setTimeRange(range);
+  }, []);
+
   // Emit unified filter snapshot to parent when analytics filters change
   useEffect(() => {
     const snapshot = {
-      departmentId: selectedDepartment !== 'all' ? selectedDepartment : undefined,
-      courseId: selectedCourse !== 'all' ? selectedCourse : undefined,
-      sectionId: selectedSection !== 'all' ? selectedSection : undefined,
-      yearLevel: selectedYearLevel !== 'all' ? selectedYearLevel : undefined,
-      subjectId: internalSelectedSubject !== 'all' ? internalSelectedSubject : undefined,
-      timeRange: timeRange?.preset || 'year',
-      startDate: timeRange?.start?.toISOString(),
-      endDate: timeRange?.end?.toISOString()
+      departmentId: appliedSelectedDepartment !== 'all' ? appliedSelectedDepartment : undefined,
+      courseId: appliedSelectedCourse !== 'all' ? appliedSelectedCourse : undefined,
+      sectionId: appliedSelectedSection !== 'all' ? appliedSelectedSection : undefined,
+      yearLevel: appliedSelectedYearLevel !== 'all' ? appliedSelectedYearLevel : undefined,
+      subjectId: appliedInternalSelectedSubject !== 'all' ? appliedInternalSelectedSubject : undefined,
+      timeRange: appliedTimeRange?.preset || 'year',
+      startDate: appliedTimeRange?.start?.toISOString(),
+      endDate: appliedTimeRange?.end?.toISOString()
     };
     // Only call if parent provided a handler
-    // @ts-ignore - optional prop not in original typing
+    // @ts-ignore - optional prop
     if (typeof onFiltersChange === 'function') {
       // @ts-ignore
       onFiltersChange(snapshot);
     }
-  }, [selectedDepartment, selectedCourse, selectedSection, selectedYearLevel, internalSelectedSubject, timeRange]);
+  }, [
+    appliedSelectedDepartment,
+    appliedSelectedCourse,
+    appliedSelectedSection,
+    appliedSelectedYearLevel,
+    appliedInternalSelectedSubject,
+    appliedTimeRange
+  ]);
 
-  // Clear all applied filters (useful for no-data states)
-  const clearAllFilters = useCallback(() => {
-    setSelectedDepartment('all');
-    setSelectedRiskLevel('all');
-    setSelectedCourse('all');
-    setSelectedSection('all');
-    setSelectedYearLevel('all');
-    setInternalSelectedSubject('all');
-    // Reset time range to current year
-    const now = new Date();
-    const newRange = {
-      start: new Date(now.getFullYear(), 0, 1),
-      end: new Date(now.getFullYear(), 11, 31),
-      preset: 'year' as const
-    };
-    setTimeRange(newRange);
-  }, []);
 
   const clearTimeRange = useCallback(() => {
     const now = new Date();
@@ -3101,9 +3200,6 @@ export function AttendanceAnalytics({
     }
   }, []);
 
-  const handleTimeRangeChange = useCallback((newRange: TimeRange) => {
-    setTimeRange(newRange);
-  }, []);
 
   const handleResetFilters = useCallback(() => {
     setDrillDownState({
@@ -3220,7 +3316,6 @@ export function AttendanceAnalytics({
             <p className="text-blue-500 text-center max-w-md">
               {loading ? 'Loading analytics data...' : 'No attendance data found. Please check your data source.'}
             </p>
-            <ClearFiltersButton onClear={clearAllFilters} />
           </div>
         )}
 
@@ -3288,10 +3383,10 @@ export function AttendanceAnalytics({
                   filterOptions={filterOptions}
                   onDepartmentChange={handleDepartmentChange}
                   onRiskLevelChange={handleRiskLevelChange}
-                  onCourseChange={setSelectedCourse}
+                  onCourseChange={handleCourseChange}
                   onSubjectChange={handleSubjectChange}
-                  onSectionChange={setSelectedSection}
-                  onYearLevelChange={setSelectedYearLevel}
+                  onSectionChange={handleSectionChange}
+                  onYearLevelChange={handleYearLevelChange}
                   enableTimeRange={enableTimeRange}
                   timeRange={timeRange}
                   onTimeRangeChange={handleTimeRangeChange}
@@ -3302,12 +3397,32 @@ export function AttendanceAnalytics({
             {/* Dashboard Tab */}
             <TabsContent value="overview" className="space-y-8 mt-6">
               {/* Summary header with collapse toggle */}
-              <div className="flex items-center justify-between">
-                <h4 className="text-sm font-semibold text-gray-800">Summary</h4>
+            <div className="flex items-center justify-between">
+              <h4 className="text-sm font-semibold text-gray-800">Summary</h4>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant={hasPendingChanges ? 'default' : 'outline'}
+                  size="sm"
+                  className="h-8 px-3 text-xs rounded"
+                  onClick={handleApplyFilters}
+                  disabled={!hasPendingChanges}
+                  title={hasPendingChanges ? 'Apply current filters' : 'No changes to apply'}
+                >
+                  Apply filters
+                </Button>
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-8 px-2 text-xs"
+                  className="h-8 px-2 text-xs rounded"
+                  onClick={clearAnalyticsFilters}
+                  title="Clear analytics filters"
+                >
+                  Clear
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 px-2 text-xs rounded"
                   onClick={() => setShowOverviewCards(prev => !prev)}
                   aria-expanded={showOverviewCards}
                   aria-controls="overview-summary-cards"
@@ -3319,6 +3434,7 @@ export function AttendanceAnalytics({
                   )}
                 </Button>
               </div>
+            </div>
 
               {/* Compact Stats Cards */}
               {showOverviewCards && (
@@ -3655,7 +3771,6 @@ export function AttendanceAnalytics({
                     ) : (chartData.departmentStats.length === 0 ? (
                       <div>
                         <DepartmentPerformanceNoData timeRange={timeRange?.preset || 'week'} />
-                        <ClearFiltersButton onClear={clearAllFilters} />
                       </div>
                     ) : (
                       <div data-chart="department-stats" className="w-full h-full">
@@ -3782,7 +3897,6 @@ export function AttendanceAnalytics({
                     ) : (generateDynamicChartData().length === 0 ? (
                       <div>
                         <AttendanceTrendNoData timeRange={timeRange?.preset || 'week'} />
-                        <ClearFiltersButton onClear={clearAllFilters} />
                       </div>
                     ) : (
                       <div data-chart="attendance-trend" className="w-full h-full">
@@ -3938,7 +4052,6 @@ export function AttendanceAnalytics({
                     ) : (generateLateArrivalData().length === 0 ? (
                       <div>
                         <LateArrivalNoData timeRange={timeRange?.preset || 'week'} />
-                        <ClearFiltersButton onClear={clearAllFilters} />
                       </div>
                     ) : (
                       <div data-chart="late-arrival" className="w-full h-full">
@@ -4072,7 +4185,6 @@ export function AttendanceAnalytics({
                     ) : (generatePatternAnalysisData.length === 0 ? (
                       <div>
                         <PatternAnalysisNoData timeRange={timeRange?.preset || 'week'} />
-                        <ClearFiltersButton onClear={clearAllFilters} />
                       </div>
                     ) : (
                       <ResponsiveContainer width="100%" height="100%">
@@ -4177,7 +4289,6 @@ export function AttendanceAnalytics({
                     ) : (generateStreakAnalysisData.data.length === 0 ? (
                       <div>
                         <StreakAnalysisNoData timeRange={timeRange?.preset || 'week'} />
-                        <ClearFiltersButton onClear={clearAllFilters} />
                       </div>
                     ) : (
                       <ResponsiveContainer width="100%" height="100%">

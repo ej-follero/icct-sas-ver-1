@@ -21,7 +21,9 @@ import {
   FileX,
   AlertTriangle,
   Info,
-  XCircle
+  XCircle,
+  ChevronDown,
+  ChevronUp
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { toast } from "sonner";
@@ -121,6 +123,7 @@ function ImportDialog({
     errors: string[];
   } | null>(null);
   const [currentStep, setCurrentStep] = useState<'upload' | 'validate' | 'import' | 'complete'>('upload');
+  const [isRequirementsExpanded, setIsRequirementsExpanded] = useState(false);
   
   // Dialog notification states
   const [notificationDialog, setNotificationDialog] = useState<{
@@ -1249,14 +1252,19 @@ function ImportDialog({
     }
 
     if (entityName.toLowerCase() === 'schedule') {
-      // Schedule schema validation
+      // Schedule schema validation aligned with Prisma schema
       return data.map((row, index) => {
         const errors: string[] = [];
         const record: any = {
           subjectId: 0,
+          subjectName: '',
+          subjectCode: '',
           sectionId: 0,
+          sectionName: '',
           instructorId: 0,
+          instructorName: '',
           roomId: 0,
+          roomNo: '',
           day: 'MONDAY',
           startTime: '08:00',
           endTime: '10:00',
@@ -1278,33 +1286,52 @@ function ImportDialog({
           return '';
         };
 
-        // Required fields validation
+        // Subject validation - either ID or name/code required
         const subjectId = getValue(row, 'subjectId');
-        if (!subjectId || isNaN(Number(subjectId))) {
-          errors.push('Subject ID is required and must be a number');
-        } else {
+        const subjectName = getValue(row, 'subjectName');
+        const subjectCode = getValue(row, 'subjectCode');
+        
+        if (subjectId && !isNaN(Number(subjectId))) {
           record.subjectId = Number(subjectId);
-        }
-
-        const sectionId = getValue(row, 'sectionId');
-        if (!sectionId || isNaN(Number(sectionId))) {
-          errors.push('Section ID is required and must be a number');
+        } else if (subjectName && subjectCode) {
+          record.subjectName = subjectName;
+          record.subjectCode = subjectCode;
         } else {
-          record.sectionId = Number(sectionId);
+          errors.push('Either Subject ID or both Subject Name and Subject Code are required');
         }
 
+        // Section validation - either ID or name required
+        const sectionId = getValue(row, 'sectionId');
+        const sectionName = getValue(row, 'sectionName');
+        
+        if (sectionId && !isNaN(Number(sectionId))) {
+          record.sectionId = Number(sectionId);
+        } else if (sectionName) {
+          record.sectionName = sectionName;
+        } else {
+          errors.push('Either Section ID or Section Name is required');
+        }
+
+        // Instructor validation - optional
         const instructorId = getValue(row, 'instructorId');
+        const instructorName = getValue(row, 'instructorName');
+        
         if (instructorId && !isNaN(Number(instructorId))) {
           record.instructorId = Number(instructorId);
-        } else if (instructorId && isNaN(Number(instructorId))) {
-          errors.push('Instructor ID must be a valid number if provided');
+        } else if (instructorName) {
+          record.instructorName = instructorName;
         }
 
+        // Room validation - either ID or number required
         const roomId = getValue(row, 'roomId');
-        if (!roomId || isNaN(Number(roomId))) {
-          errors.push('Room ID is required and must be a number');
-        } else {
+        const roomNo = getValue(row, 'roomNo');
+        
+        if (roomId && !isNaN(Number(roomId))) {
           record.roomId = Number(roomId);
+        } else if (roomNo) {
+          record.roomNo = roomNo;
+        } else {
+          errors.push('Either Room ID or Room Number is required');
         }
 
         const day = getValue(row, 'day');
@@ -1353,7 +1380,7 @@ function ImportDialog({
 
         const academicYear = getValue(row, 'academicYear');
         if (academicYear) {
-          record.scheduleAcademicYear = academicYear;
+          record.academicYear = academicYear;
         }
 
         const maxStudents = getValue(row, 'maxStudents');
@@ -1604,6 +1631,332 @@ function ImportDialog({
       });
     }
 
+    if (entityName.toLowerCase() === 'course') {
+      // Course schema validation
+      return data.map((row, index) => {
+        const errors: string[] = [];
+        const record: any = {
+          name: '',
+          code: '',
+          departmentId: 0,
+          description: '',
+          units: 0,
+          status: 'ACTIVE',
+          courseType: 'MANDATORY',
+          major: ''
+        };
+
+        // Helper function to get value regardless of case
+        const getValue = (obj: any, key: string): string => {
+          const lowerKey = key.toLowerCase();
+          const upperKey = key.toUpperCase();
+          if (obj[key] !== undefined) return obj[key];
+          if (obj[lowerKey] !== undefined) return obj[lowerKey];
+          if (obj[upperKey] !== undefined) return obj[upperKey];
+          return '';
+        };
+
+        // name (required)
+        const name = getValue(row, 'name') || getValue(row, 'courseName');
+        if (!name || name.trim() === '') {
+          errors.push('Course name is missing');
+          record.name = `Course ${index + 1}`;
+        } else {
+          record.name = name.trim();
+        }
+
+        // code (required)
+        const code = getValue(row, 'code') || getValue(row, 'courseCode');
+        if (!code || code.trim() === '') {
+          errors.push('Course code is missing');
+          record.code = `COURSE${index + 1}`;
+        } else {
+          record.code = code.trim().toUpperCase();
+        }
+
+        // departmentId (required)
+        const departmentId = getValue(row, 'departmentId');
+        if (!departmentId || departmentId.trim() === '') {
+          errors.push('Department ID is missing');
+          record.departmentId = 1; // Default to first department
+        } else {
+          const deptId = parseInt(departmentId);
+          if (isNaN(deptId) || deptId <= 0) {
+            errors.push('Invalid department ID - must be a positive number');
+            record.departmentId = 1;
+          } else {
+            record.departmentId = deptId;
+          }
+        }
+
+        // description (optional)
+        const description = getValue(row, 'description');
+        record.description = description || '';
+
+        // units (required)
+        const units = getValue(row, 'units') || getValue(row, 'totalUnits');
+        if (!units || units.trim() === '') {
+          errors.push('Units is missing');
+          record.units = 3; // Default units
+        } else {
+          const unitsNum = parseInt(units);
+          if (isNaN(unitsNum) || unitsNum <= 0) {
+            errors.push('Invalid units - must be a positive number');
+            record.units = 3;
+          } else {
+            record.units = unitsNum;
+          }
+        }
+
+        // status (optional, defaults to ACTIVE)
+        const status = getValue(row, 'status');
+        const validStatuses = ['ACTIVE', 'INACTIVE', 'ARCHIVED', 'PENDING_REVIEW'];
+        if (status && validStatuses.includes(status.toUpperCase())) {
+          record.status = status.toUpperCase();
+        } else if (status) {
+          errors.push('Invalid status - must be ACTIVE, INACTIVE, ARCHIVED, or PENDING_REVIEW');
+          record.status = 'ACTIVE';
+        } else {
+          record.status = 'ACTIVE';
+        }
+
+        // courseType (optional, defaults to MANDATORY)
+        const courseType = getValue(row, 'courseType');
+        const validTypes = ['MANDATORY', 'ELECTIVE'];
+        if (courseType && validTypes.includes(courseType.toUpperCase())) {
+          record.courseType = courseType.toUpperCase();
+        } else if (courseType) {
+          errors.push('Invalid course type - must be MANDATORY or ELECTIVE');
+          record.courseType = 'MANDATORY';
+        } else {
+          record.courseType = 'MANDATORY';
+        }
+
+        // major (optional)
+        const major = getValue(row, 'major');
+        record.major = major || '';
+
+        record.errors = errors;
+        record.isValid = errors.length === 0;
+        return record;
+      });
+    }
+
+    if (entityName.toLowerCase() === 'subjects') {
+      // Subjects schema validation
+      return data.map((row, index) => {
+        const errors: string[] = [];
+        const record: any = {
+          subjectName: '',
+          subjectCode: '',
+          subjectType: 'LECTURE',
+          courseId: 0,
+          departmentId: 0,
+          academicYear: '2024-2025',
+          semester: 'FIRST_SEMESTER',
+          totalHours: 0,
+          lectureUnits: 0,
+          labUnits: 0,
+          creditedUnits: 0,
+          description: '',
+          prerequisites: '',
+          maxStudents: 30,
+          status: 'ACTIVE'
+        };
+
+        // Helper function to get value regardless of case
+        const getValue = (obj: any, key: string): string => {
+          const lowerKey = key.toLowerCase();
+          const upperKey = key.toUpperCase();
+          if (obj[key] !== undefined) return obj[key];
+          if (obj[lowerKey] !== undefined) return obj[lowerKey];
+          if (obj[upperKey] !== undefined) return obj[upperKey];
+          return '';
+        };
+
+        // subjectName (required)
+        const subjectName = getValue(row, 'subjectName') || getValue(row, 'name');
+        if (!subjectName || subjectName.trim() === '') {
+          errors.push('Subject name is missing');
+          record.subjectName = `Subject ${index + 1}`;
+        } else {
+          record.subjectName = subjectName.trim();
+        }
+
+        // subjectCode (required)
+        const subjectCode = getValue(row, 'subjectCode') || getValue(row, 'code');
+        if (!subjectCode || subjectCode.trim() === '') {
+          errors.push('Subject code is missing');
+          record.subjectCode = `SUB${index + 1}`;
+        } else {
+          record.subjectCode = subjectCode.trim().toUpperCase();
+        }
+
+        // subjectType (required)
+        const subjectType = getValue(row, 'subjectType') || getValue(row, 'type');
+        const validTypes = ['LECTURE', 'LABORATORY', 'HYBRID', 'THESIS', 'RESEARCH', 'INTERNSHIP'];
+        if (subjectType && validTypes.includes(subjectType.toUpperCase())) {
+          record.subjectType = subjectType.toUpperCase();
+        } else if (subjectType) {
+          errors.push('Invalid subject type - must be LECTURE, LABORATORY, HYBRID, THESIS, RESEARCH, or INTERNSHIP');
+          record.subjectType = 'LECTURE';
+        } else {
+          record.subjectType = 'LECTURE';
+        }
+
+        // courseId (required)
+        const courseId = getValue(row, 'courseId');
+        if (!courseId || courseId.trim() === '') {
+          errors.push('Course ID is missing');
+          record.courseId = 1; // Default to first course
+        } else {
+          const courseIdNum = parseInt(courseId);
+          if (isNaN(courseIdNum) || courseIdNum <= 0) {
+            errors.push('Invalid course ID - must be a positive number');
+            record.courseId = 1;
+          } else {
+            record.courseId = courseIdNum;
+          }
+        }
+
+        // departmentId (required)
+        const departmentId = getValue(row, 'departmentId');
+        if (!departmentId || departmentId.trim() === '') {
+          errors.push('Department ID is missing');
+          record.departmentId = 1; // Default to first department
+        } else {
+          const deptId = parseInt(departmentId);
+          if (isNaN(deptId) || deptId <= 0) {
+            errors.push('Invalid department ID - must be a positive number');
+            record.departmentId = 1;
+          } else {
+            record.departmentId = deptId;
+          }
+        }
+
+        // academicYear (required)
+        const academicYear = getValue(row, 'academicYear');
+        if (!academicYear || academicYear.trim() === '') {
+          errors.push('Academic year is missing');
+          record.academicYear = '2024-2025';
+        } else {
+          record.academicYear = academicYear.trim();
+        }
+
+        // semester (required)
+        const semester = getValue(row, 'semester');
+        const validSemesters = ['FIRST_SEMESTER', 'SECOND_SEMESTER', 'THIRD_SEMESTER'];
+        if (semester && validSemesters.includes(semester.toUpperCase())) {
+          record.semester = semester.toUpperCase();
+        } else if (semester) {
+          errors.push('Invalid semester - must be FIRST_SEMESTER, SECOND_SEMESTER, or THIRD_SEMESTER');
+          record.semester = 'FIRST_SEMESTER';
+        } else {
+          record.semester = 'FIRST_SEMESTER';
+        }
+
+        // totalHours (required)
+        const totalHours = getValue(row, 'totalHours');
+        if (!totalHours || totalHours.trim() === '') {
+          errors.push('Total hours is missing');
+          record.totalHours = 54; // Default hours
+        } else {
+          const hours = parseInt(totalHours);
+          if (isNaN(hours) || hours <= 0) {
+            errors.push('Invalid total hours - must be a positive number');
+            record.totalHours = 54;
+          } else {
+            record.totalHours = hours;
+          }
+        }
+
+        // lectureUnits (optional, defaults to 0)
+        const lectureUnits = getValue(row, 'lectureUnits');
+        if (lectureUnits && lectureUnits.trim() !== '') {
+          const units = parseInt(lectureUnits);
+          if (isNaN(units) || units < 0) {
+            errors.push('Invalid lecture units - must be a non-negative number');
+            record.lectureUnits = 0;
+          } else {
+            record.lectureUnits = units;
+          }
+        } else {
+          record.lectureUnits = 0;
+        }
+
+        // labUnits (optional, defaults to 0)
+        const labUnits = getValue(row, 'labUnits');
+        if (labUnits && labUnits.trim() !== '') {
+          const units = parseInt(labUnits);
+          if (isNaN(units) || units < 0) {
+            errors.push('Invalid lab units - must be a non-negative number');
+            record.labUnits = 0;
+          } else {
+            record.labUnits = units;
+          }
+        } else {
+          record.labUnits = 0;
+        }
+
+        // creditedUnits (required)
+        const creditedUnits = getValue(row, 'creditedUnits');
+        if (!creditedUnits || creditedUnits.trim() === '') {
+          // Auto-calculate if not provided
+          record.creditedUnits = record.lectureUnits + record.labUnits;
+          if (record.creditedUnits === 0) {
+            errors.push('Credited units is missing and cannot be calculated');
+            record.creditedUnits = 3;
+          }
+        } else {
+          const units = parseInt(creditedUnits);
+          if (isNaN(units) || units <= 0) {
+            errors.push('Invalid credited units - must be a positive number');
+            record.creditedUnits = record.lectureUnits + record.labUnits || 3;
+          } else {
+            record.creditedUnits = units;
+          }
+        }
+
+        // description (optional)
+        const description = getValue(row, 'description');
+        record.description = description || '';
+
+        // prerequisites (optional)
+        const prerequisites = getValue(row, 'prerequisites');
+        record.prerequisites = prerequisites || '';
+
+        // maxStudents (optional, defaults to 30)
+        const maxStudents = getValue(row, 'maxStudents');
+        if (maxStudents && maxStudents.trim() !== '') {
+          const students = parseInt(maxStudents);
+          if (isNaN(students) || students <= 0) {
+            errors.push('Invalid max students - must be a positive number');
+            record.maxStudents = 30;
+          } else {
+            record.maxStudents = students;
+          }
+        } else {
+          record.maxStudents = 30;
+        }
+
+        // status (optional, defaults to ACTIVE)
+        const status = getValue(row, 'status');
+        const validStatuses = ['ACTIVE', 'INACTIVE', 'ARCHIVED', 'PENDING_REVIEW'];
+        if (status && validStatuses.includes(status.toUpperCase())) {
+          record.status = status.toUpperCase();
+        } else if (status) {
+          errors.push('Invalid status - must be ACTIVE, INACTIVE, ARCHIVED, or PENDING_REVIEW');
+          record.status = 'ACTIVE';
+        } else {
+          record.status = 'ACTIVE';
+        }
+
+        record.errors = errors;
+        record.isValid = errors.length === 0;
+        return record;
+      });
+    }
+
     // Default: department validation
     return data.map((row, index) => {
       const errors: string[] = [];
@@ -1830,9 +2183,14 @@ function ImportDialog({
         templateData = [
           {
             subjectId: 1,
+            subjectName: "Mathematics 101",
+            subjectCode: "MATH101",
             sectionId: 1,
+            sectionName: "Section A",
             instructorId: 1,
+            instructorName: "John Doe",
             roomId: 1,
+            roomNo: "Room 101",
             day: "MONDAY",
             startTime: "08:00",
             endTime: "10:00",
@@ -1845,9 +2203,14 @@ function ImportDialog({
           },
           {
             subjectId: 2,
+            subjectName: "Physics 101",
+            subjectCode: "PHYS101",
             sectionId: 2,
+            sectionName: "Section B",
             instructorId: 2,
+            instructorName: "Jane Smith",
             roomId: 2,
+            roomNo: "Room 102",
             day: "TUESDAY",
             startTime: "10:00",
             endTime: "12:00",
@@ -1860,7 +2223,8 @@ function ImportDialog({
           }
         ];
         headers = [
-          'subjectId', 'sectionId', 'instructorId', 'roomId', 'day', 'startTime', 'endTime',
+          'subjectId', 'subjectName', 'subjectCode', 'sectionId', 'sectionName', 
+          'instructorId', 'instructorName', 'roomId', 'roomNo', 'day', 'startTime', 'endTime',
           'scheduleType', 'status', 'semesterId', 'academicYear', 'maxStudents', 'notes'
         ];
         sheetName = 'Schedules Template';
@@ -2081,6 +2445,36 @@ function ImportDialog({
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, sheetName);
         XLSX.writeFile(wb, `courseoffering-import-template.xlsx`);
+        return;
+      } else if (entityName.toLowerCase() === 'course') {
+        const templateData = [
+          {
+            name: "Computer Science Fundamentals",
+            code: "CS101",
+            departmentId: 1,
+            description: "Introduction to computer science concepts",
+            units: 3,
+            status: "ACTIVE",
+            courseType: "MANDATORY",
+            major: "Computer Science"
+          },
+          {
+            name: "Advanced Mathematics",
+            code: "MATH201",
+            departmentId: 2,
+            description: "Advanced calculus and linear algebra",
+            units: 4,
+            status: "ACTIVE",
+            courseType: "MANDATORY",
+            major: "Mathematics"
+          }
+        ];
+        const headers = ['name', 'code', 'departmentId', 'description', 'units', 'status', 'courseType', 'major'];
+        const sheetName = "Course Template";
+        const ws = XLSX.utils.json_to_sheet(templateData, { header: headers });
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, sheetName);
+        XLSX.writeFile(wb, `course-import-template.xlsx`);
         return;
       } else if (entityName.toLowerCase() === 'section') {
         const templateData = [
@@ -2679,7 +3073,7 @@ function ImportDialog({
           {/* Content */}
           <div className="flex-1 overflow-y-auto px-6">
             {currentStep === 'upload' && (
-              <div className="space-y-6">
+              <div className="space-y-6 pb-6">
                 <div className="text-center">
                   <div className="mx-auto w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-4">
                     <Upload className="h-8 w-8 text-blue-600" />
@@ -2771,8 +3165,19 @@ function ImportDialog({
 
                 {/* File Requirements */}
                 <div className="bg-gray-50 border border-gray-200 rounded p-4">
-                  <h4 className="font-medium text-gray-900 mb-2">File Requirements</h4>
-                  <ul className="text-sm text-gray-600 space-y-1">
+                  <button
+                    onClick={() => setIsRequirementsExpanded(!isRequirementsExpanded)}
+                    className="flex items-center justify-between w-full text-left hover:bg-gray-100 rounded p-2 -m-2 transition-colors"
+                  >
+                    <h4 className="font-medium text-gray-900">File Requirements</h4>
+                    {isRequirementsExpanded ? (
+                      <ChevronUp className="h-4 w-4 text-gray-500" />
+                    ) : (
+                      <ChevronDown className="h-4 w-4 text-gray-500" />
+                    )}
+                  </button>
+                  {isRequirementsExpanded && (
+                    <ul className="text-sm text-gray-600 space-y-1 mt-3">
                     {fileRequirements ? (
                       fileRequirements
                     ) : entityName.toLowerCase() === 'emails' ? (
@@ -2812,6 +3217,17 @@ function ImportDialog({
                         <li>• <b>departmentId</b> must match an existing department in the system</li>
                         <li>• <b>totalUnits</b> must be a number</li>
                       </>
+                    ) : entityName.toLowerCase() === 'course' ? (
+                      <>
+                        <li>• File must be in CSV or Excel format</li>
+                        <li>• Maximum file size: {maxFileSize}MB</li>
+                        <li>• Required columns: <b>name</b>, <b>code</b>, <b>departmentId</b>, <b>units</b></li>
+                        <li>• Optional columns: <b>description</b>, <b>status</b>, <b>courseType</b>, <b>major</b></li>
+                        <li>• <b>status</b> values: "ACTIVE", "INACTIVE", "ARCHIVED", "PENDING_REVIEW"</li>
+                        <li>• <b>courseType</b> values: "MANDATORY" or "ELECTIVE"</li>
+                        <li>• <b>departmentId</b> must match an existing department in the system</li>
+                        <li>• <b>units</b> must be a positive number</li>
+                      </>
                     ) : entityName.toLowerCase() === 'role' ? (
                       <>
                         <li>• File must be in CSV or Excel format</li>
@@ -2827,13 +3243,16 @@ function ImportDialog({
                       <>
                         <li>• File must be in CSV or Excel format</li>
                         <li>• Maximum file size: {maxFileSize}MB</li>
-                        <li>• Required columns: <b>subjectId</b>, <b>sectionId</b>, <b>instructorId</b>, <b>roomId</b>, <b>day</b>, <b>startTime</b>, <b>endTime</b></li>
+                        <li>• Required columns: <b>day</b>, <b>startTime</b>, <b>endTime</b></li>
+                        <li>• Subject: Either <b>subjectId</b> OR both <b>subjectName</b> and <b>subjectCode</b></li>
+                        <li>• Section: Either <b>sectionId</b> OR <b>sectionName</b></li>
+                        <li>• Instructor: Either <b>instructorId</b> OR <b>instructorName</b> (optional)</li>
+                        <li>• Room: Either <b>roomId</b> OR <b>roomNo</b></li>
                         <li>• Optional columns: <b>scheduleType</b>, <b>status</b>, <b>semesterId</b>, <b>academicYear</b>, <b>maxStudents</b>, <b>notes</b></li>
                         <li>• <b>day</b> values: "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"</li>
                         <li>• <b>startTime</b>/<b>endTime</b> format: HH:MM (24-hour format, e.g., "08:00", "14:30")</li>
                         <li>• <b>scheduleType</b> values: "REGULAR", "MAKEUP", "SPECIAL", "REVIEW", "EXAM" (defaults to "REGULAR")</li>
                         <li>• <b>status</b> values: "ACTIVE", "CANCELLED", "POSTPONED", "COMPLETED", "CONFLICT" (defaults to "ACTIVE")</li>
-                        <li>• <b>subjectId</b>, <b>sectionId</b>, <b>instructorId</b>, <b>roomId</b>, <b>semesterId</b> must be valid IDs from the database</li>
                         <li>• <b>maxStudents</b> must be a number (defaults to 30)</li>
                         <li>• <b>academicYear</b> format: "YYYY-YYYY" (e.g., "2024-2025")</li>
                       </>
@@ -2882,7 +3301,8 @@ function ImportDialog({
                         <li>• Head of Department is managed separately through the instructor system</li>
                       </>
                     )}
-                  </ul>
+                    </ul>
+                  )}
                 </div>
               </div>
             )}
@@ -3064,6 +3484,44 @@ function ImportDialog({
                                       <td className="px-4 py-2">{(record as any).courseType}</td>
                                       <td className="px-4 py-2">{(record as any).departmentId}</td>
                                       <td className="px-4 py-2">{(record as any).totalUnits}</td>
+                                      <td className="px-4 py-2">
+                                        {record.errors && record.errors.length > 0 ? (
+                                          <div className="text-red-600 text-xs">
+                                            {record.errors.slice(0, 2).map((error, i) => (
+                                              <div key={i}>{error}</div>
+                                            ))}
+                                            {record.errors.length > 2 && <div>+{record.errors.length - 2} more</div>}
+                                          </div>
+                                        ) : (
+                                          <span className="text-green-600 text-xs">✓ Valid</span>
+                                        )}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            ) : entityName.toLowerCase() === 'course' ? (
+                              <table className="w-full text-sm">
+                                <thead className="bg-gray-50">
+                                  <tr>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Name</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Code</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Department ID</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Units</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Status</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Type</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Validation</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-200">
+                                  {importData.slice(0, 5).map((record, index) => (
+                                    <tr key={index} className={record.errors && record.errors.length > 0 ? 'bg-yellow-50' : 'bg-white'}>
+                                      <td className="px-4 py-2">{(record as any).name}</td>
+                                      <td className="px-4 py-2">{(record as any).code}</td>
+                                      <td className="px-4 py-2">{(record as any).departmentId}</td>
+                                      <td className="px-4 py-2">{(record as any).units}</td>
+                                      <td className="px-4 py-2">{(record as any).status}</td>
+                                      <td className="px-4 py-2">{(record as any).courseType}</td>
                                       <td className="px-4 py-2">
                                         {record.errors && record.errors.length > 0 ? (
                                           <AlertTriangle className="h-4 w-4 text-yellow-600" />
@@ -3474,6 +3932,67 @@ function ImportDialog({
                                       <td className="px-4 py-2">
                                         <Badge variant={(record as any).status === 'Active' ? 'default' : 'destructive'}>
                                           {(record as any).status || 'Active'}
+                                        </Badge>
+                                      </td>
+                                      <td className="px-4 py-2">
+                                        {record.errors && record.errors.length > 0 ? (
+                                          <AlertTriangle className="h-4 w-4 text-yellow-600" />
+                                        ) : (
+                                          <CheckCircle className="h-4 w-4 text-green-600" />
+                                        )}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            ) : entityName.toLowerCase() === 'subjects' ? (
+                              <table className="w-full text-sm">
+                                <thead className="bg-gray-50">
+                                  <tr>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Subject Name</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Subject Code</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Type</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Course ID</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Department ID</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Units</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Status</th>
+                                    <th className="px-4 py-2 text-left font-medium text-gray-700">Validation</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-200">
+                                  {importData.slice(0, 5).map((record, index) => (
+                                    <tr key={index} className={record.errors && record.errors.length > 0 ? 'bg-yellow-50' : 'bg-white'}>
+                                      <td className="px-4 py-2">
+                                        <div className="max-w-xs truncate" title={(record as any).subjectName}>
+                                          {(record as any).subjectName || '-'}
+                                        </div>
+                                      </td>
+                                      <td className="px-4 py-2">{(record as any).subjectCode || '-'}</td>
+                                      <td className="px-4 py-2">
+                                        <Badge variant={
+                                          (record as any).subjectType === 'LECTURE' ? 'default' :
+                                          (record as any).subjectType === 'LABORATORY' ? 'secondary' :
+                                          (record as any).subjectType === 'HYBRID' ? 'outline' :
+                                          (record as any).subjectType === 'THESIS' ? 'success' :
+                                          (record as any).subjectType === 'RESEARCH' ? 'destructive' :
+                                          (record as any).subjectType === 'INTERNSHIP' ? 'outline' :
+                                          'default'
+                                        }>
+                                          {(record as any).subjectType || '-'}
+                                        </Badge>
+                                      </td>
+                                      <td className="px-4 py-2">{(record as any).courseId || '-'}</td>
+                                      <td className="px-4 py-2">{(record as any).departmentId || '-'}</td>
+                                      <td className="px-4 py-2">{(record as any).creditedUnits || '-'}</td>
+                                      <td className="px-4 py-2">
+                                        <Badge variant={
+                                          (record as any).status === 'ACTIVE' ? 'success' :
+                                          (record as any).status === 'INACTIVE' ? 'destructive' :
+                                          (record as any).status === 'ARCHIVED' ? 'secondary' :
+                                          (record as any).status === 'PENDING_REVIEW' ? 'outline' :
+                                          'default'
+                                        }>
+                                          {(record as any).status || 'ACTIVE'}
                                         </Badge>
                                       </td>
                                       <td className="px-4 py-2">

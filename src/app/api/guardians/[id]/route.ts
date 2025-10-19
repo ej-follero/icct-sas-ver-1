@@ -1,63 +1,51 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { Status, GuardianType, UserGender } from '@prisma/client';
+import { z } from 'zod';
 
-async function assertAdmin(request: NextRequest) {
-  const token = request.cookies.get('token')?.value;
-  const isDev = process.env.NODE_ENV !== 'production';
-  if (!token) return isDev ? { ok: true } as const : { ok: false, res: NextResponse.json({ error: 'Authentication required' }, { status: 401 }) };
-  try {
-    const jwt = require('jsonwebtoken');
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const role = decoded.role as string | undefined;
-    if (!role || (role !== 'SUPER_ADMIN' && role !== 'ADMIN')) {
-      return { ok: false, res: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
-    }
-    return { ok: true } as const;
-  } catch {
-    return { ok: false, res: NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 }) };
-  }
-}
+// Guardian update schema
+const guardianUpdateSchema = z.object({
+  email: z.string().email('Invalid email format').optional(),
+  phoneNumber: z.string().min(10, 'Phone number must be at least 10 characters').optional(),
+  firstName: z.string().min(1, 'First name is required').optional(),
+  middleName: z.string().optional(),
+  lastName: z.string().min(1, 'Last name is required').optional(),
+  suffix: z.string().optional(),
+  address: z.string().min(1, 'Address is required').optional(),
+  img: z.string().optional(),
+  gender: z.enum(['MALE', 'FEMALE']).optional(),
+  guardianType: z.enum(['PARENT', 'GUARDIAN']).optional(),
+  occupation: z.string().optional(),
+  workplace: z.string().optional(),
+  emergencyContact: z.string().optional(),
+  relationshipToStudent: z.string().min(1, 'Relationship to student is required').optional(),
+  status: z.enum(['ACTIVE', 'INACTIVE']).optional(),
+});
 
-export async function PATCH(
+// GET /api/guardians/[id] - Fetch single guardian
+export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    const gate = await assertAdmin(request);
-    if (!('ok' in gate) || gate.ok !== true) return gate.res;
     const guardianId = parseInt(params.id);
-    const body = await request.json();
 
-    // Update guardian
-    const updatedGuardian = await prisma.guardian.update({
+    if (isNaN(guardianId)) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid guardian ID' },
+        { status: 400 }
+      );
+    }
+
+    const guardian = await prisma.guardian.findUnique({
       where: { guardianId },
-      data: {
-        ...(body.firstName && { firstName: body.firstName }),
-        ...(body.middleName !== undefined && { middleName: body.middleName }),
-        ...(body.lastName && { lastName: body.lastName }),
-        ...(body.suffix !== undefined && { suffix: body.suffix }),
-        ...(body.email && { email: body.email }),
-        ...(body.phoneNumber && { phoneNumber: body.phoneNumber }),
-        ...(body.address && { address: body.address }),
-        ...(body.img !== undefined && { img: body.img }),
-        ...(body.gender && body.gender.toUpperCase() in UserGender && { gender: body.gender.toUpperCase() as UserGender }),
-        ...(body.guardianType && body.guardianType.toUpperCase() in GuardianType && { guardianType: body.guardianType.toUpperCase() as GuardianType }),
-        ...(body.status && body.status.toUpperCase() in Status && { status: body.status.toUpperCase() as Status }),
-        ...(body.occupation !== undefined && { occupation: body.occupation }),
-        ...(body.workplace !== undefined && { workplace: body.workplace }),
-        ...(body.emergencyContact !== undefined && { emergencyContact: body.emergencyContact }),
-        ...(body.relationshipToStudent && { relationshipToStudent: body.relationshipToStudent }),
-        ...(body.totalStudents !== undefined && { totalStudents: body.totalStudents }),
-      },
       include: {
         Student: {
           select: {
             studentId: true,
+            studentIdNum: true,
             firstName: true,
             lastName: true,
-            studentIdNum: true,
-            yearLevel: true,
+            email: true,
             status: true,
             CourseOffering: {
               select: {
@@ -76,59 +64,140 @@ export async function PATCH(
       }
     });
 
-    // Transform the response to match the expected format
-    const transformedGuardian = {
-      id: updatedGuardian.guardianId.toString(),
-      name: `${updatedGuardian.firstName} ${updatedGuardian.middleName || ''} ${updatedGuardian.lastName} ${updatedGuardian.suffix || ''}`.trim(),
-      firstName: updatedGuardian.firstName,
-      middleName: updatedGuardian.middleName,
-      lastName: updatedGuardian.lastName,
-      suffix: updatedGuardian.suffix,
-      email: updatedGuardian.email,
-      phoneNumber: updatedGuardian.phoneNumber,
-      address: updatedGuardian.address,
-      img: updatedGuardian.img,
-      gender: updatedGuardian.gender,
-      guardianType: updatedGuardian.guardianType,
-      status: updatedGuardian.status.toLowerCase() as 'active' | 'inactive',
-      occupation: updatedGuardian.occupation,
-      workplace: updatedGuardian.workplace,
-      emergencyContact: updatedGuardian.emergencyContact,
-      relationshipToStudent: updatedGuardian.relationshipToStudent,
-      totalStudents: updatedGuardian.totalStudents,
-      lastLogin: updatedGuardian.lastLogin,
-      createdAt: updatedGuardian.createdAt,
-      updatedAt: updatedGuardian.updatedAt,
-      students: updatedGuardian.Student.map(student => ({
-        id: student.studentId.toString(),
-        name: `${student.firstName} ${student.lastName}`,
-        studentIdNum: student.studentIdNum,
-        yearLevel: student.yearLevel,
-        status: student.status,
-        course: student.CourseOffering ? {
-          name: student.CourseOffering.courseName,
-          code: student.CourseOffering.courseCode,
-        } : null,
-        department: student.Department ? {
-          name: student.Department.departmentName,
-          code: student.Department.departmentCode,
-        } : null,
-      }))
-    };
+    if (!guardian) {
+      return NextResponse.json(
+        { success: false, error: 'Guardian not found' },
+        { status: 404 }
+      );
+    }
 
-    return NextResponse.json({ 
-      data: transformedGuardian,
-      message: 'Guardian updated successfully' 
+    return NextResponse.json({
+      success: true,
+      data: guardian
     });
   } catch (error) {
-    console.error('Error updating guardian:', error);
+    console.error('Error fetching guardian:', error);
     return NextResponse.json(
-      { error: 'Failed to update guardian' },
+      { success: false, error: 'Failed to fetch guardian' },
       { status: 500 }
     );
   }
 }
 
+// PUT /api/guardians/[id] - Update guardian
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const guardianId = parseInt(params.id);
+
+    if (isNaN(guardianId)) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid guardian ID' },
+        { status: 400 }
+      );
+    }
+
+    const body = await request.json();
+    const validatedData = guardianUpdateSchema.parse(body);
+
+    // Check if guardian exists
+    const existingGuardian = await prisma.guardian.findUnique({
+      where: { guardianId }
+    });
+
+    if (!existingGuardian) {
+      return NextResponse.json(
+        { success: false, error: 'Guardian not found' },
+        { status: 404 }
+      );
+    }
+
+    // Check for email/phone conflicts if they're being updated
+    if (validatedData.email || validatedData.phoneNumber) {
+      const conflictGuardian = await prisma.guardian.findFirst({
+        where: {
+          AND: [
+            { guardianId: { not: guardianId } },
+            {
+              OR: [
+                ...(validatedData.email ? [{ email: validatedData.email }] : []),
+                ...(validatedData.phoneNumber ? [{ phoneNumber: validatedData.phoneNumber }] : [])
+              ]
+            }
+          ]
+        }
+      });
+
+      if (conflictGuardian) {
+        return NextResponse.json(
+          { 
+            success: false, 
+            error: 'Guardian with this email or phone number already exists' 
+          },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Update guardian
+    const updatedGuardian = await prisma.guardian.update({
+      where: { guardianId },
+      data: validatedData,
+      include: {
+        Student: {
+          select: {
+            studentId: true,
+            studentIdNum: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            status: true,
+            CourseOffering: {
+              select: {
+                courseName: true,
+                courseCode: true,
+              }
+            },
+            Department: {
+              select: {
+                departmentName: true,
+                departmentCode: true,
+              }
+            }
+          }
+        }
+      }
+    });
+
+    return NextResponse.json({
+      success: true,
+      data: updatedGuardian,
+      message: 'Guardian updated successfully'
+    });
+  } catch (error) {
+    console.error('Error updating guardian:', error);
+    
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: 'Validation failed',
+          details: error.errors 
+        },
+        { status: 400 }
+      );
+    }
+
+    return NextResponse.json(
+      { success: false, error: 'Failed to update guardian' },
+      { status: 500 }
+    );
+  }
+}
+
+// DELETE /api/guardians/[id] - Delete guardian
 export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -136,40 +205,52 @@ export async function DELETE(
   try {
     const guardianId = parseInt(params.id);
 
-    // Check if guardian has students
-    const guardian = await prisma.guardian.findUnique({
+    if (isNaN(guardianId)) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid guardian ID' },
+        { status: 400 }
+      );
+    }
+
+    // Check if guardian exists
+    const existingGuardian = await prisma.guardian.findUnique({
       where: { guardianId },
       include: {
         Student: true
       }
     });
 
-    if (!guardian) {
+    if (!existingGuardian) {
       return NextResponse.json(
-        { error: 'Guardian not found' },
+        { success: false, error: 'Guardian not found' },
         { status: 404 }
       );
     }
 
-    if (guardian.Student.length > 0) {
+    // Check if guardian has associated students
+    if (existingGuardian.Student.length > 0) {
       return NextResponse.json(
-        { error: 'Cannot delete guardian with associated students' },
+        { 
+          success: false, 
+          error: 'Cannot delete guardian with associated students. Please reassign students first.' 
+        },
         { status: 400 }
       );
     }
 
-    // Delete guardian (no associated user account)
+    // Delete guardian
     await prisma.guardian.delete({
       where: { guardianId }
     });
 
-    return NextResponse.json({ 
-      message: 'Guardian deleted successfully' 
+    return NextResponse.json({
+      success: true,
+      message: 'Guardian deleted successfully'
     });
   } catch (error) {
     console.error('Error deleting guardian:', error);
     return NextResponse.json(
-      { error: 'Failed to delete guardian' },
+      { success: false, error: 'Failed to delete guardian' },
       { status: 500 }
     );
   }

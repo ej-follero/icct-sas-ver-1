@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback } from "react";
+import React, { useCallback, useEffect } from "react";
 import { Bell, MessageCircle, CheckCheck, AlertTriangle, Info, ExternalLink, Calendar as CalendarIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -51,8 +51,12 @@ export const NotificationPopover: React.FC<NotificationPopoverProps> = ({
     messages,
     markAsRead,
     markAllAsRead,
-    loading
+    loading,
+    refresh
   } = useNotifications();
+
+  // Safety check for refresh function
+  const safeRefresh = refresh || (() => {});
 
   const items = type === "messages" ? messages : notifications;
   const unreadCount = items.filter((item) => item.unread).length;
@@ -75,6 +79,13 @@ export const NotificationPopover: React.FC<NotificationPopoverProps> = ({
   const handleMarkAllRead = useCallback(async () => {
     await markAllAsRead(type === "messages" ? "message" : "notification");
   }, [markAllAsRead, type]);
+
+  // Refresh notifications when popover opens for real-time updates
+  useEffect(() => {
+    if (open && safeRefresh) {
+      safeRefresh();
+    }
+  }, [open, safeRefresh]);
 
   return (
     <Popover open={open} onOpenChange={onOpenChange}>

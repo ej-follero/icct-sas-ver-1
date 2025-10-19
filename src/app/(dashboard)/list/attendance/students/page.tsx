@@ -1,6 +1,6 @@
 ﻿'use client';
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
@@ -172,6 +172,7 @@ const filterPresets: FilterPreset[] = [
 
 export default function StudentAttendancePage() {
   const [searchQuery, setSearchQuery] = useState('');
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [filters, setFilters] = useState<Filters>({
     departments: [],
     courses: [],
@@ -1210,7 +1211,26 @@ export default function StudentAttendancePage() {
     setShowStudentDetail(true);
   };
 
-  const handleClearFilters = () => {
+  const hasActiveFilters = useMemo(() => {
+    const anyFilter = Object.values(filters).some(arr => (arr as string[]).length > 0);
+    const anyAnalytics = analyticsFilters && Object.keys(analyticsFilters).length > 0;
+    return anyFilter || !!searchQuery || anyAnalytics || selectedSubject !== 'all';
+  }, [filters, searchQuery, analyticsFilters, selectedSubject]);
+
+  // Check what types of filters are active
+  const hasTableFilters = useMemo(() => {
+    const anyFilter = Object.values(filters).some(arr => (arr as string[]).length > 0);
+    return anyFilter || !!searchQuery;
+  }, [filters, searchQuery]);
+
+  const hasAnalyticsFilters = useMemo(() => {
+    const anyAnalytics = analyticsFilters && Object.keys(analyticsFilters).length > 0;
+    return anyAnalytics || selectedSubject !== 'all';
+  }, [analyticsFilters, selectedSubject]);
+
+  // Clear all filters (analytics + table + search)
+  const handleClearAllFilters = () => {
+    // Reset all table/UI filters
     setFilters({
       departments: [],
       courses: [],
@@ -1220,7 +1240,70 @@ export default function StudentAttendancePage() {
       subjects: [],
       statuses: []
     });
+    // Reset search and analytics-linked filters
+    setSearchQuery('');
+    setAnalyticsFilters({});
+    setSelectedSubject('all');
+    // Reset pagination and selection
+    setPage(1);
+    setSelected(new Set());
+    // Force analytics component reset
+    forceAnalyticsReset();
+    // Force re-fetch after state reset
+    setTimeout(() => {
+      fetchStudentAttendance();
+      fetchSubjects();
+      // Focus search and scroll to top for context
+      try { searchInputRef.current?.focus(); } catch {}
+      try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch {}
+    }, 0);
+    try { toast.success('All filters cleared'); } catch {}
   };
+
+  // Clear only table filters (search + table filters)
+  const handleClearTableFilters = () => {
+    setFilters({
+      departments: [],
+      courses: [],
+      yearLevels: [],
+      attendanceRates: [],
+      riskLevels: [],
+      subjects: [],
+      statuses: []
+    });
+    setSearchQuery('');
+    setPage(1);
+    setSelected(new Set());
+    setTimeout(() => {
+      fetchStudentAttendance();
+      fetchSubjects();
+    }, 0);
+    try { toast.success('Table filters cleared'); } catch {}
+  };
+
+  // Clear only analytics filters
+  const handleClearAnalyticsFilters = () => {
+    setAnalyticsFilters({});
+    setSelectedSubject('all');
+    setPage(1);
+    // Force analytics component reset
+    forceAnalyticsReset();
+    // Force analytics component to reset by passing empty filters
+    setTimeout(() => {
+      fetchStudentAttendance();
+      fetchSubjects();
+    }, 0);
+    try { toast.success('Analytics filters cleared'); } catch {}
+  };
+
+  // Force analytics reset when filters are cleared
+  const [analyticsResetKey, setAnalyticsResetKey] = useState(0);
+  const forceAnalyticsReset = () => {
+    setAnalyticsResetKey(prev => prev + 1);
+  };
+
+  // Legacy function for backward compatibility
+  const handleClearFilters = handleClearAllFilters;
 
   const handleApplyFilters = (newFilters: Record<string, string[]>) => {
     setFilters(newFilters as Filters);
@@ -1544,7 +1627,7 @@ export default function StudentAttendancePage() {
     };
   };
 
-  const handleExport = async (format: 'pdf' | 'csv' | 'excel', options: { includeCharts: boolean; includeFilters: boolean; includeSummary: boolean; includeTable?: boolean; selectedCharts?: string[]; selectedColumns?: string[] }) => {
+  const handleExport = async (format: 'pdf' | 'csv' | 'excel', options: { includeFilters: boolean; includeSummary: boolean; includeTable?: boolean; selectedColumns?: string[] }) => {
     try {
       setExportLoading(true);
       setExportStage('collecting');
@@ -1644,6 +1727,8 @@ export default function StudentAttendancePage() {
 
       const exportRows = transformForExport(allStudents);
 
+      // Charts and visualizations export functionality removed
+
       // 1) Fetch server analytics so export reflects current filters
       const snapshot = buildAnalyticsSnapshot();
       const analyticsParams = new URLSearchParams({
@@ -1682,153 +1767,7 @@ export default function StudentAttendancePage() {
         }
       };
 
-      setExportStage('capturing');
-      
-      // Wait a bit for charts to render
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      // Capture chart elements for export with better selectors
-      const chartElements = {
-        // Main dashboard charts
-        attendanceTrend: document.querySelector('[data-chart="attendance-trend"]') as HTMLElement,
-        departmentStats: document.querySelector('[data-chart="department-stats"]') as HTMLElement,
-        riskLevelChart: document.querySelector('[data-chart="risk-level"]') as HTMLElement,
-        lateArrivalChart: document.querySelector('[data-chart="late-arrival"]') as HTMLElement,
-        // Expanded modal charts
-        attendanceDistribution: document.querySelector('[data-chart="attendance-distribution"]') as HTMLElement,
-        weeklyTrend: document.querySelector('[data-chart="weekly-trend"]') as HTMLElement,
-        lateArrivalTrend: document.querySelector('[data-chart="late-arrival-trend"]') as HTMLElement,
-        riskLevelDistribution: document.querySelector('[data-chart="risk-level-distribution"]') as HTMLElement,
-        departmentPerformance: document.querySelector('[data-chart="department-performance"]') as HTMLElement,
-        patternAnalysis: document.querySelector('[data-chart="pattern-analysis"]') as HTMLElement,
-        streakAnalysis: document.querySelector('[data-chart="streak-analysis"]') as HTMLElement
-      };
-
-      console.log('Chart elements found:', {
-        attendanceTrend: !!chartElements.attendanceTrend,
-        departmentStats: !!chartElements.departmentStats,
-        riskLevelChart: !!chartElements.riskLevelChart,
-        lateArrivalChart: !!chartElements.lateArrivalChart,
-        attendanceDistribution: !!chartElements.attendanceDistribution,
-        weeklyTrend: !!chartElements.weeklyTrend,
-        lateArrivalTrend: !!chartElements.lateArrivalTrend,
-        riskLevelDistribution: !!chartElements.riskLevelDistribution,
-        departmentPerformance: !!chartElements.departmentPerformance,
-        patternAnalysis: !!chartElements.patternAnalysis,
-        streakAnalysis: !!chartElements.streakAnalysis
-      });
-
-      // Fallback to generic selectors if specific ones not found
-      const allRechartsWrappers = document.querySelectorAll('.recharts-wrapper');
-      console.log('Found recharts wrappers:', allRechartsWrappers.length);
-      
-      if (!chartElements.attendanceTrend && allRechartsWrappers[0]) {
-        chartElements.attendanceTrend = allRechartsWrappers[0] as HTMLElement;
-        console.log('Using fallback for attendanceTrend');
-      }
-      if (!chartElements.departmentStats && allRechartsWrappers[1]) {
-        chartElements.departmentStats = allRechartsWrappers[1] as HTMLElement;
-        console.log('Using fallback for departmentStats');
-      }
-      if (!chartElements.riskLevelChart && allRechartsWrappers[2]) {
-        chartElements.riskLevelChart = allRechartsWrappers[2] as HTMLElement;
-        console.log('Using fallback for riskLevelChart');
-      }
-      if (!chartElements.lateArrivalChart && allRechartsWrappers[3]) {
-        chartElements.lateArrivalChart = allRechartsWrappers[3] as HTMLElement;
-        console.log('Using fallback for lateArrivalChart');
-      }
-
       setExportStage('generating');
-      // Convert charts to data URLs for PDF embeds when requested
-      let chartImages: Record<string, string> | undefined = undefined;
-      if (format === 'pdf' && options.includeCharts) {
-        try {
-          let toPng: undefined | ((node: HTMLElement, opts?: any) => Promise<string>) = undefined;
-          try {
-            // Dynamic import if available in project; otherwise we gracefully fallback
-            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-            // @ts-ignore
-            const lib = await import('html-to-image');
-            toPng = (lib as any)?.toPng;
-          } catch {}
-          const svgToPng = async (container: HTMLElement): Promise<string | undefined> => {
-            const svg = container.querySelector('svg');
-            if (!svg) return undefined;
-            const serializer = new XMLSerializer();
-            const svgStr = serializer.serializeToString(svg);
-            const svgBlob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
-            const url = URL.createObjectURL(svgBlob);
-            try {
-              const img = new Image();
-              img.crossOrigin = 'anonymous';
-              const dataUrl: string = await new Promise((resolve, reject) => {
-                img.onload = () => {
-                  const rect = svg.getBoundingClientRect();
-                  const w = Math.ceil(rect.width || 800);
-                  const h = Math.ceil(rect.height || 400);
-                  const canvas = document.createElement('canvas');
-                  canvas.width = w; canvas.height = h;
-                  const ctx = canvas.getContext('2d');
-                  if (!ctx) { reject(new Error('Canvas context unavailable')); return; }
-                  ctx.fillStyle = '#ffffff';
-                  ctx.fillRect(0, 0, w, h);
-                  ctx.drawImage(img, 0, 0, w, h);
-                  resolve(canvas.toDataURL('image/png'));
-                };
-                img.onerror = reject;
-                img.src = url;
-              });
-              return dataUrl;
-            } finally {
-              URL.revokeObjectURL(url);
-            }
-          };
-          if (toPng) {
-            const allow = new Set((options.selectedCharts || []).length ? options.selectedCharts : ['attendance-trend','department-stats','risk-level','late-arrival','attendance-distribution','weekly-trend','late-arrival-trend','risk-level-distribution','department-performance','pattern-analysis','streak-analysis']);
-            const keyMap: Record<string,string> = {
-              attendanceTrend: 'attendance-trend',
-              departmentStats: 'department-stats',
-              riskLevelChart: 'risk-level',
-              lateArrivalChart: 'late-arrival',
-              attendanceDistribution: 'attendance-distribution',
-              weeklyTrend: 'weekly-trend',
-              lateArrivalTrend: 'late-arrival-trend',
-              riskLevelDistribution: 'risk-level-distribution',
-              departmentPerformance: 'department-performance',
-              patternAnalysis: 'pattern-analysis',
-              streakAnalysis: 'streak-analysis'
-            };
-            const entries = Object.entries(chartElements).filter(([k, el]) => !!el && allow.has(keyMap[k] || k)) as Array<[string, HTMLElement]>;
-            console.log('Charts to capture:', entries.map(([k, el]) => ({ key: k, element: !!el, tagName: el?.tagName })));
-            
-            const results = await Promise.all(entries.map(async ([key, el]) => {
-              let dataUrl: string | undefined = undefined;
-              try { 
-                console.log(`Capturing chart: ${key}`);
-                dataUrl = await toPng(el, { cacheBust: true, pixelRatio: 2 }); 
-                console.log(`Successfully captured ${key}:`, !!dataUrl);
-              } catch (error) {
-                console.log(`Failed to capture ${key} with toPng:`, error);
-              }
-              if (!dataUrl) { 
-                try {
-                  dataUrl = await svgToPng(el); 
-                  console.log(`Successfully captured ${key} with svgToPng:`, !!dataUrl);
-                } catch (error) {
-                  console.log(`Failed to capture ${key} with svgToPng:`, error);
-                }
-              }
-              const mapped = keyMap[key] || key;
-              return [mapped, dataUrl] as [string, string | undefined];
-            }));
-            chartImages = Object.fromEntries(results.filter(([,v]) => !!v) as Array<[string, string]>);
-            console.log('Final chart images:', Object.keys(chartImages));
-          }
-        } catch (e) {
-          console.warn('Chart image capture unavailable; proceeding without images');
-        }
-      }
 
       const makeSlug = (s: string) => String(s || 'All').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
       const deptSlug = makeSlug(filters.departments?.[0] || 'All');
@@ -1839,13 +1778,11 @@ export default function StudentAttendancePage() {
       const exportOptions = {
         format,
         filename: filenameBase,
-        includeCharts: format === 'pdf' && options.includeCharts,
+        includeCharts: false, // Charts export disabled
         includeFilters: !!options.includeFilters,
         includeSummary: !!options.includeSummary,
         includeTable: !!options.includeTable,
-        selectedColumns: options.selectedColumns,
-        chartElements: options.includeCharts ? chartElements : undefined,
-        chartImages
+        selectedColumns: options.selectedColumns
       };
 
       await ExportService.exportAnalytics(exportData, exportOptions);
@@ -2046,6 +1983,7 @@ export default function StudentAttendancePage() {
           {/* Analytics Dashboard */}
           <Card className="border border-blue-200 shadow-lg rounded-xl overflow-hidden p-0 w-full">
               <AttendanceAnalytics 
+                key={`analytics-${analyticsResetKey}-${JSON.stringify(analyticsFilters)}-${selectedSubject}`}
                 data={transformedStudentsData}
                 loading={analyticsLoading}
                 type="student"
@@ -2065,11 +2003,12 @@ export default function StudentAttendancePage() {
                   setAnalyticsFilters(snapshot);
                   setPage(1); // reset to first page; effect will refetch
                 }}
+                onClearAnalytics={handleClearAnalyticsFilters}
 
                 onDrillDown={(filter: { type: string; value: string }) => {
                   // Handle drill down logic
                 }}
-                onExport={async (format: 'pdf' | 'csv' | 'excel') => {
+                onExport={async (format: 'pdf' | 'csv' | 'excel', options?: { includeFilters: boolean; includeSummary: boolean; includeTable?: boolean; selectedColumns?: string[] }) => {
                   try {
                     setExportLoading(true);
                     console.log('Exporting analytics data:', format);
@@ -2138,18 +2077,20 @@ export default function StudentAttendancePage() {
                       chartElements.lateArrivalChart = document.querySelectorAll('.recharts-wrapper')[3] as HTMLElement;
                     }
 
+                    // Charts and visualizations export functionality removed
+
                     const options = {
                       format,
                       filename: `student-attendance-analytics-${new Date().toISOString().split('T')[0]}`,
-                      includeCharts: format === 'pdf',
+                      includeCharts: false, // Charts export disabled
                       includeFilters: true,
-                      chartElements,
                       // Align columns with dialog defaults for quick export (non-PDF)
                       selectedColumns: format === 'pdf' ? undefined : [...defaultSelectedColumns],
                       // Ensure tabular data is included for Excel/CSV
                       includeTable: format !== 'pdf'
                     };
 
+                    // Charts export functionality removed
                     await ExportService.exportAnalytics(exportData, options);
                     
                     // Show success toast
@@ -2219,6 +2160,7 @@ export default function StudentAttendancePage() {
                       placeholder="Search students..."
                       value={searchQuery}
                       onChange={e => setSearchQuery(e.target.value)}
+                      ref={searchInputRef}
                       className="w-full pl-10 pr-4 py-2.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:outline-none"
                     />
                   </div>
@@ -2285,16 +2227,26 @@ export default function StudentAttendancePage() {
               </div>
 
               {/* Active Filter Chips */}
-              {Object.values(filters).some(arr => arr.length > 0) && (
+              {(Object.values(filters).some(arr => arr.length > 0) || searchQuery || selectedSubject !== 'all') && (
                 <div className="p-3 bg-blue-50 rounded border border-blue-200 mx-3 sm:mx-4 lg:mx-6 mt-4">
                   <div className="flex flex-col sm:flex-row sm:items-center gap-2 text-sm mb-2">
                     <div className="flex items-center gap-2">
                       <Filter className="w-4 h-4 text-blue-600 flex-shrink-0" />
                       <span className="font-medium text-blue-900">Active Filters:</span>
                     </div>
-                    <span className="text-blue-700">
-                      {filteredStudents.length} of {students.length} students
-                    </span>
+                    <div className="flex items-center gap-3 text-blue-700">
+                      <span>{filteredStudents.length} of {students.length} students</span>
+                      <button
+                        type="button"
+                        onClick={handleClearFilters}
+                        disabled={!hasActiveFilters}
+                        className={`text-xs px-2 py-1 rounded border ${hasActiveFilters ? 'border-blue-300 text-blue-700 hover:bg-blue-100' : 'border-gray-200 text-gray-400 cursor-not-allowed'}`}
+                        aria-disabled={!hasActiveFilters}
+                        title={hasActiveFilters ? 'Clear all filters' : 'No active filters'}
+                      >
+                        Clear all
+                      </button>
+                    </div>
                   </div>
                   <FilterChips
                     filters={filters}
@@ -2362,43 +2314,11 @@ export default function StudentAttendancePage() {
                             }
                           };
 
-                          // Capture chart elements for export with better selectors
-                          const chartElements = {
-                            // Main dashboard charts
-                            attendanceTrend: document.querySelector('[data-chart="attendance-trend"]') as HTMLElement,
-                            departmentStats: document.querySelector('[data-chart="department-stats"]') as HTMLElement,
-                            riskLevelChart: document.querySelector('[data-chart="risk-level"]') as HTMLElement,
-                            lateArrivalChart: document.querySelector('[data-chart="late-arrival"]') as HTMLElement,
-                            // Expanded modal charts
-                            attendanceDistribution: document.querySelector('[data-chart="attendance-distribution"]') as HTMLElement,
-                            weeklyTrend: document.querySelector('[data-chart="weekly-trend"]') as HTMLElement,
-                            lateArrivalTrend: document.querySelector('[data-chart="late-arrival-trend"]') as HTMLElement,
-                            riskLevelDistribution: document.querySelector('[data-chart="risk-level-distribution"]') as HTMLElement,
-                            departmentPerformance: document.querySelector('[data-chart="department-performance"]') as HTMLElement,
-                            patternAnalysis: document.querySelector('[data-chart="pattern-analysis"]') as HTMLElement,
-                            streakAnalysis: document.querySelector('[data-chart="streak-analysis"]') as HTMLElement
-                          };
-
-                          // Fallback to generic selectors if specific ones not found
-                          if (!chartElements.attendanceTrend) {
-                            chartElements.attendanceTrend = document.querySelector('.recharts-wrapper') as HTMLElement;
-                          }
-                          if (!chartElements.departmentStats) {
-                            chartElements.departmentStats = document.querySelectorAll('.recharts-wrapper')[1] as HTMLElement;
-                          }
-                          if (!chartElements.riskLevelChart) {
-                            chartElements.riskLevelChart = document.querySelectorAll('.recharts-wrapper')[2] as HTMLElement;
-                          }
-                          if (!chartElements.lateArrivalChart) {
-                            chartElements.lateArrivalChart = document.querySelectorAll('.recharts-wrapper')[3] as HTMLElement;
-                          }
-
                           const options = {
                             format: 'excel' as const,
                             filename: `selected-students-${new Date().toISOString().split('T')[0]}`,
-                            includeCharts: true,
+                            includeCharts: false, // Charts export disabled
                             includeFilters: true,
-                            chartElements,
                             // Align columns with dialog defaults for quick export
                             selectedColumns: ['studentName','studentId','department','yearLevel','riskLevel','date','timeIn','timeOut','status','subject','room'],
                             includeTable: true
@@ -2451,7 +2371,7 @@ export default function StudentAttendancePage() {
                           title="No students found"
                           description="Try adjusting your search criteria or filters to find the students you're looking for."
                           action={
-                            <Button onClick={handleClearFilters} className="bg-blue-600 hover:bg-blue-700 rounded">
+                            <Button type="button" onClick={handleClearFilters} className="bg-blue-600 hover:bg-blue-700 rounded">
                               Clear Filters
                             </Button>
                           }

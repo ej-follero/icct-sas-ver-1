@@ -9,26 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Calendar, Clock, Users, MapPin, BookOpen, GraduationCap, X, Loader2, Search, Info } from "lucide-react";
 import { toast } from "sonner";
-
-interface Schedule {
-  subjectSchedId: number;
-  subject: { subjectName: string; subjectCode: string; subjectId: number };
-  section: { sectionName: string; sectionId: number };
-  instructor: { firstName: string; lastName: string; instructorId: number };
-  room: { roomNo: string; roomId: number; roomCapacity: number };
-  day: string;
-  startTime: string;
-  endTime: string;
-  slots: number;
-  scheduleType: string;
-  status: string;
-  semester: { semesterName: string; semesterId: number };
-  academicYear: string;
-  maxStudents: number;
-  currentEnrollment: number;
-  notes?: string;
-  conflicts?: string[];
-}
+import { Schedule } from "@/types/schedule";
 
 interface EditScheduleDialogProps {
   open: boolean;
@@ -96,7 +77,7 @@ export function EditScheduleDialog({ open, onOpenChange, schedule, onScheduleUpd
       setFormData({
         subjectId: schedule.subject.subjectId.toString(),
         sectionId: schedule.section.sectionId.toString(),
-        instructorId: schedule.instructor.instructorId.toString(),
+        instructorId: schedule.instructor?.instructorId?.toString() || '',
         roomId: schedule.room.roomId.toString(),
         day: schedule.day,
         startTime: schedule.startTime,
@@ -179,10 +160,28 @@ export function EditScheduleDialog({ open, onOpenChange, schedule, onScheduleUpd
   };
 
   const handleInputChange = (field: string, value: string) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: value
-    }));
+    setFormData(prev => {
+      const newFormData = {
+        ...prev,
+        [field]: value
+      };
+
+      // Auto-populate academic year when semester is selected
+      if (field === 'semesterId' && value) {
+        const selectedSemester = semesters.find(sem => sem.semesterId.toString() === value);
+        if (selectedSemester && selectedSemester.year) {
+          // Extract year from semester and create academic year format
+          const year = selectedSemester.year;
+          const academicYear = `${year}-${year + 1}`;
+          newFormData.academicYear = academicYear;
+        } else {
+          // If semester not found or no year, clear academic year
+          newFormData.academicYear = '';
+        }
+      }
+
+      return newFormData;
+    });
   };
 
   // Safe focus handler to prevent null reference errors
@@ -222,7 +221,9 @@ export function EditScheduleDialog({ open, onOpenChange, schedule, onScheduleUpd
         onOpenChange(false);
       } else {
         const error = await response.json();
-        throw new Error(error.message || 'Failed to update schedule');
+        console.error('API Error Response:', error);
+        console.error('Response Status:', response.status);
+        throw new Error(error.error || error.message || 'Failed to update schedule');
       }
     } catch (error) {
       console.error('Error updating schedule:', error);
@@ -538,6 +539,9 @@ export function EditScheduleDialog({ open, onOpenChange, schedule, onScheduleUpd
                     <div className="space-y-2">
                       <Label htmlFor="academicYear" className="text-sm text-blue-900">
                         Academic Year <span className="text-red-500">*</span>
+                        {formData.semesterId && (
+                          <span className="text-xs text-green-600 ml-2">(Auto-filled)</span>
+                        )}
                       </Label>
                       <Input
                         id="academicYear"
@@ -545,9 +549,17 @@ export function EditScheduleDialog({ open, onOpenChange, schedule, onScheduleUpd
                         value={formData.academicYear}
                         onChange={(e) => handleInputChange('academicYear', e.target.value)}
                         placeholder="e.g., 2024-2025"
-                        className="border-blue-200 focus:border-blue-400 focus:ring-blue-400"
+                        className={`border-blue-200 focus:border-blue-400 focus:ring-blue-400 ${
+                          formData.semesterId ? 'bg-gray-50' : ''
+                        }`}
+                        readOnly={!!formData.semesterId}
                         required
                       />
+                      {formData.semesterId && (
+                        <p className="text-xs text-gray-500">
+                          Academic year is automatically set based on the selected semester
+                        </p>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -672,7 +684,7 @@ export function EditScheduleDialog({ open, onOpenChange, schedule, onScheduleUpd
 
               {/* Additional Information */}
               <div>
-                <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center justify-between mb-2 mt-6">
                   <div className="flex items-center gap-2">
                     <h3 className="text-md font-semibold text-blue-900">Additional Information</h3>
                   </div>

@@ -75,25 +75,43 @@ const LoginPage = () => {
         throw new Error(data.error || 'Login failed');
       }
 
+      // Add minimum loading time to show "Signing in..." for longer
+      const minLoadingTime = 2000; // 2 seconds minimum
+      const startTime = Date.now();
+      
       // Redirect based on user role
-      switch (data.user.role) {
-        case 'SUPER_ADMIN':
-        case 'ADMIN':
-        case 'DEPARTMENT_HEAD':
-          router.push('/dashboard');
-          break;
-        case 'INSTRUCTOR':
-          router.push('/dashboard');
-          break;
-        case 'STUDENT':
-          router.push('/dashboard');
-          break;
-        default:
-          router.push('/dashboard');
-      }
+      const redirectToDashboard = () => {
+        switch (data.user.role) {
+          case 'SUPER_ADMIN':
+          case 'ADMIN':
+          case 'DEPARTMENT_HEAD':
+            router.push('/dashboard');
+            break;
+          case 'INSTRUCTOR':
+            router.push('/dashboard');
+            break;
+          case 'STUDENT':
+            router.push('/dashboard');
+            break;
+          default:
+            router.push('/dashboard');
+        }
+        
+        // Keep loading state active until dashboard loads
+        // The loading will be cleared when the component unmounts (dashboard loads)
+      };
+
+      // Ensure minimum loading time has passed before redirecting
+      const elapsedTime = Date.now() - startTime;
+      const remainingTime = Math.max(0, minLoadingTime - elapsedTime);
+      
+      setTimeout(() => {
+        redirectToDashboard();
+        // Don't set isLoading to false here - let it continue until dashboard loads
+      }, remainingTime);
+      
     } catch (error) {
       setError(error instanceof Error ? error.message : 'An error occurred during login');
-    } finally {
       setIsLoading(false);
     }
   };

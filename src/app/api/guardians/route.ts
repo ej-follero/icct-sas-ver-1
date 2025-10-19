@@ -1,46 +1,40 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { Status, GuardianType, UserGender } from '@prisma/client';
+import { z } from 'zod';
 
-async function assertAdmin(request: NextRequest) {
-  const token = request.cookies.get('token')?.value;
-  const isDev = process.env.NODE_ENV !== 'production';
-  if (!token) return isDev ? { ok: true } as const : { ok: false, res: NextResponse.json({ error: 'Authentication required' }, { status: 401 }) };
-  try {
-    const jwt = require('jsonwebtoken');
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const role = decoded.role as string | undefined;
-    if (!role || (role !== 'SUPER_ADMIN' && role !== 'ADMIN')) {
-      return { ok: false, res: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
-    }
-    return { ok: true } as const;
-  } catch {
-    return { ok: false, res: NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 }) };
-  }
-}
+// Guardian creation schema
+const guardianSchema = z.object({
+  email: z.string().email('Invalid email format'),
+  phoneNumber: z.string().min(10, 'Phone number must be at least 10 characters'),
+  firstName: z.string().min(1, 'First name is required'),
+  middleName: z.string().optional(),
+  lastName: z.string().min(1, 'Last name is required'),
+  suffix: z.string().optional(),
+  address: z.string().min(1, 'Address is required'),
+  img: z.string().optional(),
+  gender: z.enum(['MALE', 'FEMALE']),
+  guardianType: z.enum(['PARENT', 'GUARDIAN']),
+  occupation: z.string().optional(),
+  workplace: z.string().optional(),
+  emergencyContact: z.string().optional(),
+  relationshipToStudent: z.string().min(1, 'Relationship to student is required'),
+});
 
+// GET /api/guardians - Fetch all guardians
 export async function GET(request: NextRequest) {
   try {
-    const gate = await assertAdmin(request);
-    if (!('ok' in gate) || gate.ok !== true) return gate.res;
     const { searchParams } = new URL(request.url);
-    const status = searchParams.get('status');
-    const type = searchParams.get('type');
-    const search = searchParams.get('search');
+    const page = parseInt(searchParams.get('page') || '1');
+    const limit = parseInt(searchParams.get('limit') || '10');
+    const search = searchParams.get('search') || '';
+    const status = searchParams.get('status') || 'all';
+    const guardianType = searchParams.get('guardianType') || 'all';
+
+    const skip = (page - 1) * limit;
 
     // Build where clause
     const where: any = {};
     
-    if (status && status !== 'all') {
-      const upper = status.toUpperCase();
-      if (upper in Status) where.status = upper as Status;
-    }
-    
-    if (type && type !== 'all') {
-      const upper = type.toUpperCase();
-      if (upper in GuardianType) where.guardianType = upper as GuardianType;
-    }
-
     if (search) {
       where.OR = [
         { firstName: { contains: search, mode: 'insensitive' } },
@@ -50,135 +44,150 @@ export async function GET(request: NextRequest) {
       ];
     }
 
-    const guardians = await prisma.guardian.findMany({
-      where,
-      include: {
-        Student: {
-          select: {
-            studentId: true,
-            firstName: true,
-            lastName: true,
-            studentIdNum: true,
-            yearLevel: true,
-            status: true,
-            CourseOffering: {
-              select: {
-                courseName: true,
-                courseCode: true,
-              }
-            },
-            Department: {
-              select: {
-                departmentName: true,
-                departmentCode: true,
+    if (status !== 'all') {
+      where.status = status;
+    }
+
+    if (guardianType !== 'all') {
+      where.guardianType = guardianType;
+    }
+
+    // Fetch guardians with related data
+    const [guardians, total] = await Promise.all([
+      prisma.guardian.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          Student: {
+            select: {
+              studentId: true,
+              studentIdNum: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+              CourseOffering: {
+                select: {
+                  courseName: true,
+                  courseCode: true,
+                }
               }
             }
           }
         }
-      },
-      orderBy: [
-        { lastName: 'asc' },
-        { firstName: 'asc' }
-      ]
+      }),
+      prisma.guardian.count({ where })
+    ]);
+
+    // Calculate statistics
+    const statistics = await prisma.guardian.groupBy({
+      by: ['status'],
+      _count: { status: true }
     });
 
-    // Transform data to match the expected format
-    const transformedGuardians = guardians.map(guardian => ({
-      id: guardian.guardianId.toString(),
-      name: `${guardian.firstName} ${guardian.middleName || ''} ${guardian.lastName} ${guardian.suffix || ''}`.trim(),
-      firstName: guardian.firstName,
-      middleName: guardian.middleName,
-      lastName: guardian.lastName,
-      suffix: guardian.suffix,
-      email: guardian.email,
-      phoneNumber: guardian.phoneNumber,
-      address: guardian.address,
-      img: guardian.img,
-      gender: guardian.gender,
-      guardianType: guardian.guardianType,
-      status: guardian.status.toLowerCase() as 'active' | 'inactive',
-      occupation: guardian.occupation,
-      workplace: guardian.workplace,
-      emergencyContact: guardian.emergencyContact,
-      relationshipToStudent: guardian.relationshipToStudent,
-      totalStudents: guardian.totalStudents,
-      lastLogin: guardian.lastLogin,
-      createdAt: guardian.createdAt,
-      updatedAt: guardian.updatedAt,
-      students: guardian.Student.map(student => ({
-        id: student.studentId.toString(),
-        name: `${student.firstName} ${student.lastName}`,
-        studentIdNum: student.studentIdNum,
-        yearLevel: student.yearLevel,
-        status: student.status,
-        course: student.CourseOffering ? {
-          name: student.CourseOffering.courseName,
-          code: student.CourseOffering.courseCode,
-        } : null,
-        department: student.Department ? {
-          name: student.Department.departmentName,
-          code: student.Department.departmentCode,
-        } : null,
-      }))
-    }));
+    const statusCounts = statistics.reduce((acc, stat) => {
+      acc[stat.status] = stat._count.status;
+      return acc;
+    }, {} as Record<string, number>);
 
-    return NextResponse.json({ data: transformedGuardians });
+    return NextResponse.json({
+      success: true,
+      data: guardians,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit)
+      },
+      statistics: {
+        total: total,
+        statusCounts
+      }
+    });
   } catch (error) {
     console.error('Error fetching guardians:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch guardians' },
+      { success: false, error: 'Failed to fetch guardians' },
       { status: 500 }
     );
   }
 }
 
+// POST /api/guardians - Create new guardian
 export async function POST(request: NextRequest) {
   try {
-    const gate = await assertAdmin(request);
-    if (!('ok' in gate) || gate.ok !== true) return gate.res;
     const body = await request.json();
+    
+    // Validate input
+    const validatedData = guardianSchema.parse(body);
 
-    // Normalize enums
-    const statusUpper = (body.status || 'ACTIVE').toString().toUpperCase();
-    const statusEnum: Status = (statusUpper in Status ? statusUpper : 'ACTIVE') as Status;
-    const typeUpper = (body.guardianType || '').toString().toUpperCase();
-    const typeEnum: GuardianType | null = (typeUpper in GuardianType ? (typeUpper as GuardianType) : null);
-    const genderUpper = (body.gender || '').toString().toUpperCase();
-    const genderEnum: UserGender | null = (genderUpper in UserGender ? (genderUpper as UserGender) : null);
-
-    // Create guardian (no user account)
-    const guardian = await prisma.guardian.create({
-      data: {
-        email: body.email,
-        phoneNumber: body.phoneNumber,
-        firstName: body.firstName,
-        middleName: body.middleName,
-        lastName: body.lastName,
-        suffix: body.suffix,
-        address: body.address,
-        img: body.img,
-        gender: genderEnum as any,
-        guardianType: typeEnum as any,
-        status: statusEnum,
-        occupation: body.occupation,
-        workplace: body.workplace,
-        emergencyContact: body.emergencyContact,
-        relationshipToStudent: body.relationshipToStudent,
-        totalStudents: 0,
-      },
-      include: {
-        Student: true
+    // Check for existing email or phone
+    const existingGuardian = await prisma.guardian.findFirst({
+      where: {
+        OR: [
+          { email: validatedData.email },
+          { phoneNumber: validatedData.phoneNumber }
+        ]
       }
     });
 
-    return NextResponse.json({ 
+    if (existingGuardian) {
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: 'Guardian with this email or phone number already exists' 
+        },
+        { status: 400 }
+      );
+    }
+
+    // Create guardian
+    const guardian = await prisma.guardian.create({
+      data: {
+        ...validatedData,
+        status: 'ACTIVE'
+      },
+      include: {
+        Student: {
+          select: {
+            studentId: true,
+            studentIdNum: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            CourseOffering: {
+              select: {
+                courseName: true,
+                courseCode: true,
+              }
+            }
+          }
+        }
+      }
+    });
+
+    return NextResponse.json({
+      success: true,
       data: guardian,
-      message: 'Guardian created successfully' 
+      message: 'Guardian created successfully'
     });
   } catch (error) {
     console.error('Error creating guardian:', error);
+    
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: 'Validation failed',
+          details: error.errors 
+        },
+        { status: 400 }
+      );
+    }
+
     return NextResponse.json(
-      { error: 'Failed to create guardian' },
+      { success: false, error: 'Failed to create guardian' },
       { status: 500 }
     );
   }

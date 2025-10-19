@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { createNotification } from '@/lib/notifications';
 import { ComprehensiveAuditService } from '@/lib/services/comprehensive-audit.service';
 
 // POST /api/attendance/manual-override
@@ -189,6 +190,18 @@ export async function POST(request: NextRequest) {
       ipAddress: request.headers.get('x-forwarded-for') || undefined,
       userAgent: request.headers.get('user-agent') || undefined,
     } as any);
+
+    // Notification: manual override applied/updated
+    try {
+      await createNotification(actorUserId, {
+        title: 'Attendance override updated',
+        message: `${student.firstName} ${student.lastName}: ${existingAttendance ? 'Updated' : 'Created'} to ${status} – ${subjectSchedule.subject.subjectName}`,
+        priority: 'NORMAL',
+        type: 'ATTENDANCE',
+      });
+    } catch (e) {
+      console.warn('Notification create failed (attendance override):', e);
+    }
 
     // Emit WebSocket update
     try {

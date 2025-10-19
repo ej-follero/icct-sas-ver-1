@@ -47,6 +47,27 @@ export async function POST(request: NextRequest) {
     }
 
     if (!student) {
+      // Log failed scan for auditability
+      try {
+        await prisma.rFIDLogs.create({
+          data: {
+            rfidTag: rfid,
+            readerId: readerId || 1,
+            scanType: 'CHECK_IN',
+            scanStatus: 'FAILED',
+            location: location || 'Unknown',
+            userId: 0, // unknown user
+            userRole: 'STUDENT',
+            timestamp: new Date(),
+            deviceInfo: deviceInfo || null,
+          },
+        });
+        // Optionally log a reader event of type SCAN_ERROR
+        // If readerId provided, we can attach a reader log record in a separate table if desired
+      } catch (logErr) {
+        console.warn('Failed to log unknown RFID scan', logErr);
+      }
+
       return NextResponse.json({ 
         error: 'Student not found for RFID tag',
         rfid 

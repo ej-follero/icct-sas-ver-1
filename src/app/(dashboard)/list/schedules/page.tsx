@@ -29,33 +29,15 @@ import { AddScheduleDialog } from '@/components/reusable/Dialogs/AddScheduleDial
 import { EditScheduleDialog } from '@/components/reusable/Dialogs/EditScheduleDialog';
 import { DeleteScheduleDialog } from '@/components/reusable/Dialogs/DeleteScheduleDialog';
 import { BulkEditDialog } from '@/components/reusable/Dialogs/BulkEditDialog';
+import { ViewDialog } from '@/components/reusable/Dialogs/ViewDialog';
 import { PrintLayout } from '@/components/PrintLayout';
 
 import BulkActions from '../../../../components/BulkActions';
 import { ICCT_CLASSES } from '../../../../lib/colors';
 import { EmptyState } from '@/components/reusable';
+import { Schedule } from '@/types/schedule';
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
-
-interface Schedule {
-  subjectSchedId: number;
-  subject: { subjectName: string; subjectCode: string; subjectId: number };
-  section: { sectionName: string; sectionId: number };
-  instructor: { firstName: string; lastName: string; instructorId: number };
-  room: { roomNo: string; roomId: number; roomCapacity: number };
-  day: string;
-  startTime: string;
-  endTime: string;
-  slots: number;
-  scheduleType: string;
-  status: string;
-  semester: { semesterName: string; semesterId: number };
-  academicYear: string;
-  maxStudents: number;
-  currentEnrollment: number;
-  notes?: string;
-  conflicts?: string[];
-}
 
 interface FuseResult<T> {
   item: T;
@@ -130,9 +112,13 @@ export default function ClassSchedulesPage() {
   const [showEditScheduleDialog, setShowEditScheduleDialog] = useState(false);
   const [showDeleteScheduleDialog, setShowDeleteScheduleDialog] = useState(false);
   const [showBulkEditDialog, setShowBulkEditDialog] = useState(false);
+  const [showViewDialog, setShowViewDialog] = useState(false);
   const [selectedSchedule, setSelectedSchedule] = useState<Schedule | null>(null);
+  const [expandedRowIds, setExpandedRowIds] = useState<string[]>([]);
+  const [scheduleStudents, setScheduleStudents] = useState<{[key: string]: any[]}>({});
+  const [loadingStudents, setLoadingStudents] = useState<{[key: string]: boolean}>({});
   const [visibleColumns, setVisibleColumns] = useState<string[]>([
-    'select', 'subject', 'section', 'instructor', 'room', 'day', 'time', 'scheduleType', 'status', 'enrollment', 'actions'
+    'select', 'expander', 'subject', 'section', 'instructor', 'room', 'day', 'time', 'scheduleType', 'status', 'enrollment', 'actions'
   ]);
 
   // Export columns configuration
@@ -166,6 +152,7 @@ export default function ClassSchedulesPage() {
   // Column options for VisibleColumnsDialog
   const columnOptions = [
     { accessor: 'select', header: 'Select', required: true },
+    { accessor: 'expander', header: 'Students', description: 'View enrolled students' },
     { accessor: 'subject', header: 'Subject', description: 'Subject name and code' },
     { accessor: 'section', header: 'Section', description: 'Section name' },
     { accessor: 'instructor', header: 'Instructor', description: 'Instructor name and ID' },
@@ -361,9 +348,84 @@ export default function ClassSchedulesPage() {
       className: 'w-12 text-center',
     },
     {
+      header: '',
+      accessor: 'expander',
+      className: 'w-12 text-center',
+      expandedContent: (schedule: Schedule) => {
+        const scheduleIdStr = schedule.subjectSchedId.toString();
+        const students = scheduleStudents[scheduleIdStr] || [];
+        const isLoading = loadingStudents[scheduleIdStr];
+
+        return (
+          <td colSpan={visibleColumns.length} className="px-4 py-2">
+            <div className="p-4 bg-gray-50 border-t">
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-sm font-semibold text-gray-700">
+                  Students in this Schedule ({students.length})
+                </h4>
+                <Badge variant="outline" className="text-xs">
+                  {schedule.currentEnrollment || 0}/{schedule.maxStudents || 30}
+                </Badge>
+              </div>
+              
+              {isLoading ? (
+                <div className="flex items-center justify-center py-4">
+                  <RefreshCw className="h-4 w-4 animate-spin mr-2" />
+                  <span className="text-sm text-gray-500">Loading students...</span>
+                </div>
+              ) : students.length === 0 ? (
+                <div className="text-center py-4 text-gray-500">
+                  <Users className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+                  <p className="text-sm">No students enrolled in this schedule</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {students.map((student: any) => (
+                    <div key={student.studentId} className="bg-white rounded-lg border p-3 shadow-sm">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1 min-w-0">
+                          <h5 className="text-sm font-medium text-gray-900 truncate">
+                            {student.firstName} {student.lastName}
+                          </h5>
+                          <p className="text-xs text-gray-500 truncate">
+                            ID: {student.studentIdNum}
+                          </p>
+                          <p className="text-xs text-gray-500 truncate">
+                            {student.CourseOffering?.courseName || 'No course'}
+                          </p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <Badge 
+                              variant={student.status === 'ACTIVE' ? 'default' : 'secondary'} 
+                              className="text-xs"
+                            >
+                              {student.status}
+                            </Badge>
+                            <Badge variant="outline" className="text-xs">
+                              {student.enrollmentType}
+                            </Badge>
+                          </div>
+                        </div>
+                        <div className="ml-2">
+                          <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                            <span className="text-xs font-medium text-blue-600">
+                              {student.firstName.charAt(0)}{student.lastName.charAt(0)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </td>
+        );
+      }
+    },
+    {
       header: 'Subject',
       accessor: 'subject',
-      className: 'text-center min-w-[120px]',
+      className: 'text-center min-w-[100px]',
       sortable: true,
       render: (item: Schedule) => {
         const fuseResult = fuzzyResults.find(r => r.item.subjectSchedId === item.subjectSchedId) as FuseResult<Schedule> | undefined;
@@ -388,7 +450,7 @@ export default function ClassSchedulesPage() {
     {
       header: 'Section',
       accessor: 'section',
-      className: 'text-center min-w-[100px]',
+      className: 'text-center min-w-[80px]',
       sortable: true,
       render: (item: Schedule) => (
         <span className="text-sm text-blue-900 text-center truncate block" title={item.section.sectionName}>{item.section.sectionName}</span>
@@ -397,12 +459,21 @@ export default function ClassSchedulesPage() {
     {
       header: 'Instructor',
       accessor: 'instructor',
-      className: 'text-center min-w-[140px]',
+      className: 'text-center min-w-[120px]',
       sortable: true,
       render: (item: Schedule) => {
         const fuseResult = fuzzyResults.find(r => r.item.subjectSchedId === item.subjectSchedId) as FuseResult<Schedule> | undefined;
         const firstNameMatches = fuseResult?.matches?.find((m: { key: string }) => m.key === "instructor.firstName")?.indices;
         const lastNameMatches = fuseResult?.matches?.find((m: { key: string }) => m.key === "instructor.lastName")?.indices;
+        
+        if (!item.instructor) {
+          return (
+            <div className="text-sm text-gray-500 text-center italic">
+              No instructor assigned
+            </div>
+          );
+        }
+        
         const fullName = `${item.instructor.firstName} ${item.instructor.lastName}`;
         return (
         <div className="text-sm text-blue-900 text-center">
@@ -419,7 +490,7 @@ export default function ClassSchedulesPage() {
     {
       header: 'Room',
       accessor: 'room',
-      className: 'text-center min-w-[100px]',
+      className: 'text-center min-w-[80px]',
       sortable: true,
       render: (item: Schedule) => (
         <div className="text-sm text-blue-900 text-center">
@@ -496,6 +567,15 @@ export default function ClassSchedulesPage() {
           <Button
             variant="ghost"
             size="icon"
+            aria-label="View Schedule"
+            className="hover:bg-blue-50"
+            onClick={() => handleViewSchedule(item)}
+          >
+            <Eye className="h-4 w-4 text-blue-600" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
             aria-label="Edit Schedule"
             className="hover:bg-green-50"
             onClick={() => handleEditSchedule(item)}
@@ -518,22 +598,31 @@ export default function ClassSchedulesPage() {
 
 
 
-  const handleExportCSV = () => {
+  const handleExportCSV = async () => {
+    // Preload all student data before exporting
+    toast.info('Loading student data for export...');
+    await preloadAllStudents();
     const csvRows = [
-      columns.slice(1, -1).map((col) => col.header).join(","),
-      ...schedules.map((schedule) =>
-        [
+      ['Subject', 'Section', 'Instructor', 'Room', 'Day', 'Time', 'Type', 'Status', 'Enrollment', 'Students', 'Student Count'].join(","),
+      ...schedules.map((schedule) => {
+        const scheduleIdStr = schedule.subjectSchedId.toString();
+        const students = scheduleStudents[scheduleIdStr] || [];
+        const studentNames = students.length > 0 ? students.map(s => `${s.firstName} ${s.lastName} (${s.studentIdNum})`).join('; ') : 'No students enrolled';
+        
+        return [
           schedule.subject.subjectName,
           schedule.section.sectionName,
-          `${schedule.instructor.firstName} ${schedule.instructor.lastName}`,
+          schedule.instructor ? `${schedule.instructor.firstName} ${schedule.instructor.lastName}` : 'No instructor',
           schedule.room.roomNo,
           schedule.day,
           `${schedule.startTime} - ${schedule.endTime}`,
           schedule.scheduleType,
           schedule.status,
           `${schedule.currentEnrollment}/${schedule.maxStudents}`,
-        ].join(",")
-      ),
+          studentNames,
+          students.length.toString()
+        ].join(",");
+      }),
     ];
     const blob = new Blob([csvRows.join("\n")], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
@@ -563,23 +652,45 @@ export default function ClassSchedulesPage() {
     setShowSortDialog(true);
   };
 
-  const handlePrint = () => {
+  const preloadAllStudents = async () => {
+    const scheduleIds = schedules.map(s => s.subjectSchedId);
+    const promises = scheduleIds.map(async (scheduleId) => {
+      const scheduleIdStr = scheduleId.toString();
+      if (!scheduleStudents[scheduleIdStr]) {
+        await fetchScheduleStudents(scheduleId);
+      }
+    });
+    await Promise.all(promises);
+  };
+
+  const handlePrint = async () => {
     if (schedules.length === 0) {
       toast.error('No schedules to print');
       return;
     }
 
-    const printData = schedules.map((schedule) => ({
-      subject: `${schedule.subject.subjectName} (${schedule.subject.subjectCode})`,
-      section: schedule.section.sectionName,
-      instructor: `${schedule.instructor.firstName} ${schedule.instructor.lastName}`,
-      room: schedule.room.roomNo,
-      day: schedule.day,
-      time: `${schedule.startTime} - ${schedule.endTime}`,
-      type: schedule.scheduleType,
-      status: schedule.status,
-      enrollment: `${schedule.currentEnrollment}/${schedule.maxStudents}`,
-    }));
+    // Preload all student data before printing
+    toast.info('Loading student data for print...');
+    await preloadAllStudents();
+
+    const printData = schedules.map((schedule) => {
+      const scheduleIdStr = schedule.subjectSchedId.toString();
+      const students = scheduleStudents[scheduleIdStr] || [];
+      
+      return {
+        subject: `${schedule.subject.subjectName} (${schedule.subject.subjectCode})`,
+        section: schedule.section.sectionName,
+        instructor: schedule.instructor ? `${schedule.instructor.firstName} ${schedule.instructor.lastName}` : 'No instructor',
+        room: schedule.room.roomNo,
+        day: schedule.day,
+        time: `${schedule.startTime} - ${schedule.endTime}`,
+        type: schedule.scheduleType,
+        status: schedule.status,
+        enrollment: `${schedule.currentEnrollment}/${schedule.maxStudents}`,
+        students: students.length > 0 ? students.map(s => `${s.firstName} ${s.lastName} (${s.studentIdNum})`).join(', ') : 'No students enrolled',
+        studentCount: students.length
+      };
+    });
 
     const printColumns = [
       { header: 'Subject', accessor: 'subject' },
@@ -591,6 +702,8 @@ export default function ClassSchedulesPage() {
       { header: 'Type', accessor: 'type' },
       { header: 'Status', accessor: 'status' },
       { header: 'Enrollment', accessor: 'enrollment' },
+      { header: 'Students', accessor: 'students' },
+      { header: 'Student Count', accessor: 'studentCount' },
     ];
 
     const printFunction = PrintLayout({
@@ -789,7 +902,7 @@ export default function ClassSchedulesPage() {
           ...data.data.map((schedule: any) => [
             schedule.subject.subjectName,
             schedule.section.sectionName,
-            `${schedule.instructor.firstName} ${schedule.instructor.lastName}`,
+            schedule.instructor ? `${schedule.instructor.firstName} ${schedule.instructor.lastName}` : 'No instructor',
             schedule.room.roomNo,
             schedule.day,
             `${schedule.startTime} - ${schedule.endTime}`,
@@ -880,6 +993,11 @@ export default function ClassSchedulesPage() {
     setShowAddScheduleDialog(true);
   };
 
+  const handleViewSchedule = (schedule: Schedule) => {
+    setSelectedSchedule(schedule);
+    setShowViewDialog(true);
+  };
+
   const handleEditSchedule = (schedule: Schedule) => {
     setSelectedSchedule(schedule);
     setShowEditScheduleDialog(true);
@@ -888,6 +1006,58 @@ export default function ClassSchedulesPage() {
   const handleDeleteSchedule = (schedule: Schedule) => {
     setSelectedSchedule(schedule);
     setShowDeleteScheduleDialog(true);
+  };
+
+  const fetchScheduleStudents = async (scheduleId: number) => {
+    const scheduleIdStr = scheduleId.toString();
+    
+    // Check if we already have the students for this schedule
+    if (scheduleStudents[scheduleIdStr]) {
+      return;
+    }
+
+    setLoadingStudents(prev => ({ ...prev, [scheduleIdStr]: true }));
+
+    try {
+      const response = await fetch(`/api/schedules/${scheduleId}/students`);
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        setScheduleStudents(prev => ({
+          ...prev,
+          [scheduleIdStr]: data.data
+        }));
+      } else {
+        console.error('Failed to fetch students:', data.error);
+        setScheduleStudents(prev => ({
+          ...prev,
+          [scheduleIdStr]: []
+        }));
+      }
+    } catch (error) {
+      console.error('Error fetching students:', error);
+      setScheduleStudents(prev => ({
+        ...prev,
+        [scheduleIdStr]: []
+      }));
+    } finally {
+      setLoadingStudents(prev => ({ ...prev, [scheduleIdStr]: false }));
+    }
+  };
+
+  const handleToggleExpand = (scheduleId: string) => {
+    const scheduleIdNum = parseInt(scheduleId);
+    
+    setExpandedRowIds(prev => {
+      const isExpanded = prev.includes(scheduleId);
+      if (isExpanded) {
+        return prev.filter(id => id !== scheduleId);
+      } else {
+        // Fetch students when expanding
+        fetchScheduleStudents(scheduleIdNum);
+        return [...prev, scheduleId];
+      }
+    });
   };
 
   const handleScheduleCreated = (newSchedule: Schedule) => {
@@ -1107,10 +1277,81 @@ export default function ClassSchedulesPage() {
             size: A4 !important;
           }
         }
+
+        /* Compact Table Styles */
+        .compact-table table {
+          font-size: 0.875rem !important;
+        }
+        
+        .compact-table th {
+          padding: 0.5rem 0.75rem !important;
+          font-size: 0.75rem !important;
+          font-weight: 600 !important;
+          line-height: 1.25 !important;
+        }
+        
+        .compact-table td {
+          padding: 0.5rem 0.75rem !important;
+          font-size: 0.875rem !important;
+          line-height: 1.25 !important;
+        }
+        
+        .compact-table .text-sm {
+          font-size: 0.75rem !important;
+        }
+        
+        .compact-table .text-xs {
+          font-size: 0.625rem !important;
+        }
+        
+        .compact-table .h-4 {
+          height: 0.875rem !important;
+          width: 0.875rem !important;
+        }
+        
+        .compact-table .w-4 {
+          width: 0.875rem !important;
+          height: 0.875rem !important;
+        }
+        
+        .compact-table .gap-1 {
+          gap: 0.125rem !important;
+        }
+        
+        .compact-table .gap-2 {
+          gap: 0.25rem !important;
+        }
+        
+        .compact-table .p-2 {
+          padding: 0.25rem !important;
+        }
+        
+        .compact-table .py-1 {
+          padding-top: 0.125rem !important;
+          padding-bottom: 0.125rem !important;
+        }
+        
+        .compact-table .px-2 {
+          padding-left: 0.25rem !important;
+          padding-right: 0.25rem !important;
+        }
+        
+        .compact-table .min-w-\[120px\] {
+          min-width: 100px !important;
+        }
+        
+        .compact-table .min-w-\[140px\] {
+          min-width: 120px !important;
+        }
+        
+        .compact-table .min-w-\[100px\] {
+          min-width: 80px !important;
+        }
       `}</style>
 
-      <div className="min-h-screen bg-gradient-to-br from-[#f8fafc] via-[#ffffff] to-[#f8fafc] p-0 overflow-x-hidden">
-      <div className="w-full max-w-full px-4 sm:px-6 lg:px-8 space-y-8 sm:space-y-10">
+      <div className="min-h-screen bg-gradient-to-br from-[#f8fafc] via-[#ffffff] to-[#f8fafc] overflow-x-hidden">
+        {/* Main container with responsive padding and spacing */}
+        <div className="w-full max-w-none px-2 sm:px-3 md:px-4 lg:px-6 xl:px-8 py-2 sm:py-3 md:py-4 lg:py-6 space-y-3 sm:space-y-4 md:space-y-5 lg:space-y-6">
         <div className="no-print">
           <PageHeader
             title="Class Schedules"
@@ -1138,31 +1379,31 @@ export default function ClassSchedulesPage() {
           </div>
         </div>
 
-        {/* Summary Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+        {/* Summary Cards - Enhanced responsive grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-5 lg:gap-6">
           <SummaryCard
-            icon={<Calendar className="text-blue-500 w-5 h-5" />}
+            icon={<Calendar className="text-blue-500 w-4 h-4 sm:w-5 sm:h-5" />}
             label="Total Schedules"
             value={loading ? "..." : total}
             valueClassName="text-blue-900"
             sublabel="Total number of schedules"
           />
           <SummaryCard
-            icon={<CheckCircle className="text-blue-500 w-5 h-5" />}
+            icon={<CheckCircle className="text-blue-500 w-4 h-4 sm:w-5 sm:h-5" />}
             label="Active Schedules"
             value={loading ? "..." : schedules.filter(s => s.status === 'Active').length}
             valueClassName="text-blue-900"
             sublabel="Currently active"
           />
           <SummaryCard
-            icon={<Users className="text-blue-500 w-5 h-5" />}
+            icon={<Users className="text-blue-500 w-4 h-4 sm:w-5 sm:h-5" />}
             label="Total Instructors"
-            value={loading ? "..." : new Set(schedules.map(s => s.instructor.instructorId)).size}
+            value={loading ? "..." : new Set(schedules.filter(s => s.instructor).map(s => s.instructor!.instructorId)).size}
             valueClassName="text-blue-900"
             sublabel="Teaching this semester"
           />
           <SummaryCard
-            icon={<MapPin className="text-blue-500 w-5 h-5" />}
+            icon={<MapPin className="text-blue-500 w-4 h-4 sm:w-5 sm:h-5" />}
             label="Total Rooms"
             value={loading ? "..." : new Set(schedules.map(s => s.room.roomId)).size}
             valueClassName="text-blue-900"
@@ -1170,14 +1411,14 @@ export default function ClassSchedulesPage() {
           />
         </div>
 
-        {/* Quick Actions Panel */}
-        <div className="w-full max-w-full pt-4 no-print">
+        {/* Quick Actions Panel - Responsive */}
+        <div className="w-full max-w-full pt-2 sm:pt-3 md:pt-4 no-print">
           <QuickActionsPanel
             variant="premium"
             title="Quick Actions"
             subtitle="Essential tools and shortcuts"
             icon={
-              <div className="w-6 h-6 text-white">
+              <div className="w-5 h-5 sm:w-6 sm:h-6 text-white">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
                 </svg>
@@ -1188,28 +1429,28 @@ export default function ClassSchedulesPage() {
                 id: 'add-schedule',
                 label: 'Add Schedule',
                 description: 'Create new schedule',
-                icon: <Plus className="w-5 h-5 text-white" />,
+                icon: <Plus className="w-4 h-4 sm:w-5 sm:h-5 text-white" />,
                 onClick: handleAddSchedule
               },
               {
                 id: 'import-data',
                 label: 'Import Data',
                 description: 'Import schedules from file',
-                icon: <Upload className="w-5 h-5 text-white" />,
+                icon: <Upload className="w-4 h-4 sm:w-5 sm:h-5 text-white" />,
                 onClick: handleImport
               },
               {
                 id: 'print-page',
                 label: 'Print Page',
                 description: 'Print schedule list',
-                icon: <Printer className="w-5 h-5 text-white" />,
+                icon: <Printer className="w-4 h-4 sm:w-5 sm:h-5 text-white" />,
                 onClick: handlePrint
               },
               {
                 id: 'visible-columns',
                 label: 'Visible Columns',
                 description: 'Manage table columns',
-                icon: <Columns3 className="w-5 h-5 text-white" />,
+                icon: <Columns3 className="w-4 h-4 sm:w-5 sm:h-5 text-white" />,
                 onClick: handleVisibleColumns
               },
               {
@@ -1217,9 +1458,9 @@ export default function ClassSchedulesPage() {
                 label: 'Refresh Data',
                 description: 'Reload schedule data',
                 icon: isRefreshing ? (
-                  <RefreshCw className="w-5 h-5 text-white animate-spin" />
+                  <RefreshCw className="w-4 h-4 sm:w-5 sm:h-5 text-white animate-spin" />
                 ) : (
-                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 sm:w-5 sm:h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                   </svg>
                 ),
@@ -1231,7 +1472,7 @@ export default function ClassSchedulesPage() {
                 id: 'sort-options',
                 label: 'Sort Options',
                 description: 'Configure sorting',
-                icon: <List className="w-5 h-5 text-white" />,
+                icon: <List className="w-4 h-4 sm:w-5 sm:h-5 text-white" />,
                 onClick: handleSortOptions
               }
             ]}
@@ -1246,47 +1487,45 @@ export default function ClassSchedulesPage() {
         </div>
 
 
-        {/* Main Content Area */}
-        <div className="w-full max-w-full pt-4">
+        {/* Main Content Area - Enhanced responsive layout */}
+        <div className="w-full max-w-full pt-2 sm:pt-3 md:pt-4">
           <Card className="shadow-lg rounded-xl overflow-hidden p-0 w-full max-w-full">
             <CardHeader className="p-0">
-              {/* Blue Gradient Header - flush to card edge, no rounded corners */}
-              <div className="bg-gradient-to-r from-[#1e40af] to-[#3b82f6] p-0">
-                <div className="py-4 sm:py-6">
-                  <div className="flex items-center gap-3 px-4 sm:px-6">
-                    <div className="w-8 h-8 flex items-center justify-center">
-                      <Calendar className="w-5 h-5 text-white" />
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-bold text-white">Schedule List</h3>
-                      <p className="text-blue-100 text-sm">Search and filter schedule information</p>
-                    </div>
+              {/* Blue Gradient Header - Responsive padding */}
+              <div className="bg-gradient-to-r from-[#1e40af] to-[#3b82f6] p-4 sm:p-5 md:p-6">
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center">
+                    <Calendar className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg sm:text-xl font-bold text-white">Schedule List</h3>
+                    <p className="text-blue-100 text-xs sm:text-sm">Search and filter schedule information</p>
                   </div>
                 </div>
               </div>
             </CardHeader>
             
-            {/* Search and Filter Section */}
-            <div className="border-b border-gray-200 shadow-sm p-2 sm:p-3 lg:p-4 pb-4 no-print">
-              <div className="flex flex-col lg:flex-row gap-2 lg:gap-3 items-start lg:items-center justify-end">
-                {/* Primary Filter Dropdowns - Compact layout */}
-                <div className="flex flex-wrap gap-1.5 lg:gap-2 w-full lg:w-auto lg:justify-end">
-                {/* Search Bar */}
-                  <div className="relative w-full lg:w-72 flex-shrink-0">
-                  <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+            {/* Search and Filter Section - Enhanced responsive layout */}
+            <div className="border-b border-gray-200 shadow-sm p-3 sm:p-4 md:p-5 lg:p-6">
+              <div className="flex flex-col lg:flex-row gap-3 sm:gap-4 items-stretch lg:items-center justify-end">
+                {/* Quick Filter Dropdowns - Responsive layout */}
+                <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full lg:w-auto lg:flex-shrink-0">
+                {/* Search Bar - Responsive width */}
+                <div className="relative w-full lg:w-auto lg:min-w-[250px] lg:max-w-sm">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                   <input
                     type="text"
                     placeholder="Search schedules..."
-                      value={searchInput}
-                      onChange={e => {
-                        setSearchInput(e.target.value);
-                        setSearch(e.target.value);
-                      }}
-                    className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:outline-none"
+                    value={searchInput}
+                    onChange={e => {
+                      setSearchInput(e.target.value);
+                      setSearch(e.target.value);
+                    }}
+                    className="w-full pl-10 pr-4 py-2.5 sm:py-3 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent focus:outline-none text-sm"
                   />
                 </div>
                   <Select value={statusFilter} onValueChange={setStatusFilter}>
-                    <SelectTrigger className="w-28 sm:w-32 text-gray-700 text-sm h-8 rounded">
+                    <SelectTrigger className="w-full sm:w-auto sm:min-w-[120px] text-gray-500 rounded border-gray-300 hover:border-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm">
                       <SelectValue placeholder="Status" />
                     </SelectTrigger>
                     <SelectContent>
@@ -1309,7 +1548,7 @@ export default function ClassSchedulesPage() {
                     </SelectContent>
                   </Select>
                   <Select value={semesterFilter} onValueChange={setSemesterFilter}>
-                    <SelectTrigger className="w-32 sm:w-36 text-gray-700 text-sm h-8 rounded">
+                    <SelectTrigger className="w-full sm:w-auto sm:min-w-[140px] text-gray-500 rounded border-gray-300 hover:border-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm">
                       <SelectValue placeholder="Semester" />
                     </SelectTrigger>
                     <SelectContent>
@@ -1320,7 +1559,7 @@ export default function ClassSchedulesPage() {
                     </SelectContent>
                   </Select>
                   <Select value={dayFilter} onValueChange={setDayFilter}>
-                    <SelectTrigger className="w-24 sm:w-28 text-gray-700 text-sm h-8 rounded">
+                    <SelectTrigger className="w-full sm:w-auto sm:min-w-[100px] text-gray-500 rounded border-gray-300 hover:border-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm">
                       <SelectValue placeholder="Day" />
                     </SelectTrigger>
                     <SelectContent>
@@ -1679,8 +1918,8 @@ export default function ClassSchedulesPage() {
               )}
             </div>
 
-            {/* Content Area */}
-            <div className="flex-1 px-3 sm:px-4 lg:px-6 pb-6 pt-6">
+            {/* Content Area - Responsive padding */}
+            <div className="flex-1 px-3 sm:px-4 md:px-5 lg:px-6 pt-4 sm:pt-5 md:pt-6 pb-4 sm:pb-5 md:pb-6">
 
                 {/* Bulk Actions */}
                 {selectedSchedules.length > 0 && (
@@ -1732,11 +1971,13 @@ export default function ClassSchedulesPage() {
                             <td>{schedule.section.sectionName}</td>
                             <td>
                               <div style={{ fontSize: '11px' }}>
-                                {schedule.instructor.firstName} {schedule.instructor.lastName}
+                                {schedule.instructor ? `${schedule.instructor.firstName} ${schedule.instructor.lastName}` : 'No instructor'}
                               </div>
-                              <div style={{ fontSize: '9px', color: '#666' }}>
-                                ID: {schedule.instructor.instructorId}
-                              </div>
+                              {schedule.instructor && (
+                                <div style={{ fontSize: '9px', color: '#666' }}>
+                                  ID: {schedule.instructor.instructorId}
+                                </div>
+                              )}
                             </td>
                             <td>
                               <div style={{ fontWeight: 'bold' }}>
@@ -1817,27 +2058,131 @@ export default function ClassSchedulesPage() {
                        />
                      </div>
                    ) : (
-                     <div className="hidden xl:block">
-                       <div className="px-4 sm:px-6 pt-6 pb-6">
-                         <div className="overflow-x-auto bg-white/70 shadow-none relative">
-                            <TableList
-                              columns={columns}
-                              data={schedules}
-                              loading={loading}
-                              selectedIds={selectedSchedules.map(String)}
-                              emptyMessage={null}
-                              onSelectRow={handleSelectRow}
-                              onSelectAll={handleSelectAll}
-                              isAllSelected={isAllSelected}
-                              isIndeterminate={isIndeterminate}
-                              getItemId={(item) => String(item.subjectSchedId)}
-                              className="border-0 shadow-none max-w-full"
-                              sortState={{ field: sortField, order: sortOrder }}
-                              onSort={handleSort}
-                            />
+                     <>
+                       {/* Table layout for large screens - Enhanced responsive */}
+                       <div className="hidden xl:block">
+                         <div className="px-3 sm:px-4 md:px-5 lg:px-6 pt-4 sm:pt-5 md:pt-6 pb-4 sm:pb-5 md:pb-6">
+                           <div className="overflow-x-auto bg-white/70 shadow-none relative">
+                              <TableList
+                                columns={columns}
+                                data={schedules}
+                                loading={loading}
+                                selectedIds={selectedSchedules.map(String)}
+                                emptyMessage={null}
+                                onSelectRow={handleSelectRow}
+                                onSelectAll={handleSelectAll}
+                                isAllSelected={isAllSelected}
+                                isIndeterminate={isIndeterminate}
+                                getItemId={(item) => String(item.subjectSchedId)}
+                                className="border-0 shadow-none max-w-full compact-table"
+                                sortState={{ field: sortField, order: sortOrder }}
+                                onSort={handleSort}
+                                expandedRowIds={expandedRowIds}
+                                onToggleExpand={handleToggleExpand}
+                              />
+                           </div>
                          </div>
                        </div>
-                     </div>
+                       
+                       {/* Medium screen table layout */}
+                       <div className="hidden lg:block xl:hidden">
+                         <div className="px-3 sm:px-4 md:px-5 lg:px-6 pt-4 sm:pt-5 md:pt-6 pb-4 sm:pb-5 md:pb-6">
+                           <div className="overflow-x-auto bg-white/70 shadow-none relative">
+                              <TableList
+                                columns={columns}
+                                data={schedules}
+                                loading={loading}
+                                selectedIds={selectedSchedules.map(String)}
+                                emptyMessage={null}
+                                onSelectRow={handleSelectRow}
+                                onSelectAll={handleSelectAll}
+                                isAllSelected={isAllSelected}
+                                isIndeterminate={isIndeterminate}
+                                getItemId={(item) => String(item.subjectSchedId)}
+                                className="border-0 shadow-none max-w-full compact-table"
+                                sortState={{ field: sortField, order: sortOrder }}
+                                onSort={handleSort}
+                                expandedRowIds={expandedRowIds}
+                                onToggleExpand={handleToggleExpand}
+                              />
+                           </div>
+                         </div>
+                       </div>
+                       
+                       {/* Small screen card layout */}
+                       <div className="block lg:hidden">
+                         <div className="px-3 sm:px-4 md:px-5 lg:px-6 pt-4 sm:pt-5 md:pt-6 pb-4 sm:pb-5 md:pb-6">
+                           <div className="space-y-3">
+                             {schedules.map((schedule) => (
+                               <div key={schedule.subjectSchedId} className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm">
+                                 <div className="flex items-start justify-between">
+                                   <div className="flex-1 min-w-0">
+                                     <div className="flex items-center gap-2 mb-2">
+                                       <Checkbox
+                                         checked={selectedSchedules.includes(schedule.subjectSchedId)}
+                                         onCheckedChange={() => handleSelectRow(String(schedule.subjectSchedId))}
+                                       />
+                                       <h3 className="text-sm font-medium text-gray-900 truncate">
+                                         {schedule.subject.subjectName}
+                                       </h3>
+                                     </div>
+                                     <div className="text-xs text-gray-500 mb-2">
+                                       {schedule.subject.subjectCode} • {schedule.section.sectionName}
+                                     </div>
+                                     <div className="grid grid-cols-2 gap-2 text-xs">
+                                       <div>
+                                         <span className="font-medium text-gray-700">Instructor:</span>
+                                         <div className="text-gray-600">
+                                           {schedule.instructor ? `${schedule.instructor.firstName} ${schedule.instructor.lastName}` : 'No instructor'}
+                                         </div>
+                                       </div>
+                                       <div>
+                                         <span className="font-medium text-gray-700">Room:</span>
+                                         <div className="text-gray-600">{schedule.room.roomNo}</div>
+                                       </div>
+                                       <div>
+                                         <span className="font-medium text-gray-700">Day:</span>
+                                         <div className="text-gray-600">{schedule.day}</div>
+                                       </div>
+                                       <div>
+                                         <span className="font-medium text-gray-700">Time:</span>
+                                         <div className="text-gray-600">{schedule.startTime} - {schedule.endTime}</div>
+                                       </div>
+                                     </div>
+                                   </div>
+                                   <div className="flex flex-col gap-1 ml-4">
+                                     <Button
+                                       variant="ghost"
+                                       size="icon"
+                                       className="h-8 w-8 hover:bg-blue-50"
+                                       onClick={() => handleViewSchedule(schedule)}
+                                     >
+                                       <Eye className="h-4 w-4 text-blue-600" />
+                                     </Button>
+                                     <Button
+                                       variant="ghost"
+                                       size="icon"
+                                       className="h-8 w-8 hover:bg-green-50"
+                                       onClick={() => handleEditSchedule(schedule)}
+                                     >
+                                       <Edit className="h-4 w-4 text-green-600" />
+                                     </Button>
+                                     <Button
+                                       variant="ghost"
+                                       size="icon"
+                                       className="h-8 w-8 hover:bg-red-50"
+                                       onClick={() => handleDeleteSchedule(schedule)}
+                                     >
+                                       <Trash2 className="h-4 w-4 text-red-600" />
+                                     </Button>
+                                   </div>
+                                 </div>
+                               </div>
+                             ))}
+                           </div>
+                         </div>
+                       </div>
+                     </>
                    )}
                    {/* Pagination - only show when there's data */}
                    {schedules.length > 0 && (
@@ -1958,6 +2303,144 @@ export default function ClassSchedulesPage() {
         onOpenChange={setShowBulkEditDialog}
         selectedCount={selectedSchedules.length}
         onBulkEdit={handleBulkEditSubmit}
+      />
+
+      <ViewDialog
+        open={showViewDialog}
+        onOpenChange={(open) => {
+          setShowViewDialog(open);
+          if (!open) setSelectedSchedule(null);
+        }}
+        title={selectedSchedule ? `${selectedSchedule.subject.subjectName} Schedule` : 'Schedule Details'}
+        subtitle={selectedSchedule ? `${selectedSchedule.subject.subjectCode} - ${selectedSchedule.section.sectionName}` : ''}
+        status={selectedSchedule ? {
+          value: selectedSchedule.status,
+          variant: selectedSchedule.status === 'ACTIVE' ? 'success' : 'destructive'
+        } : undefined}
+        headerIcon={<Calendar className="w-6 h-6 text-white" />}
+        sections={selectedSchedule ? [
+          {
+            title: "Schedule Information",
+            fields: [
+              { 
+                label: 'Schedule ID', 
+                value: selectedSchedule.subjectSchedId?.toString() || 'N/A', 
+                type: 'text',
+                icon: <Hash className="w-4 h-4 text-blue-600" />
+              },
+              { 
+                label: 'Subject', 
+                value: selectedSchedule.subject.subjectName, 
+                type: 'text',
+                icon: <BookOpen className="w-4 h-4 text-blue-600" />
+              },
+              { 
+                label: 'Subject Code', 
+                value: selectedSchedule.subject.subjectCode, 
+                type: 'text',
+                icon: <Tag className="w-4 h-4 text-blue-600" />
+              },
+              { 
+                label: 'Section', 
+                value: selectedSchedule.section.sectionName, 
+                type: 'text',
+                icon: <Users className="w-4 h-4 text-blue-600" />
+              },
+              { 
+                label: 'Instructor', 
+                value: selectedSchedule.instructor ? `${selectedSchedule.instructor.firstName} ${selectedSchedule.instructor.lastName}` : 'No instructor assigned', 
+                type: 'text',
+                icon: <GraduationCap className="w-4 h-4 text-blue-600" />
+              },
+              { 
+                label: 'Room', 
+                value: `${selectedSchedule.room.roomNo} (Capacity: ${selectedSchedule.room.roomCapacity || 'N/A'})`, 
+                type: 'text',
+                icon: <MapPin className="w-4 h-4 text-blue-600" />
+              },
+              { 
+                label: 'Day', 
+                value: selectedSchedule.day, 
+                type: 'badge',
+                badgeVariant: 'default',
+                icon: <Calendar className="w-4 h-4 text-blue-600" />
+              },
+              { 
+                label: 'Time', 
+                value: `${selectedSchedule.startTime} - ${selectedSchedule.endTime}`, 
+                type: 'text',
+                icon: <Clock className="w-4 h-4 text-blue-600" />
+              },
+              { 
+                label: 'Schedule Type', 
+                value: selectedSchedule.scheduleType, 
+                type: 'badge',
+                badgeVariant: selectedSchedule.scheduleType === 'REGULAR' ? 'default' : 'secondary',
+                icon: <Info className="w-4 h-4 text-blue-600" />
+              },
+              { 
+                label: 'Status', 
+                value: selectedSchedule.status, 
+                type: 'badge',
+                badgeVariant: selectedSchedule.status === 'ACTIVE' ? 'success' : 'destructive',
+                icon: <CheckCircle className="w-4 h-4 text-blue-600" />
+              },
+              { 
+                label: 'Max Students', 
+                value: selectedSchedule.maxStudents?.toString() || '0', 
+                type: 'number',
+                icon: <Users className="w-4 h-4 text-blue-600" />
+              },
+              { 
+                label: 'Current Enrollment', 
+                value: selectedSchedule.currentEnrollment?.toString() || '0', 
+                type: 'number',
+                icon: <UserCheckIcon className="w-4 h-4 text-blue-600" />
+              },
+              { 
+                label: 'Academic Year', 
+                value: selectedSchedule.academicYear, 
+                type: 'text',
+                icon: <Calendar className="w-4 h-4 text-blue-600" />
+              },
+              { 
+                label: 'Semester', 
+                value: selectedSchedule.semester ? selectedSchedule.semester.semesterName : 'N/A', 
+                type: 'text',
+                icon: <Calendar className="w-4 h-4 text-blue-600" />
+              },
+              { 
+                label: 'Notes', 
+                value: selectedSchedule.notes || 'No notes available', 
+                type: 'text',
+                icon: <Info className="w-4 h-4 text-blue-600" />
+              }
+            ],
+            columns: 2
+          }
+        ] : []}
+        actions={[
+          {
+            label: 'Edit Schedule',
+            onClick: () => {
+              setShowViewDialog(false);
+              setShowEditScheduleDialog(true);
+            },
+            variant: 'default',
+            icon: <Edit className="w-4 h-4" />
+          },
+          {
+            label: 'Delete Schedule',
+            onClick: () => {
+              setShowViewDialog(false);
+              setShowDeleteScheduleDialog(true);
+            },
+            variant: 'destructive',
+            icon: <Trash2 className="w-4 h-4" />
+          }
+        ]}
+        showPrintButton={true}
+        showCopyButton={true}
       />
       </div>
     </>

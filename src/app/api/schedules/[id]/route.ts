@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { createNotification } from '@/lib/notifications';
 
 // GET individual schedule
 export async function GET(
@@ -106,6 +107,8 @@ export async function PUT(
     }
 
     const body = await request.json();
+    console.log('Update schedule request body:', body);
+    
     const {
       subjectId,
       sectionId,
@@ -123,8 +126,17 @@ export async function PUT(
     } = body;
 
     // Validate required fields
-    if (!subjectId || !sectionId || !instructorId || !roomId || !day || !startTime || !endTime) {
+    if (!subjectId || !sectionId || !roomId || !day || !startTime || !endTime) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    }
+
+    // Validate data types
+    if (isNaN(parseInt(subjectId)) || isNaN(parseInt(sectionId)) || isNaN(parseInt(roomId))) {
+      return NextResponse.json({ error: 'Invalid ID format' }, { status: 400 });
+    }
+
+    if (instructorId && isNaN(parseInt(instructorId))) {
+      return NextResponse.json({ error: 'Invalid instructor ID format' }, { status: 400 });
     }
 
     // Check if schedule exists
@@ -137,33 +149,79 @@ export async function PUT(
     }
 
     // Update the schedule
-    const updatedSchedule = await prisma.subjectSchedule.update({
-      where: { subjectSchedId: scheduleId },
-      data: {
-        subjectId: parseInt(subjectId),
-        sectionId: parseInt(sectionId),
-        instructorId: parseInt(instructorId),
-        roomId: parseInt(roomId),
-        day: day,
-        startTime: startTime,
-        endTime: endTime,
-        scheduleType: scheduleType || 'REGULAR',
-        status: status || 'ACTIVE',
-        maxStudents: parseInt(maxStudents) || 30,
-        semesterId: semesterId ? parseInt(semesterId) : undefined,
-        academicYear: academicYear || undefined,
-        notes: notes || null,
-      },
-      include: {
-        subject: true,
-        section: true,
-        instructor: true,
-        room: true,
-        semester: true,
-      },
-    });
+    try {
+      const prev = await prisma.subjectSchedule.findUnique({ where: { subjectSchedId: scheduleId }, select: { status: true, instructorId: true, roomId: true } });
+      const updatedSchedule = await prisma.subjectSchedule.update({
+        where: { subjectSchedId: scheduleId },
+        data: {
+          subjectId: parseInt(subjectId),
+          sectionId: parseInt(sectionId),
+          instructorId: instructorId ? parseInt(instructorId) : null,
+          roomId: parseInt(roomId),
+          day: day,
+          startTime: startTime,
+          endTime: endTime,
+          scheduleType: scheduleType || 'REGULAR',
+          status: status || 'ACTIVE',
+          maxStudents: parseInt(maxStudents) || 30,
+          semesterId: semesterId ? parseInt(semesterId) : undefined,
+          academicYear: academicYear || undefined,
+          notes: notes || null,
+        },
+        include: {
+          subject: true,
+          section: true,
+          instructor: true,
+          room: true,
+          semester: true,
+        },
+      });
 
-    return NextResponse.json(updatedSchedule);
+      // Notifications: status changes and conflicts (room/instructor/time)
+      try {
+        if (prev && prev.status !== updatedSchedule.status && (updatedSchedule.status === 'CANCELLED' || updatedSchedule.status === 'POSTPONED')) {
+          await createNotification(userId, {
+            title: updatedSchedule.status === 'CANCELLED' ? 'Class cancelled' : 'Class postponed',
+            message: `Section ${updatedSchedule.section.sectionName} ${updatedSchedule.day} ${updatedSchedule.startTime}-${updatedSchedule.endTime}`,
+            priority: 'NORMAL',
+            type: 'SCHEDULING',
+          });
+        }
+        // Basic conflict detection: overlapping schedules in same room or same instructor
+        const overlaps = await prisma.subjectSchedule.findFirst({
+          where: {
+            subjectSchedId: { not: scheduleId },
+            day: updatedSchedule.day,
+            OR: [
+              { roomId: updatedSchedule.roomId },
+              ...(updatedSchedule.instructorId ? [{ instructorId: updatedSchedule.instructorId }] : []),
+            ],
+            // naive time overlap check using string compare HH:MM
+            AND: [
+              { startTime: { lt: updatedSchedule.endTime } },
+              { endTime: { gt: updatedSchedule.startTime } },
+            ],
+          },
+          include: { room: true, instructor: true, section: true }
+        });
+        if (overlaps) {
+          await createNotification(userId, {
+            title: 'Schedule conflict',
+            message: `Conflict with ${overlaps.section.sectionName} in room ${overlaps.room.roomNo}${overlaps.instructor ? ` or instructor ${overlaps.instructor.firstName} ${overlaps.instructor.lastName}` : ''} (${overlaps.startTime}-${overlaps.endTime})`,
+            priority: 'HIGH',
+            type: 'SCHEDULING',
+          });
+        }
+      } catch {}
+
+      return NextResponse.json(updatedSchedule);
+    } catch (dbError: any) {
+      console.error('Database update error:', dbError);
+      return NextResponse.json({ 
+        error: 'Database update failed', 
+        details: dbError.message 
+      }, { status: 500 });
+    }
   } catch (error) {
     console.error('Error updating schedule:', error);
     return NextResponse.json({ error: 'Failed to update schedule' }, { status: 500 });

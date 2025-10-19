@@ -1,5 +1,57 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+
+// PATCH /api/instructors/[id] - update instructor
+export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+  try {
+    const instructorId = parseInt(params.id);
+    if (isNaN(instructorId)) {
+      return NextResponse.json({ error: 'Invalid instructor id' }, { status: 400 });
+    }
+
+    // Auth
+    const token = request.cookies.get('token')?.value;
+    if (!token) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const reqUserId = Number((decoded as any)?.userId);
+    if (!Number.isFinite(reqUserId)) {
+      return NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 });
+    }
+
+    const body = await request.json();
+
+    const updated = await prisma.instructor.update({
+      where: { instructorId },
+      data: {
+        email: body.email,
+        phoneNumber: body.phoneNumber,
+        firstName: body.firstName,
+        middleName: body.middleName,
+        lastName: body.lastName,
+        suffix: body.suffix ?? null,
+        gender: body.gender,
+        instructorType: body.instructorType,
+        departmentId: body.departmentId,
+        officeLocation: body.officeLocation ?? null,
+        officeHours: body.officeHours ?? null,
+        specialization: body.specialization ?? null,
+        employeeId: body.employeeId,
+        rfidTag: body.rfidTag ?? undefined,
+      }
+    });
+
+    return NextResponse.json({ data: updated, message: 'Instructor updated successfully' });
+  } catch (error) {
+    console.error('Error updating instructor:', error);
+    return NextResponse.json({ error: 'Failed to update instructor' }, { status: 500 });
+  }
+}
+
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
 import { InstructorType, Status, UserGender } from '@prisma/client';
 
 async function assertAdmin(request: NextRequest) {

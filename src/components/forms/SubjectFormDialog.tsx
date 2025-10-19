@@ -338,16 +338,26 @@ function SubjectFormDialog({
         '3rd': 'THIRD_SEMESTER'
       };
       
+      // Generate a unique subject code if none provided
+      let subjectCode = currentFormData.code || '';
+      if (!subjectCode.trim()) {
+        // Generate a code based on the subject name
+        const nameWords = (currentFormData.name || 'Subject').split(' ');
+        const initials = nameWords.map(word => word.charAt(0).toUpperCase()).join('');
+        const randomSuffix = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+        subjectCode = `${initials}${randomSuffix}`;
+      }
+
       const subjectData = {
         name: currentFormData.name || '',
-        code: currentFormData.code || '',
+        code: subjectCode,
         type: formType,
         units: finalUnits,
         lecture_units: finalLectureUnits,
         laboratory_units: finalLaboratoryUnits,
         semester: semesterMap[currentFormData.semester] || 'FIRST_SEMESTER',
         year_level: currentFormData.year_level || '1st',
-        department: currentFormData.department || '',
+        department: currentFormData.department || '1',
         description: currentFormData.description || '',
         instructors: currentFormData.instructors || [],
         courseId: 1,
@@ -358,23 +368,63 @@ function SubjectFormDialog({
       // Debug: Log the data being sent
       console.log('Sending subject data:', subjectData);
 
-      // Call the API directly
-      const response = await fetch('/api/subjects', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include', // Include cookies for authentication
-        body: JSON.stringify(subjectData),
-      });
+      // Retry mechanism for duplicate codes
+      let response;
+      let retryCount = 0;
+      const maxRetries = 3;
+      
+      while (retryCount < maxRetries) {
+        try {
+          response = await fetch('/api/subjects', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            credentials: 'include', // Include cookies for authentication
+            body: JSON.stringify(subjectData),
+          });
+          
+          // If successful, break out of retry loop
+          if (response.ok) {
+            break;
+          }
+          
+          // Check if it's a duplicate code error
+          const errorData = await response.json();
+          if (errorData.error && errorData.error.includes('already exists') && retryCount < maxRetries - 1) {
+            // Generate a new unique code and retry
+            const nameWords = (currentFormData.name || 'Subject').split(' ');
+            const initials = nameWords.map(word => word.charAt(0).toUpperCase()).join('');
+            const randomSuffix = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+            subjectCode = `${initials}${randomSuffix}`;
+            subjectData.code = subjectCode;
+            retryCount++;
+            console.log(`Retrying with new code: ${subjectCode}`);
+            continue;
+          }
+          
+          // If not a duplicate error or max retries reached, break
+          break;
+        } catch (error) {
+          console.error('API call error:', error);
+          throw error;
+        }
+      }
 
       if (!response.ok) {
         let errorData;
         try {
-          errorData = await response.json();
+          const responseText = await response.text();
+          console.log('Raw response text:', responseText);
+          
+          if (responseText.trim() === '') {
+            errorData = { error: `HTTP ${response.status}: ${response.statusText} - Empty response` };
+          } else {
+            errorData = JSON.parse(responseText);
+          }
         } catch (parseError) {
           console.error('Failed to parse error response:', parseError);
-          errorData = { error: `HTTP ${response.status}: ${response.statusText}` };
+          errorData = { error: `HTTP ${response.status}: ${response.statusText} - Invalid JSON response` };
         }
         
         console.error('API Error Response:', errorData);
@@ -383,7 +433,8 @@ function SubjectFormDialog({
         console.error('Response Headers:', Object.fromEntries(response.headers.entries()));
         
         const errorMessage = errorData.error || `HTTP ${response.status}: ${response.statusText}`;
-        throw new Error(errorMessage);
+        const errorDetails = errorData.details ? ` Details: ${JSON.stringify(errorData.details)}` : '';
+        throw new Error(errorMessage + errorDetails);
       }
 
       const result = await response.json();

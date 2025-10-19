@@ -64,6 +64,9 @@ export function ManualAttendanceDialog({
   const [timestamp, setTimestamp] = useState<string>(() => new Date().toISOString().slice(0, 16)); // yyyy-MM-ddTHH:mm
   const [notes, setNotes] = useState<string>("");
 
+  // Restrict to students only when defaultEntityType is explicitly set to 'student'
+  const restrictToStudents = useMemo(() => defaultEntityType === 'student', [defaultEntityType]);
+
   // Reset all fields to defaults
   const resetForm = useMemo(() => (
     () => {
@@ -400,14 +403,16 @@ export function ManualAttendanceDialog({
                 <Select 
                   value={entityType} 
                   onValueChange={(v) => setEntityType(v as "student" | "instructor")}
-                  disabled={autoDetectEntity}
+                  disabled={autoDetectEntity || restrictToStudents}
                 > 
                   <SelectTrigger>
                     <SelectValue placeholder="Select entity" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="student">Student</SelectItem>
-                    <SelectItem value="instructor">Instructor</SelectItem>
+                    {!restrictToStudents && (
+                      <SelectItem value="instructor">Instructor</SelectItem>
+                    )}
                   </SelectContent>
                 </Select>
                 {autoDetectEntity && (

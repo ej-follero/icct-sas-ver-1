@@ -244,10 +244,17 @@ export default function LiveAttendanceFeed() {
     readerId: '',
     roomId: '',
     building: '',
-    limit: '50'
+    status: '',
+    department: '',
+    course: '',
+    timeRange: ''
   });
   const [readers, setReaders] = useState<any[]>([]);
   const [buildings, setBuildings] = useState<string[]>([]);
+  const [departments, setDepartments] = useState<any[]>([]);
+  const [courses, setCourses] = useState<any[]>([]);
+  const [statusOptions, setStatusOptions] = useState<string[]>([]);
+  const [loadingFilters, setLoadingFilters] = useState(true);
   
   const eventSourceRef = useRef<EventSource | null>(null);
   const [streamConnected, setStreamConnected] = useState(false);
@@ -266,15 +273,107 @@ export default function LiveAttendanceFeed() {
       const response = await fetch('/api/rfid/readers');
       const result = await response.json();
       
+      console.log('Readers API response:', result);
       if (result.success) {
         setReaders(result.data?.readers || []);
-        setBuildings(Object.keys(result.data?.readersByBuilding || {}));
+        const buildingsFromReaders = Object.keys(result.data?.readersByBuilding || {});
+        setBuildings(buildingsFromReaders);
+        
+        // If no buildings from RFID readers, try to get them from rooms
+        if (buildingsFromReaders.length === 0) {
+          console.log('No buildings from RFID readers, trying rooms...');
+          await fetchBuildingsFromRooms();
+        }
+      } else {
+        // If API doesn't return success, provide default buildings
+        const defaultBuildings = ['BuildingA', 'BuildingB', 'BuildingC', 'BuildingD', 'BuildingE'];
+        setBuildings(defaultBuildings);
+        console.log('Using default buildings (API not successful):', defaultBuildings);
       }
     } catch (err) {
       console.error('Failed to fetch readers:', err);
       // Set fallback values on error
       setReaders([]);
       setBuildings([]);
+      // Try to get buildings from rooms as fallback
+      await fetchBuildingsFromRooms();
+    }
+  };
+
+  // Fetch buildings from rooms (fallback when no RFID readers)
+  const fetchBuildingsFromRooms = async () => {
+    try {
+      const response = await fetch('/api/rooms');
+      const rooms = await response.json();
+      
+      console.log('Rooms API response:', rooms);
+      if (Array.isArray(rooms)) {
+        // Extract unique buildings from rooms
+        const uniqueBuildings = [...new Set(rooms.map(room => room.roomBuildingLoc))];
+        setBuildings(uniqueBuildings);
+        console.log('Buildings from rooms:', uniqueBuildings);
+      }
+    } catch (err) {
+      console.error('Failed to fetch buildings from rooms:', err);
+      // Provide default buildings based on schema
+      const defaultBuildings = ['BuildingA', 'BuildingB', 'BuildingC', 'BuildingD', 'BuildingE'];
+      setBuildings(defaultBuildings);
+      console.log('Using default buildings:', defaultBuildings);
+    }
+  };
+
+  // Fetch departments
+  const fetchDepartments = async () => {
+    try {
+      const response = await fetch('/api/departments');
+      const result = await response.json();
+      
+      // Handle both response formats: { data: [...] } and { success: true, data: [...] }
+      console.log('Departments API response:', result);
+      if (result.data) {
+        setDepartments(result.data || []);
+      } else if (Array.isArray(result)) {
+        setDepartments(result);
+      }
+    } catch (err) {
+      console.error('Failed to fetch departments:', err);
+      setDepartments([]);
+    }
+  };
+
+  // Fetch courses
+  const fetchCourses = async () => {
+    try {
+      const response = await fetch('/api/courses');
+      const result = await response.json();
+      
+      // Handle both response formats: { data: [...] } and { success: true, data: [...] }
+      console.log('Courses API response:', result);
+      if (result.data) {
+        setCourses(result.data || []);
+      } else if (Array.isArray(result)) {
+        setCourses(result);
+      }
+    } catch (err) {
+      console.error('Failed to fetch courses:', err);
+      setCourses([]);
+    }
+  };
+
+  // Fetch unique status values from attendance records
+  const fetchStatusOptions = async () => {
+    try {
+      const response = await fetch('/api/attendance/status-options');
+      const result = await response.json();
+      
+      console.log('Status options API response:', result);
+      if (result.success) {
+        setStatusOptions(result.data || []);
+      }
+    } catch (err) {
+      console.error('Failed to fetch status options:', err);
+      // Fallback to default status options
+      setStatusOptions(['PRESENT', 'LATE', 'ABSENT', 'EXCUSED']);
     }
   };
 
@@ -291,7 +390,10 @@ export default function LiveAttendanceFeed() {
       if (filters.readerId) params.append('readerId', filters.readerId);
       if (filters.roomId) params.append('roomId', filters.roomId);
       if (filters.building) params.append('building', filters.building);
-      params.append('limit', filters.limit);
+      if (filters.status) params.append('status', filters.status);
+      if (filters.department) params.append('department', filters.department);
+      if (filters.course) params.append('course', filters.course);
+      if (filters.timeRange) params.append('timeRange', filters.timeRange);
       
       // Add current day filter to only show today's attendance
       const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
@@ -310,7 +412,7 @@ export default function LiveAttendanceFeed() {
           console.log('Attendance API endpoint not found - showing empty state');
           setData({
             records: [],
-            pagination: { total: 0, limit: parseInt(filters.limit), offset: 0, hasMore: false },
+            pagination: { total: 0, limit: 25, offset: 0, hasMore: false },
             statistics: { totalRecords: 0, statusCounts: {} },
             recentActivity: []
           });
@@ -329,7 +431,7 @@ export default function LiveAttendanceFeed() {
         // Handle both cases: data exists or empty array
         let data = result.data || {
           records: [],
-          pagination: { total: 0, limit: parseInt(filters.limit), offset: 0, hasMore: false },
+          pagination: { total: 0, limit: 25, offset: 0, hasMore: false },
           statistics: { totalRecords: 0, statusCounts: {} },
           recentActivity: []
         };
@@ -339,7 +441,7 @@ export default function LiveAttendanceFeed() {
           console.log('🔧 FORCE_EMPTY_STATE is enabled - showing empty state');
           data = {
             records: [],
-            pagination: { total: 0, limit: parseInt(filters.limit), offset: 0, hasMore: false },
+            pagination: { total: 0, limit: 25, offset: 0, hasMore: false },
             statistics: { totalRecords: 0, statusCounts: {} },
             recentActivity: []
           };
@@ -353,7 +455,7 @@ export default function LiveAttendanceFeed() {
         // API returned success: false, but not an error - just empty data
         setData({
           records: [],
-          pagination: { total: 0, limit: parseInt(filters.limit), offset: 0, hasMore: false },
+          pagination: { total: 0, limit: 25, offset: 0, hasMore: false },
           statistics: { totalRecords: 0, statusCounts: {} },
           recentActivity: []
         });
@@ -364,7 +466,7 @@ export default function LiveAttendanceFeed() {
       // Don't show error for network issues, just show empty state
       setData({
         records: [],
-        pagination: { total: 0, limit: parseInt(filters.limit), offset: 0, hasMore: false },
+        pagination: { total: 0, limit: 25, offset: 0, hasMore: false },
         statistics: { totalRecords: 0, statusCounts: {} },
         recentActivity: []
       });
@@ -418,7 +520,7 @@ export default function LiveAttendanceFeed() {
             console.log('🔄 Adding new records to table:', newRecords.length);
             return {
               ...prevData,
-              records: [...newRecords, ...prevData.records].slice(0, parseInt(filters.limit))
+              records: [...newRecords, ...prevData.records].slice(0, 100) // Keep last 100 records for performance
             };
           });
         }
@@ -440,7 +542,21 @@ export default function LiveAttendanceFeed() {
 
   // Initial data fetch
   useEffect(() => {
-    fetchReaders();
+    const loadAllFilters = async () => {
+      setLoadingFilters(true);
+      try {
+        await Promise.all([
+          fetchReaders(),
+          fetchDepartments(),
+          fetchCourses(),
+          fetchStatusOptions()
+        ]);
+      } finally {
+        setLoadingFilters(false);
+      }
+    };
+    
+    loadAllFilters();
     fetchData();
     // Reset pagination when filters change
     setCurrentPage(1);
@@ -596,14 +712,6 @@ export default function LiveAttendanceFeed() {
               <Wifi className="h-4 w-4" />
               <span>{mqttClient?.status === 'connected' ? 'Connected' : 'Disconnected'}</span>
             </div>
-            {mqttClient?.messages && mqttClient.messages.length > 0 && (
-              <div className="mt-2 text-xs text-gray-500">
-                <span>📡 {mqttClient.messages.length} MQTT messages received</span>
-                {isRefreshing && (
-                  <span className="ml-2 text-blue-500">🔄 Refreshing...</span>
-                )}
-              </div>
-            )}
         </div>
       </div>
 
@@ -650,21 +758,21 @@ export default function LiveAttendanceFeed() {
               icon={<CheckCircle className="h-5 w-5" />}
               label="Present Today"
               value={data.statistics.statusCounts.PRESENT || 0}
-              valueClassName="text-green-600"
+              valueClassName="text-blue-600"
               sublabel="Students marked present"
             />
             <SummaryCard
               icon={<AlertTriangle className="h-5 w-5" />}
               label="Late Arrivals"
               value={data.statistics.statusCounts.LATE || 0}
-              valueClassName="text-yellow-600"
+              valueClassName="text-blue-600"
               sublabel="Students arrived late"
             />
             <SummaryCard
               icon={<XCircle className="h-5 w-5" />}
               label="Absent Today"
               value={data.statistics.statusCounts.ABSENT || 0}
-              valueClassName="text-red-600"
+              valueClassName="text-blue-600"
               sublabel="Students marked absent"
             />
           </div>
@@ -704,96 +812,6 @@ export default function LiveAttendanceFeed() {
                 }
               },
               {
-                id: 'debug-api',
-                label: 'Debug API',
-                description: 'Test API endpoint and show response',
-                icon: <Activity className="w-5 h-5 text-white" />,
-                onClick: async () => {
-                  console.log('🔧 DEBUG: Testing API endpoint...');
-                  try {
-                    const today = new Date().toISOString().split('T')[0];
-                    const testUrl = `/api/attendance/live-feed?date=${today}&currentDay=true&limit=50`;
-                    console.log('🔧 DEBUG: Testing URL:', testUrl);
-                    
-                    const response = await fetch(testUrl);
-                    console.log('🔧 DEBUG: Response status:', response.status);
-                    console.log('🔧 DEBUG: Response headers:', Object.fromEntries(response.headers.entries()));
-                    
-                    if (response.ok) {
-                      const data = await response.json();
-                      console.log('🔧 DEBUG: API Response:', data);
-                      console.log('🔧 DEBUG: Records found:', data.data?.records?.length || 0);
-                    } else {
-                      console.log('🔧 DEBUG: API Error:', response.status, response.statusText);
-                    }
-                  } catch (error) {
-                    console.log('🔧 DEBUG: Network Error:', error);
-                  }
-                }
-              },
-              {
-                id: 'test-all-records',
-                label: 'Test All Records',
-                description: 'Check all attendance records (no date filter)',
-                icon: <Activity className="w-5 h-5 text-white" />,
-                onClick: async () => {
-                  console.log('🔧 DEBUG: Testing all records (no date filter)...');
-                  try {
-                    const testUrl = `/api/attendance/live-feed?limit=50`;
-                    console.log('🔧 DEBUG: Testing URL:', testUrl);
-                    
-                    const response = await fetch(testUrl);
-                    console.log('🔧 DEBUG: Response status:', response.status);
-                    
-                    if (response.ok) {
-                      const data = await response.json();
-                      console.log('🔧 DEBUG: All Records Response:', data);
-                      console.log('🔧 DEBUG: Total records found:', data.data?.records?.length || 0);
-                      if (data.data?.records?.length > 0) {
-                        console.log('🔧 DEBUG: Sample record:', data.data.records[0]);
-                      }
-                    } else {
-                      console.log('🔧 DEBUG: API Error:', response.status, response.statusText);
-                    }
-                  } catch (error) {
-                    console.log('🔧 DEBUG: Network Error:', error);
-                  }
-                }
-              },
-              {
-                id: 'check-rfid-tags',
-                label: 'Check RFID Tags',
-                description: 'List all RFID tags in database',
-                icon: <Activity className="w-5 h-5 text-white" />,
-                onClick: async () => {
-                  console.log('🔧 DEBUG: Checking RFID tags in database...');
-                  try {
-                    const response = await fetch('/api/rfid/tags');
-                    console.log('🔧 DEBUG: RFID Tags Response status:', response.status);
-                    
-                    if (response.ok) {
-                      const data = await response.json();
-                      console.log('🔧 DEBUG: RFID Tags Response:', data);
-                      console.log('🔧 DEBUG: Total RFID tags found:', data.data?.tags?.length || 0);
-                      
-                      if (data.data?.tags?.length > 0) {
-                        console.log('🔧 DEBUG: Available RFID tags:');
-                        data.data.tags.forEach((tag: any, index: number) => {
-                          console.log(`  ${index + 1}. Tag: ${tag.tagNumber}, Student: ${tag.student?.firstName} ${tag.student?.lastName || 'Not assigned'}`);
-                        });
-                      } else {
-                        console.log('🔧 DEBUG: No RFID tags found in database');
-                        console.log('💡 You need to create RFID tags and assign them to students first');
-                      }
-                    } else {
-                      console.log('🔧 DEBUG: RFID Tags API Error:', response.status, response.statusText);
-                    }
-                  } catch (error) {
-                    console.log('🔧 DEBUG: RFID Tags Network Error:', error);
-                  }
-                }
-              },
-              {
                 id: 'export-data',
                 label: 'Export Data',
                 description: 'Download attendance reports',
@@ -801,32 +819,11 @@ export default function LiveAttendanceFeed() {
                 onClick: exportData
               },
               {
-                id: 'send-notifications',
-                label: 'Send Alerts',
-                description: 'Notify instructors',
-                icon: <Bell className="w-5 h-5 text-white" />,
-                onClick: () => console.log('Send notifications')
-              },
-              {
                 id: 'generate-reports',
                 label: 'Generate Reports',
-                description: 'Create analytics',
+                description: 'Create attendance analytics',
                 icon: <BarChart3 className="w-5 h-5 text-white" />,
                 onClick: () => console.log('Generate reports')
-              },
-              {
-                id: 'view-analytics',
-                label: 'View Analytics',
-                description: 'Attendance insights',
-                icon: <Eye className="w-5 h-5 text-white" />,
-                onClick: () => console.log('View analytics')
-              },
-              {
-                id: 'system-settings',
-                label: 'Feed Settings',
-                description: 'Configure monitoring',
-                icon: <Settings className="w-5 h-5 text-white" />,
-                onClick: () => console.log('System settings')
               }
             ]}
           />
@@ -875,38 +872,104 @@ export default function LiveAttendanceFeed() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Buildings</SelectItem>
-                  {buildings.map(building => (
-                    <SelectItem key={building} value={building}>{building}</SelectItem>
-                  ))}
+                  {loadingFilters ? (
+                    <SelectItem value="loading" disabled>Loading buildings...</SelectItem>
+                  ) : (
+                    buildings.map(building => (
+                      <SelectItem key={building} value={building}>{building}</SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
                     
               <Select value={filters.readerId || "all"} onValueChange={(value) => setFilters(prev => ({ ...prev, readerId: value === "all" ? '' : value, roomId: '' }))}>
-                      <SelectTrigger className="w-full sm:w-auto sm:min-w-[140px] text-gray-500 rounded border-gray-300 hover:border-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm">
-                        <SelectValue placeholder="Reader" />
+                    <SelectTrigger className="w-full sm:w-auto sm:min-w-[140px] text-gray-500 rounded border-gray-300 hover:border-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm">
+                      <SelectValue placeholder="Reader" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Readers</SelectItem>
-                  {readers
-                    .filter(reader => !filters.building || reader.room.roomBuildingLoc === filters.building)
-                    .map(reader => (
-                      <SelectItem key={reader.readerId} value={reader.readerId.toString()}>
-                              {reader.deviceName} - {reader.room.roomNo}
+                  {loadingFilters ? (
+                    <SelectItem value="loading" disabled>Loading readers...</SelectItem>
+                  ) : (
+                    readers
+                      .filter(reader => !filters.building || reader.room.roomBuildingLoc === filters.building)
+                      .map(reader => (
+                        <SelectItem key={reader.readerId} value={reader.readerId.toString()}>
+                          {reader.deviceName} - {reader.room.roomNo} ({reader.room.roomBuildingLoc})
+                        </SelectItem>
+                      ))
+                  )}
+                </SelectContent>
+              </Select>
+              
+              <Select value={filters.status || "all"} onValueChange={(value) => setFilters(prev => ({ ...prev, status: value === "all" ? '' : value }))}>
+                    <SelectTrigger className="w-full sm:w-auto sm:min-w-[100px] text-gray-500 rounded border-gray-300 hover:border-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm">
+                      <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Status</SelectItem>
+                  {loadingFilters ? (
+                    <SelectItem value="loading" disabled>Loading status options...</SelectItem>
+                  ) : (
+                    statusOptions.map(status => (
+                      <SelectItem key={status} value={status}>
+                        {status.charAt(0) + status.slice(1).toLowerCase()}
                       </SelectItem>
-                    ))}
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+              
+              <Select value={filters.department || "all"} onValueChange={(value) => setFilters(prev => ({ ...prev, department: value === "all" ? '' : value }))}>
+                    <SelectTrigger className="w-full sm:w-auto sm:min-w-[120px] text-gray-500 rounded border-gray-300 hover:border-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm">
+                      <SelectValue placeholder="Department" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Departments</SelectItem>
+                  {loadingFilters ? (
+                    <SelectItem value="loading" disabled>Loading departments...</SelectItem>
+                  ) : (
+                    departments.map(dept => (
+                      <SelectItem key={dept.id} value={dept.name}>
+                        {dept.name} {dept.code && `(${dept.code})`}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+              
+              <Select value={filters.course || "all"} onValueChange={(value) => setFilters(prev => ({ ...prev, course: value === "all" ? '' : value }))}>
+                    <SelectTrigger className="w-full sm:w-auto sm:min-w-[120px] text-gray-500 rounded border-gray-300 hover:border-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm">
+                      <SelectValue placeholder="Course" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Courses</SelectItem>
+                  {loadingFilters ? (
+                    <SelectItem value="loading" disabled>Loading courses...</SelectItem>
+                  ) : (
+                    courses.map(course => (
+                      <SelectItem key={course.id} value={course.name}>
+                        {course.name} {course.code && `(${course.code})`}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+              
+              <Select value={filters.timeRange || "all"} onValueChange={(value) => setFilters(prev => ({ ...prev, timeRange: value === "all" ? '' : value }))}>
+                    <SelectTrigger className="w-full sm:w-auto sm:min-w-[120px] text-gray-500 rounded border-gray-300 hover:border-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm">
+                      <SelectValue placeholder="Time Range" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Times</SelectItem>
+                  <SelectItem value="morning">Morning (6AM-12PM)</SelectItem>
+                  <SelectItem value="afternoon">Afternoon (12PM-6PM)</SelectItem>
+                  <SelectItem value="evening">Evening (6PM-10PM)</SelectItem>
+                  <SelectItem value="last-hour">Last Hour</SelectItem>
+                  <SelectItem value="last-2-hours">Last 2 Hours</SelectItem>
                 </SelectContent>
               </Select>
                     
-              <Select value={filters.limit} onValueChange={(value) => setFilters(prev => ({ ...prev, limit: value }))}>
-                      <SelectTrigger className="w-full sm:w-auto sm:min-w-[100px] text-gray-500 rounded border-gray-300 hover:border-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm">
-                        <SelectValue placeholder="Limit" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="25">25 records</SelectItem>
-                  <SelectItem value="50">50 records</SelectItem>
-                  <SelectItem value="100">100 records</SelectItem>
-                </SelectContent>
-              </Select>
             </div>
           </div>
                 </div>

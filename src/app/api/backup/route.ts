@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { BackupType, BackupStatus, BackupLocation } from "@prisma/client";
 import { backupServerService } from "@/lib/services/backup-server.service";
+import { createNotification } from '@/lib/notifications';
 import "@/lib/services/backup-scheduler.service"; // Initialize scheduler
 
 async function assertAdmin(request: NextRequest) {
@@ -201,6 +202,16 @@ export async function POST(request: NextRequest) {
             createdBy,
           },
         });
+
+        // Notify creator
+        try {
+          await createNotification(createdBy, {
+            title: 'Backup completed',
+            message: `Backup "${name}" saved (${result.size}) at ${result.filePath || 'storage'}`,
+            priority: 'NORMAL',
+            type: 'BACKUP',
+          });
+        } catch {}
         
         await backgroundPrisma.$disconnect();
       } catch (error) {
@@ -234,6 +245,16 @@ export async function POST(request: NextRequest) {
             createdBy,
           },
         });
+
+        // Notify creator of failure
+        try {
+          await createNotification(createdBy, {
+            title: 'Backup failed',
+            message: `Backup "${name}" failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+            priority: 'HIGH',
+            type: 'BACKUP',
+          });
+        } catch {}
         
         await backgroundPrisma.$disconnect();
       } catch (updateError) {

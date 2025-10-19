@@ -146,10 +146,28 @@ export function AddScheduleDialog({ open, onOpenChange, onScheduleCreated }: Add
   };
 
   const handleInputChange = (field: string, value: string) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: value
-    }));
+    setFormData(prev => {
+      const newFormData = {
+        ...prev,
+        [field]: value
+      };
+
+      // Auto-populate academic year when semester is selected
+      if (field === 'semesterId' && value) {
+        const selectedSemester = semesters.find(sem => sem.semesterId.toString() === value);
+        if (selectedSemester && selectedSemester.year) {
+          // Extract year from semester and create academic year format
+          const year = selectedSemester.year;
+          const academicYear = `${year}-${year + 1}`;
+          newFormData.academicYear = academicYear;
+        } else {
+          // If semester not found or no year, clear academic year
+          newFormData.academicYear = '';
+        }
+      }
+
+      return newFormData;
+    });
   };
 
   // Safe focus handler to prevent null reference errors
@@ -259,6 +277,11 @@ export function AddScheduleDialog({ open, onOpenChange, onScheduleCreated }: Add
       semesterId: '',
       academicYear: ''
     });
+    // Clear search states
+    setSubjectSearch("");
+    setSectionSearch("");
+    setInstructorSearch("");
+    setRoomSearch("");
   };
 
   const handleClose = () => {
@@ -456,6 +479,9 @@ export function AddScheduleDialog({ open, onOpenChange, onScheduleCreated }: Add
                     <div className="space-y-2">
                       <Label htmlFor="academicYear" className="text-sm text-blue-900">
                         Academic Year <span className="text-red-500">*</span>
+                        {formData.semesterId && (
+                          <span className="text-xs text-green-600 ml-2">(Auto-filled)</span>
+                        )}
                       </Label>
                       <Input
                         id="academicYear"
@@ -463,9 +489,17 @@ export function AddScheduleDialog({ open, onOpenChange, onScheduleCreated }: Add
                         value={formData.academicYear}
                         onChange={(e) => handleInputChange('academicYear', e.target.value)}
                         placeholder="e.g., 2024-2025"
-                        className="border-blue-200 focus:border-blue-400 focus:ring-blue-400"
+                        className={`border-blue-200 focus:border-blue-400 focus:ring-blue-400 ${
+                          formData.semesterId ? 'bg-gray-50' : ''
+                        }`}
+                        readOnly={!!formData.semesterId}
                         required
                       />
+                      {formData.semesterId && (
+                        <p className="text-xs text-gray-500">
+                          Academic year is automatically set based on the selected semester
+                        </p>
+                      )}
                     </div>
                   </div>
 

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { createNotification } from '@/lib/notifications';
 
 // Create manual attendance entry
 export async function POST(req: NextRequest) {
@@ -76,6 +77,40 @@ export async function POST(req: NextRequest) {
         attendanceType: true
       },
     });
+
+    // First-of-week notification for ABSENT/LATE
+    try {
+      if ((created.status === 'ABSENT' || created.status === 'LATE') && attendanceData.studentId) {
+        const startOfWeek = new Date(created.timestamp);
+        const day = startOfWeek.getDay();
+        const diff = (day === 0 ? -6 : 1) - day; // Monday start
+        startOfWeek.setDate(startOfWeek.getDate() + diff);
+        startOfWeek.setHours(0,0,0,0);
+        const endOfWeek = new Date(startOfWeek);
+        endOfWeek.setDate(endOfWeek.getDate() + 7);
+
+        const count = await prisma.attendance.count({
+          where: {
+            studentId: attendanceData.studentId,
+            status: created.status,
+            timestamp: { gte: startOfWeek, lt: endOfWeek },
+          }
+        });
+        if (count === 1) {
+          const student = await prisma.student.findUnique({ where: { studentId: attendanceData.studentId }, select: { userId: true, firstName: true, lastName: true } });
+          if (student?.userId) {
+            await createNotification(student.userId, {
+              title: 'Attendance alert',
+              message: `${student.firstName} ${student.lastName} marked ${created.status}`,
+              priority: created.status === 'ABSENT' ? 'HIGH' : 'NORMAL',
+              type: 'ATTENDANCE',
+            });
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Notification (first-of-week) failed:', e);
+    }
 
     return NextResponse.json({ 
       success: true, 

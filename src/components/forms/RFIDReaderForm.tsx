@@ -7,8 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { toast } from "sonner";
-import { Loader2, Search, Building, MapPin, ScanLine } from "lucide-react";
-import { useMQTTRFIDScan } from '@/hooks/useMQTTRFIDScan';
+import { Loader2, Building } from "lucide-react";
 
 const rfidReaderFormSchema = z.object({
   deviceId: z.string()
@@ -21,10 +20,6 @@ const rfidReaderFormSchema = z.object({
     .or(z.literal("")),
   ipAddress: z.string()
     .ip({ version: "v4", message: "Please enter a valid IPv4 address (e.g., 192.168.1.100)" })
-    .optional()
-    .or(z.literal("")),
-  tagNumber: z.string()
-    .max(50, "Tag number must be less than 50 characters")
     .optional()
     .or(z.literal("")),
   status: z.enum(["ACTIVE","INACTIVE","TESTING","CALIBRATION","REPAIR","OFFLINE","ERROR"], {
@@ -70,49 +65,38 @@ const RFIDReaderForm: React.FC<RFIDReaderFormProps> = ({ type, data, id, onSucce
   const [showRoomDropdown, setShowRoomDropdown] = useState(false);
   const [roomSearchValue, setRoomSearchValue] = useState("");
 
-  // MQTT RFID scanning for tag number auto-fill
-  const { isConnected, setMode, sendFeedback } = useMQTTRFIDScan({
-    enabled: true,
-    mode: 'registration',
-    onNewScan: (scan) => {
-      console.log('RFID Scan received in Reader Form:', scan);
-      const tag = String(scan?.tagNumber || scan?.rfid || '').trim();
-      if (!tag) {
-        console.log('No valid tag number found in scan:', scan);
-        return;
-      }
-      console.log('Setting tag number in form:', tag);
-      form.setValue('tagNumber', tag);
-      toast.success('Card detected - Tag number auto-filled', {
-        description: `Tag: ${tag}`
-      });
-      sendFeedback('Card detected', tag);
-    }
-  });
-
   const form = useForm<RFIDReaderFormData>({
     resolver: zodResolver(rfidReaderFormSchema),
     defaultValues: data || {
       deviceId: "",
-      deviceName: undefined,
-      ipAddress: undefined,
-      tagNumber: undefined,
+      deviceName: "",
+      ipAddress: "",
       status: "ACTIVE",
       roomId: 0,
-      notes: undefined,
+      notes: "",
       components: {
-        power: "AC",
-        antenna: "Omni-directional",
-        firmware: "v1.0.0"
+        power: "",
+        antenna: "",
+        firmware: ""
       },
     },
   });
+
+  const watchedRoomId = form.watch('roomId');
 
   useEffect(() => {
     if (data) {
       form.reset(data);
     }
   }, [data, form]);
+
+  // Keep the search textbox in sync with the selected room without updating state during render
+  useEffect(() => {
+    if (!rooms || rooms.length === 0) return;
+    const match = rooms.find(r => r.roomId === watchedRoomId);
+    const label = match ? `${match.roomNo} (${match.roomBuildingLoc})` : '';
+    setRoomSearchValue(label);
+  }, [rooms, watchedRoomId]);
 
   // Fetch available rooms
   useEffect(() => {
@@ -202,9 +186,71 @@ const RFIDReaderForm: React.FC<RFIDReaderFormProps> = ({ type, data, id, onSucce
     }
   };
 
+  // Autofill via local bridge (reads temp/discovered-reader.json through API)
+  const handleAutofillFromBridge = async () => {
+    try {
+      const res = await fetch('/api/rfid/readers/discovered', { cache: 'no-store' });
+      const json = await res.json();
+      if (!json?.data) {
+        toast.error('No discovered reader data found. Make sure the serial bridge is running.');
+        return;
+      }
+      const d = json.data;
+      // Normalize common field name variants (be forgiving)
+      const deviceIdVal = d.deviceId ?? d.deviceID ?? d.id ?? d.readerId;
+      const deviceNameVal = d.deviceName ?? d.name ?? d.readerName;
+      const ipVal = d.ip ?? d.ipAddress ?? d.ip_addr;
+      const statusVal = d.status ?? d.state;
+      const roomIdVal = d.roomId ?? d.room ?? d.roomID;
+      const notesVal = d.notes ?? d.note;
+
+      // Coerce and set with RHF options to force UI update
+      if (deviceIdVal) form.setValue('deviceId', String(deviceIdVal).trim(), { shouldDirty: true, shouldTouch: true, shouldValidate: true });
+      if (deviceNameVal) form.setValue('deviceName', String(deviceNameVal).trim(), { shouldDirty: true, shouldTouch: true, shouldValidate: true });
+      if (ipVal) form.setValue('ipAddress', String(ipVal).trim(), { shouldDirty: true, shouldTouch: true, shouldValidate: true });
+      if (statusVal) {
+        const statusUpper = String(d.status).toUpperCase();
+        const allowed = ["ACTIVE","INACTIVE","TESTING","CALIBRATION","REPAIR","OFFLINE","ERROR"] as const;
+        const isValid = (allowed as readonly string[]).includes(statusUpper);
+        const finalStatus = (isValid ? statusUpper : "ACTIVE") as typeof allowed[number];
+        form.setValue('status', finalStatus, { shouldDirty: true, shouldTouch: true, shouldValidate: true });
+      }
+      if (roomIdVal !== undefined && roomIdVal !== null) {
+        const roomVal = typeof roomIdVal === 'string' ? parseInt(roomIdVal, 10) : Number(roomIdVal);
+        if (!Number.isNaN(roomVal)) form.setValue('roomId', roomVal, { shouldDirty: true, shouldTouch: true, shouldValidate: true });
+      }
+      if (notesVal) form.setValue('notes', String(notesVal), { shouldDirty: true, shouldTouch: true, shouldValidate: true });
+      if (d.components) {
+        if (d.components.power) form.setValue('components.power', String(d.components.power), { shouldDirty: true });
+        if (d.components.antenna) form.setValue('components.antenna', String(d.components.antenna), { shouldDirty: true });
+        if (d.components.firmware) form.setValue('components.firmware', String(d.components.firmware), { shouldDirty: true });
+      }
+      // As a fallback, force a reset with merged values to update UI in all cases
+      const merged = {
+        ...form.getValues(),
+        ...(deviceIdVal ? { deviceId: String(deviceIdVal).trim() } : {}),
+        ...(deviceNameVal ? { deviceName: String(deviceNameVal).trim() } : {}),
+        ...(ipVal ? { ipAddress: String(ipVal).trim() } : {}),
+      } as any;
+      form.reset(merged, { keepDirty: true, keepTouched: true });
+
+      toast.success('Form auto-filled from serial bridge');
+      // Optional: focus first field
+      const first = document.querySelector('input[name="deviceId"]') as HTMLInputElement | null;
+      if (first) first.focus();
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to fetch discovered reader');
+    }
+  };
+
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+        <div className="flex justify-end">
+          <Button type="button" variant="outline" onClick={handleAutofillFromBridge}>
+            Autofill from USB Bridge
+          </Button>
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <FormField
             control={form.control}
@@ -245,39 +291,7 @@ const RFIDReaderForm: React.FC<RFIDReaderFormProps> = ({ type, data, id, onSucce
               </FormItem>
             )}
           />
-          <FormField
-            control={form.control}
-            name="tagNumber"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel className="flex items-center gap-2">
-                  Tag Number
-                  <div className="flex items-center gap-1 text-xs text-blue-600">
-                    <ScanLine className="w-3 h-3" />
-                    {isConnected ? (
-                      <span className="text-green-600">● Ready to scan</span>
-                    ) : (
-                      <span className="text-red-600">● MQTT disconnected</span>
-                    )}
-                  </div>
-                </FormLabel>
-                <FormControl>
-                  <Input 
-                    placeholder="Scan RFID card or enter manually..." 
-                    {...field}
-                    className="font-mono"
-                  />
-                </FormControl>
-                <FormMessage />
-                <p className="text-xs text-gray-500">
-                  {isConnected 
-                    ? "Place RFID card near reader to auto-fill" 
-                    : "MQTT connection required for auto-scan"
-                  }
-                </p>
-              </FormItem>
-            )}
-          />
+          
           <FormField
             control={form.control}
             name="status"
@@ -338,19 +352,7 @@ const RFIDReaderForm: React.FC<RFIDReaderFormProps> = ({ type, data, id, onSucce
                       {...field}
                       type="hidden"
                     />
-                    {/* Sync search and hidden input */}
-                    {(() => {
-                      const match = rooms.find(
-                        room =>
-                          room.roomId === field.value
-                      );
-                      if (match && roomSearchValue !== `${match.roomNo} (${match.roomBuildingLoc})`) {
-                        setRoomSearchValue(`${match.roomNo} (${match.roomBuildingLoc})`);
-                      } else if (!match && field.value !== 0) {
-                        setRoomSearchValue("");
-                      }
-                      return null;
-                    })()}
+                    {/* The input value is synced via useEffect (see above) */}
                     {showRoomDropdown && (
                       <div className="absolute z-50 w-full bg-white border border-blue-200 rounded shadow max-h-60 overflow-y-auto">
                         {rooms
@@ -467,7 +469,7 @@ const RFIDReaderForm: React.FC<RFIDReaderFormProps> = ({ type, data, id, onSucce
         
         {/* Components Section */}
         <div className="space-y-4">
-          <h3 className="text-lg font-semibold text-gray-900 border-b border-gray-200 pb-2">Device Components</h3>
+          <h3 className="text-md font-semibold text-blue-900 border-b border-gray-200 pb-2">Device Components</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <FormField
               control={form.control}

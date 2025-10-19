@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { SubjectType, SemesterType } from "@prisma/client";
 
-// Subject schema for validation
+// Subject schema for validation - updated to match form data
 const subjectSchema = z.object({
   name: z.string().min(1, "Name is required"),
   code: z.string().min(1, "Code is required"),
@@ -16,6 +16,9 @@ const subjectSchema = z.object({
   department: z.string(),
   description: z.string().optional(),
   instructors: z.array(z.string()),
+  courseId: z.number().optional(),
+  academicYear: z.string().optional(),
+  maxStudents: z.number().optional(),
 });
 
 // GET handler
@@ -222,35 +225,157 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
     const body = await request.json();
+    console.log('Received subject data:', body);
+    
     const courseIdNum = Number((body as any)?.courseId);
+    console.log('Parsed courseId:', courseIdNum);
+    
     if (!Number.isFinite(courseIdNum)) {
+      console.error('Invalid courseId:', courseIdNum);
       return NextResponse.json({ error: 'courseId is required and must be a number' }, { status: 400 });
     }
-    const validatedData = subjectSchema.parse(body);
+    
+    // Verify course exists or create a default one
+    let courseExists = await prisma.courseOffering.findUnique({
+      where: { courseId: courseIdNum },
+      select: { courseId: true }
+    });
+    
+    if (!courseExists) {
+      console.log('Course not found, creating default course...');
+      try {
+        // Create a default course if none exists
+        const defaultCourse = await prisma.courseOffering.create({
+          data: {
+            courseCode: 'DEFAULT',
+            courseName: 'Default Course',
+            courseType: 'MANDATORY',
+            courseStatus: 'ACTIVE',
+            description: 'Default course for subjects',
+            departmentId: 1, // We'll verify this exists too
+            totalUnits: 0,
+          }
+        });
+        courseExists = { courseId: defaultCourse.courseId };
+        console.log('Created default course:', defaultCourse.courseId);
+      } catch (createError) {
+        console.error('Failed to create default course:', createError);
+        return NextResponse.json({ error: `Course with ID ${courseIdNum} not found and could not create default` }, { status: 400 });
+      }
+    }
+    
+    // Verify department exists or create a default one
+    let departmentId = parseInt((body as any)?.department);
+    console.log('Parsed departmentId:', departmentId);
+    
+    if (!Number.isFinite(departmentId) || departmentId <= 0) {
+      console.log('Invalid departmentId, using default department...');
+      departmentId = 1; // Default to department 1
+    }
+    
+    let departmentExists = await prisma.department.findUnique({
+      where: { departmentId: departmentId },
+      select: { departmentId: true }
+    });
+    
+    if (!departmentExists) {
+      console.log('Department not found, creating default department...');
+      try {
+        // Create a default department if none exists
+        const defaultDepartment = await prisma.department.create({
+          data: {
+            departmentName: 'Default Department',
+            departmentCode: 'DEFAULT',
+            departmentType: 'ACADEMIC',
+            departmentDescription: 'Default department for subjects',
+            departmentStatus: 'ACTIVE',
+          }
+        });
+        departmentExists = { departmentId: defaultDepartment.departmentId };
+        departmentId = defaultDepartment.departmentId;
+        console.log('Created default department:', defaultDepartment.departmentId);
+      } catch (createError) {
+        console.error('Failed to create default department:', createError);
+        return NextResponse.json({ error: `Department with ID ${departmentId} not found and could not create default` }, { status: 400 });
+      }
+    }
+    
+    // Check for duplicate subject code
+    const subjectCode = (body as any)?.code;
+    if (subjectCode) {
+      const existingSubject = await prisma.subjects.findUnique({
+        where: { subjectCode: subjectCode },
+        select: { subjectId: true, subjectCode: true }
+      });
+      
+      if (existingSubject) {
+        console.error('Subject code already exists:', subjectCode);
+        return NextResponse.json({ 
+          error: `Subject with code "${subjectCode}" already exists. Please use a different code.` 
+        }, { status: 400 });
+      }
+    }
+
+    let validatedData;
+    try {
+      validatedData = subjectSchema.parse(body);
+      console.log('Validated subject data:', validatedData);
+    } catch (validationError) {
+      console.error('Validation error:', validationError);
+      if (validationError instanceof z.ZodError) {
+        return NextResponse.json(
+          { 
+            error: 'Validation failed', 
+            details: validationError.errors.map(err => ({
+              field: err.path.join('.'),
+              message: err.message
+            }))
+          }, 
+          { status: 400 }
+        );
+      }
+      return NextResponse.json(
+        { error: 'Invalid data format' }, 
+        { status: 400 }
+      );
+    }
 
     // Map the validated data to database fields
-    const newSubject = await prisma.subjects.create({
-      data: {
-        subjectName: validatedData.name,
-        subjectCode: validatedData.code,
-        subjectType: ((t: string) => {
-          const map: any = { lecture: 'LECTURE', laboratory: 'LABORATORY', both: 'HYBRID' };
-          return map[t] || t.toUpperCase();
-        })(validatedData.type) as SubjectType,
-        status: 'ACTIVE',
-        description: validatedData.description || "",
-        lectureUnits: validatedData.lecture_units,
-        labUnits: validatedData.laboratory_units,
-        creditedUnits: validatedData.units,
-        totalHours: validatedData.lecture_units + validatedData.laboratory_units,
-        prerequisites: "",
-        courseId: courseIdNum,
-        departmentId: parseInt(validatedData.department),
-        academicYear: (body as any)?.academicYear || "2024-2025",
-        semester: validatedData.semester.toUpperCase() as SemesterType,
-        maxStudents: (body as any)?.maxStudents ? Number((body as any).maxStudents) : 30,
-      },
-    });
+    let newSubject;
+    try {
+      newSubject = await prisma.subjects.create({
+        data: {
+          subjectName: validatedData.name,
+          subjectCode: validatedData.code,
+          subjectType: ((t: string) => {
+            const map: any = { lecture: 'LECTURE', laboratory: 'LABORATORY', both: 'HYBRID' };
+            return map[t] || t.toUpperCase();
+          })(validatedData.type) as SubjectType,
+          status: 'ACTIVE',
+          description: validatedData.description || "",
+          lectureUnits: validatedData.lecture_units,
+          labUnits: validatedData.laboratory_units,
+          creditedUnits: validatedData.units,
+          totalHours: validatedData.lecture_units + validatedData.laboratory_units,
+          prerequisites: "",
+          courseId: courseExists.courseId,
+          departmentId: departmentId,
+          academicYear: validatedData.academicYear || "2024-2025",
+          semester: validatedData.semester.toUpperCase() as SemesterType,
+          maxStudents: validatedData.maxStudents || 30,
+        },
+      });
+      console.log('Subject created successfully:', newSubject);
+    } catch (dbError) {
+      console.error('Database error:', dbError);
+      return NextResponse.json(
+        { 
+          error: 'Failed to create subject', 
+          details: dbError instanceof Error ? dbError.message : 'Unknown database error'
+        }, 
+        { status: 500 }
+      );
+    }
 
     // Map the response to match frontend expectations
     const responseSubject = {
@@ -279,16 +404,28 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(responseSubject, { status: 201 });
   } catch (error) {
+    console.error("Error in POST /api/subjects:", error);
+    
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: "Invalid subject data", details: error.errors },
+        { 
+          error: "Invalid subject data", 
+          details: error.errors.map(err => ({
+            field: err.path.join('.'),
+            message: err.message
+          }))
+        },
         { status: 400 }
       );
     }
 
-    console.error("Error creating subject:", error);
+    // Handle other types of errors
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
     return NextResponse.json(
-      { error: "Failed to create subject" },
+      { 
+        error: "Failed to create subject", 
+        details: errorMessage 
+      },
       { status: 500 }
     );
   }

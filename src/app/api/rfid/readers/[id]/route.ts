@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { createNotification } from '@/lib/notifications';
 
 export async function GET(
   request: NextRequest,
@@ -104,6 +105,23 @@ export async function PATCH(
       }
     });
     
+    // Optional status-change notification
+    try {
+      const prevStatus = existingReader.status;
+      const newStatus = updated.status;
+      if (prevStatus !== newStatus) {
+        const priority = (newStatus === 'OFFLINE' || newStatus === 'ERROR') ? 'HIGH' : 'NORMAL';
+        await createNotification(userId, {
+          title: 'RFID Reader status updated',
+          message: `Device ${updated.deviceId} is now ${newStatus}`,
+          priority,
+          type: 'RFID',
+        });
+      }
+    } catch (e) {
+      console.warn('Notification create failed (reader status change):', e);
+    }
+
     return NextResponse.json({
       readerId: updated.readerId,
       deviceId: updated.deviceId,
@@ -190,7 +208,15 @@ export async function DELETE(
 
     const readerId = Number(params.id);
     if (isNaN(readerId)) return NextResponse.json({ error: 'Invalid reader id' }, { status: 400 });
-    await prisma.rFIDReader.delete({ where: { readerId } });
+    const toDelete = await prisma.rFIDReader.delete({ where: { readerId } });
+    try {
+      await createNotification(userId, {
+        title: 'RFID Reader removed',
+        message: `Device ${toDelete.deviceId} deleted`,
+        priority: 'NORMAL',
+        type: 'RFID',
+      });
+    } catch {}
     return NextResponse.json({ success: true });
   } catch (error) {
     return NextResponse.json({ error: "Failed to delete RFID reader" }, { status: 500 });

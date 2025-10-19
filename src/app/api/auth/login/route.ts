@@ -1,9 +1,10 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { auditService } from '@/lib/services/audit.service';
 import { env } from '@/lib/env-validation';
+import { createNotification } from '@/lib/notifications';
 
 
 export async function POST(request: NextRequest) {
@@ -118,6 +119,19 @@ export async function POST(request: NextRequest) {
         request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown',
         request.headers.get('user-agent') || 'unknown'
       );
+
+      // Notify admin on multiple failed attempts (threshold 5)
+      try {
+        const updated = await prisma.user.findUnique({ where: { userId: user.userId }, select: { failedLoginAttempts: true, role: true } });
+        if (updated && updated.failedLoginAttempts >= 5 && (user.role === 'SUPER_ADMIN' || user.role === 'ADMIN')) {
+          await createNotification(user.userId, {
+            title: 'Failed admin login attempts',
+            message: `There have been ${updated.failedLoginAttempts} failed login attempts for your account`,
+            priority: 'HIGH',
+            type: 'SECURITY',
+          });
+        }
+      } catch {}
 
       return NextResponse.json(
         { error: 'Invalid credentials' },

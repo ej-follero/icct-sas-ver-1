@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { createNotification } from '@/lib/notifications';
 
 export async function GET(
   request: NextRequest,
@@ -124,6 +125,7 @@ export async function PUT(
       }
 
       const { id } = await params;
+      const previous = await prisma.rFIDTags.findUnique({ where: { tagId: parseInt(id) } });
       const tag = await prisma.rFIDTags.update({
         where: { tagId: parseInt(id) },
         data: {
@@ -149,6 +151,24 @@ export async function PUT(
         },
       });
       
+      // Notifications: status transitions of interest
+      try {
+        if (previous?.status !== tag.status && ['LOST','DAMAGED','EXPIRED'].includes(tag.status)) {
+          // Notify the assigned student (if any) and the admin actor
+          if (tag.studentId) {
+            const student = await prisma.student.findUnique({ where: { studentId: tag.studentId }, select: { userId: true, firstName: true, lastName: true } });
+            if (student?.userId) {
+              await createNotification(student.userId, {
+                title: 'RFID tag status',
+                message: `Tag ${tag.tagNumber} is ${tag.status}`,
+                priority: 'HIGH',
+                type: 'RFID',
+              });
+            }
+          }
+        }
+      } catch {}
+
       return NextResponse.json(tag);
     } catch (error: any) {
       console.error('Error updating RFID tag:', error);
@@ -265,6 +285,7 @@ export async function PATCH(
       }
       
       const { id } = await params;
+      const before = await prisma.rFIDTags.findUnique({ where: { tagId: parseInt(id) }, select: { tagNumber: true, studentId: true } });
       const tag = await prisma.rFIDTags.update({
         where: { tagId: parseInt(id) },
         data: updateData,
@@ -279,6 +300,31 @@ export async function PATCH(
           },
         },
       });
+      // Notify assignment changes
+      try {
+        const assigned = !!tag.studentId;
+        const message = assigned
+          ? `Tag ${tag.tagNumber} assigned to ${tag.student?.firstName || ''} ${tag.student?.lastName || ''}`
+          : `Tag ${tag.tagNumber} unassigned`;
+        // Actor notification
+        const token = request.cookies.get('token')?.value;
+        if (token) {
+          const jwt = require('jsonwebtoken');
+          const decoded = jwt.verify(token, process.env.JWT_SECRET);
+          const actorId = Number((decoded as any)?.userId);
+          if (Number.isFinite(actorId)) {
+            await createNotification(actorId, { title: 'RFID tag updated', message, priority: 'NORMAL', type: 'RFID' });
+          }
+        }
+        // If reassigned, optionally notify previous owner
+        if (before?.studentId && before.studentId !== tag.studentId) {
+          const prevStudent = await prisma.student.findUnique({ where: { studentId: before.studentId }, select: { userId: true } });
+          if (prevStudent?.userId) {
+            await createNotification(prevStudent.userId, { title: 'RFID tag updated', message: `Tag ${tag.tagNumber} unassigned from your account`, priority: 'NORMAL', type: 'RFID' });
+          }
+        }
+      } catch {}
+
       return NextResponse.json(tag);
     } catch (error) {
       return NextResponse.json({ error: "Failed to update assignment" }, { status: 500 });

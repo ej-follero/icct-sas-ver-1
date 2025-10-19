@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { UserStatus } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { createNotification } from '@/lib/notifications';
 
 // GET single user
 export async function GET(
@@ -216,10 +217,23 @@ export async function PATCH(
     if (twoFactorEnabled !== undefined) updateData.twoFactorEnabled = twoFactorEnabled;
 
     // Update user
+    const prev = await prisma.user.findUnique({ where: { userId }, select: { role: true } });
     const updatedUser = await prisma.user.update({
       where: { userId },
       data: updateData,
     });
+
+    // Notify on role change
+    try {
+      if (prev && role !== undefined && prev.role !== updatedUser.role) {
+        await createNotification(userId, {
+          title: 'User role updated',
+          message: `Your role has been changed to ${updatedUser.role}`,
+          priority: 'NORMAL',
+          type: 'SECURITY',
+        });
+      }
+    } catch {}
 
     return NextResponse.json({
       data: updatedUser,

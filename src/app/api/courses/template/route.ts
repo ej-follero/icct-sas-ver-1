@@ -1,14 +1,21 @@
 import { NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
 
 export async function GET() {
   try {
+    // Get available departments from database
+    const departments = await prisma.department.findMany({
+      where: { departmentStatus: 'ACTIVE' },
+      select: { departmentId: true, departmentName: true, departmentCode: true },
+      orderBy: { departmentName: 'asc' }
+    });
+
     // Define the template data for course import
     const templateData = [
       {
         name: 'Computer Science Fundamentals',
         code: 'CS101',
-        department: 'Computer Science',
-        departmentCode: 'CS',
+        departmentId: departments.find(d => d.departmentCode === 'CS')?.departmentId || 1,
         description: 'Introduction to computer science concepts and programming fundamentals',
         units: 3,
         status: 'ACTIVE',
@@ -18,8 +25,7 @@ export async function GET() {
       {
         name: 'Advanced Mathematics',
         code: 'MATH201',
-        department: 'Mathematics',
-        departmentCode: 'MATH',
+        departmentId: departments.find(d => d.departmentCode === 'MATH')?.departmentId || 2,
         description: 'Advanced calculus and linear algebra for engineering students',
         units: 4,
         status: 'ACTIVE',
@@ -29,8 +35,7 @@ export async function GET() {
       {
         name: 'Creative Writing Workshop',
         code: 'ENG150',
-        department: 'English',
-        departmentCode: 'ENG',
+        departmentId: departments.find(d => d.departmentCode === 'ENG')?.departmentId || 3,
         description: 'Developing creative writing skills through various literary forms',
         units: 2,
         status: 'ACTIVE',
@@ -39,8 +44,8 @@ export async function GET() {
       }
     ];
 
-    // Create CSV content
-    const headers = ['name', 'code', 'department', 'departmentCode', 'description', 'units', 'status', 'courseType', 'major'];
+    // Create CSV content with proper headers
+    const headers = ['name', 'code', 'departmentId', 'description', 'units', 'status', 'courseType', 'major'];
     const csvContent = [
       headers.join(','),
       ...templateData.map(row => 
