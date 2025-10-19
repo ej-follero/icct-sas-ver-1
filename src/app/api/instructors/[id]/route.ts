@@ -20,12 +20,13 @@ async function assertAdmin(request: NextRequest) {
 }
 
 // PATCH /api/instructors/[id] - update instructor
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const gate = await assertAdmin(request);
   if (!('ok' in gate) || gate.ok !== true) return gate.res;
   
   try {
-    const instructorId = parseInt(params.id);
+    const { id } = await params;
+    const instructorId = parseInt(id);
     if (isNaN(instructorId)) {
       return NextResponse.json({ error: 'Invalid instructor ID' }, { status: 400 });
     }
@@ -90,9 +91,9 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = params;
+  const { id } = await params;
   try {
     const instructorId = parseInt(id);
     if (isNaN(instructorId)) {
@@ -152,11 +153,11 @@ type PutBody = {
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const gate = await assertAdmin(request);
   if (!('ok' in gate) || gate.ok !== true) return gate.res;
-  const { id } = params;
+  const { id } = await params;
   try {
     const instructorId = parseInt(id);
     if (isNaN(instructorId)) {
