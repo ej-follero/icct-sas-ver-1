@@ -19,13 +19,13 @@ async function assertRole(request: NextRequest, allowed: Array<'SUPER_ADMIN' | '
   }
 }
 
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     // Authorization: allow ADMIN and INSTRUCTOR
     const gate = await assertRole(request, ['SUPER_ADMIN', 'ADMIN', 'INSTRUCTOR']);
     if (!('ok' in gate) || gate.ok !== true) return gate.res;
 
-    const { id } = params;
+    const { id } = await params;
     const event = await prisma.event.findFirst({
       where: { 
         eventId: parseInt(id),
@@ -88,13 +88,13 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
   }
 }
 
-export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     // Authorization: allow ADMIN and INSTRUCTOR
     const gate = await assertRole(request, ['SUPER_ADMIN', 'ADMIN', 'INSTRUCTOR']);
     if (!('ok' in gate) || gate.ok !== true) return gate.res;
 
-    const { id } = params;
+    const { id } = await params;
     const body = await request.json();
     const {
       title,
@@ -183,13 +183,13 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
   }
 }
 
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     // Authorization: allow ADMIN and INSTRUCTOR
     const gate = await assertRole(request, ['SUPER_ADMIN', 'ADMIN', 'INSTRUCTOR']);
     if (!('ok' in gate) || gate.ok !== true) return gate.res;
 
-    const { id } = params;
+    const { id } = await params;
     const body = await request.json();
     const {
       title,
@@ -277,13 +277,13 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   }
 }
 
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     // Authorization: allow ADMIN only
     const gate = await assertRole(request, ['SUPER_ADMIN', 'ADMIN']);
     if (!('ok' in gate) || gate.ok !== true) return gate.res;
 
-    const { id } = params;
+    const { id } = await params;
     
     // Check if event exists and is not already deleted
     const event = await prisma.event.findFirst({
