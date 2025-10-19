@@ -113,7 +113,7 @@
     "react-to-print": "^3.1.0",
     "react-virtualized-auto-sizer": "^1.0.26",
     "react-window": "^1.8.11",
-    "recharts": "^2.15.4",
+    "recharts": "^3.0.0",
     "recharts-to-png": "^3.0.1",
     "redis": "^5.8.2",
     "socket.io": "^4.8.1",
