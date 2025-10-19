@@ -998,11 +998,9 @@ export default function RFIDConfigPage() {
         <ExportDialog
           open={exportDialogOpen}
           onOpenChange={setExportDialogOpen}
-          selectedItems={readers}
+          dataCount={readers.length}
           entityType="reader"
-          entityLabel="reader"
-          exportColumns={readerColumns.map(col => ({ id: col.key, label: col.label, default: true }))}
-          onExport={async (options) => {
+          onExport={async (format, options) => {
             try {
               const cols = (options.columns as any[]).map((c: any) => {
                 const key = typeof c === 'string' ? c : c?.id;
@@ -1014,15 +1012,14 @@ export default function RFIDConfigPage() {
                 toast.error('No data to export');
                 return;
               }
-              const fmt = String(options.format || '').toLowerCase();
-              if (fmt === 'csv') {
+              if (format === 'csv') {
                 exportToCSV(dataSource as any, cols, 'rfid-readers.csv');
-              } else if (fmt === 'excel') {
+              } else if (format === 'excel') {
                 await exportToXLSX(dataSource as any, cols, 'rfid-readers.xlsx');
-              } else if (fmt === 'pdf') {
+              } else if (format === 'pdf') {
                 await exportToPDF(dataSource as any, cols, 'rfid-readers.pdf');
               }
-              toast.success(`Exported ${dataSource.length} record(s) to ${String(options.format).toUpperCase()}`);
+              toast.success(`Exported ${dataSource.length} record(s) to ${format.toUpperCase()}`);
             } catch (e: any) {
               toast.error(e?.message || 'Failed to export readers');
             }
