@@ -1205,34 +1205,27 @@ export default function RFIDLogsPage() {
         <ExportDialog
           open={exportDialogOpen}
           onOpenChange={setExportDialogOpen}
-          selectedItems={logs.filter(l => selectedIds.includes(l.id))}
+          dataCount={selectedIds.length > 0 ? selectedIds.length : filteredLogs.length}
           entityType="rfidLog"
-          entityLabel="log"
-          exportColumns={rfidLogColumns.map(col => ({ id: col.key, label: col.label, default: true }))}
-          onExport={async (options) => {
+          onExport={async (format, options) => {
             try {
-              const requested = (options.columns as any[]) || [];
-              const cols = requested
-                .map((c: any) => {
-                  const key = typeof c === 'string' ? c : c?.id;
-                  const found = rfidLogColumns.find(col => col.key === key);
-                  return found ? { id: found.key, label: found.label } : null;
-                })
-                .filter((c: any): c is { id: string; label: string } => Boolean(c));
+              const cols = (options.selectedColumns || []).map((key: string) => {
+                const found = rfidLogColumns.find(col => col.key === key);
+                return found ? { id: found.key, label: found.label } : null;
+              }).filter(Boolean) as { id: string; label: string }[];
               const dataSource = selectedIds.length > 0 ? logs.filter(l => selectedIds.includes(l.id)) : filteredLogs;
               if (dataSource.length === 0) {
                 toast.error('No data to export');
                 return;
               }
-              const fmt = String(options.format || '').toLowerCase();
-              if (fmt === 'csv') {
+              if (format === 'csv') {
                 exportToCSV(dataSource, cols, 'rfid-logs.csv');
-              } else if (fmt === 'excel') {
+              } else if (format === 'excel') {
                 await exportToXLSX(dataSource, cols, 'rfid-logs.xlsx');
-              } else if (fmt === 'pdf') {
+              } else if (format === 'pdf') {
                 await exportToPDF(dataSource, cols, 'rfid-logs.pdf');
               }
-              toast.success(`Exported ${dataSource.length} record(s) to ${String(options.format).toUpperCase()}`);
+              toast.success(`Exported ${dataSource.length} record(s) to ${format.toUpperCase()}`);
             } catch (e: any) {
               toast.error(e?.message || 'Failed to export logs');
             }
