@@ -22,9 +22,9 @@ async function assertAdmin(request: NextRequest) {
 // GET /api/courses/[id] - Get a specific course
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = params;
+  const { id } = await params;
   try {
     // Try to find by ID first
     let course = await prisma.courseOffering.findUnique({
@@ -114,11 +114,11 @@ export async function GET(
 // PUT /api/courses/[id] - Update a course
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const gate = await assertAdmin(request);
   if (!('ok' in gate) || gate.ok !== true) return gate.res;
-  const { id } = params;
+  const { id } = await params;
   try {
     const body = await request.json();
     const { name, code, department, description, units, status, courseType, major } = body;
@@ -232,11 +232,11 @@ export async function PUT(
 // DELETE /api/courses/[id] - Soft delete (archive) a course
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const gate = await assertAdmin(request);
   if (!('ok' in gate) || gate.ok !== true) return gate.res;
-  const { id } = params;
+  const { id } = await params;
   try {
     // Try to find by ID first
     let existingCourse = await prisma.courseOffering.findUnique({
@@ -287,11 +287,11 @@ export async function DELETE(
 // PATCH /api/courses/[id] - Update course status (e.g., restore from archived)
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const gate = await assertAdmin(request);
   if (!('ok' in gate) || gate.ok !== true) return gate.res;
-  const { id } = params;
+  const { id } = await params;
   try {
     const body = await request.json();
     const { status } = body;
