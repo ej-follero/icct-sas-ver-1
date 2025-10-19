@@ -1,5 +1,5 @@
 {
-  "buildCommand": "rm -rf .next && npm run build",
+  "buildCommand": "rm -rf .next && rm -rf node_modules/.cache && npm run build",
   "installCommand": "npm install --legacy-peer-deps --force",
   "framework": "nextjs",
   "functions": {
