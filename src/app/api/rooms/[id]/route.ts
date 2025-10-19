@@ -15,8 +15,9 @@ const roomSchema = z.object({
 });
 
 // GET handler
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params;
     // JWT Authentication
     const token = request.cookies.get('token')?.value;
     if (!token) {
@@ -47,7 +48,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     }
 
     const room = await prisma.room.findUnique({
-      where: { roomId: Number(params.id) },
+      where: { roomId: Number(id) },
       include: {
         SubjectSchedule: {
           include: {
@@ -68,8 +69,9 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 }
 
 // PUT handler (update room)
-export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params;
     // JWT Authentication - Admin only
     const token = request.cookies.get('token')?.value;
     if (!token) {
@@ -100,7 +102,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     }
 
     const body = await request.json();
-    const validatedData = roomSchema.parse({ ...body, roomId: Number(params.id) });
+    const validatedData = roomSchema.parse({ ...body, roomId: Number(id) });
     const { roomId, roomType, roomBuildingLoc, roomFloorLoc, ...rest } = validatedData;
     const updateData = {
       ...rest,
@@ -109,7 +111,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       roomFloorLoc: roomFloorLoc as any, // Prisma enum
     };
     const updatedRoom = await prisma.room.update({
-      where: { roomId: Number(params.id) },
+      where: { roomId: Number(id) },
       data: updateData,
     });
     return NextResponse.json(updatedRoom);
@@ -122,8 +124,9 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
 }
 
 // DELETE handler
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params;
     // JWT Authentication - Admin only
     const token = request.cookies.get('token')?.value;
     if (!token) {
@@ -154,7 +157,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
     }
 
     await prisma.room.delete({
-      where: { roomId: Number(params.id) },
+      where: { roomId: Number(id) },
     });
     return NextResponse.json({ success: true });
   } catch (error) {

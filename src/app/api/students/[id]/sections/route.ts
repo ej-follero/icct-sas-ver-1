@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params;
     const { sectionId } = await request.json();
-    const studentId = Number(params.id);
+    const studentId = Number(id);
     if (!studentId || !sectionId) {
       return NextResponse.json({ error: 'studentId and sectionId are required' }, { status: 400 });
     }
@@ -38,11 +39,12 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   }
 }
 
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params;
     const { searchParams } = new URL(request.url);
     const sectionId = Number(searchParams.get('sectionId'));
-    const studentId = Number(params.id);
+    const studentId = Number(id);
     if (!studentId || !sectionId) {
       return NextResponse.json({ error: 'studentId and sectionId are required' }, { status: 400 });
     }

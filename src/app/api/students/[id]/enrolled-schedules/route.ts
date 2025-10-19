@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
 // GET /api/students/:id/enrolled-schedules
-export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params;
     // JWT Authentication (SUPER_ADMIN, ADMIN, DEPARTMENT_HEAD, INSTRUCTOR)
     const token = _req.cookies.get('token')?.value;
     if (!token) {
@@ -26,7 +27,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
     }
 
-    const studentId = Number(params.id);
+    const studentId = Number(id);
     if (!studentId || !Number.isFinite(studentId)) {
       return NextResponse.json({ items: [] });
     }

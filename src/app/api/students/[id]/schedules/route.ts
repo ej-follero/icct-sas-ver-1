@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params;
     // JWT Authentication (SUPER_ADMIN, ADMIN, DEPARTMENT_HEAD, INSTRUCTOR)
     const token = request.cookies.get('token')?.value;
     if (!token) {
@@ -26,7 +27,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     }
 
     const { scheduleId, notes } = await request.json();
-    const studentId = Number(params.id);
+    const studentId = Number(id);
     if (!studentId || !scheduleId) {
       return NextResponse.json({ error: 'studentId and scheduleId are required' }, { status: 400 });
     }
@@ -53,8 +54,9 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   }
 }
 
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params;
     // JWT Authentication (SUPER_ADMIN, ADMIN, DEPARTMENT_HEAD, INSTRUCTOR)
     const token = request.cookies.get('token')?.value;
     if (!token) {
@@ -79,7 +81,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
 
     const { searchParams } = new URL(request.url);
     const scheduleId = Number(searchParams.get('scheduleId'));
-    const studentId = Number(params.id);
+    const studentId = Number(id);
     if (!studentId || !scheduleId) {
       return NextResponse.json({ error: 'studentId and scheduleId are required' }, { status: 400 });
     }
