@@ -1002,8 +1002,7 @@ export default function RFIDConfigPage() {
           entityType="reader"
           onExport={async (format, options) => {
             try {
-              const cols = (options.columns as any[]).map((c: any) => {
-                const key = typeof c === 'string' ? c : c?.id;
+              const cols = (options.selectedColumns || []).map((key: string) => {
                 const found = readerColumns.find(col => col.key === key);
                 return found ? { id: found.key, label: found.label } : null;
               }).filter(Boolean) as { id: string; label: string }[];
