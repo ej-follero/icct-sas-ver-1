@@ -4,9 +4,10 @@ import { createNotification } from '@/lib/notifications';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     // Auth: allow SUPER_ADMIN, ADMIN, DEPARTMENT_HEAD, INSTRUCTOR
     const token = request.cookies.get('token')?.value;
     if (!token) return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
@@ -20,7 +21,7 @@ export async function GET(
     if (!allowedRoles.includes(user.role)) return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
 
     const reader = await prisma.rFIDReader.findUnique({
-      where: { readerId: parseInt(params.id) },
+      where: { readerId: parseInt(id) },
     });
     if (!reader) return NextResponse.json({ error: "Not found" }, { status: 404 });
     return NextResponse.json(reader);
@@ -31,9 +32,10 @@ export async function GET(
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     // Auth: admin-only
     const token = request.cookies.get('token')?.value;
     if (!token) return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
@@ -46,7 +48,7 @@ export async function PATCH(
     if (user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN') return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
 
     const body = await request.json().catch(() => ({}));
-    const readerId = Number(params.id);
+    const readerId = Number(id);
     if (isNaN(readerId)) return NextResponse.json({ error: 'Invalid reader id' }, { status: 400 });
 
     // Check if reader exists
@@ -156,9 +158,10 @@ export async function PATCH(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     // Auth: admin-only
     const token = request.cookies.get('token')?.value;
     if (!token) return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
@@ -172,7 +175,7 @@ export async function PUT(
 
     const data = await request.json();
     const reader = await prisma.rFIDReader.update({
-      where: { readerId: parseInt(params.id) },
+      where: { readerId: parseInt(id) },
       data: {
         deviceId: data.deviceId,
         deviceName: data.deviceName,
@@ -192,9 +195,10 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     // Auth: admin-only
     const token = request.cookies.get('token')?.value;
     if (!token) return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
@@ -206,7 +210,7 @@ export async function DELETE(
     if (!user || user.status !== 'ACTIVE') return NextResponse.json({ error: 'User not found or inactive' }, { status: 404 });
     if (user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN') return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
 
-    const readerId = Number(params.id);
+    const readerId = Number(id);
     if (isNaN(readerId)) return NextResponse.json({ error: 'Invalid reader id' }, { status: 400 });
     const toDelete = await prisma.rFIDReader.delete({ where: { readerId } });
     try {
