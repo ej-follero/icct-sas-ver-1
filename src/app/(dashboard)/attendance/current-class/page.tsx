@@ -364,7 +364,7 @@ export default function CurrentClassAttendance() {
               <Timer className="h-4 w-4 text-orange-500" />
               <div>
                 <p className="text-sm font-medium">{data.classInfo.timeRemaining}</p>
-                <p className="text-xs text-muted-foreground">{data.schedule.startTime} - {data.schedule.endTime}</p>
+                <p className="text-xs text-muted-foreground">{data.classInfo.startTime} - {data.classInfo.endTime}</p>
               </div>
             </div>
           </div>

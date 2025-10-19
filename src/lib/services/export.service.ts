@@ -46,29 +46,20 @@ export class ExportService {
         }).join(','));
         const csv = [headers.join(','), ...rows].join('\n');
 
-        const { writeFile, mkdir } = await import('fs/promises');
-        const { join } = await import('path');
-        const outDir = join(process.cwd(), 'public', 'reports');
-        await mkdir(outDir, { recursive: true });
-        const outfile = join(process.cwd(), 'public', relPath);
-        await writeFile(outfile, csv, 'utf8');
-
-        const fileSize = Buffer.byteLength(csv, 'utf8');
+        // For client-side, return the CSV data for download
+        const fileSize = new Blob([csv]).size;
 
         return {
           success: true,
           filename: `${filename}.${format}`,
-          filePath: relPath,
+          data: csv,
           fileSize
         };
       }
 
       // PDF
       if (format === 'pdf') {
-        const { mkdir, writeFile } = await import('fs/promises');
-        const { join } = await import('path');
-        const outDir = join(process.cwd(), 'public', 'reports');
-        await mkdir(outDir, { recursive: true });
+        // For client-side, prepare PDF data for download
 
         const { jsPDF } = await import('jspdf');
         const autoTable = (await import('jspdf-autotable')).default;
@@ -142,26 +133,20 @@ export class ExportService {
           }
         });
 
-        const pdfBuffer = Buffer.from(doc.output('arraybuffer'));
-        const relPdf = `reports/${filename}_${timestamp}.pdf`;
-        const outPdf = join(process.cwd(), 'public', relPdf);
-        await writeFile(outPdf, pdfBuffer);
-
+        const pdfData = doc.output('datauristring');
+        
         return {
           success: true,
           filename: `${filename}.pdf`,
-          filePath: relPdf,
-          fileSize: pdfBuffer.byteLength
+          data: pdfData,
+          fileSize: new Blob([pdfData]).size
         };
       }
 
       // Excel (XLSX)
       if (format === 'excel') {
       const XLSX = await import('xlsx');
-        const { mkdir, writeFile } = await import('fs/promises');
-        const { join } = await import('path');
-        const outDir = join(process.cwd(), 'public', 'reports');
-        await mkdir(outDir, { recursive: true });
+        // For client-side, prepare PDF data for download
 
         // Convert data to sheet with selected columns
         const rows = data.map(row => {
@@ -177,16 +162,14 @@ export class ExportService {
         const ws = XLSX.utils.json_to_sheet(rows);
         XLSX.utils.book_append_sheet(wb, ws, 'Report');
 
-        const relXlsx = `reports/${filename}_${timestamp}.xlsx`;
-        const outXlsx = join(process.cwd(), 'public', relXlsx);
-        const wbout = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
-        await writeFile(outXlsx, wbout);
+        const wbout = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
+        const excelData = new Uint8Array(wbout);
 
         return {
           success: true,
           filename: `${filename}.xlsx`,
-          filePath: relXlsx,
-          fileSize: (wbout as Buffer).length
+          data: excelData,
+          fileSize: excelData.length
         };
       }
 
