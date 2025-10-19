@@ -2,8 +2,8 @@
 import { PrismaClient } from '@prisma/client';
 import { ensureValidEnvironment } from './env-validation';
 
-// Validate environment before initializing Prisma (only in production)
-if (process.env.NODE_ENV === 'production') {
+// Validate environment before initializing Prisma (only in production and not during build)
+if (process.env.NODE_ENV === 'production' && !process.env.NEXT_PHASE) {
   ensureValidEnvironment();
 }
 

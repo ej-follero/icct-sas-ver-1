@@ -131,6 +131,12 @@ export function validateEnvironment(): ValidationResult {
 }
 
 export function ensureValidEnvironment(): void {
+  // Skip validation during build phase
+  if (process.env.NEXT_PHASE === 'phase-production-build') {
+    console.log('⏭️  Skipping environment validation during build phase');
+    return;
+  }
+
   const validation = validateEnvironment();
   
   if (validation.warnings.length > 0) {
