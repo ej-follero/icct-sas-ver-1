@@ -50,8 +50,6 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   }
 }
 
-import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
 import { InstructorType, Status, UserGender } from '@prisma/client';
 
 async function assertAdmin(request: NextRequest) {
