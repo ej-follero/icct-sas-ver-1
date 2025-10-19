@@ -18,10 +18,11 @@ Create or update your local `.env` file with placeholders (never commit real cre
 
 ```bash
 # Email Configuration (SMTP) - Gmail Setup
+# ⚠️  WARNING: These are PLACEHOLDER values - replace with real credentials in .env only
 SMTP_HOST="smtp.gmail.com"
 SMTP_PORT="587"
-SMTP_USER="<your-gmail>@gmail.com"             # set locally in .env only
-SMTP_PASS="<your-16-char-app-password>"       # set locally in .env only
+SMTP_USER="PLACEHOLDER_GMAIL_ADDRESS"          # Replace with your actual Gmail
+SMTP_PASS="PLACEHOLDER_APP_PASSWORD"           # Replace with your actual app password
 SMTP_FROM="noreply@icct.edu.ph"
 ```
 

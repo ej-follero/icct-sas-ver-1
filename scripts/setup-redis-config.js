@@ -61,24 +61,24 @@ if (fs.existsSync(envPath)) {
 DATABASE_URL="postgresql://admin:admin123@localhost:5433/icct-sas"
 
 # JWT Configuration
-JWT_SECRET="your-jwt-secret-key-here-change-in-production"
+JWT_SECRET="PLACEHOLDER_JWT_SECRET_CHANGE_IN_PRODUCTION"
 
 # Application Configuration
 NEXT_PUBLIC_APP_URL="http://localhost:3000"
 NODE_ENV="development"
 
-# Email Configuration (SMTP)
+# Email Configuration (SMTP) - PLACEHOLDER VALUES ONLY
 SMTP_HOST="smtp.gmail.com"
 SMTP_PORT="587"
-SMTP_USER="your-email@gmail.com"
-SMTP_PASS="your-app-password"
+SMTP_USER="PLACEHOLDER_EMAIL_USERNAME"
+SMTP_PASS="PLACEHOLDER_EMAIL_PASSWORD"
 SMTP_FROM="noreply@icct.edu.ph"
 ${redisConfig}
 
-# Security Configuration
-SESSION_SECRET="development-session-key-123456789012345678901234567890"
-COOKIE_SECRET="development-cookie-key-1234567890123456789012345678901"
-CSRF_SECRET="development-csrf-key-12345678901234567890123456789012"
+# Security Configuration - PLACEHOLDER VALUES FOR DEVELOPMENT ONLY
+SESSION_SECRET="PLACEHOLDER_SESSION_SECRET_DEVELOPMENT_ONLY"
+COOKIE_SECRET="PLACEHOLDER_COOKIE_SECRET_DEVELOPMENT_ONLY"
+CSRF_SECRET="PLACEHOLDER_CSRF_SECRET_DEVELOPMENT_ONLY"
 
 # Rate Limiting
 RATE_LIMIT_WINDOW="900000"
