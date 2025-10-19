@@ -2180,7 +2180,7 @@ async function main() {
         name: role.name,
         description: role.description,
         permissions: role.permissions,
-        status: role.status,
+        status: role.status as any,
         totalUsers: 0
       }
     });
