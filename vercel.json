@@ -1,6 +1,6 @@
 {
-  "buildCommand": "npm install --legacy-peer-deps && npm run build",
-  "installCommand": "npm install --legacy-peer-deps",
+  "buildCommand": "npm cache clean --force && npm ci --legacy-peer-deps && npm run build",
+  "installCommand": "npm cache clean --force && npm ci --legacy-peer-deps",
   "framework": "nextjs",
   "functions": {
     "src/app/api/**/*.ts": {
@@ -8,11 +8,13 @@
     }
   },
   "env": {
-    "NODE_ENV": "production"
+    "NODE_ENV": "production",
+    "NODE_DEBUG": "http,https,net"
   },
   "build": {
     "env": {
-      "NODE_ENV": "production"
+      "NODE_ENV": "production",
+      "NODE_DEBUG": "http,https,net"
     }
   },
   "ignoreCommand": "git diff --quiet HEAD^ HEAD ./"
