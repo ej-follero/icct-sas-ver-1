@@ -17,11 +17,8 @@ export const UserMenu: React.FC<UserMenuProps> = ({
   open,
   onOpenChange,
 }) => {
-  // Validate props
-  if (!onOpenChange) {
-    console.error('UserMenu: Missing required props');
-    return null;
-  }
+  // Validate props without breaking hook order
+  const safeOnOpenChange = onOpenChange ?? (() => {});
 
   const { user, profile, logout, loading } = useUser();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -55,17 +52,7 @@ export const UserMenu: React.FC<UserMenuProps> = ({
     }
   }, [logout]);
 
-  if (loading) {
-    return (
-      <div className="hidden sm:flex items-center gap-2 mr-1">
-        <div className="w-9 h-9 bg-gray-200 rounded-full animate-pulse"></div>
-        <div className="flex flex-col items-end">
-          <div className="w-20 h-4 bg-gray-200 rounded animate-pulse"></div>
-          <div className="w-16 h-3 bg-gray-200 rounded animate-pulse mt-1"></div>
-        </div>
-      </div>
-    );
-  }
+  const isLoading = loading;
 
   // Memoize user display information
   const userDisplayInfo = useMemo(() => {
@@ -80,12 +67,26 @@ export const UserMenu: React.FC<UserMenuProps> = ({
     };
   }, [user, profile]);
 
-  if (!user) {
+  const hasUser = Boolean(user);
+
+  if (isLoading) {
+    return (
+      <div className="hidden sm:flex items-center gap-2 mr-1">
+        <div className="w-9 h-9 bg-gray-200 rounded-full animate-pulse"></div>
+        <div className="flex flex-col items-end">
+          <div className="w-20 h-4 bg-gray-200 rounded animate-pulse"></div>
+          <div className="w-16 h-3 bg-gray-200 rounded animate-pulse mt-1"></div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!hasUser) {
     return null;
   }
 
   return (
-    <Popover open={open} onOpenChange={onOpenChange}>
+    <Popover open={open} onOpenChange={safeOnOpenChange}>
       <PopoverTrigger asChild>
         <div 
           className="hidden sm:flex items-center mr-1 group relative cursor-pointer select-none" 
