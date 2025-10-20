@@ -215,6 +215,8 @@ export default function LiveAttendanceFeed() {
   // Listen for MQTT messages and refresh data when new attendance records are created
   const [lastProcessedMessageId, setLastProcessedMessageId] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  // Track rejected/unrecognized scans from MQTT feedback
+  const [rejectedScans, setRejectedScans] = useState<Array<{ time: string; rfid?: string; message: string }>>([]);
   
   useEffect(() => {
     if (mqttClient?.messages && mqttClient.messages.length > 0) {
@@ -235,6 +237,15 @@ export default function LiveAttendanceFeed() {
           await fetchData();
           setIsRefreshing(false);
         }, 1000);
+      }
+      // Capture feedback for invalid/unrecognized/error cards
+      if (messageId !== lastProcessedMessageId && latestMessage.topic === '/attendance/feedback') {
+        const status = (latestMessage as any)?.status;
+        const rfid = (latestMessage as any)?.value;
+        const message = (latestMessage as any)?.message || (status === 'unrecognized' ? 'Unrecognized card' : 'Feedback');
+        if (status === 'unrecognized' || status === 'error') {
+          setRejectedScans((prev) => [{ time: new Date().toISOString(), rfid, message }, ...prev].slice(0, 10));
+        }
       }
     }
   }, [mqttClient?.messages, lastProcessedMessageId, isRefreshing]);
@@ -776,6 +787,28 @@ export default function LiveAttendanceFeed() {
               sublabel="Students marked absent"
             />
           </div>
+        )}
+
+        {/* Rejected scans (invalid/unregistered/not on schedule) */}
+        {rejectedScans.length > 0 && (
+          <Alert className="border-yellow-200 bg-yellow-50">
+            <AlertDescription>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="font-semibold text-yellow-800">Recent rejected scans</div>
+                  <div className="text-xs text-yellow-700">Unrecognized card or not on schedule</div>
+                </div>
+                <Button variant="outline" size="sm" onClick={() => setRejectedScans([])} className="rounded">Clear</Button>
+              </div>
+              <ul className="mt-2 space-y-1">
+                {rejectedScans.slice(0, 5).map((r, idx) => (
+                  <li key={`${r.time}-${idx}`} className="text-xs text-yellow-800">
+                    {new Date(r.time).toLocaleTimeString()} – {r.message}{r.rfid ? ` (RFID: ${r.rfid})` : ''}
+                  </li>
+                ))}
+              </ul>
+            </AlertDescription>
+          </Alert>
         )}
 
         {/* Quick Actions Panel */}

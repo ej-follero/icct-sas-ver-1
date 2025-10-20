@@ -109,6 +109,15 @@ export default function EditStudentDialog({
     onClose?: () => void;
   }>({ open: false, title: '' });
 
+  // Precompute allowed courseIds for the selected department to filter sections by department
+  const courseIdsForSelectedDept = useMemo(() => {
+    if (!selectedDepartmentId) return null;
+    const ids = courses
+      .filter(c => c.department === selectedDepartmentId)
+      .map(c => Number(c.id));
+    return new Set(ids);
+  }, [courses, selectedDepartmentId]);
+
   // Load sections when dialog opens
   useEffect(() => {
     const loadSections = async () => {
@@ -120,7 +129,27 @@ export default function EditStudentDialog({
           throw new Error(`Failed to load sections (HTTP ${res.status})`);
         }
         const json = await res.json();
-        setSections(Array.isArray(json) ? json : []);
+        // Normalize various API response shapes to a consistent array
+        const items = Array.isArray(json)
+          ? json
+          : Array.isArray(json?.data)
+            ? json.data
+            : Array.isArray(json?.sections)
+              ? json.sections
+              : [];
+        // Ensure fields we rely on exist with consistent names/types
+        const normalized = (items as Array<any>).map((s) => ({
+          sectionId: Number(s.sectionId ?? s.id),
+          sectionName: String(s.sectionName ?? s.name ?? ''),
+          courseId: Number(s.courseId ?? s.Course?.courseId ?? 0),
+          courseName: s.courseName ?? s.Course?.courseName,
+          academicYear: s.academicYear,
+          semester: s.semester,
+          yearLevel: Number(s.yearLevel ?? 0),
+          currentEnrollment: Number(s.currentEnrollment ?? 0),
+          sectionCapacity: Number(s.sectionCapacity ?? s.capacity ?? 0),
+        }));
+        setSections(normalized);
       } catch (e) {
         // non-blocking; keep list empty
         console.warn('Failed to fetch sections', e);
@@ -487,12 +516,19 @@ export default function EditStudentDialog({
                     <SelectContent>
                       {sections
                         .filter(s => {
-                          // Filter by selected course id
-                          const byCourse = selectedCourseId ? String((s as any).courseId ?? '') === selectedCourseId : true;
-                          // Filter by year level if selected
+                          // 1) Year-level filter (primary)
                           const ylNum = getYearLevelNumber(formData.yearLevel);
                           const byYear = ylNum ? Number((s as any).yearLevel) === ylNum : true;
-                          return byCourse && byYear;
+                          if (!byYear) return false;
+
+                          // 2) Department filter via courseId mapping
+                          const courseIdNum = Number((s as any).courseId ?? 0);
+                          const byDept = courseIdsForSelectedDept ? courseIdsForSelectedDept.has(courseIdNum) : true;
+                          if (!byDept) return false;
+
+                          // 3) Specific course filter (if chosen)
+                          const byCourse = selectedCourseId ? String(courseIdNum) === selectedCourseId : true;
+                          return byCourse;
                         })
                         .map(s => (
                           <SelectItem key={s.sectionId} value={String(s.sectionId)}>

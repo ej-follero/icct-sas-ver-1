@@ -53,6 +53,9 @@ export function MQTTProvider({ children }: { children: ReactNode }) {
   const [mode, setMode] = useState<"attendance" | "registration">("attendance");
   const [messages, setMessages] = useState<MQTTContextState["messages"]>([]);
   const [cardId, setcardId] = useState<string>();
+  // Double-tap suppression state (per-RFID cooldown)
+  const lastScanAtRef = React.useRef<Record<string, number>>({});
+  const SCAN_COOLDOWN_MS = 3000; // 3 seconds
 
   useEffect(() => {
     // Check if we're in the browser environment
@@ -162,6 +165,27 @@ export function MQTTProvider({ children }: { children: ReactNode }) {
           console.log('🔍 RFID Tag being scanned:', data.rfid);
           console.log('🔍 Reader ID:', data.readerId);
           console.log('🔍 Location:', data.location);
+          // Client-side dedupe: suppress rapid double taps
+          try {
+            const now = Date.now();
+            const last = lastScanAtRef.current[data.rfid];
+            if (last && now - last < SCAN_COOLDOWN_MS) {
+              console.log('⏱️ Duplicate tap suppressed within cooldown window');
+              if (client.connected) {
+                client.publish(
+                  MQTT_TOPIC.FEEDBACK,
+                  JSON.stringify({
+                    topic: MQTT_TOPIC.FEEDBACK,
+                    message: 'Already scanned',
+                    status: 'recognized',
+                    value: data.rfid,
+                  }),
+                );
+              }
+              return;
+            }
+            lastScanAtRef.current[data.rfid] = now;
+          } catch {}
           
           // Send directly to attendance API - it now handles both Student.rfidTag and RFIDTags.tagNumber
           fetch('/api/attendance/mqtt', {
@@ -188,24 +212,34 @@ export function MQTTProvider({ children }: { children: ReactNode }) {
                     MQTT_TOPIC.FEEDBACK,
                     JSON.stringify({
                       topic: MQTT_TOPIC.FEEDBACK,
-                      message: "Recorded!",
+                      message: result.duplicate ? 'Already scanned' : 'Recorded!',
+                      status: "recognized",   // 👈 added status field
                       value: data.rfid,
                     }),
                   );
                 }
-                toast.success('Attendance recorded');
+                
+                toast.success(result.duplicate ? 'Already scanned' : 'Attendance recorded');
               } else {
-                console.error('❌ Attendance record failed:', result.error);
-                console.log('💡 Check if the RFID tag is properly assigned to a student');
                 const errMsg = typeof result.error === 'string' ? result.error : 'Failed to record attendance';
-                toast.error(`${errMsg}${data?.rfid ? ` (RFID: ${data.rfid})` : ''}`);
+                const isUnrecognized = /not\s*found/i.test(errMsg);
+                if (isUnrecognized) {
+                  console.warn('⚠️ Unrecognized card:', errMsg);
+                  const display = `Unrecognized card${data?.rfid ? ` (RFID: ${data.rfid})` : ''}`;
+                  // softer UX for unrecognized cards
+                  toast.info(display);
+                } else {
+                  console.error('❌ Attendance record failed:', errMsg);
+                  toast.error(`${errMsg}${data?.rfid ? ` (RFID: ${data.rfid})` : ''}`);
+                }
                 // error feedback
                 if (client.connected) {
                   client.publish(
                     MQTT_TOPIC.FEEDBACK,
                     JSON.stringify({
                       topic: MQTT_TOPIC.FEEDBACK,
-                      message: errMsg.includes('not found') ? 'Unrecognized card' : 'Error',
+                      message: /not\s*found/i.test(errMsg) ? 'Unrecognized card' : 'Error',
+                      status: "unrecognized",
                       value: data.rfid,
                     }),
                   );
@@ -221,6 +255,7 @@ export function MQTTProvider({ children }: { children: ReactNode }) {
                   JSON.stringify({
                     topic: MQTT_TOPIC.FEEDBACK,
                     message: 'Service error',
+                    status: "error",
                     value: data.rfid,
                   }),
                 );
@@ -234,14 +269,16 @@ export function MQTTProvider({ children }: { children: ReactNode }) {
         ) {
           setcardId(data.rfid);
           setMessages((current) => [...current, { topic, ...data }]);
-          
-          // Send feedback for registration mode
+        
+          // Check if card exists in your DB (optional: via fetch)
+          // For now we'll just send recognized status by default
           if (client.connected) {
             client.publish(
               MQTT_TOPIC.FEEDBACK,
               JSON.stringify({
                 topic: MQTT_TOPIC.FEEDBACK,
                 message: "Card ready for registration",
+                status: "recognized",    // 👈 added status
                 value: data.rfid,
               }),
             );
