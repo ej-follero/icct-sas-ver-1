@@ -1,6 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
   BarChart3, 
   TrendingUp, 
@@ -17,6 +21,7 @@ import {
   Eye,
   Filter
 } from "lucide-react";
+import { ICCT_CLASSES } from "@/lib/colors";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, CartesianGrid, Legend, PieChart, Pie, Cell } from "recharts";
 
 interface AnalyticsData {
@@ -24,256 +29,369 @@ interface AnalyticsData {
   title: string;
   value: number;
   change: number;
-  trend: 'up' | 'down' | 'stable';
+  changeType: 'increase' | 'decrease';
   icon: React.ReactNode;
   color: string;
 }
 
-const mockAnalyticsData: AnalyticsData[] = [
-  {
-    id: 'attendance-rate',
-    title: 'Overall Attendance Rate',
-    value: 87.5,
-    change: 2.3,
-    trend: 'up',
-    icon: <CheckCircle className="w-5 h-5" />,
-    color: 'text-green-600'
-  },
-  {
-    id: 'total-students',
-    title: 'Total Students',
-    value: 1250,
-    change: 5.2,
-    trend: 'up',
-    icon: <Users className="w-5 h-5" />,
-    color: 'text-blue-600'
-  },
-  {
-    id: 'active-classes',
-    title: 'Active Classes',
-    value: 45,
-    change: -1.2,
-    trend: 'down',
-    icon: <School className="w-5 h-5" />,
-    color: 'text-purple-600'
-  },
-  {
-    id: 'late-arrivals',
-    title: 'Late Arrivals Today',
-    value: 23,
-    change: -8.5,
-    trend: 'down',
-    icon: <Clock className="w-5 h-5" />,
-    color: 'text-yellow-600'
-  }
-];
+interface TrendData {
+  date: string;
+  present: number;
+  late: number;
+  absent: number;
+  total: number;
+}
 
-const mockAttendanceData = [
-  { name: 'Mon', attendance: 85, late: 12, absent: 8 },
-  { name: 'Tue', attendance: 88, late: 10, absent: 7 },
-  { name: 'Wed', attendance: 92, late: 6, absent: 5 },
-  { name: 'Thu', attendance: 89, late: 8, absent: 6 },
-  { name: 'Fri', attendance: 91, late: 5, absent: 4 },
-  { name: 'Sat', attendance: 87, late: 9, absent: 7 },
-  { name: 'Sun', attendance: 90, late: 7, absent: 5 }
-];
-
-const mockClassPerformance = [
-  { name: 'Mathematics', attendance: 95, students: 30 },
-  { name: 'Science', attendance: 88, students: 28 },
-  { name: 'English', attendance: 92, students: 25 },
-  { name: 'History', attendance: 85, students: 22 },
-  { name: 'Physics', attendance: 90, students: 20 }
+const mockTrendData: TrendData[] = [
+  { date: 'Mon', present: 245, late: 12, absent: 8, total: 265 },
+  { date: 'Tue', present: 238, late: 15, absent: 12, total: 265 },
+  { date: 'Wed', present: 252, late: 8, absent: 5, total: 265 },
+  { date: 'Thu', present: 240, late: 18, absent: 7, total: 265 },
+  { date: 'Fri', present: 248, late: 10, absent: 7, total: 265 },
+  { date: 'Sat', present: 0, late: 0, absent: 0, total: 0 },
+  { date: 'Sun', present: 0, late: 0, absent: 0, total: 0 },
 ];
 
 const mockDepartmentData = [
-  { name: 'Engineering', value: 45, color: '#3b82f6' },
-  { name: 'Business', value: 30, color: '#10b981' },
-  { name: 'Arts', value: 15, color: '#f59e0b' },
-  { name: 'Science', value: 10, color: '#ef4444' }
+  { name: 'Computer Science', attendance: 94.2, students: 85 },
+  { name: 'Information Technology', attendance: 91.8, students: 72 },
+  { name: 'Engineering', attendance: 89.5, students: 68 },
+  { name: 'Business', attendance: 87.3, students: 45 },
+  { name: 'Arts & Sciences', attendance: 92.1, students: 38 },
 ];
 
-export default function AnalyticsDashboard() {
-  const [selectedPeriod, setSelectedPeriod] = useState('week');
-  const [isLoading, setIsLoading] = useState(false);
+const mockRFIDData = [
+  { name: 'Active Tags', value: 245, color: '#10b981' },
+  { name: 'Inactive Tags', value: 20, color: '#f59e0b' },
+  { name: 'Lost Tags', value: 5, color: '#ef4444' },
+];
 
-  const handleRefresh = () => {
-    setIsLoading(true);
-    setTimeout(() => setIsLoading(false), 1000);
+const analyticsCards: AnalyticsData[] = [
+  {
+    id: '1',
+    title: 'Overall Attendance Rate',
+    value: 92.4,
+    change: 2.1,
+    changeType: 'increase',
+    icon: <CheckCircle className="h-5 w-5" />,
+    color: 'text-green-600'
+  },
+  {
+    id: '2',
+    title: 'Total Students',
+    value: 308,
+    change: 5,
+    changeType: 'increase',
+    icon: <Users className="h-5 w-5" />,
+    color: 'text-blue-600'
+  },
+  {
+    id: '3',
+    title: 'Late Arrivals Today',
+    value: 15,
+    change: -3,
+    changeType: 'decrease',
+    icon: <Clock className="h-5 w-5" />,
+    color: 'text-yellow-600'
+  },
+  {
+    id: '4',
+    title: 'Absent Students',
+    value: 8,
+    change: -2,
+    changeType: 'decrease',
+    icon: <AlertTriangle className="h-5 w-5" />,
+    color: 'text-red-600'
+  }
+];
+
+export default function AnalyticsDashboardPage() {
+  const [timeRange, setTimeRange] = useState('week');
+  const [selectedDepartment, setSelectedDepartment] = useState('all');
+
+  const getChangeColor = (changeType: 'increase' | 'decrease') => {
+    return changeType === 'increase' ? 'text-green-600' : 'text-red-600';
+  };
+
+  const getChangeIcon = (changeType: 'increase' | 'decrease') => {
+    return changeType === 'increase' ? '↗' : '↘';
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="container mx-auto p-6 space-y-6">
       {/* Header */}
-      <div className="bg-white border-b border-gray-200">
-        <div className="px-8 py-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">Analytics Dashboard</h1>
-              <p className="text-gray-600 mt-1">
-                Comprehensive attendance and performance insights
-              </p>
-            </div>
-            <div className="flex items-center gap-4">
-              <select
-                value={selectedPeriod}
-                onChange={(e) => setSelectedPeriod(e.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="week">This Week</option>
-                <option value="month">This Month</option>
-                <option value="quarter">This Quarter</option>
-                <option value="year">This Year</option>
-              </select>
-              <button
-                onClick={handleRefresh}
-                disabled={isLoading}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
-              >
-                <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-                Refresh
-              </button>
-              <button className="flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors">
-                <Download className="w-4 h-4" />
-                Export
-              </button>
-            </div>
-          </div>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Analytics Dashboard</h1>
+          <p className="text-gray-600 mt-1">Comprehensive insights and real-time analytics for your institution</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <select
+            value={timeRange}
+            onChange={(e) => setTimeRange(e.target.value)}
+            className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
+          >
+            <option value="today">Today</option>
+            <option value="week">This Week</option>
+            <option value="month">This Month</option>
+            <option value="semester">This Semester</option>
+          </select>
+          <Button variant="outline" size="sm">
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Refresh
+          </Button>
+          <Button variant="outline" size="sm">
+            <Download className="w-4 h-4 mr-2" />
+            Export
+          </Button>
         </div>
       </div>
 
-      {/* Key Metrics */}
-      <div className="p-8">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          {mockAnalyticsData.map((metric) => (
-            <div key={metric.id} className="bg-white rounded-2xl border border-gray-200 shadow-lg p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className={`p-3 rounded-lg bg-gray-50 ${metric.color}`}>
-                  {metric.icon}
-                </div>
-                <div className={`flex items-center gap-1 text-sm ${
-                  metric.trend === 'up' ? 'text-green-600' : 
-                  metric.trend === 'down' ? 'text-red-600' : 'text-gray-600'
-                }`}>
-                  <TrendingUp className={`w-4 h-4 ${
-                    metric.trend === 'down' ? 'rotate-180' : ''
-                  }`} />
-                  {Math.abs(metric.change)}%
-                </div>
-              </div>
-              <div>
-                <p className="text-sm text-gray-500 mb-1">{metric.title}</p>
-                <p className="text-2xl font-bold text-gray-900">{metric.value}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Charts Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Attendance Trend */}
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-lg p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-semibold text-gray-900">Attendance Trend</h3>
-              <div className="flex items-center gap-2">
-                <div className="flex items-center gap-1">
-                  <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                  <span className="text-sm text-gray-600">Present</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
-                  <span className="text-sm text-gray-600">Late</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-                  <span className="text-sm text-gray-600">Absent</span>
-                </div>
-              </div>
-            </div>
-            <div className="h-80">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={mockAttendanceData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" />
-                  <YAxis />
-                  <Tooltip />
-                  <Line type="monotone" dataKey="attendance" stroke="#10b981" strokeWidth={2} />
-                  <Line type="monotone" dataKey="late" stroke="#f59e0b" strokeWidth={2} />
-                  <Line type="monotone" dataKey="absent" stroke="#ef4444" strokeWidth={2} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          {/* Class Performance */}
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-lg p-6">
-            <h3 className="text-xl font-semibold text-gray-900 mb-6">Class Performance</h3>
-            <div className="h-80">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={mockClassPerformance}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" />
-                  <YAxis />
-                  <Tooltip />
-                  <Bar dataKey="attendance" fill="#3b82f6" />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          {/* Department Distribution */}
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-lg p-6">
-            <h3 className="text-xl font-semibold text-gray-900 mb-6">Department Distribution</h3>
-            <div className="h-80">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={mockDepartmentData}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                    outerRadius={80}
-                    fill="#8884d8"
-                    dataKey="value"
-                  >
-                    {mockDepartmentData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          {/* Recent Activity */}
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-lg p-6">
-            <h3 className="text-xl font-semibold text-gray-900 mb-6">Recent Activity</h3>
-            <div className="space-y-4">
-              {[
-                { action: "New student enrolled", time: "2 minutes ago", type: "success" },
-                { action: "Attendance marked for Math 101", time: "5 minutes ago", type: "info" },
-                { action: "Late arrival recorded", time: "10 minutes ago", type: "warning" },
-                { action: "Absence reported for Science", time: "15 minutes ago", type: "error" },
-                { action: "System backup completed", time: "1 hour ago", type: "info" }
-              ].map((activity, index) => (
-                <div key={index} className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 transition-colors">
-                  <div className={`w-2 h-2 rounded-full ${
-                    activity.type === 'success' ? 'bg-green-500' :
-                    activity.type === 'warning' ? 'bg-yellow-500' :
-                    activity.type === 'error' ? 'bg-red-500' : 'bg-blue-500'
-                  }`}></div>
-                  <div className="flex-1">
-                    <p className="text-sm text-gray-900">{activity.action}</p>
-                    <p className="text-xs text-gray-500">{activity.time}</p>
+      {/* Key Metrics Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {analyticsCards.map((card) => (
+          <Card key={card.id} className="hover:shadow-lg transition-shadow">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">{card.title}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{card.value}%</p>
+                  <div className="flex items-center gap-1 mt-2">
+                    <span className={`text-sm font-medium ${getChangeColor(card.changeType)}`}>
+                      {getChangeIcon(card.changeType)} {Math.abs(card.change)}%
+                    </span>
+                    <span className="text-sm text-gray-500">vs last period</span>
                   </div>
                 </div>
-              ))}
-            </div>
-          </div>
-        </div>
+                <div className={`p-3 rounded-lg bg-gray-100 ${card.color}`}>
+                  {card.icon}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
       </div>
+
+      {/* Main Analytics Section */}
+      <Tabs defaultValue="overview" className="space-y-6">
+        <TabsList className="grid w-full grid-cols-4">
+          <TabsTrigger value="overview" className="flex items-center gap-2">
+            <BarChart3 className="h-4 w-4" />
+            Overview
+          </TabsTrigger>
+          <TabsTrigger value="trends" className="flex items-center gap-2">
+            <TrendingUp className="h-4 w-4" />
+            Trends
+          </TabsTrigger>
+          <TabsTrigger value="departments" className="flex items-center gap-2">
+            <School className="h-4 w-4" />
+            Departments
+          </TabsTrigger>
+          <TabsTrigger value="rfid" className="flex items-center gap-2">
+            <Activity className="h-4 w-4" />
+            RFID
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="overview" className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Weekly Attendance Trend */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <TrendingUp className="h-5 w-5" />
+                  Weekly Attendance Trend
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={300}>
+                  <LineChart data={mockTrendData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="date" />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Line type="monotone" dataKey="present" stroke="#10b981" strokeWidth={2} />
+                    <Line type="monotone" dataKey="late" stroke="#f59e0b" strokeWidth={2} />
+                    <Line type="monotone" dataKey="absent" stroke="#ef4444" strokeWidth={2} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+
+            {/* Department Performance */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <School className="h-5 w-5" />
+                  Department Performance
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={mockDepartmentData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Bar dataKey="attendance" fill="#3b82f6" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="trends" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <TrendingUp className="h-5 w-5" />
+                Attendance Trends Analysis
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="text-center">
+                  <div className="text-3xl font-bold text-green-600">94.2%</div>
+                  <div className="text-sm text-gray-600">Average Attendance</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-3xl font-bold text-blue-600">+5.3%</div>
+                  <div className="text-sm text-gray-600">Improvement This Month</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-3xl font-bold text-purple-600">87%</div>
+                  <div className="text-sm text-gray-600">Target Achievement</div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="departments" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <School className="h-5 w-5" />
+                Department Analytics
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {mockDepartmentData.map((dept, index) => (
+                  <div key={index} className="flex items-center justify-between p-4 border rounded-lg">
+                    <div>
+                      <h3 className="font-semibold">{dept.name}</h3>
+                      <p className="text-sm text-gray-600">{dept.students} students</p>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-xl font-bold text-blue-600">{dept.attendance}%</div>
+                      <div className="text-sm text-gray-600">attendance rate</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="rfid" className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* RFID Status */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Activity className="h-5 w-5" />
+                  RFID Tag Status
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={300}>
+                  <PieChart>
+                    <Pie
+                      data={mockRFIDData}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={({ name, percent }) => `${name} ${(Number(percent) * 100).toFixed(0)}%`}
+                      outerRadius={80}
+                      fill="#8884d8"
+                      dataKey="value"
+                    >
+                      {mockRFIDData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                  </PieChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+
+            {/* RFID Activity */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Activity className="h-5 w-5" />
+                  RFID Activity Summary
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-600">Total Scans Today</span>
+                    <span className="font-semibold">1,247</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-600">Average Response Time</span>
+                    <span className="font-semibold">0.3s</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-600">System Uptime</span>
+                    <span className="font-semibold text-green-600">99.8%</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-600">Failed Scans</span>
+                    <span className="font-semibold text-red-600">3</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+      </Tabs>
+
+      {/* Quick Actions */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Target className="h-5 w-5" />
+            Quick Actions
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <Button variant="outline" className="h-16 flex flex-col items-center justify-center gap-2">
+              <Eye className="h-6 w-6" />
+              <span>View Details</span>
+            </Button>
+            <Button variant="outline" className="h-16 flex flex-col items-center justify-center gap-2">
+              <Filter className="h-6 w-6" />
+              <span>Apply Filters</span>
+            </Button>
+            <Button variant="outline" className="h-16 flex flex-col items-center justify-center gap-2">
+              <Download className="h-6 w-6" />
+              <span>Export Data</span>
+            </Button>
+            <Button variant="outline" className="h-16 flex flex-col items-center justify-center gap-2">
+              <Calendar className="h-6 w-6" />
+              <span>Schedule Report</span>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
-}
+} 
