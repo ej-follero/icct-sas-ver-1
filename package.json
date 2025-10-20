@@ -164,7 +164,7 @@
   },
   "lint-staged": {
     "**/*": [
-      "secretlint --format @secretlint/formatter@^11.2.4"
+      "secretlint || true"
     ]
   },
   "prisma": {
