@@ -205,8 +205,8 @@ export default function StudentDetailModal({
             </CardHeader>
             <CardContent>
               <div className="flex flex-wrap gap-2">
-                {student.schedules?.map((schedule) => (
-                  <Badge key={schedule.scheduleId} variant="outline" className="text-xs">
+                {student.schedules?.map((schedule, index) => (
+                  <Badge key={`${schedule.scheduleId}-${schedule.subjectCode}-${index}`} variant="outline" className="text-xs">
                     {schedule.subjectName} ({schedule.subjectCode})
                   </Badge>
                 ))}

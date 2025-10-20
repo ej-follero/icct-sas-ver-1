@@ -19,9 +19,21 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (!section) return NextResponse.json({ error: 'Section not found' }, { status: 404 });
 
     // Validate year level compatibility
-    if (Number(student.yearLevel) !== Number(section.yearLevel)) {
-      return NextResponse.json({ 
-        error: `Year level mismatch: Student is in year ${student.yearLevel} but section requires year ${section.yearLevel}` 
+    // Student.yearLevel is an enum (e.g., 'FIRST_YEAR'), while Section.yearLevel is a number (1-4).
+    // Map enum to numeric year for comparison.
+    const yearLevelMap: Record<string, number> = {
+      FIRST_YEAR: 1,
+      SECOND_YEAR: 2,
+      THIRD_YEAR: 3,
+      FOURTH_YEAR: 4,
+    };
+
+    const studentYearNumeric = yearLevelMap[String(student.yearLevel)] ?? NaN;
+    const sectionYearNumeric = Number(section.yearLevel);
+
+    if (studentYearNumeric !== sectionYearNumeric) {
+      return NextResponse.json({
+        error: `Year level mismatch: Student is in year ${student.yearLevel} but section requires year ${section.yearLevel}`,
       }, { status: 400 });
     }
 

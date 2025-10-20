@@ -69,8 +69,8 @@ export async function POST(request: NextRequest) {
       }
 
       return NextResponse.json({ 
-        error: 'Student not found for RFID tag',
-        rfid 
+        success: false,
+        error: 'Card not found'
       }, { status: 404 });
     }
 
@@ -123,15 +123,17 @@ export async function POST(request: NextRequest) {
       }
     });
 
+    // Optional: if no matching schedule now, treat as not-on-schedule
+    if (!currentSchedule) {
+      return NextResponse.json({ success: false, error: 'Not on schedule' }, { status: 400 });
+    }
+
     // Determine attendance status based on time
     let attendanceStatus = 'PRESENT';
-    if (currentSchedule) {
-      const scheduleStart = new Date(`${now.toDateString()} ${currentSchedule.startTime}`);
-      const lateThreshold = new Date(scheduleStart.getTime() + 15 * 60 * 1000); // 15 minutes late
-      
-      if (now > lateThreshold) {
-        attendanceStatus = 'LATE';
-      }
+    const scheduleStart = new Date(`${now.toDateString()} ${currentSchedule.startTime}`);
+    const lateThreshold = new Date(scheduleStart.getTime() + 15 * 60 * 1000); // 15 minutes late
+    if (now > lateThreshold) {
+      attendanceStatus = 'LATE';
     }
 
     // Create RFID log first
@@ -152,20 +154,34 @@ export async function POST(request: NextRequest) {
       }
     });
 
+    // Idempotency: prevent double taps within 60s for same student+schedule
+    const recent = await prisma.attendance.findFirst({
+      where: {
+        studentId: student.studentId,
+        subjectSchedId: currentSchedule.subjectSchedId,
+        timestamp: { gte: new Date(now.getTime() - 60 * 1000) },
+      },
+      orderBy: { timestamp: 'desc' },
+    });
+
+    if (recent) {
+      return NextResponse.json({ success: true, duplicate: true, attendance: recent });
+    }
+
     // Create attendance record
     const attendance = await prisma.attendance.create({
       data: {
         userId: student.userId,
         userRole: 'STUDENT',
         studentId: student.studentId,
-        subjectSchedId: currentSchedule?.subjectSchedId || null,
+        subjectSchedId: currentSchedule.subjectSchedId,
         semesterId: currentSemester.semesterId,
         status: attendanceStatus as any,
         attendanceType: 'RFID_SCAN',
         verification: 'PENDING',
         timestamp: now,
         rfidLogId: rfidLog.logsId,
-        notes: currentSchedule ? `Attended ${currentSchedule.subject.subjectName}` : 'General attendance'
+        notes: `Attended ${currentSchedule.subject.subjectName}`
       }
     });
 

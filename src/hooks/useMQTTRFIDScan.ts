@@ -29,6 +29,7 @@ export function useMQTTRFIDScan(options: UseMQTTRFIDScanOptions = {}) {
   const [isConnected, setIsConnected] = useState(false);
   const lastScanTimeRef = useRef<Date | null>(null);
   const onNewScanRef = useRef(onNewScan);
+  const processedMessagesRef = useRef<Set<string>>(new Set());
 
   // Update ref when callback changes
   useEffect(() => {
@@ -83,13 +84,27 @@ export function useMQTTRFIDScan(options: UseMQTTRFIDScanOptions = {}) {
       }
     };
 
-    // Listen to messages array changes
+    // Process all new messages since last check
     if (messages.length > 0) {
-      const latestMessage = messages[messages.length - 1];
-      console.log('useMQTTRFIDScan: Processing latest message:', latestMessage);
-      handleMessage(latestMessage);
+      messages.forEach((message, index) => {
+        const messageId = `${message.topic}-${message.timestamp}-${message.rfid}`;
+        
+        // Skip if we've already processed this message
+        if (processedMessagesRef.current.has(messageId)) {
+          return;
+        }
+        
+        console.log('useMQTTRFIDScan: Processing new message:', message);
+        processedMessagesRef.current.add(messageId);
+        handleMessage(message);
+      });
     }
   }, [enabled, client, isConnected, messages, mqttMode, mode, scanThreshold]);
+
+  // Clear processed messages when mode changes
+  useEffect(() => {
+    processedMessagesRef.current.clear();
+  }, [mode]);
 
   // Publish mode change to MQTT
   const setMode = useCallback((newMode: 'attendance' | 'registration') => {

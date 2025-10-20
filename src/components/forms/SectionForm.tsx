@@ -347,8 +347,16 @@ export default function SectionForm({ type, data, id, onSuccess, onProgressChang
           credentials: 'include', // Include cookies for authentication
           body: JSON.stringify(apiData),
         });
-      } else if (type === "update" && id) {
-        response = await fetch(`/api/sections/${id}`, {
+      } else if (type === "update") {
+        // Allow fallback to data.sectionId when id prop is not explicitly passed
+        const targetId = id ?? (data as any)?.sectionId ?? (data as any)?.id;
+        if (!targetId) {
+          setError("Invalid form type or missing section ID");
+          toast.error("Invalid form type or missing section ID");
+          setIsSubmitting(false);
+          return;
+        }
+        response = await fetch(`/api/sections/${String(targetId)}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           credentials: 'include', // Include cookies for authentication
@@ -357,6 +365,7 @@ export default function SectionForm({ type, data, id, onSuccess, onProgressChang
       } else {
         setError("Invalid form type or missing section ID");
         toast.error("Invalid form type or missing section ID");
+        setIsSubmitting(false);
         return;
       }
 

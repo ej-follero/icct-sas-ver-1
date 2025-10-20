@@ -703,8 +703,8 @@ export default function StudentAttendanceRecordsDialog({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All subjects</SelectItem>
-                  {student.subjects?.map((subject) => (
-                    <SelectItem key={subject} value={subject}>{subject}</SelectItem>
+                  {student.subjects?.map((subject, index) => (
+                    <SelectItem key={`${subject}-${index}`} value={subject}>{subject}</SelectItem>
                   )) || []}
                 </SelectContent>
               </Select>
