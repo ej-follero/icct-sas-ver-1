@@ -212,6 +212,7 @@ export function MQTTProvider({ children }: { children: ReactNode }) {
                     MQTT_TOPIC.FEEDBACK,
                     JSON.stringify({
                       topic: MQTT_TOPIC.FEEDBACK,
+
                       message: result.duplicate ? 'Already scanned' : 'Recorded!',
                       status: "recognized",   // 👈 added status field
                       value: data.rfid,
