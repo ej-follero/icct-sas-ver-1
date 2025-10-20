@@ -9,7 +9,6 @@
     "dev:next": "next dev",
     "dev:silent": "next dev --no-open",
     "build": "next build",
-    "postinstall": "prisma generate",
     "start": "NODE_ENV=production node server.js",
     "start:next": "next start",
     "lint": "next lint",
@@ -40,7 +39,13 @@
     "security:audit": "node -e \"console.log('Security audit available at /api/security/monitor')\"",
     "security:logs": "node -e \"console.log('Audit logs available at /api/audit/logs')\"",
     "redis:test": "node scripts/test-redis-connection.js",
-    "redis:status": "docker exec icct-sas-redis redis-cli ping"
+    "redis:status": "docker exec icct-sas-redis redis-cli ping",
+    "deploy:vercel": "node scripts/deploy-vercel.js",
+    "deploy:preview": "vercel",
+    "deploy:prod": "vercel --prod",
+    "migrate:cloud": "node scripts/migrate-to-cloud.js",
+    "setup:vercel-postgres": "node scripts/setup-vercel-postgres.js",
+    "db:export": "docker exec icct-sas-db pg_dump -U admin -d icct-sas > database-backup.sql"
   },
   "dependencies": {
     "@babel/runtime": "^7.28.4",

@@ -25,7 +25,11 @@ const nextConfig = {
   // Performance optimizations
   experimental: {
     optimizePackageImports: ['@radix-ui/react-icons', 'lucide-react'],
+    // Enable static optimization
+    staticPageGenerationTimeout: 1000,
   },
+  // External packages for server components
+  serverExternalPackages: ['@prisma/client', 'bcrypt', 'bcryptjs'],
   // Enable compression
   compress: true,
   // Optimize bundle size
@@ -35,6 +39,10 @@ const nextConfig = {
     maxInactiveAge: 25 * 1000,
     pagesBufferLength: 2,
   },
+  // Vercel-specific optimizations
+  output: 'standalone',
+  poweredByHeader: false,
+  generateEtags: false,
   // Enhanced security headers
   async headers() {
     return [

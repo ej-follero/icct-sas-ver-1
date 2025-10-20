@@ -1,10 +1,11 @@
 {
-  "buildCommand": "rm -rf .next && npm run build",
+  "buildCommand": "rm -rf .next && npm install --legacy-peer-deps && npm run build",
   "installCommand": "npm install --legacy-peer-deps",
   "framework": "nextjs",
   "functions": {
     "src/app/api/**/*.ts": {
-      "maxDuration": 30
+      "maxDuration": 30,
+      "memory": 1024
     }
   },
   "env": {
@@ -14,5 +15,12 @@
     "env": {
       "NODE_ENV": "production"
     }
-  }
+  },
+  "regions": ["iad1"],
+  "crons": [
+    {
+      "path": "/api/cron/cleanup",
+      "schedule": "0 2 * * *"
+    }
+  ]
 }
